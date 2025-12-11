@@ -1,0 +1,67 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# python build artifacts
+*.egg-info/
+
+# Temporary files
+*.log
+*.tmp
+*.*~
+\#*\#
+.\#*
+.coverage*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+
+# zips
+pdftkpy*.zip
+
+# disabled tests
+/tests/_test*.py
+
+# misc
+/bugreports/
+/attic/
+*.tex
+*.sty
+*.log
+github*
+imagediff*
+dist/
+*zip
+makezip*
+code[2_]*
+./test_*
+1
+
+pdfs/
+xfdf/
+zips/
+tmp/
+typescript
+/scripts/
+/notes/
+
+tests/**/*.pdf
+magic_report.json
+auto/
+/output/
+out.*
+fdf/
+/docs/source/
+/docs/build/
+/docs/pdftl.1
+/docs/pdftl.html
+*~
+\#*
+tests/files/private/
+src/pdftl/_version.py
+_*/
+tests/assets/Form.pdf
+.hypothesis/

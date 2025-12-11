@@ -1,0 +1,24 @@
+include LICENSE
+include NOTICE.md
+include README.md
+include pyproject.toml
+
+# Include the source code
+recursive-include src/pdftl *.py
+
+# Include tests and their small assets (useful for downstream packagers like Debian)
+recursive-include tests *.py
+recursive-include tests/assets *.pdf
+recursive-include tests/assets *.fdf
+recursive-include tests/assets *.txt
+
+# Exclude junk
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .git*
+global-exclude .DS_Store
+
+# docs
+include docs/Makefile
+include docs/README*.md
+include docs/*.py

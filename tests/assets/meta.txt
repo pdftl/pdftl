@@ -1,0 +1,20 @@
+InfoBegin
+InfoKey: CreationDate
+InfoValue: D:20250919180057+01&apos;00
+InfoBegin
+InfoKey: Creator
+InfoValue: Inkscape 1.4 (https://inkscape.org)
+InfoBegin
+InfoKey: Producer
+InfoValue: cairo 1.18.4 (https://cairographics.org)
+NumberOfPages: 2
+PageMediaBegin
+PageMediaNumber: 1
+PageMediaRotation: 0
+PageMediaRect: 0 0 212 282
+PageMediaDimensions: 212 282
+PageMediaBegin
+PageMediaNumber: 2
+PageMediaRotation: 0
+PageMediaRect: 0 0 212 282
+PageMediaDimensions: 212 282
