@@ -182,7 +182,7 @@ def print_main_help(hprint):
 def _print_output_options_help(hprint):
     """Prints detailed help for all output options."""
     hprint("Options for PDF output:\n")
-    for opt, info in sorted(registry["options"].items()):
+    for opt, info in sorted(registry.options.items()):
         hprint(opt)
         hprint()
         hprint(f"  {info['desc']}")
@@ -206,7 +206,7 @@ def _discover_examples():
     for topic, topic_data in itertools.chain(
         registry.operations.items(),
         CLI_DATA["extra help topics"].items(),
-        registry["options"].items(),
+        registry.options.items(),
     ):
         new_examples = topic_data.get("examples", [])
         for example in new_examples:

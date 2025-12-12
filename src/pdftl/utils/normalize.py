@@ -10,13 +10,13 @@ import logging
 
 import pikepdf
 
+LOG_TRUNC = 500
+
 
 def get_normalized_page_content_stream(page):
     """Return a normalized version of the content stream of
     a page. This should have one PDF operator and its
     arguments per line."""
-
-    LOG_TRUNC = 500
 
     parsed = pikepdf.parse_content_stream(page)
     logging.debug("str(parsed)[:%s]=%s", LOG_TRUNC, str(parsed)[:LOG_TRUNC])

@@ -173,7 +173,7 @@ class PipelineManager:
         self._validate_number_of_effective_inputs(stage.operation, effective_inputs)
 
     def _validate_number_of_effective_inputs(self, operation, effective_inputs):
-        if (op_data := registry["operations"].get(operation)) is None:
+        if (op_data := registry.operations.get(operation)) is None:
             return
         op_type = op_data.get("type")
         logging.debug("operation=%s, op_type=%s", operation, op_type)

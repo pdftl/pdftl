@@ -18,7 +18,7 @@ def _get_registry_data_entries(main_key, sub_key, test, transform=None):
     """Helper to filter and transform entries from the registry dictionary."""
     return {
         transform(x) if transform is not None else x
-        for x, y in registry[main_key].items()
+        for x, y in getattr(registry, main_key).items()
         if sub_key in y and test(y[sub_key])
     }
 

@@ -3,20 +3,55 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-# --- Import Exceptions ---
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
-
-# --- Import module and functions to test ---
 from pdftl.output import save as save_module
 from pdftl.output.save import (
+    _allow_option,
     _build_encryption_object,
     _build_permissions_object,
     _build_save_options,
+    _compress_options,
     _default_permissions_object,
+    _drop_options,
+    _encrypt_options,
+    _flatten_option,
     _get_passwords_from_options,
+    _keep_id_options,
+    _linearize_option,
+    _need_appearances_option,
+    _output_option,
+    _owner_pw_option,
     _set_permission_or_raise_error,
+    _user_pw_option,
     save_pdf,
 )
+
+
+class TestSaveOptionsRegistration:
+    """
+    Tests that the option registration functions execute their 'pass' statements.
+    These functions exist solely for their @register_option decorators, but coverage
+    still requires the functions bodies to be executed to mark the 'pass' as covered.
+    This test covers lines 31, 40, 49, 67, 101, 109, 114, 120, 125, 135, and 142 in save.py.
+    """
+
+    def test_option_functions_execute_pass(self):
+        # Simply calling the functions executes the single 'pass' statement inside each.
+        _output_option()
+        _owner_pw_option()
+        _user_pw_option()
+        _encrypt_options()
+        _allow_option()
+        _compress_options()
+        _linearize_option()
+        _drop_options()
+        _flatten_option()
+        _keep_id_options()
+        _need_appearances_option()
+
+        # Test passes if no exceptions are raised during execution.
+        assert True
+
 
 # --- Fixtures ---
 
