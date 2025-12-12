@@ -16,7 +16,6 @@ from pdftl.output.attach import (  # This is the main pipeline; The pure parser 
     _attach_attachment,
     _attach_attachment_to_page,
     _attachment_rect,
-    _can_read_file,
     _get_attachments_from_options,
     _raise_exception_if_invalid_after_keyword,
     _validate_topage_and_convert_to_ints,
@@ -54,26 +53,6 @@ def patch_logging(mocker):
 
 # --- Test Cases ---
 
-## _can_read_file (Unchanged) ##
-
-
-@patch("pdftl.output.attach.Path")
-def test_can_read_file_exists(mock_Path):
-    mock_p_instance = mock_Path.return_value
-    mock_p_instance.is_file.return_value = True
-    mock_p_instance.open.return_value.__enter__.return_value = None
-    assert _can_read_file("good.txt") is True
-
-
-@patch("pdftl.output.attach.Path")
-def test_can_read_file_not_a_file(mock_Path):
-    mock_p_instance = mock_Path.return_value
-    mock_p_instance.is_file.return_value = False
-    assert _can_read_file("dir/") is False
-
-
-## _raise_exception_if_invalid_after_keyword (Unchanged) ##
-
 
 def test_raise_exception_if_invalid_after_keyword_missing_file():
     with pytest.raises(MissingArgumentError, match="Missing filename before 'to_page'"):
@@ -89,9 +68,6 @@ def test_raise_exception_if_invalid_after_keyword_missing_arg():
         )
 
 
-## _set_page_specs_in_parsed_attachments (Unchanged) ##
-
-
 def test_set_page_specs_in_parsed_attachments():
     p1 = ParsedAttachment(path="a.pdf")
     p2 = ParsedAttachment(path="b.pdf", page_spec="1")
@@ -105,7 +81,7 @@ def test_set_page_specs_in_parsed_attachments():
     assert p3.page_spec == "even"
 
 
-## _validate_topage_and_convert_to_ints (Unchanged) ##
+## _validate_topage_and_convert_to_ints ##
 
 
 @patch("pdftl.output.attach.page_numbers_matching_page_spec", return_value=[1, 3, 5])
@@ -128,10 +104,10 @@ def test_validate_topage_and_convert_to_ints_parser_error(mock_page_numbers):
         _validate_topage_and_convert_to_ints("foo", 5)
 
 
-## _resolve_attachments (FIX 1 HERE) ##
+## _resolve_attachments ##
 
 
-@patch("pdftl.output.attach._can_read_file", return_value=True)
+@patch("pdftl.utils.io_helpers.can_read_file", return_value=True)
 @patch("pdftl.output.attach._validate_topage_and_convert_to_ints", return_value=[1, 2])
 def test_resolve_attachments_happy_path(
     mock_validate, mock_can_read, mock_input_context
@@ -154,9 +130,8 @@ def test_resolve_attachments_happy_path(
     assert resolved[1].relationship == "Source"
 
 
-# --- THIS TEST IS NOW FIXED (FIX 1) ---
 @patch(
-    "pdftl.output.attach._can_read_file", side_effect=[True, True]
+    "pdftl.utils.io_helpers.can_read_file", side_effect=[True, True]
 )  # Needs two True values now
 def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
     """
@@ -183,18 +158,12 @@ def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
     assert resolved[0].path == Path("prompted.pdf")
 
 
-# --- END OF FIX ---
-
-
-@patch("pdftl.output.attach._can_read_file", return_value=True)
+@patch("pdftl.utils.io_helpers.can_read_file", return_value=True)
 def test_resolve_attachments_invalid_relation(mock_can_read, mock_input_context):
     parsed_items = [ParsedAttachment(path="a.pdf", relationship="Friend")]
 
     with pytest.raises(InvalidArgumentError, match="Invalid attachment relationship"):
         _resolve_attachments(parsed_items, 5, mock_input_context)
-
-
-## _get_attachments_from_options (Unchanged) ##
 
 
 @patch("pdftl.output.attach._resolve_attachments")
@@ -218,9 +187,6 @@ def test_get_attachments_from_options_pipeline(
         mock_parsed_items, num_pages, mock_input_context
     )
     assert result == mock_resolved_items
-
-
-## _attach_attachment (Unchanged) ##
 
 
 @patch("pdftl.output.attach._attach_attachment_to_page")
@@ -253,9 +219,6 @@ def test_attach_attachment_to_pdf(mock_from_filepath, mock_pdf):
     assert mock_pdf.attachments["f.txt"] == mock_spec
 
 
-## _attach_attachment_to_page (Unchanged) ##
-
-
 @patch("pikepdf.Annotation")
 @patch("pikepdf.Dictionary")
 def test_attach_attachment_to_page_existing_spec(mock_Dict, mock_Annotation, mock_pdf):
@@ -282,9 +245,6 @@ def test_attach_attachment_to_page_existing_spec(mock_Dict, mock_Annotation, moc
     mock_page.Annots.append.assert_called_once_with(mock_Annotation.return_value.obj)
 
 
-## attach_files (Unchanged) ##
-
-
 @patch("pdftl.output.attach._attach_attachment")
 @patch("pdftl.output.attach._get_attachments_from_options")
 def test_attach_files_orchestration(
@@ -303,9 +263,6 @@ def test_attach_files_orchestration(
 
     mock_get_options.assert_called_once_with(options, num_pages, mock_input_context)
     assert mock_attach.call_count == 2
-
-
-## test_page_attachment_with_relationship (Unchanged) ##
 
 
 @patch("pikepdf.Annotation")

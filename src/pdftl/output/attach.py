@@ -15,6 +15,7 @@ import pikepdf
 
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.utils.io_helpers import can_read_file
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.user_input import UserInputContext, filename_completer
 
@@ -117,22 +118,6 @@ ATTACHMENT_RELATIONSHIPS = {
 }
 
 
-def _can_read_file(filename: str):
-    """Test if we can read a file by attempting to open it."""
-    try:
-        p = Path(filename)
-
-        if not p.is_file():
-            return False
-
-        with p.open("rb") as _:
-            pass
-        return True
-
-    except (OSError, FileNotFoundError):
-        return False
-
-
 def _get_attachments_from_options(options, num_pages, input_context):
     """Handles filename retrieval, including interactive prompts."""
     args = options.get("attach_files", [])
@@ -209,7 +194,7 @@ def _resolve_attachments(
                 input_context, len(resolved_list) + 1
             )
 
-        if not _can_read_file(final_filename):
+        if not can_read_file(final_filename):
             logging.warning("Cannot read attachment '%s'. Skipping.", final_filename)
             continue
 
@@ -248,7 +233,7 @@ def _resolve_prompt_to_filename(input_context, attachment_num):
             f"{prefix}Enter a filename for attachment {attachment_num}: ",
             completer=filename_completer,
         )
-        if filename != "" and not _can_read_file(filename):
+        if filename != "" and not can_read_file(filename):
             return get_filename(f"Cannot read file '{filename}'. ")
         return filename
 

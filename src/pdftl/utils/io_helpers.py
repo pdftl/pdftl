@@ -8,9 +8,10 @@
 
 import sys
 from contextlib import nullcontext
+from pathlib import Path
 
 
-def smart_open_output(filename, mode="w", encoding="utf-8"):
+def smart_open_output(filename: str, mode="w", encoding="utf-8"):
     """
     Context manager that opens a filename for writing,
     or yields sys.stdout (or sys.stdout.buffer) if filename is None.
@@ -26,3 +27,19 @@ def smart_open_output(filename, mode="w", encoding="utf-8"):
         return open(filename, mode)  # pylint: disable=unspecified-encoding
 
     return open(filename, mode, encoding=encoding)
+
+
+def can_read_file(filename: str) -> bool:
+    """Test if we can read a file by attempting to open it."""
+    try:
+        p = Path(filename)
+
+        if not p.is_file():
+            return False
+
+        with p.open("rb") as _:
+            pass
+        return True
+
+    except (OSError, FileNotFoundError):
+        return False
