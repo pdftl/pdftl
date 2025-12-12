@@ -88,11 +88,7 @@ def test_write_json_output_compaction_does_not_crash(data):
         # A "simple" list contains no nested objects OR CHARACTERS
         # that would break compaction.
         lambda l: not any(
-            "{" in str(i)
-            or "[" in str(i)
-            or "}" in str(i)
-            or "]" in str(i)  # <-- ADD THIS LINE
-            for i in l
+            "{" in str(i) or "[" in str(i) or "}" in str(i) or "]" in str(i) for i in l
         )
     )
 )

@@ -78,7 +78,6 @@ def generate():
     )
 
     # 7. Button: ResetButton (Pushbutton = 65536)
-    # Fix: ReportLab checkbox takes 'size', not width/height.
     c.drawString(50, 340, "Reset:")
     form.checkbox(
         name="ResetButton",

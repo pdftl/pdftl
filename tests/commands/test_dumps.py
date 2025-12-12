@@ -24,7 +24,7 @@ def test_dump_annots_to_file(two_page_pdf, tmp_path):
     assert output_path.exists()
 
 
-# --- 2. Test dumping to STDOUT (Now Safe) ---
+# --- 2. Test dumping to STDOUT ---
 
 
 def test_dump_data_to_stdout(two_page_pdf, capsys):

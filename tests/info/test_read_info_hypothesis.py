@@ -19,7 +19,7 @@ def create_mock_page(obj_num):
     Creates a mock page object using MagicMock
     to allow setting the .objgen attribute.
     """
-    # FIX: Use MagicMock to be able to set .objgen, which is read-only
+    # Use MagicMock to be able to set .objgen, which is read-only
     # on real Dictionary objects. This mimics a real pikepdf.Page.
     page = MagicMock(spec=pikepdf.Page)
     page.objgen = (obj_num, 0)  # .objgen is a tuple
@@ -130,7 +130,7 @@ def mock_item_strategy(draw, named_dests_map):
         if draw(st.booleans()):
             mock_item.destination = String(dest_name_str)
         else:
-            # FIX: Name objects MUST start with a /
+            # Name objects MUST start with a /
             dest_name = Name("/" + dest_name_str)
             mock_item.destination = dest_name
 
@@ -174,9 +174,9 @@ def test_get_destination_array_hypothesis(named_dests_map, data):
 
 @given(num_pages=st.integers(min_value=0, max_value=20), data=st.data())
 @settings(max_examples=100, deadline=None)
-# FIX: Patch _get_destination_array to isolate the logic
+# Patch _get_destination_array to isolate the logic
 @patch("pdftl.info.read_info._get_destination_array")
-# FIX: Patch is_page to check for our MagicMock pages
+# Patch is_page to check for our MagicMock pages
 @patch("pdftl.info.read_info.is_page", new=lambda x: isinstance(x, MagicMock))
 def test_resolve_page_number_hypothesis(mock_get_dest_array, num_pages, data):
 
@@ -211,7 +211,7 @@ def test_resolve_page_number_hypothesis(mock_get_dest_array, num_pages, data):
         # Create an item that resolves to the target page
         target_page = mock_pages[target_page_idx]
 
-        # FIX: Return a Python list, not a pikepdf.Array,
+        # Return a Python list, not a pikepdf.Array,
         # since we can't store a MagicMock in a real Array.
         dest_array_list = [target_page, Name("/XYZ"), 0, 100]
         mock_get_dest_array.return_value = dest_array_list

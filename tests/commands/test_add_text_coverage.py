@@ -38,7 +38,7 @@ def test_add_text_skip_page(pdf):
 
 def test_add_text_overlay_exception(pdf, caplog):
     """Test handling exception during overlay application."""
-    # FIX: Ensure we capture WARNING logs
+    # Ensure we capture WARNING logs
     caplog.set_level(logging.WARNING)
 
     spec = "1/Hello/"

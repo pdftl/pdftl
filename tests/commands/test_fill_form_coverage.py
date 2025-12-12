@@ -76,7 +76,7 @@ def test_fill_form_recursion_kids(pdf, tmp_path):
 def test_fill_form_radio_button_index(pdf, tmp_path):
     """Test setting RadioButton value by index using a valid Group structure."""
 
-    # FIX: Use pdf.make_stream() instead of pikepdf.Stream()
+    # Use pdf.make_stream() instead of pikepdf.Stream()
     opt1 = pikepdf.Dictionary(
         Type=pikepdf.Name.Annot,
         Subtype=pikepdf.Name.Widget,

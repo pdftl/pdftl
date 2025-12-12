@@ -192,7 +192,7 @@ class TestGetDestinationArray:
 @patch("pdftl.info.read_info._get_destination_array")
 class TestResolvePageNumber:
 
-    # FIX: new=lambda... does NOT inject an argument.
+    # new=lambda... does NOT inject an argument.
     # The signature must not include 'mock_is_page'.
     @patch("pdftl.info.read_info.is_page", new=lambda x: True)
     def test_resolves_correct_page(
@@ -213,7 +213,7 @@ class TestResolvePageNumber:
         assert result == 2
         mock_get_dest_array.assert_called_with(mock_item, mock_named_dests)
 
-    # FIX: new=lambda... does NOT inject an argument.
+    # new=lambda... does NOT inject an argument.
     # The signature must not include 'mock_is_page'.
     @patch("pdftl.info.read_info.is_page", new=lambda x: True)
     def test_page_not_in_list(
@@ -230,7 +230,7 @@ class TestResolvePageNumber:
         assert result is None
         mock_get_dest_array.assert_called_with(mock_item, mock_named_dests)
 
-    # FIX: Correct argument order. Method patch (mock_is_page) comes FIRST.
+    # Correct argument order. Method patch (mock_is_page) comes FIRST.
     @patch("pdftl.info.read_info.is_page", return_value=True)
     def test_no_destination_array(
         self, mock_is_page, mock_get_dest_array, mock_pdf_pages, mock_named_dests
@@ -244,7 +244,7 @@ class TestResolvePageNumber:
         mock_is_page.assert_not_called()
         mock_get_dest_array.assert_called_with(mock_item, mock_named_dests)
 
-    # FIX: Correct argument order. Method patch (mock_is_page) comes FIRST.
+    # Correct argument order. Method patch (mock_is_page) comes FIRST.
     @patch("pdftl.info.read_info.is_page", return_value=True)
     def test_empty_destination_array(
         self, mock_is_page, mock_get_dest_array, mock_pdf_pages, mock_named_dests
@@ -258,7 +258,7 @@ class TestResolvePageNumber:
         mock_is_page.assert_not_called()
         mock_get_dest_array.assert_called_with(mock_item, mock_named_dests)
 
-    # FIX: Correct argument order. Method patch (mock_is_page_inner) comes FIRST.
+    # Correct argument order. Method patch (mock_is_page_inner) comes FIRST.
     @patch("pdftl.info.read_info.is_page", return_value=False)
     def test_dest_array_not_a_page(
         self, mock_is_page_inner, mock_get_dest_array, mock_pdf_pages, mock_named_dests

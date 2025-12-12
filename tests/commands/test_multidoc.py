@@ -40,7 +40,7 @@ def test_cat_multiple_with_handles(pdf_a, pdf_b):
     inputs = ["a.pdf", "b.pdf"]
     opened_pdfs = [pdf_a, pdf_b]
 
-    # FIX: Aliases must map Handle -> Integer Index
+    # Aliases must map Handle -> Integer Index
     # "A" points to index 0 (pdf_a), "B" points to index 1 (pdf_b)
     aliases = {"A": 0, "B": 1}
 
@@ -69,7 +69,7 @@ def test_shuffle_basic(pdf_a, pdf_b):
     inputs = ["a.pdf", "b.pdf"]
     opened_pdfs = [pdf_a, pdf_b]
 
-    # FIX: Aliases must map Handle -> Integer Index
+    # Aliases must map Handle -> Integer Index
     aliases = {"A": 0, "B": 1}
     specs = []
 
@@ -84,7 +84,7 @@ def test_shuffle_with_specs(pdf_a, pdf_b):
     inputs = ["a.pdf", "b.pdf"]
     opened_pdfs = [pdf_a, pdf_b]
 
-    # FIX: Aliases must map Handle -> Integer Index
+    # Aliases must map Handle -> Integer Index
     aliases = {"A": 0, "B": 1}
     specs = ["A1", "B1"]
 

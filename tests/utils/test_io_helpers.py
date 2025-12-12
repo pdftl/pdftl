@@ -15,7 +15,7 @@ def test_can_read_file_exists(mock_Path):
     assert can_read_file("good.txt") is True
 
 
-@patch("pdftl.output.attach.Path")
+@patch("pdftl.utils.io_helpers.Path")
 def test_can_read_file_not_a_file(mock_Path):
     mock_p_instance = mock_Path.return_value
     mock_p_instance.is_file.return_value = False

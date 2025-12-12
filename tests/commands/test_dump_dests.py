@@ -278,7 +278,6 @@ def test_write_json_output_to_file():
 
     m.assert_called_once_with(test_filename, "w", encoding="utf-8")
 
-    # --- THIS IS THE FIX ---
     # We must check the calls to write() separately,
     # because print() calls write() twice (once for the
     # string, once for the newline).
@@ -297,7 +296,6 @@ def test_write_json_output_to_file():
 
 def test_write_json_output_to_stdout(mock_stdout):
     data = {"a": 1}
-    # --- THIS IS THE FIX ---
     # The actual output is {"a": 1}\n, not { "a": 1 }\n
     compacted_expected = '{"a": 1}\n'  # Compacted + newline from print
 

@@ -53,13 +53,10 @@ def mock_constants(mocker):
         "assembly": "Assembly",
     }
 
-    # --- FIX: Use mocker.patch() to replace the odict_keys objects ---
     mocker.patch.object(parser_module, "FLAG_KEYWORDS", mock_flags)
     mocker.patch.object(parser_module, "VALUE_KEYWORDS", mock_values)
     mocker.patch.object(parser_module, "ALLOW_PERMISSIONS", mock_allow)
-    # This one is a dict, so patch.dict is fine (but patch.object is more consistent)
     mocker.patch.object(parser_module, "ALLOW_PERMISSIONS_L", mock_allow_l)
-    # --- End Fix ---
 
 
 @pytest.fixture(autouse=True)

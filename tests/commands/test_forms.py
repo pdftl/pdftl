@@ -29,7 +29,7 @@ def pdf_with_form():
         Ff=0,
     )
 
-    # CRITICAL FIX: Make the field an INDIRECT object.
+    # Make the field an INDIRECT object.
     # pikepdf requires fields to have an Object ID (e.g. "10 0 R")
     indirect_field = pdf.make_indirect(text_field_dict)
 

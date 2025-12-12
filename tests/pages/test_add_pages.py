@@ -205,14 +205,14 @@ def test_process_source_pages_empty(mock_new_pdf):
 @patch("pdftl.pages.add_pages.write_named_dests")
 @patch("pdftl.pages.add_pages.rebuild_outlines")
 @patch("pdftl.pages.add_pages.rebuild_links")
-@patch("pdftl.pages.add_pages.create_link_remapper")  # <-- NEW
+@patch("pdftl.pages.add_pages.create_link_remapper")
 @patch("pdftl.pages.add_pages.process_source_pages")
 def test_add_pages_orchestration(
     mock_process_source_pages,
-    mock_create_link_remapper,  # <-- NEW
+    mock_create_link_remapper,
     mock_rebuild_links,
-    mock_rebuild_outlines,  # <-- NEW
-    mock_write_named_dests,  # <-- NEW
+    mock_rebuild_outlines,
+    mock_write_named_dests,
     mock_new_pdf,  # Fixture
 ):
     """Tests that add_pages correctly orchestrates its helper functions."""
@@ -262,8 +262,8 @@ def test_add_pages_orchestration(
     # This function takes 3 arguments
     mock_rebuild_links.assert_called_once_with(
         mock_new_pdf,
-        mock_context.processed_page_info,  # <-- FIX: This is the 2nd arg
-        mock_remapper,  # <-- FIX: This is the 3rd arg
+        mock_context.processed_page_info,
+        mock_remapper,
     )
 
     # Check PASS 2b (rebuild_outlines)

@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 # --- Import the exceptions it can raise ---
 from pdftl.exceptions import MissingArgumentError
 
-# --- Import the NEW pure parser and its data class ---
+# --- Import the parser and its data class ---
 from pdftl.output.attach import _parse_attach_specs_to_intent
 
 # ---------------------------
@@ -53,7 +53,6 @@ def test_parser_to_page(files, page_spec):
     assert [att.path for att in attachments] == files
 
 
-# --- THIS TEST IS NOW FIXED ---
 @given(files=st_file_list, relation=st_relation)
 def test_parser_relation(files, relation):
     """Tests [files...] 'relation' <type>"""
@@ -68,7 +67,6 @@ def test_parser_relation(files, relation):
     assert [att.path for att in attachments] == files
 
 
-# --- THIS TEST IS NOW FIXED ---
 @given(
     files1=st_file_list,
     page_spec=st_page_spec,

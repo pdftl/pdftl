@@ -50,7 +50,7 @@ def _get_all_filename_matches(text, glob_suffix="*"):
         f + (os.path.sep if os.path.isdir(f) else "")
         for f in glob.glob(text + glob_suffix)
     ]
-    logging.debug(glob.glob(text + glob_suffix))  # From your code
+    logging.debug(glob.glob(text + glob_suffix))
     return matches
 
 

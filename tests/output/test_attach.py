@@ -107,7 +107,7 @@ def test_validate_topage_and_convert_to_ints_parser_error(mock_page_numbers):
 ## _resolve_attachments ##
 
 
-@patch("pdftl.utils.io_helpers.can_read_file", return_value=True)
+@patch("pdftl.output.attach.can_read_file", return_value=True)
 @patch("pdftl.output.attach._validate_topage_and_convert_to_ints", return_value=[1, 2])
 def test_resolve_attachments_happy_path(
     mock_validate, mock_can_read, mock_input_context
@@ -131,7 +131,7 @@ def test_resolve_attachments_happy_path(
 
 
 @patch(
-    "pdftl.utils.io_helpers.can_read_file", side_effect=[True, True]
+    "pdftl.output.attach.can_read_file", side_effect=[True, True]
 )  # Needs two True values now
 def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
     """
@@ -158,7 +158,7 @@ def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
     assert resolved[0].path == Path("prompted.pdf")
 
 
-@patch("pdftl.utils.io_helpers.can_read_file", return_value=True)
+@patch("pdftl.output.attach.can_read_file", return_value=True)
 def test_resolve_attachments_invalid_relation(mock_can_read, mock_input_context):
     parsed_items = [ParsedAttachment(path="a.pdf", relationship="Friend")]
 

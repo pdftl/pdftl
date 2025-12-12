@@ -55,11 +55,8 @@ def test_scale_standard_page_boxes(mocker):
     # Assert
     assert page.MediaBox == Array([0.0, 0.0, 200.0, 400.0])
     assert page.CropBox == Array([20.0, 20.0, 180.0, 380.0])
-    assert page.ArtBox == Array([0, 0, 0, 0])  # Unchanged
-    assert page.OtherKey == "value"  # Unchanged
-
-
-# --- Test _scale_all_annots_in_page ---
+    assert page.ArtBox == Array([0, 0, 0, 0])
+    assert page.OtherKey == "value"
 
 
 def test_scale_all_annots_in_page():
@@ -82,7 +79,7 @@ def test_scale_all_annots_in_page():
     # Assert
     assert annot1.Rect == Array([20.0, 20.0, 40.0, 40.0])
     assert annot2.Rect == Array([100.0, 100.0, 120.0, 120.0])
-    assert "/Rect" not in annot3  # Unchanged
+    assert "/Rect" not in annot3
 
 
 def test_scale_all_annots_in_page_no_annots():

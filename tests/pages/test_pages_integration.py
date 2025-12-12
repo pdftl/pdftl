@@ -122,7 +122,7 @@ def test_integration_cat_a_a(complex_pdf_a: Path, tmp_path: Path):
             assert item_2.title == "Chapter 1"
 
             # Check the destination names - they must be unique
-            # FIX: Use the structure-agnostic .destination property
+            # Use the structure-agnostic .destination property
             dest_name_1 = item_1.destination
             dest_name_2 = item_2.destination
 

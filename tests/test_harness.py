@@ -67,7 +67,7 @@ def run_test_case(
         outputs[command] = Path(output)
         print(f"   {command} run time: {runner.durations[command]}")
 
-        # --- ADDED: Report Exit Codes ---
+        # --- Report Exit Codes ---
         exit_code = result.returncode
         print(f"  {command} exit code: {result.returncode}")
 

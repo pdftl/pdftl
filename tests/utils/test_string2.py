@@ -1,9 +1,9 @@
-from decimal import Decimal  # Need this for one of the pikepdf object types
+from decimal import Decimal
 
-import pikepdf  # <-- We need this to create test objects
+import pikepdf
 import pytest
 
-from pdftl.utils.string import (  # Importing this helper from your code
+from pdftl.utils.string import (
     before_space,
     compact_json_string,
     pdf_num_to_string,

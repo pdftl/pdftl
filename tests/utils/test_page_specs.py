@@ -186,7 +186,6 @@ def test_parse_omissions_invalid_token():
         ("r1-r5", 10, PageSpec(10, 6, (0, False), 1.0, set(), [])),  # 10 down to 6
         ("5-1", 10, PageSpec(5, 1, (0, False), 1.0, set(), [])),  # 5 down to 1
         ("rend-r1", 10, PageSpec(1, 10, (0, False), 1.0, set(), [])),  # 1 to 10
-        # --- NEW TEST CASE to prove 'r0' parses to 11 ---
         (
             "r0",
             10,
@@ -227,7 +226,7 @@ def test_parse_page_spec_valid(spec, total_pages, expected_spec):
         assert result.omissions == expected_spec.omissions
 
 
-# --- FIX: Removed 'r0' from this test ---
+# --- Removed 'r0' from this test ---
 @pytest.mark.parametrize("spec", ["0-5", "0"])
 def test_parse_page_spec_invalid_range(spec):
     """Tests that a 0 or negative page number raises an error."""
@@ -386,7 +385,7 @@ def test_resolve_alias_and_spec(mock_pdfs_fixture):
     assert spec == "1-5"
     assert alias == "DEFAULT"
 
-    # FIX: Case 4: Invalid alias. The code's logic *correctly* falls
+    # Case 4: Invalid alias. The code's logic *correctly* falls
     # back to the default alias, so this should NOT raise an error.
     pdf, spec, alias = _resolve_alias_and_spec("C1-5", opened_pdfs_by_alias, "DEFAULT")
     assert pdf is pdf_A
@@ -414,7 +413,7 @@ def test_create_page_tuples_from_numbers_out_of_range(mock_pdfs_fixture):
         )
 
 
-# --- NEW TEST to prove 'r0' (which parses to 11) is caught ---
+# --- Test to prove 'r0' (which parses to 11) is caught ---
 def test_create_page_tuples_from_numbers_catches_r0(mock_pdfs_fixture):
     """Tests that the error from 'r0' (page 11) is caught here."""
     pdf = mock_pdfs_fixture["pdf_A"]  # 10 pages
@@ -479,7 +478,7 @@ def test_expand_specs_to_pages_with_specs(mock_pdfs_fixture):
     )
     assert result[1] == PageTransform(
         pdf=pdf_A, index=1, rotation=(0, False), scale=1.0
-    )  # <-- Fixed typo cf_A -> pdf_A
+    )
     # Check "B1"
     assert result[2] == PageTransform(
         pdf=pdf_B, index=0, rotation=(0, False), scale=1.0

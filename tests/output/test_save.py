@@ -53,7 +53,7 @@ def patch_dependencies(mocker):
     # _default_permissions_object relies on inspecting the REAL class.
     # ---
 
-    # --- FIX 1: Use the REAL permission strings from the help text ---
+    # --- Use the REAL permission strings from the help text ---
     mock_permission_map = {
         # Map user-facing strings (from help) to real pikepdf flags
         "Printing": ["print_highres", "print_lowres"],
@@ -157,7 +157,7 @@ def test_set_permission_or_raise_error_success():
 
     assert perms_dict["print_highres"] is True
     assert perms_dict["print_lowres"] is True
-    assert perms_dict["copy"] is False  # Unchanged
+    assert perms_dict["copy"] is False
 
 
 def test_set_permission_or_raise_error_unknown_perm():
@@ -243,7 +243,7 @@ def test_build_permissions_object_specific(mocker):
     mock_default_helper.return_value = real_default_perms.copy()
 
     # 5. Run the function (using the *correct* user-facing strings)
-    result = _build_permissions_object(["Printing", "CopyContents"])  # <-- FIX 2
+    result = _build_permissions_object(["Printing", "CopyContents"])
 
     # 6. Assertions will now work
     # The helper was called

@@ -108,7 +108,7 @@ class TestTextDrawerLogic(unittest.TestCase):
         self.assertEqual((x, y), (300.0, 400.0))
 
 
-class TestTextDrawerClass:  # <-- 1. Removed (unittest.TestCase)
+class TestTextDrawerClass:
     """
     Unit tests for the TextDrawer class. (pytest-style)
     These tests mock the reportlab dependency.
@@ -126,32 +126,30 @@ class TestTextDrawerClass:  # <-- 1. Removed (unittest.TestCase)
 
         # 1. Test standard font: 'Helvetica'
         font_name = drawer.get_font_name("Helvetica")
-        assert font_name == "Helvetica"  # <-- 2. Changed to assert
+        assert font_name == "Helvetica"
         mock_getFont.assert_not_called()
 
         # 2. Test another standard font, case-insensitive
         font_name = drawer.get_font_name("times-bold")
-        assert font_name == "Times-Bold"  # <-- 2. Changed to assert
+        assert font_name == "Times-Bold"
         mock_getFont.assert_not_called()
 
         # 3. Test bad font: 'Fake-Font-Name'
         mock_getFont.side_effect = Exception("Font not found")
         with patch("logging.warning") as mock_logging_warn:
             font_name = drawer.get_font_name("Fake-Font-Name")
-            assert font_name == DEFAULT_FONT_NAME  # <-- 2. Changed to assert
+            assert font_name == DEFAULT_FONT_NAME
             mock_getFont.assert_called_with("Fake-Font-Name")
             mock_logging_warn.assert_called_once()
             # Corrected assertion
-            assert (
-                "Fake-Font-Name" in mock_logging_warn.call_args[0][1]
-            )  # <-- 2. Changed to assert
+            assert "Fake-Font-Name" in mock_logging_warn.call_args[0][1]
 
         mock_getFont.reset_mock()
 
         # 4. Test a *registered* custom font
         mock_getFont.side_effect = None  # Clear the side effect
         font_name = drawer.get_font_name("My-Custom-TTF-Font")
-        assert font_name == "My-Custom-TTF-Font"  # <-- 2. Changed to assert
+        assert font_name == "My-Custom-TTF-Font"
         mock_getFont.assert_called_with("My-Custom-TTF-Font")
 
     @patch("pdftl.commands.helpers.text_drawer.getFont")
@@ -168,12 +166,8 @@ class TestTextDrawerClass:  # <-- 1. Removed (unittest.TestCase)
         with patch("logging.warning") as mock_logging_warn:
             drawer.draw_rule(bad_rule, context)
             mock_logging_warn.assert_called_once()
-            assert (
-                "Skipping one text rule" in mock_logging_warn.call_args[0][0]
-            )  # <-- 2. Changed to assert
-            assert "I am a bad rule!" in str(
-                mock_logging_warn.call_args[0][1]
-            )  # <-- 2. Changed to assert
+            assert "Skipping one text rule" in mock_logging_warn.call_args[0][0]
+            assert "I am a bad rule!" in str(mock_logging_warn.call_args[0][1])
 
     # This helper method is now part of the pytest-style class
     def _run_draw_test(

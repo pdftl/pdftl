@@ -61,7 +61,6 @@ try:
     import pdftl.commands.parsers.add_text_parser
 
     # Now, we can import the functions to be tested from the *new* module path
-    # *** THIS IS THE FIX ***
     # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
     from pdftl.commands.parsers.add_text_parser import (  # Import new function for testing
         _compile_text_renderer,
@@ -104,7 +103,6 @@ except ImportError as e:
     def _parse_options_string(*args, **kwargs):
         pass
 
-    # *** THIS IS THE FIX ***
     # Define a dummy function with the *new* name
     def _compile_text_renderer(*args, **kwargs):
         pass
@@ -132,7 +130,6 @@ class TestAddTextParser(unittest.TestCase):
             },
         }
 
-    # --- THIS TEST IS UPDATED FOR THE NEW PARSER ---
     def test_split_spec_string(self):
         """Test the robust, right-to-left spec string splitter."""
         test_cases = {
@@ -184,7 +181,6 @@ class TestAddTextParser(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid text delimiter 'o'"):
             _split_spec_string("1 Hello (options)")
 
-    # --- THIS TEST IS UPDATED FOR THE NEW PARSER ---
     def test_split_fail_unmatched_delimiter(self):
         # The new parser identifies an unmatched delimiter when only one
         # is found (first_pos == last_pos).
@@ -243,7 +239,6 @@ class TestAddTextParser(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Options block must be enclosed"):
             _parse_options_string("(options")
 
-    # --- NEW TEST CASE ---
     def test_parse_options_fail_invalid_format(self):
         """
         Test for options that are not valid key=value pairs, which the
@@ -269,11 +264,8 @@ class TestAddTextParser(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Option missing key: '=bar'"):
             _parse_options_string("(size=10, =bar)")
 
-    # --- END NEW TEST CASE ---
-
     def test_variable_parsing_and_rendering(self):
         text_str = "Page {page-1} of {total}. Report: {meta:Title}. File: {filename_base}. {{Literal}}"
-        # *** THIS IS THE FIX ***
         render_fn = _compile_text_renderer(text_str)
 
         self.assertTrue(callable(render_fn))
@@ -309,7 +301,6 @@ class TestAddTextParser(unittest.TestCase):
         # The parser *should* fail (correctly) when it sees math
         # on a non-numeric variable.
         with self.assertRaisesRegex(ValueError, "Cannot apply arithmetic"):
-            # *** THIS IS THE FIX ***
             _compile_text_renderer("File: {filename-1}")
 
     def test_parse_specs_simple(self):
@@ -553,7 +544,7 @@ try:
 
         return f"{page_part}{delim}{text}{delim} {opts}"
 
-    # --- NEW: Strategies for INVALID specs ---
+    # --- Strategies for INVALID specs ---
 
     st_invalid_options = st.one_of(
         st.just("(size=foo)"),  # Not a float
@@ -647,7 +638,6 @@ try:
                 # Catch any other unexpected exceptions
                 self.fail(f"Parser crashed on specs: '{specs}'\nError: {e}")
 
-        # --- NEW TEST ---
         @given(invalid_spec=st_invalid_specs())
         @settings(max_examples=200, deadline=None)
         def test_parser_raises_valueerror_on_invalid_syntax(self, invalid_spec):

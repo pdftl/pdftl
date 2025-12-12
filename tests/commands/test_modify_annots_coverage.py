@@ -30,7 +30,7 @@ def test_modify_annots_array_mixed_types(pdf):
 
 def test_modify_annots_mismatched_parens(pdf, caplog):
     """Test ValueError for mismatched parentheses is caught and logged."""
-    # FIX: Ensure we capture WARNING logs
+    # Ensure we capture WARNING logs
     caplog.set_level(logging.WARNING)
 
     # Passing a string with unbalanced parens inside the value part
@@ -55,7 +55,7 @@ def test_modify_annots_name_value(pdf):
 
 def test_modify_annots_empty_rules_warning(pdf, caplog):
     """Test warning when parser returns no rules."""
-    # FIX: Ensure we capture WARNING logs
+    # Ensure we capture WARNING logs
     caplog.set_level(logging.WARNING)
 
     with patch(

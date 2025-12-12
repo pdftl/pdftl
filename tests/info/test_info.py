@@ -304,7 +304,7 @@ class TestOutputInfo:
     def test_write_page_labels(self, mock_writer, mock_pdf):
         """Tests writing page label data using a real NumberTree."""
 
-        # --- FIX: Create a real, temporary PDF to "own" the NumberTree ---
+        # --- Create a real, temporary PDF to "own" the NumberTree ---
         with Pdf.new() as real_pdf_owner:
             # 1. Create a real NumberTree owned by the real PDF
             real_nt = NumberTree.new(real_pdf_owner)
@@ -378,7 +378,7 @@ class TestParseDump:
 
         # 2. Value, then Key (should log warning and do nothing)
         _parse_info_field("InfoValue", "Orphan Value", info_dict, state, decoder)
-        assert info_dict == {"Title": "My Doc"}  # Unchanged
+        assert info_dict == {"Title": "My Doc"}
         parse_dump_module.logging.warning.assert_called_with(
             "Got InfoValue without a preceding InfoKey. Ignoring"
         )

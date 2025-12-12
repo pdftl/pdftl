@@ -61,7 +61,6 @@ def get_pdf_path():
 
     def _resolver(filename):
         # 1. Check Public Folder (Standard Git files)
-        # Adjust 'tests/files/pdfs' if your structure is slightly different
         base = Path(__file__).parent
         public_path = base / "files" / "pdfs" / filename
         if not filename.endswith(".pdf"):
@@ -182,24 +181,15 @@ class Runner:
         else:
             raise ValueError(f"Unknown tool: {tool}")
 
-        # Convert all Path objects in args to strings for subprocess
         command_str = [str(item) for item in command]
-        # --- THE FIX IS HERE ---
-        # Create a copy of the current environment
         env = os.environ.copy()
-
-        # Get the absolute path to your 'src' directory
         src_path = str(Path(__file__).parent.parent / "src")
-
-        # Prepend the 'src' path to the PYTHONPATH for the subprocess
         env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
-
         time_start = time.time()
         # Pass the modified environment to the subprocess
         result = subprocess.run(
             command_str, capture_output=True, text=True, check=False, env=env
         )
-        # --- END OF FIX ---
         self.durations[tool] = round(time.time() - time_start, 2)
         self.stdout = result.stdout
         self.stderr = result.stderr

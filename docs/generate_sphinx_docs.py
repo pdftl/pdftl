@@ -126,7 +126,6 @@ def generate_sphinx_docs(app_data, topics, output_dir="source"):
                 f.write(f"   {app_data['whoami']} {data['usage']}\n\n")
             if data.get("details"):
                 f.write("**Details**\n\n")
-                # ** THE FIX IS HERE **
                 # The 'output_options' topic has pre-formatted RST, so write it directly.
                 # For all other topics, format the plain text as prose.
                 if name == "output_options":

@@ -258,7 +258,7 @@ def _build_outline_chunks_helper(
 def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
     source_pdf = chunk.pdf
 
-    # --- MODIFICATION (Fix 2): Get instance_num from chunk ---
+    # --- Get instance_num from chunk ---
     logging.debug(
         "Processing outline chunk: start_page=%s, instance_num=%s",
         chunk.output_start_page,

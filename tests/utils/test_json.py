@@ -17,9 +17,6 @@ except ImportError:
         return isinstance(obj, Dictionary) and obj.get("/Type") == "/Page"
 
 
-# --- Your Existing Test (it's good!) ---
-
-
 def test_json_blank():
     pdf = pikepdf.new()
     assert pdf_obj_to_json(pdf.Root) == {

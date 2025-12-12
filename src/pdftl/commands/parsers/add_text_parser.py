@@ -210,8 +210,6 @@ def _parse_add_text_op(text_string: str, options_part: str):
     """
     Parses the text string and options part into a structured rule dict.
     """
-    # The 'text' key now contains a function, not a string.
-    # *** REFACTOR: Call the new compiler function ***
     rule = {"text": _compile_text_renderer(text_string)}
     options = _parse_options_string(options_part)
     rule.update(options)
@@ -439,7 +437,7 @@ def _parse_color(color_str: str):
 
 
 ##################################################
-# TEXT VARIABLE PARSING (REFACTORED)
+# TEXT VARIABLE PARSING
 ##################################################
 
 
@@ -519,7 +517,6 @@ def _evaluate_token(token: tuple, context: dict):
     return base_value
 
 
-# --- REFACTOR: New Tokenizer Function ---
 def _tokenize_text_string(text_str: str) -> list:
     """
     Splits the text string into a list of literals and parsed tokens.
@@ -547,7 +544,6 @@ def _tokenize_text_string(text_str: str) -> list:
     return parts
 
 
-# --- REFACTOR: New Renderer Function ---
 def _default_renderer(parts: list, context: dict) -> str:
     """
     Renders a pre-compiled list of parts against a context dict.
@@ -562,7 +558,6 @@ def _default_renderer(parts: list, context: dict) -> str:
     return "".join(result)
 
 
-# --- REFACTOR: Main function is now a simple compiler ---
 def _compile_text_renderer(text_str: str):
     """
     Parses and "compiles" a text string into a render function.

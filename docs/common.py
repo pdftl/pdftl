@@ -69,7 +69,7 @@ def get_docs_data():
             "type": "topic",
         }
 
-    # ** THE FIX IS HERE: New logic to build the complete options topic **
+    # build complete options topic **
     if app_info["options"]:
         print(
             "--- [common.py] Found output options. Constructing 'output_options' topic..."

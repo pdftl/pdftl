@@ -282,7 +282,7 @@ def test_copy_item_recursive_pruning(mock_remapper):
     new_parent_list = []
 
     # 2. Act
-    # --- FIX: Configure the mock OutlineItem to have "falsy" children ---
+    # --- Configure the mock OutlineItem to have "falsy" children ---
     # A default MagicMock is "truthy", which breaks the pruning logic.
     mock_constructor = MagicMock(spec=OutlineItem)
     mock_new_item = MagicMock(spec=OutlineItem)
@@ -346,12 +346,11 @@ def test_rebuild_outlines_processes_chunks(  # 1b. Renamed test
     # (mock_remapper_instance is now created above)
 
     # 2. Act
-    # 3. FIX the function call with the new signature
     result_dests = rebuild_outlines(
         mock_pdf,
         [],  # source_pages_to_process
         mock_context,
-        mock_remapper_instance,  # <-- PASS THE MOCK REMAPPER
+        mock_remapper_instance,
     )
 
     # 3. Assert
@@ -359,7 +358,6 @@ def test_rebuild_outlines_processes_chunks(  # 1b. Renamed test
     mock_build_chunks.assert_called_once_with(mock_context.processed_page_info)
 
     # 4. DELETE all the old assertions for cache/remapper creation
-    # (Lines 88-98 from your test file are GONE)
 
     # 5. KEEP the assertions for remapper *usage* (these are still correct)
     # Check that set_call_context was called TWICE, once for each chunk

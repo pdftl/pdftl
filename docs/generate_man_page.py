@@ -34,7 +34,7 @@ def _format_token(f, word, bold_literals, is_prose=False):
     """
     debug_log(f, f"Formatting token: '{word}' (is_prose={is_prose})")
 
-    # ** THE FIX IS HERE: New, more robust parsing logic **
+    # parsing logic
     # First, separate general punctuation from the core, potentially-quoted word.
     # Note: Single quote is handled separately as a quoting character.
     punctuation = '()[].,:;"'

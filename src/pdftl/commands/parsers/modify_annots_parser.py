@@ -56,7 +56,7 @@ def _parse_kv_pair(part: str) -> tuple[str, str]:
     return key, value
 
 
-# --- New parsing logic for modify_annots ---
+# --- Parsing logic for modify_annots ---
 
 # This regex is the core pattern from crop_parser.py
 # It matches 'selector(mods)'
@@ -127,7 +127,6 @@ def specs_to_modification_rules(
     Converts a list of spec strings into a list of ModificationRule objects.
     """
     rules = []
-    # spec_pattern = re.compile(r"^([^(]*)?\((.*?)\)$")  # <-- This was inefficient
 
     for spec in specs:
         if not (match := spec_pattern.match(spec)):

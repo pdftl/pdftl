@@ -17,9 +17,9 @@ from hypothesis import strategies as st
 import pdftl.commands.parsers.modify_annots_parser as map
 from pdftl.commands.parsers.modify_annots_parser import ModificationRule
 
-# --------------------------
+# --- -----------------------
 # Fixtures
-# --------------------------
+# --- -----------------------
 
 
 @pytest.fixture
@@ -44,9 +44,9 @@ def mock_page_spec_parser(monkeypatch):
     monkeypatch.setattr(map, "page_numbers_matching_page_spec", dummy_page_spec_parser)
 
 
-# --------------------------
+# --- -----------------------
 # Tests for _unquote_string
-# --------------------------
+# --- -----------------------
 
 
 @pytest.mark.parametrize(
@@ -65,9 +65,9 @@ def test_unquote_string(input_str, expected):
     assert map._unquote_string(input_str) == expected
 
 
-# --------------------------
+# --- -----------------------
 # Tests for _parse_kv_pair
-# --------------------------
+# --- -----------------------
 
 
 @pytest.mark.parametrize(
@@ -93,9 +93,9 @@ def test_parse_kv_pair_failure(input_str):
         map._parse_kv_pair(input_str)
 
 
-# --------------------------
+# --- -----------------------
 # Tests for _parse_modification_string
-# --------------------------
+# --- -----------------------
 
 
 def test_parse_modification_string_simple():
@@ -125,9 +125,9 @@ def test_parse_modification_string_empty_fails():
         map._parse_modification_string("")
 
 
-# --------------------------
+# --- -----------------------
 # Tests for _parse_selector_string
-# --------------------------
+# --- -----------------------
 
 
 @pytest.mark.parametrize(
@@ -148,9 +148,9 @@ def test_parse_selector_string(input_str, expected_page_spec, expected_type):
     assert type_spec == expected_type
 
 
-# --------------------------
+# --- -----------------------
 # Tests for specs_to_modification_rules (Main Function)
-# --------------------------
+# --- -----------------------
 
 
 def test_parser_success_simple(mock_page_spec_parser):
@@ -176,7 +176,7 @@ def test_parser_success_multiple_specs(mock_page_spec_parser):
     """
     specs = [
         "odd(C=[1 0 0])",
-        "/Text(T='(New Author)')",  # FIX: Quotes go around the value, not the whole pair
+        "/Text(T='(New Author)')",  # Quotes go around the value, not the whole pair
         "(Key=Val)",  # Empty selector
     ]
     rules = map.specs_to_modification_rules(specs, total_pages=10)
@@ -199,9 +199,9 @@ def test_parser_success_multiple_specs(mock_page_spec_parser):
     assert rules[2].modifications == [("Key", "Val")]
 
 
-# --------------------------
+# --- -----------------------
 # Hypothesis Property-Based Tests
-# --------------------------
+# --- -----------------------
 
 # Strategy for a valid Key
 st_key = st.text(

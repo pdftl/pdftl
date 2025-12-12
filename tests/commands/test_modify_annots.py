@@ -23,9 +23,9 @@ from hypothesis import strategies as st
 import pdftl.commands.modify_annots as ma
 from pdftl.exceptions import InvalidArgumentError
 
-# --------------------------
+# --- -----------------------
 # Fixtures
-# --------------------------
+# --- -----------------------
 
 
 @pytest.fixture
@@ -74,9 +74,9 @@ def mock_pdf():
     pdf.close()
 
 
-# --------------------------
+# --- -----------------------
 # Integration Tests
-# --------------------------
+# --- -----------------------
 
 
 def test_modify_annots_integration_remove_link_border(mock_pdf):
@@ -255,7 +255,7 @@ def test_modify_annots_no_specs(mock_pdf):
 
     ma.modify_annots(pdf, [])  # Empty specs list
 
-    assert pdf.pages[0].Annots[0].Border == original_border  # Unchanged
+    assert pdf.pages[0].Annots[0].Border == original_border
 
 
 def test_modify_annots_no_annots_on_page(mock_pdf):
@@ -327,9 +327,9 @@ def test_modify_annots_malformed_string_value_bug(mock_pdf, caplog):
     assert "Malformed value string" in caplog.text
 
 
-# --------------------------
+# --- -----------------------
 # Hypothesis Tests
-# --------------------------
+# --- -----------------------
 
 # A strategy for generating arbitrary (and potentially malformed)
 # spec strings. This replaces the narrow key/value fuzzers.

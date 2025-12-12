@@ -12,8 +12,7 @@ except ImportError:
 
 # --- Import the module and functions to test ---
 # --- Import the class/functions we need to mock OR test ---
-from pdftl.pages.link_remapper import _build_link_caches  # <-- Fixed import
-from pdftl.pages.link_remapper import LinkRemapper
+from pdftl.pages.link_remapper import LinkRemapper, _build_link_caches
 from pdftl.pages.links import (
     RebuildLinksPartialContext,
     _process_annotation,
@@ -220,7 +219,7 @@ def test_rebuild_annotations_for_page(mocker, mock_remapper):
         side_effect=lambda key: key == Name.Annots
     )
 
-    # --- FIX: Use a REAL PDF and REAL PAGE ---
+    # --- Use a REAL PDF and REAL PAGE ---
     real_pdf = Pdf.new()
     real_pdf.add_blank_page()
     new_page = real_pdf.pages[0]
@@ -305,7 +304,6 @@ def test_write_named_dests_no_dests(mocker):
     mock_nametree_new.assert_not_called()
 
 
-# --- THIS TEST HAS BEEN REWRITTEN TO MATCH THE NEW REFACTOR ---
 @patch("pdftl.pages.links._rebuild_annotations_for_page")
 def test_rebuild_links_orchestration(
     mock_rebuild_annots,
@@ -504,7 +502,6 @@ def test_rebuild_annots_pruning_logic(mock_process, mock_remapper, mock_real_pag
     assert real_page.Annots[1].P == real_page.obj
 
 
-# --- THIS TEST HAS BEEN REWRITTEN TO MATCH THE NEW REFACTOR ---
 @patch("pdftl.pages.links._rebuild_annotations_for_page")
 def test_rebuild_links_empty_context(mock_rebuild_annots):
     """
