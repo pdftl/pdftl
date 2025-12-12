@@ -40,18 +40,17 @@ pages using pageranges or even/odd keywords.
 
 Specification syntax:
 
-    [<page range>]<direction>[<sizes>][even|odd]<spec>
+    [<page_spec>][cols|rows][<sizes_or_pieces>]
 
-Page Ranges: Page ranges and qualifiers precede the chop definition.
-If no page range is given, the chop applies to all pages.
+Examples:
 
    1-10cols2
 
-     Apply a horizontal 2-piece chop to pages 1 through 10.
+     Apply a vertical 2-piece chop to pages 1 through 10.
 
    evencols(1:2)
 
-     Apply a horizontal 1-to-2 ratio chop to all even pages.
+     Apply a vertical 1-to-2 ratio chop to all even pages.
 
    odd 4-endcols3
 
@@ -61,18 +60,25 @@ If no page range is given, the chop applies to all pages.
 
      Chop horizontally (creating rows).
 
-Sizes: The sizes define the dimensions of the pieces.  This can be
-specified in several ways.
+Specification details:
 
-    If no size is given (e.g., 1-3rows), it defaults to 2 equal
-    pieces.
+<page_spec> is a page specification, consisting of an
+optional page range (like 1-4) followed immediately by an
+optional 'even' or 'odd'.  If no page range is given, all
+pages are assumed.
+
+
+<sizes_or_pieces> defines the dimensions of the chopped
+pieces.  This can be specified in several ways.
+
+    If omitted, the default is 2 equal pieces.
 
     <integer>
       Chop into N equal-sized pieces.
 
       Example: cols3 (Chop into 3 equal vertical columns).
 
-   <list>
+    <list>
       comma-separated list of custom sizes. Parentheses are optional.
 
       Example: rows(100, fill, 100) or rows100,fill,100

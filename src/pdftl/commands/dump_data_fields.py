@@ -99,7 +99,7 @@ _DUMP_DATA_FIELDS_EXAMPLES = [
     type="single input operation",
     desc="Print PDF form field data in UTF-8",
     long_desc=_DUMP_DATA_FIELDS_UTF8_LONG_DESC,
-    usage="<input> dump_data_utf8 [output <output>]",
+    usage="<input> dump_data_fields_utf8 [output <output>]",
     examples=_DUMP_DATA_FIELDS_UTF8_EXAMPLES,
     args=(
         ["input_pdf"],

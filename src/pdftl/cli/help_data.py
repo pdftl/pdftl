@@ -43,7 +43,8 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
     [
         (("filter", "(omitted)", "omitted", "filter_mode"), "filter_mode"),
         (("input", "inputs", "<input>"), "input"),
-        (("---", "pipeline"), "pipeline"),
+        (("---", "pipeline", "pipeline syntax"), "pipeline"),
+        (("pages", "range", "page_spec", "page specifications", "page_specifications", "page_specs"), "page_specs"),
         (
             ("output", "outputs", "options", "output_options", "<options>"),
             "output_options",

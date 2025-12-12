@@ -274,6 +274,7 @@ def print_help(command=None, dest=None):
             "filter_mode",
             "output_options",
             "pipeline",
+            "page_specs",
         ]
         for i, topic in enumerate(all_topics):
             if i > 0:
