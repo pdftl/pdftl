@@ -12,4 +12,4 @@ Portions of the `optimize_images` command are adapted from [OCRmyPDF](https://gi
 * **License:** Mozilla Public License 2.0
 * **Copyright:** © 2022 James R. Barlow
 
-The original source code can be found at: https://github.com/ocrmypdf/OCRmyPDF
+The original source code can be found at <https://github.com/ocrmypdf/OCRmyPDF>.

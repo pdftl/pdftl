@@ -1,10 +1,10 @@
 # pdftl
 
-<!-- [![PyPI](https://img.shields.io/pypi/v/pdftl)](https://pypi.org/project/pdftl/) -->
+[![PyPI](https://img.shields.io/pypi/v/pdftl)](https://pypi.org/project/pdftl/)
 [![CI](https://github.com/pdftl/pdftl/actions/workflows/ci.yml/badge.svg)](https://github.com/pdftl/pdftl/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/pdftl/pdftl/graph/badge.svg)](https://codecov.io/gh/pdftl/pdftl)
 <!-- [![Documentation Status](https://readthedocs.org/projects/pdftl/badge/?version=latest)](https://pdftl.readthedocs.io/en/latest/?badge=latest) -->
-<!-- [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pdftl)](https://pypi.org/project/pdftl/) -->
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pdftl)](https://pypi.org/project/pdftl/)
 
 **pdftl** ("PDF Tackle") is a CLI tool for PDF manipulation written in Python. It is intended to be a command-line compatible extension of the venerable `pdftk`.
 
@@ -26,27 +26,31 @@ Install with all features enabled (recommended):
 pip install "pdftl[full]"
 ```
 
-*Note: The full install includes `ocrmypdf`, `reportlab`, and `pdfium` for image optimization and text generation.*
+*Note: The full install includes `ocrmypdf`, `reportlab`, and `pdfium` for image optimization, text generation and text extraction.*
 
 ## Key Features
 
 ### 📄 Standard Operations
+
 * **Combine:** `cat`, `shuffle` (interleave pages from multiple docs).
 * **Split:** `burst` (split into single pages), `delete` pages.
 * **Metadata:** `dump_data`, `update_info` (supports XMP), `attach_files`, `unpack_files`.
 * **Watermarking:** `stamp` / `background` (single page), `multistamp` / `multibackground`.
 
 ### ✂️ Geometry & Splitting
+
 * **Rotate:** `rotate` pages (absolute or relative).
 * **Crop:** `crop` to margins or standard paper sizes (e.g., "A4").
 * **Chop:** `chop` pages into grids or rows (e.g., split a scanned spread into two pages).
 * **Spin:** `spin` content *inside* the page boundaries without changing page orientation.
 
 ### 📝 Forms & Annotations
+
 * **Forms:** `fill_form` (FDF/XFDF), `generate_fdf`, `dump_data_fields`.
 * **Annotations:** `modify_annots` (surgical edits to link properties, colors, borders), `delete_annots`, `dump_annots`.
 
 ### 🛠️ Advanced / Power User
+
 * **Text Replacement:** `replace` text in content streams using Regex (experimental).
 * **Code Injection:** `inject` raw PDF operators at the head/tail of content streams.
 * **Optimization:** `optimize_images` (smart compression via OCRmyPDF).
@@ -55,20 +59,24 @@ pip install "pdftl[full]"
 
 ## Usage Examples
 
-**Basic Concatenation**
+### Basic Concatenation
+
 ```bash
 # Merge two files
 pdftl in1.pdf in2.pdf cat output combined.pdf
 ```
 
-**Complex Geometry**
+### Complex Geometry
+
 ```bash
 # Take pages 1-5, rotate them 90 degrees East, and crop to A4
 pdftl in.pdf cat 1-5east --- crop "(a4)" output out.pdf
 ```
 
-**Advanced Pipelining**
+### Advanced Pipelining
+
 You can chain operations without intermediate files using `---`:
+
 ```bash
 # Burst a file, but rotate and stamp every page first
 pdftl in.pdf rotate south \
@@ -76,13 +84,15 @@ pdftl in.pdf rotate south \
   --- burst output page_%04d.pdf
 ```
 
-**Forms and Metadata**
+### Forms and Metadata
+
 ```bash
 # Fill a form and flatten it (make it non-editable)
 pdftl form.pdf fill_form data.fdf flatten output signed.pdf
 ```
 
-**Modify Annotations**
+### Modify Annotations
+
 ```bash
 # Change all Highlight annotations on odd pages to Red
 pdftl docs.pdf modify_annots "odd/Highlight(C=[1 0 0])" output red_notes.pdf
@@ -164,7 +174,6 @@ Options for PDF output:
   verbose                Turn on verbose output
 
 ```
-
 
 ## License
 

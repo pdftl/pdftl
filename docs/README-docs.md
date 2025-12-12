@@ -39,7 +39,7 @@ sudo mandb
 
 This process has two steps: generating the source `.rst` files and then building the HTML site with Sphinx.
 
-**Step 1: Generate the `.rst` source files**
+#### Step 1: Generate the `.rst` source files
 
 This will create a `docs/source/` directory containing `index.rst` and a subdirectory with a file for each command.
 
@@ -47,7 +47,7 @@ This will create a `docs/source/` directory containing `index.rst` and a subdire
 python docs/generate_sphinx_docs.py
 ```
 
-**Step 2: Initialize and Build the Sphinx Site**
+#### Step 2: Initialize and Build the Sphinx Site
 
 If this is your first time, you need to initialize a Sphinx project. You only need to do this once.
 

@@ -9,7 +9,7 @@ authors = [{ name="The pdftl developers", email="ether-jet-emerald@duck.com" }]
 description = "A capable CLI tool for PDF manipulation inspired by pdftk."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MPL-2.0" }
+license = "MPL-2.0"
 keywords = ["pdf", "pdftk", "pdftl", "cli", "manipulation", "automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -17,7 +17,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     "Operating System :: OS Independent",
     "Topic :: Utilities",
     "Topic :: Text Processing",
