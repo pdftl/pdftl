@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/pdftl)](https://pypi.org/project/pdftl/)
 [![CI](https://github.com/pdftl/pdftl/actions/workflows/ci.yml/badge.svg)](https://github.com/pdftl/pdftl/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/pdftl/pdftl/graph/badge.svg)](https://codecov.io/gh/pdftl/pdftl)
-<!-- [![Documentation Status](https://readthedocs.org/projects/pdftl/badge/?version=latest)](https://pdftl.readthedocs.io/en/latest/?badge=latest) -->
+[![Documentation Status](https://readthedocs.org/projects/pdftl/badge/?version=latest)](https://pdftl.readthedocs.io/en/latest/?badge=latest)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pdftl)](https://pypi.org/project/pdftl/)
 
 **pdftl** ("PDF Tackle") is a CLI tool for PDF manipulation written in Python. It is intended to be a command-line compatible extension of the venerable `pdftk`.
