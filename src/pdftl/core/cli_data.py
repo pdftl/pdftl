@@ -14,18 +14,25 @@ CLI_DATA = {
             "title": "pdftl help",
             "desc": "Get help",
             "long_desc": """ If a `help` argument is given, the
-            remaining arguments are scanned for a keyword. This can be
-            one of the operation names, or an option name, or a
-            special help topic, or an alias. If a match is found, the
-            help is printed.
+remaining arguments are scanned for a keyword. This can be
+one of the operation names, or an option name, or a
+special help topic, or an alias. If a match is found, the
+help is printed.
 
-            By default, colors are used if printing directly to the
-            terminal, and usually not in other situations (e.g., if
-            the output is redirected). If the environment variable
-            `FORCE_COLORS` is set, then colors should appear in all
-            cases.
+By default, colors are used if printing directly to the
+terminal, and usually not in other situations (e.g., if
+the output is redirected). If the environment variable
+`FORCE_COLORS` is set, then colors should appear in all
+cases.
 
+The special help topic `all` is particularly interesting.
             """,
+            "examples": [
+                {
+                    "desc": "Get all help. This is nice if you set `FORCE_COLORS=1` and pipe the output to `less -R`, with the complete command `FORCE_COLORS=1 pdftl help all | less -R`.",
+                    "cmd": "help all",
+                },
+            ],
         },
         "pipeline": {
             "title": "pipeline syntax",
