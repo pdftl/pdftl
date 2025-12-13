@@ -13,7 +13,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 _DELETE_ANNOTS_LONG_DESC = """
 
-The delete_annots operation deletes in the PDF file.
+The `delete_annots` operation deletes annotations in a PDF file.
 Page ranges can be specified. All annotations are removed from those pages.
 The default page range is all pages.
 

@@ -23,28 +23,30 @@ from pdftl.utils.string import split_escaped
 
 _REPLACE_LONG_DESC = """
 
-The 'replace' operation performs replacement of parts of
+The `replace` operation performs replacement of parts of
 page content streams, based on regular expressions. in the
 PDF file.  Page ranges can be specified. The default page
-range is all pages. The <spec> specification is:
+range is all pages. The `<spec>` specification is:
 
+```
   [optional page range]/<from>/<to>/[count]
+```
 
-where <from> and <to> are strings describing regular
-expressions, as described in
-https://docs.python.org/3/library/re.html.
+where `<from>` and `<to>` are strings describing regular
+expressions, as described at
+<https://docs.python.org/3/library/re.html>.
 
-The delimiter / can be replaced with any other
-non-alphnumeric character. It must break the <spec> into
-exactly 4 parts, and is determined by examining the final
-character of <spec>, ignoring digits.
+The delimiter `/` can be replaced with any other non-alphnumeric
+character. It must break the `<spec>` into exactly 4 parts (where the
+first may be empty). The delimiter is defined as the final character
+of `<spec>`, ignoring digits.
 
-Any trailing digits are interpreted as 'count', which is the
+Any trailing digits are interpreted as `count`, which is the
 maximum number of times the expression will be matched for
 each page content stream.
 
 Before and after the replacement is applied, the page
-content stream is normalized (see the 'normalize' operation), which
+content stream is normalized (see the `normalize` operation), which
 results in it appearing with one operator per line.
 
 """

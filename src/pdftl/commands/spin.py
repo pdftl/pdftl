@@ -14,10 +14,9 @@ from pdftl.utils.affix_content import affix_content
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 _SPIN_LONG_DESC = """
-
 Spins page content about the center of the page, by an arbitrary angle.
 The page media (paper size and orientation) is left unchanged.
-Each spec is of the form <page_range>:<angle>, where <angle> is in degrees.
+Each spec is of the form `<page_range>:<angle>` where `<angle>` is in degrees.
 A positive angle is a counterclockwise spin.
 
 """

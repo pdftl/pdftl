@@ -18,13 +18,15 @@ from .parsers.inject_parser import parse_inject_args
 
 _INJECT_LONG_DESC = """
 
-Add PDF code <code> at head or tail of page content streams for pages.
+Add PDF code `<code>` at head or tail of page content streams for pages.
 
-<injection_spec> = [<spec>...] (head|tail) <code>
+`<injection_spec> = [<spec>...] (head|tail) <code>`
 
-where <spec> is a page specification (default: all pages),
-and <code> is a PDF content stream fragment to instead at
+where `<spec>` is a page specification (default: all pages),
+and `<code>` is a PDF content stream fragment to instead at
 either the head or tail of those pages' streams.
+
+**Warning:** This can easily break content streams. The resulting PDF files will not render as expected.
 
 """
 

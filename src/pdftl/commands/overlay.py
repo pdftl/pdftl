@@ -18,7 +18,7 @@ from pdftl.core.registry import register_operation
 
 _STAMP_LONG_DESC = """
 
-The stamp operation overlays the first page of the stamp PDF
+The `stamp` operation overlays the first page of the stamp PDF
 onto every page of the input document.
 
 """
@@ -47,7 +47,7 @@ _MULTISTAMP_EXAMPLES = [
 
 _BACKGROUND_LONG_DESC = """
 
-The background operation places the first page of the
+The `background` operation places the first page of the
 background PDF underneath every page of the input document.
 
 """

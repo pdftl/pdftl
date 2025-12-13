@@ -13,11 +13,17 @@ from pdftl.utils.transform import transform_pdf
 
 _ROTATE_LONG_DESC = """
 
-Rotates pages by 90, 180, or 270 degrees. Each spec consists of a
-page range followed by a rotation direction: north (0), east (90),
-south (180), west (270), left (-90), right (+90), or down (+180).
-For example, '1-endeast' rotates all pages 90 degrees clockwise.
-'2-3left 4south' rotates pages 2-3 left and page 4 upside-down.
+Rotates pages by 90, 180, or 270 degrees. Each '<spec>' consists of a
+page range followed by a rotation direction. A rotation direction is
+either a cardinal direction or a relative direction.
+
+The cardinal directions `north`, `east`, `south`, `west` are absolute rotations, relative to the page's "natural" orientation which is `north`. (You get to find out what this natural orientation is by setting this to `north` and inspecting the file. Often it is `north` already but not always.)
+
+The relative directions `left`, `right`, `down` are relative to the page's current rotation, viewed from the topside of the page. For example, `down` will turn pages upside-down. And `right` rotates 90 degrees clockwise.
+
+For example, '1-endeast' orients all pages 90 degrees clockwise compared to their natural rotation.
+
+And '2-3left 4south' rotates pages 2-3 leftwards and makes page 4 Australian.
 
 """
 

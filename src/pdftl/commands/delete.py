@@ -13,18 +13,25 @@ from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _DELETE_LONG_DESC = """
 
-The delete operation is used to delete pages from one PDF.
-This operation is performed 'in-place' and the output PDF
-should retain all essential features of the input
-except the missing pages.
+The `delete` operation is used to delete pages from one PDF.  This
+operation is performed 'in-place' and the output PDF should retain all
+essential features of the input except the missing pages. So if you
+want to extract pages 1-5 of a PDF file, then it may be a good idea is
+use this operation to delete pages `6-end` rather than using `cat`
+(which would have to create a new PDF file from scratch and graft
+pages 1-5 from the input file in, using all sorts of trickery).
 
 """
 
 _DELETE_EXAMPLES = [
     {
         "cmd": "in.pdf delete 1 output out.pdf",
-        "desc": "Delete the first page:",
-    }
+        "desc": "Delete the first page",
+    },
+    {
+        "cmd": "in.pdf delete '~1' output out.pdf",
+        "desc": "Keep only the first page (by deleting the others)",
+    },
 ]
 
 

@@ -18,7 +18,7 @@ from pdftl.utils.string import compact_json_string, xml_encode_for_info
 
 _DUMP_ANNOTS_LONG_DESC = """
 
-The dump_annots operation extracts and prints information about
+The `dump_annots` operation extracts and prints information about
 annotations within the PDF file.
 
 """
@@ -55,9 +55,9 @@ def dump_annots(pdf, output_file=None):
 
 _DUMP_DATA_ANNOTS_LONG_DESC = """
 
-The dump_data_annots operation extracts and prints
+The `dump_data_annots` operation extracts and prints
 information about annotations within the PDF file in the style of
-pdftk.
+`pdftk`.
 
 """
 

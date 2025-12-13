@@ -23,21 +23,22 @@ _CROP_LONG_DESC = """
 
 Crops pages to a rectangle defined by offsets from the edges.
 
-The format is page-range(left[,top[,right[,bottom]]]).
-Units can be pt (points), in (inches),
-mm, cm or % (percentage). If omitted, the default unit is pt.
+The format is `page-range(left[,top[,right[,bottom]]])`.
+If you omit some of these, the rest are filled in in the obvious way.
+Units can be `pt` (points), `in` (inches),
+`mm`, `cm` or `%` (a percentage). If omitted, the default unit is `pt`.
 
-For example, '1-end(10pt,20pt,10pt,20pt)' removes a
+For example, `1-end(10pt,20pt,10pt,20pt)` removes a
 margin of 10 points from the left and right, and
 20 points from the top and bottom.
 
-Alternatively, specify 1-3(a4) to crop pages 1-3 to size a4.
+Alternatively, specify `1-3(a4)` to crop pages `1-3` to size a4.
 
-Many paper size names are allowed, see data/paper_sizes.py
+Many paper size names are allowed, see `data/paper_sizes.py`.
 
-For landscape add the suffix _l to the paper size, e.g.,  a4_l.
+For landscape add the suffix `_l` to the paper size, e.g.,  `a4_l`.
 
-If the 'preview' keyword is given, a rectangle will be drawn instead of cropping.
+If the `preview` keyword is given, a rectangle will be drawn instead of cropping.
 
 """
 

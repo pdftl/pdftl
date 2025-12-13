@@ -142,10 +142,6 @@ def test_write_json_output_compaction_skips_complex_lists(complex_list):
         ), f"Complex list was incorrectly compacted:\n{output_string}"
 
 
-# ================================================================
-# ===== NEW TESTS (NOW WITH PATCHING) ============================
-# ================================================================
-
 # --- Mocks for pikepdf objects ---
 
 _objgen_counter = 100  # Start high to avoid (0, 0)

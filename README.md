@@ -34,7 +34,7 @@ pip install "pdftl[full]"
 
 * **Combine:** `cat`, `shuffle` (interleave pages from multiple docs).
 * **Split:** `burst` (split into single pages), `delete` pages.
-* **Metadata:** `dump_data`, `update_info` (supports XMP), `attach_files`, `unpack_files`.
+* **Metadata:** `dump_data`, `update_info`, `attach_files`, `unpack_files`.
 * **Watermarking:** `stamp` / `background` (single page), `multistamp` / `multibackground`.
 
 ### ✂️ Geometry & Splitting

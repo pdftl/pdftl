@@ -14,18 +14,18 @@ from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 _NORMALIZE_LONG_DESC = """
 
-The 'normalize' operation formats page
+The `normalize` operation formats page
 content streams for readability. This results in the content
 stream appearing with one PDF content operator per line.
 
 To see the effect of this operation in the PDF file (for
 example, to examine a content stream in order to come up
-with a regular expression to use in the 'replace' operation)
-you should pass the 'uncompress' option to avoid compression
+with a regular expression to use in the `replace` operation)
+you should pass the `uncompress` option to avoid compression
 of the page content stream.
 
-The <spec> specification defines the pages on which to
-perform this operation.
+The `<spec>` specification defines the pages on which to
+perform this operation. See the help topic [[`page_specs`]].
 
 """
 

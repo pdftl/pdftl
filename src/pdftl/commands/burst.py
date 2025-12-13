@@ -14,7 +14,7 @@ from pdftl.core.registry import register_operation
 
 _BURST_LONG_DESC = """
 
-The burst operation splits a single input PDF into multiple
+The `burst` operation splits a single input PDF into multiple
 single-page PDF files. An optional output template can be provided.
 
 """

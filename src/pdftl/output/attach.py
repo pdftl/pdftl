@@ -19,64 +19,85 @@ from pdftl.utils.io_helpers import can_read_file
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.user_input import UserInputContext, filename_completer
 
-_ATTACH_LONG_DESC = """Attaches one or more files to the PDF, either
+_ATTACH_LONG_DESC = """Attach one or more files to the PDF, either
 at the document level or associated with specific pages.
 
 The command works by reading a list of arguments from left to
-right. Keywords like 'to_page' and 'relation' apply to all the
+right. Keywords like `to_page` and `relation` apply to all the
 filenames that came just before them.
 
-Keywords
+### Keywords
 
-to_page <page_spec>
+#### `to_page <page_spec>`
 
 Attaches all preceding files (since the last command) to the specified
-page(s) as clickable icons. <page_spec> can be a single page ('1'), a
-range ('5-10'), or a qualifier ('even', 'odd').
+page(s) as clickable icons. <page_spec> can be a single page (`1`), a
+range (`5-10`), or a qualifier (`even`, `odd`). See also the help
+topic [[`page_specs`]].
 
-relation <type>
+#### `relation <type>`
 
 Sets the metadata relationship for ALL preceding files (since the last
-command). This defines the files' purpose. Valid <type> values are:
-Source, Data, Alternative, Supplement, Unspecified.
+command). This defines the files' purpose. Valid `<type>` values are:
+`Source`, `Data`, `Alternative`, `Supplement`, `Unspecified`.
 
-PROMPT Can be used in place of a filename or <page_spec> to be
-prompted interactively.
+#### `PROMPT`
 
-Default Behavior
+This keyword can be used in place of a filename or `<page_spec>`, in
+order to be prompted interactively.
 
-If a file is listed without a 'to_page' keyword following it, it will
+#### Default Behavior
+
+If a file is listed without a `to_page` keyword following it, it will
 be attached at the document level (visible in the "Attachments" panel
 of a PDF reader, but not on a specific page).
 
-Examples
+## Examples
 
-Attach a file to the whole document:
+> Attach a file to the whole document:
 
+```
 pdftl in.pdf attach_files data.csv output out.pdf
+```
 
-Attach a file to a specific page:
+> Attach a file to a specific page:
+
+```
 pdftl in.pdf attach_files chart.png to_page 5 output out.pdf
+```
 
-Attach multiple files to one page:
+> Attach multiple files to one page:
+
+```
 pdftl in.pdf attach_files a.pdf b.pdf to_page 1 output out.pdf
+```
 
-Set a relationship for a document-level file:
+> Set a relationship for a document-level file:
+
+```
 pdftl in.pdf attach_files code.zip relation Source output out.pdf
+```
 
-Chain multiple commands:
+> Chain multiple commands:
+> `a.pdf` and `b.pdf` are attached to page 1, `c.pdf` is attached to page 5.
 
-a.pdf and b.pdf are attached to page 1, c.pdf is attached to page 5.
+```
 pdftl in.pdf attach_files a.pdf b.pdf to_page 1 c.pdf to_page 5 output out.pdf
+```
 
-Combine 'to_page' and 'relation': Keywords apply to all preceding files in their group.
-Both 'a.pdf' and 'b.pdf' are attached to page 1 AND are both set with the 'Data' relationship.
+> Combine `to_page` and `relation`: Keywords apply to all preceding files in their group.
+> Both `a.pdf` and `b.pdf` are attached to page 1 AND are both set with the `Data` relationship.
+
+```
 pdftl in.pdf attach_files a.pdf b.pdf to_page 1 relation Data output out.pdf
+```
 
-Use interactive prompts:
+> Use interactive prompts:
+> Prompt for a file, then prompt for the page.
 
-Prompt for a file, then prompt for the page.
+```
 pdftl in.pdf attach_files PROMPT to_page PROMPT output out.pdf
+```
 """
 
 

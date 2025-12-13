@@ -14,10 +14,16 @@ from pdftl.utils.page_specs import expand_specs_to_pages
 
 _CAT_LONG_DESC = """
 
-The cat operation is used to assemble pages from one or more PDFs.
-Input PDFs can be assigned to handles (e.g., A=one.pdf B=two.pdf).
+The `cat` operation is used to assemble pages from one or more PDFs.
+Input PDFs can be assigned to handles (e.g., `A=one.pdf B=two.pdf`).
 Each spec may refer to these handles to select pages or page ranges.
 When no handle is specified, the first input file is used.
+
+Considerable effort is made to do "the right thing" as regards
+hyperlinks and any outlines (table of contents). Since `cat` is quite
+flexible, exactly what the right thing is sometimes not clearly
+defined, but nevertheless if you do get a clearly incorrect output,
+then please report it as a bug.
 
 """
 

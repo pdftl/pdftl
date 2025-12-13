@@ -32,7 +32,7 @@ def _get_page_tuples_array(inputs, specs, opened_pdfs, aliases=None):
 
 _SHUFFLE_LONG_DESC = """
 
-The shuffle operation collates pages from multiple input documents,
+The `shuffle` operation collates pages from multiple input documents,
 taking one page from each document in turn to create an interleaved
 output file.
 

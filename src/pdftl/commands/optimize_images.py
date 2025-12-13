@@ -43,6 +43,46 @@ except ImportError as exc:
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError, PackageError
 
+_OPTIMIZE_IMAGES_LONG_DESC_MD = """
+
+The operation **optimize_images** optimizes images in a PDF file.
+
+> **Note:** This feature requires `ocrmypdf` to be installed.
+
+### Valid Optimization Options
+
+These options can be passed as arguments following `optimize_images`.
+
+* **low** (aliases: `lossless`, `safe`):
+    * Apply lossless optimizations only.
+
+* **medium** (aliases: `lossy_medium`, `lossy`):
+    * Also allow some lossy optimizations.
+
+* **high** (aliases: `aggressive`, `high`, `lossy_high`):
+    * Also allow more aggressive lossy optimizations.
+
+* **jbig2_lossy**:
+    * JBIG2 lossy mode (see ocrmypdf documentation).
+    * This is independent of the preceding options.
+
+* **all** (aliases: `full`):
+    * Use all of the above.
+
+* **jpeg_quality=**`<n>` (default: 75)
+* **png_quality=**`<n>` (default: 70)
+* **quality=**`<n>`
+    * Set JPEG and/or PNG quality to `<n>`.
+    * `<n>` must be an integer between 0 and 100.
+    * 0 means use the default quality.
+    * 1 is the lowest possible quality.
+    * 100 is the highest possible quality.
+
+* **jobs=**`<n>` (default: 0)
+    * Use parallel processing with `<n>` jobs.
+    * If `<n>` is 0, this is set automatically.
+"""
+
 _OPTIMIZE_IMAGES_LONG_DESC = """
 
 The operation 'optimize_images' optimizes images in a PDF file.
@@ -114,7 +154,7 @@ registration_dict = {
     "tags": ["in_place"],
     "type": "single input operation",
     "desc": "Optimize images",
-    "long_desc": _OPTIMIZE_IMAGES_LONG_DESC,
+    "long_desc": _OPTIMIZE_IMAGES_LONG_DESC_MD,
     "usage": "<input> optimize_images [<optimize_option>...] output <file> [<option...>]",
     "examples": _OPTIMIZE_IMAGES_EXAMPLES,
     "args": (["input_pdf", "operation_args", "output"], {}),

@@ -24,20 +24,20 @@ on specified pages.
 This operation allows for targeted, surgical changes to annotation
 dictionaries, such as changing a link's border or a highlight's color.
 
-The syntax is 'selector(Key=Value, ...)', where:
-  - 'selector' is a page range (e.g., '1-5', 'odd') and/or an
-    annotation type (e.g., '/Link', '/Highlight').
-  - 'Key=Value' pairs define the PDF dictionary keys to set and
+The syntax is `selector(Key=Value, ...)`, where:
+  - `selector` is a page range (e.g., `1-5`, `odd`, see [[`page_specs`]]) and/or an
+    annotation type (e.g., `/Link`, `/Highlight`). 
+  - `Key=Value` pairs define the PDF dictionary keys to set and
     their new values.
 
-Value Syntax:
-  - PDF Names: /Name
-  - PDF Strings: (My String)
-  - PDF Arrays: [0 0 1]
-  - PDF Booleans: true / false
-  - Null (to delete a key): null
-  - Numbers: 1.5, 10
-  - Plain strings are treated as PDF Strings: Value -> (Value)
+### Value Syntax
+  - PDF Names: `/Name`
+  - PDF Strings: `(My String)`
+  - PDF Arrays: `[0 0 1]`
+  - PDF Booleans: `true` / `false`
+  - Null (to delete a key): `null`
+  - Numbers: `1.5`, `10`
+  - Plain strings are treated as PDF Strings: `Value` is interpreted as `(Value)`
 
 """
 

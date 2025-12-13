@@ -13,10 +13,14 @@ import sys
 import textwrap
 from datetime import date
 
-# Third-party imports
 import pikepdf
+from rich import box
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.markdown import Heading, Markdown
+from rich.markup import escape
+from rich.panel import Panel
+from rich.text import Text
 
-# Local application imports
 from pdftl.cli.console import console
 from pdftl.cli.help_data import (
     SPECIAL_HELP_TOPICS_MAP,
@@ -29,9 +33,46 @@ from pdftl.core.registry import registry
 from pdftl.utils.string import before_space
 
 
+class LeftJustifiedHeading(Heading):
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        text = self.text
+        text.justify = "left"
+        if self.tag == "h1":
+            # Draw a border around h1s
+            yield Panel(
+                text,
+                box=box.HEAVY,
+                style="markdown.h1.border",
+            )
+        else:
+            # Styled text for h2 and beyond
+            if self.tag == "h2":
+                yield Text("")
+            yield text
+
+
+class HelpMarkdown(Markdown):
+    elements = {
+        **Markdown.elements,
+        "heading_open": LeftJustifiedHeading,
+    }
+
+    def __init__(self, markup, *args, **kwargs):
+        self.source = markup
+        super().__init__(markup, *args, **kwargs)
+
+    def __str__(self):
+        return self.source
+
+
 def get_synopsis():
     """Returns the main synopsis text for the application."""
-    special_help_topics = " | ".join([x[0] for x in SPECIAL_HELP_TOPICS_MAP.keys()])
+    # Note: Using Markdown syntax here provides better output when rendered by rich
+    special_help_topics = " | ".join(
+        [f"{x[0]}" for x in SPECIAL_HELP_TOPICS_MAP.keys()]
+    )
     ret = SYNOPSIS_TEMPLATE.strip().format(
         whoami=WHOAMI, special_help_topics=special_help_topics
     )
@@ -90,114 +131,125 @@ def print_version(dest=None):
         homepage=HOMEPAGE,
         dependencies=dependencies,
     )
-    if dest is None:
+
+    if dest is None or dest is sys.stdout or dest is sys.stderr:
         console.print(output)
     else:
         print(output, file=dest)
 
 
-def _format_long_desc_string(desc):
-    """Formats a multi-line string with indentation for detailed descriptions."""
-    wrapped_lines = [
-        textwrap.fill(line, width=77, initial_indent="  ", subsequent_indent="  ")
-        for line in desc.strip().split("\n")
-    ]
-    return "Details:\n\n" + "\n".join(wrapped_lines)
-
-
-def _format_example_header_string(input_string):
-    separator = "\n  # "
-    return separator + separator.join(input_string.strip().split("\n"))
-
-
-def _format_example_topic_heading(topic, count):
-    return _format_example_header_string(
-        "Example" + (" " + str(count) if count > 1 else "") + f" for '{topic}'"
-    )
-
-
-def _format_example_command(cmd):
-    return f"\n  {WHOAMI} {cmd.strip()}"
-
-
 def _format_examples_block(examples, show_topics=False):
-    output = ""
+    """
+    Formats the examples into a rich-ready Markdown block.
+    We convert the structured data into a Markdown code/list structure.
+    """
+    output = "## Examples\n\n"
     per_example_topic_count = 1
     topic = None
+
     for ex in examples:
+        # Add topic heading if necessary
         if show_topics and ex.get("topic"):
-            per_example_topic_count = (
-                per_example_topic_count + 1 if ex["topic"] == topic else 1
-            )
+            if ex["topic"] == topic:
+                per_example_topic_count += 1
+            else:
+                per_example_topic_count = 1
             topic = ex["topic"]
-            output += _format_example_topic_heading(topic, per_example_topic_count)
+
+            # Use Markdown heading or strong text for topics
+            heading_text = f"Example{f' {per_example_topic_count}' if per_example_topic_count > 1 else ''} for '`{topic}`'"
+            output += f"### {heading_text}\n"
 
         assert "desc" in ex and "cmd" in ex
-        output += _format_example_header_string(ex["desc"])
-        output += _format_example_command(ex["cmd"])
-        output += "\n"
-    return "Examples:\n" + output.rstrip()  # remove trailing newline
+
+        # Use a quote block for description and a fenced code block for command
+        output += f"> {ex['desc']}\n"
+        output += f"```\n{WHOAMI} {ex['cmd'].strip()}\n```\n\n"
+
+    return output.rstrip()
+
+
+def _usage_as_markdown(x: str) -> str:
+    return " ".join(map(lambda y: f"`{y}`", x.strip().split()))
 
 
 def _print_topic_help(hprint, topic_data, topic_name):
     """Prints the detailed help for a specific command or topic."""
-    hprint(f"{WHOAMI}: help for '{topic_name}'")
+
+    safe_topic_name = escape(topic_name)
+    safe_whoami = escape(WHOAMI)
+
+    hprint(HelpMarkdown(f"# {safe_whoami}: help for `{safe_topic_name}`"))
+
     if desc := topic_data.get("desc", None):
-        hprint(f"\n  {desc.strip()}")
+        hprint(HelpMarkdown(f"\n{desc.strip()}"))
+
     if usage := topic_data.get("usage", None):
-        hprint(f"\nUsage:\n\n  {WHOAMI} {usage.strip()}")
-    if examples := topic_data.get("examples", None):
-        hprint("\n" + _format_examples_block(examples))
+        usage_string = f"## Usage\n> {WHOAMI} {_usage_as_markdown(usage)}"
+        hprint(HelpMarkdown(usage_string))
+
     if long_desc := topic_data.get("long_desc", None):
-        hprint("\n" + _format_long_desc_string(long_desc))
+        cleaned_desc = long_desc.strip()
+        hprint(HelpMarkdown("\n## Details\n" + cleaned_desc))
+
+    if examples := topic_data.get("examples", None):
+        example_markdown = _format_examples_block(examples)
+        hprint(HelpMarkdown(example_markdown))
+
     if tags := topic_data.get("tags", None):
-        hprint(f"\nTags: {', '.join(tags)}")
+        hprint(HelpMarkdown(f"\n**Tags**: {', '.join(tags)}"))
+
+    if caller := topic_data.get("caller", None):
+        hprint(HelpMarkdown(f"\n*Source: {caller}*"))
 
 
 def print_main_help(hprint):
     """Prints the main, default help screen."""
-    hprint(f"{WHOAMI} - PDF Tackle {get_project_version()}")
-    hprint("\n  A wannabe CLI compatible clone/extension of pdftk\n")
-    hprint("Usage:\n")
-    for line in get_synopsis().splitlines():
-        hprint(f"  {line}")
 
-    hprint("\nOperations:\n")
+    safe_whoami = escape(WHOAMI)
+
+    hprint(HelpMarkdown(f"# **{safe_whoami}** - PDF Tackle {get_project_version()}"))
+    hprint(HelpMarkdown("_A wannabe CLI compatible clone/extension of pdftk_"))
+
+    hprint(HelpMarkdown("## Usage"))
+    hprint(HelpMarkdown("\n```\n" + get_synopsis().strip() + "\n```"))
+
+    # hprint(HelpMarkdown("## Operations\n\n\n"))
     all_ops_and_opts = list(registry.operations) + list(registry.options)
-    col_width = 3 + max(len(x) for x in all_ops_and_opts)
 
-    def print_in_cols(col1, col2):
-        indented_col2 = textwrap.fill(col2, width=80, subsequent_indent=" " * col_width)
-        hprint(f"  {col1:<{col_width - 3}} {indented_col2.lstrip()}")
+    # # Define a fixed column width based on the longest command name
+    # col_width = max(len(x) for x in all_ops_and_opts) + 4
 
-    for operation, info in sorted(registry.operations.items()):
-        print_in_cols(operation, info["desc"])
+    _print_desc_table(hprint, "Operations", registry.operations)
+    _print_desc_table(hprint, "Options", registry.options)
 
-    hprint("\nOptions for PDF output:\n")
-    for opt, info in sorted(registry.options.items()):
-        print_in_cols(opt, info["desc"])
-    hprint()
+
+def _print_desc_table(hprint, title, container):
+    table = f"|{title}||\n|-|-|\n"
+    for operation, info in sorted(list(container.items())):
+        table += f"|`{escape(operation)}`|{info['desc']}|\n"
+    hprint(HelpMarkdown(table))
 
 
 def _print_output_options_help(hprint):
     """Prints detailed help for all output options."""
-    hprint("Options for PDF output:\n")
+    hprint(HelpMarkdown("# Options for PDF output\n"))
     for opt, info in sorted(registry.options.items()):
-        hprint(opt)
-        hprint()
-        hprint(f"  {info['desc']}")
-        hprint()
+        safe_opt = escape(opt)
+        hprint(HelpMarkdown(f"\n## `{safe_opt}`"))
+        hprint(HelpMarkdown(f"\n> {info['desc']}\n"))
         if "long_desc" in info:
-            hprint(_format_long_desc_string(info["long_desc"]))
-            hprint()
+            cleaned_desc = info["long_desc"].strip()
+            hprint(HelpMarkdown("\n## Details\n"))
+            hprint(HelpMarkdown(cleaned_desc))
         if examples := info.get("examples", None):
-            hprint("  " + _format_examples_block(examples).replace("\n", "\n  "))
-            hprint()
+            example_markdown = _format_examples_block(examples)
+            hprint(HelpMarkdown(example_markdown))
 
 
 def _print_examples_help(hprint):
-    """Prints all examples and not much else"""
-    hprint(_format_examples_block(_discover_examples(), show_topics=True))
+    """Prints all examples and not much else (uses HelpMarkdown output)."""
+    hprint(HelpMarkdown(_format_examples_block(_discover_examples(), show_topics=True)))
 
 
 def _discover_examples():
@@ -242,7 +294,7 @@ def _print_help_dispatch_table():
     return dispatch_table
 
 
-def print_help(command=None, dest=None):
+def print_help(command=None, dest=None, raw=False):
     """
     Displays help information for the tool, a specific command, or a topic.
 
@@ -250,14 +302,50 @@ def print_help(command=None, dest=None):
         command (str, optional): The command or topic to get help for.
                                  If None, the main help screen is shown.
         dest (file object, optional): The destination to write help text to.
-                                      Defaults to sys.stderr.
+                                      Defaults to sys.stdout.
+        raw (bool, optional): If True, output raw markdown/text instead of rendered Rich output.
     """
 
     def hprint(*args):
-        if dest is None:
-            print(*args, file=sys.stderr)
+        # 1. Process all arguments into rich-compatible objects or raw strings.
+        processed_args = []
+        for arg in args:
+            if isinstance(arg, HelpMarkdown):
+                processed_args.append(arg)
+            elif isinstance(arg, str):
+                if raw:
+                    processed_args.append(arg)
+                else:
+                    processed_args.append(Text.from_markup(arg))
+            else:
+                processed_args.append(arg)
+
+        # 2. Output handling.
+        use_rich_console = not raw and (
+            dest is None or dest is sys.stdout or dest is sys.stderr
+        )
+
+        if use_rich_console:
+            console.print(*processed_args)
+        elif not raw:
+            # Rendered output for files/pipes (fixes missing table format in files)
+            width = console.width if console.width else 80
+            file_console = Console(file=dest, width=width, force_terminal=False)
+            file_console.print(*processed_args)
         else:
-            console.print(*[x.replace("[", "\\[") for x in args])
+            # Raw output (Markdown source)
+            output_parts = []
+            for arg in processed_args:
+                if isinstance(arg, HelpMarkdown):
+                    output_parts.append(str(arg))
+                elif isinstance(arg, Text):
+                    output_parts.append(arg.plain)
+                else:
+                    output_parts.append(str(arg))
+
+            output_string = " ".join(output_parts)
+            target = dest if dest is not None else sys.stdout
+            print(output_string, file=target)
 
     safe_command = command.lower() if command else None
 
@@ -278,8 +366,9 @@ def print_help(command=None, dest=None):
         ]
         for i, topic in enumerate(all_topics):
             if i > 0:
-                hprint("\n" + "-" * 79 + "\n")
-            print_help(topic, dest=dest)
+                # Use a separator line
+                hprint(HelpMarkdown("\n---\n"))
+            print_help(topic, dest=dest, raw=raw)
     else:
         logging.warning(
             "Unknown help topic '%s' requested, showing default help\n", command

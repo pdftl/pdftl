@@ -24,7 +24,7 @@ from pdftl.output.attach import attach_files
 
 @register_option(
     "output <file>",
-    desc="The output file path, or a template for 'burst'",
+    desc="The output file path, or a template for `burst`",
     type="one mandatory argument",
 )
 def _output_option():
@@ -68,26 +68,27 @@ def _encrypt_options():
 
 
 _ALLOW_LONG_DESC = """
-Default encryption permissions to forbid everything.
-Use this option to allow permissions selectively.
+Files saved with encryption have various possible permissions.
+The default encryption permissions are to forbid all possible actions.
+Use the `allow` output option to allow permissions selectively.
 
-Arguments <perm>... must be one or more permissions from among
+Arguments `<perm>...` must be one or more permissions from among
 the following. Upper/lowercase characters are treated the same.
 
-<perm>             Allows
----------------------------------------------
-Printing           standard printing
-DegradedPrinting   low quality printing
-ModifyContents     modification and "assembly"
-Assembly           "assembly"
-CopyContents       copying and screenreaders*
-ScreenReaders      screenreaders*
-ModifyAnnotations  modifying annotations
-FillIn             filling in forms
-AllFeatures        all of the above
+|Permission `<perm>`|Allows|
+|-|-|
+|Printing|           standard printing|
+|DegradedPrinting|   low quality printing|
+|ModifyContents|     modification and "assembly"|
+|Assembly|           "assembly"|
+|CopyContents|       copying and "screenreaders"|
+|ScreenReaders|      "screenreaders"|
+|ModifyAnnotations|  modifying annotations|
+|FillIn|             filling in forms|
+|AllFeatures|        all of the above|
 
-* Screenreaders are allowed by modern PDF readers,
-regardless of permissions settings.
+Note: Screenreaders are allowed to be used by modern PDF readers,
+regardless of these permissions settings.
 """
 
 

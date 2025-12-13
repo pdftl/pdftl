@@ -166,7 +166,7 @@ def test_print_help_variants(monkeypatch, cmd):
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
     buf_out, buf_err = io.StringIO(), io.StringIO()
     with redirect_stdout(buf_out), redirect_stderr(buf_err):
-        helpmod.print_help(cmd)
+        helpmod.print_help(cmd, raw=True)
     output = buf_out.getvalue() + buf_err.getvalue()
     # Ensure output contains the version or some CLI content
     assert "pdftl" in output

@@ -22,11 +22,12 @@ from pdftl.utils.string import remove_ignored_nonprinting_chars
 
 _DUMP_TEXT_LONG_DESC = """
 
-The dump_text operation attempts to extract text from a PDF file
+The `dump_text` operation attempts to extract text from a PDF file
 and dumps it to stdout or the given output file.
 
-This is experimental and may be unreliable.
-It uses the python library pypdfium2.
+**Warning** This is experimental and may be unreliable.
+
+It uses the python library `pypdfium2`.
 
 """
 

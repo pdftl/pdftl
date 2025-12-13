@@ -71,7 +71,7 @@ def _atomic_obj_to_json(obj):
 
 _DUMP_DESTS_LONG_DESC = """
 
-The dump_dests operation prints document-level metadata to the console, in JSON format.
+The `dump_dests` operation prints document-level metadata to the console, in JSON format.
 
 """
 

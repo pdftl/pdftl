@@ -27,112 +27,107 @@ from .parsers.add_text_parser import parse_add_text_specs_to_rules
 _ADD_TEXT_LONG_DESC = """
 Add user-specified text strings to PDF pages.
 
-Note: This operation requires the 'reportlab' library. To
-install, run: pip install pdftl[add_text]
+Note: This operation requires the 'reportlab' library. If not
+installed, run: `pip install pdftl[add_text]`.
 
-Syntax: <input> add_text <spec>... output <file>
 
-A text specification (<spec>) has the format:
+A text specification (`<spec>`) has the format:
 
-  [page range]<delimiter><text string><delimiter>[<options>]
+>  `[page range]<delimiter><text string><delimiter>[<options>]`
 
-<delimiter> must be a single, non-alphanumeric character
+`<delimiter>` must be a single, non-alphanumeric character
 (e.g., /, !, #).
 
-Dynamic Text Variables in text strings
-======================================
+### Dynamic Text Variables in text strings
 
-The <text string> supports variable substitution using curly
+The `<text string>` supports variable substitution using curly
 braces {}, in one of the following formats.
 
-1. Simple format: e.g., {page} gives the current page
-number.Possible variables are:
+1. Simple format: e.g., `{page}` gives the current page
+number. Possible variables are:
 
-  page: The current page number (1-based index).
+   - `page`: The current page number (1-based index).
 
-  total: The total number of pages in the PDF.
+   - `total`: The total number of pages in the PDF.
 
-  filename: The name of the input PDF file, including the
-  extension (e.g., document.pdf).
+   - `filename`: The name of the input PDF file, including the extension
+  (e.g., "document.pdf").
 
-  filename_base: The base name of the input PDF file,
-  without the extension (e.g., document).
+   - `filename_base`: The base name of the input PDF file,
+  without the extension (e.g., "document").
 
-  filepath: The full path to the input PDF file.
+   - `filepath`: The full path to the input PDF file.
 
-  date: The current date formatted as YYYY-MM-DD (e.g.,
+   - `date`: The current date formatted as YYYY-MM-DD (e.g.,
   2025-12-12).
 
-  time: The current time formatted as HH:MM:SS (e.g.,
+   - `time`: The current time formatted as HH:MM:SS (e.g.,
   13:53:41).
 
-  datetime: The current date and time in ISO 8601 format
+   - `datetime`: The current date and time in ISO 8601 format
   (e.g., 2025-12-12T13:53:41.123456).
 
 
-2. Basic arithmetic: e.g., {page+1} (supported on 'page' and
-'total').
+2. Basic arithmetic: e.g., `{page+1}` (supported on `page` and
+`total`).
 
 3. Complex: e.g., {total-page} gives the number of pages
 remaining.  (for now, this is the only complex possibility).
 
 4. Metadata: e.g., {meta:Title}. The metadata variables
-allow you to insert information stored within the PDF
-document's own metadata dictionary (`/Title`, `/Author`,
+`allow` you to insert information stored within the PDF
+document's own metadata dictionary (\`/Title\`, \`/Author\`,
 etc.) into your text.
 
-The format for a metadata variable is: {meta:<KeyName>}
-where <KeyName> is the exact, case-sensitive key found in
+The format for a metadata variable is: {meta:`<KeyName>`}
+where `<KeyName>` is the exact, case-sensitive key found in
 the PDF's document information dictionary (it corresponds to
-the PDF keys like `/Title` after the leading slash is
+the PDF keys like \`/Title\` after the leading slash is
 stripped).
 
 The available keys are determined by the contents of the PDF
 itself, but common examples derived from the PDF
 specification include: Title, Author, Subject, Keywords,
-Creator, Producer, CreateionDate. If the specified <KeyName>
+Creator, Producer, CreateionDate. If the specified `<KeyName>`
 does not exist in the PDF's metadata, the variable will be
-substituted with an empty string.
+substituted with an `empty` string.
 
 
-5. Escaping: {{...}} renders a literal {...} string.
+5. Escaping: `{{...}}` renders a literal `{...}` string.
 
 
-Options
-=======
+### Options
 
 Options are passed as comma-separated key=value pairs inside
-parentheses, e.g., (position=bottom-center, size=10).
+parentheses, e.g., (`position=bottom-center`, `size=10`).
 
-Positioning and Layout
-----------------------
+#### Positioning and layout options
 
-position=<keyword>: Preset position (top-left, mid-center,
-bottom-right, etc.). Cannot be used with 'x'/'y'.
+`position=<keyword>`: Preset position (top-left, mid-center,
+bottom-right, etc.). Cannot be used with `x`/`y`.
 
-x=<dim>, y=<dim>: Absolute coordinates.
+`x=<dim>`, `y=<dim>`: Absolute coordinates.
 
-offset-x=<dim>, offset-y=<dim>: Offset relative to the main
+`offset-x=<dim>`, `offset-y=<dim>`: Offset relative to the main
 position.
 
-Dimension values (<dim>) must include a unit (e.g., '10pt',
-'5cm', '20%') or default to points (pt). Supported units are
+Dimension values (`<dim>`) must include a unit (e.g., `10pt`,
+`5cm`, `20%`) or default to points (pt). Supported units are
 pt, in, cm, mm, and %.
 
-rotate=<float>: Angle in degrees (e.g., 45).
+`rotate`=`<float>`: Angle in degrees (e.g., 45).
 
-Formatting
-----------
+#### Formatting options
 
-font=<string>: Font name (e.g., Helvetica-Bold).
+`font=<string>`: Font name (e.g., Helvetica-Bold).
 
-size=<float>: Font size in points.
+`size=<float>`: Font size in points.
 
-color=<string>: Text color. 1, 3, or 4 space-separated
-numbers between 0 and 1. Examples: '0.5' is gray,
-'1 0 0' is red, and '1 0 0 .5' is semi-transparent red.
+`color=<string>`: Text color. 1, 3, or 4 space-separated
+numbers between 0 and 1. Examples: `0.5` is gray,
+`1 0 0` is red, and `1 0 0 .5` is semi-transparent red.
 
-align=<'left'|'center'|'right'>: Horizontal alignment.
+`align=<'left'|'center'|'right'>`: Horizontal alignment.
 
 """
 
@@ -199,7 +194,7 @@ def _build_static_context(pdf: Pdf, total_pages: int) -> dict:
     type="single input operation",
     desc="Add user-specified text strings to PDF pages",
     long_desc=_ADD_TEXT_LONG_DESC,
-    usage="<input> add_text <spec>... output <file> [<option...>]",
+    usage="<input> add_text <spec>... output <file> [<option>...]",
     examples=_ADD_TEXT_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )

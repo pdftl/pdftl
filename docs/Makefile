@@ -1,12 +1,11 @@
-all: man html
+all: html
 
-man:
-	python ./generate_man_page.py
-
-html:
-	python ./generate_sphinx_docs.py
+html: md
+	cp sphinx-conf.py source/conf.py
 	sphinx-build -b html source build
 
+md: clean
+	python ./generate_md_docs.py
+
 clean:
-	rm pdftl.1
 	rm -rf build/ source/

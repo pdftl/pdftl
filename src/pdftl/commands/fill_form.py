@@ -20,9 +20,11 @@ from pdftl.utils.user_input import filename_completer
 
 _FILL_FORM_LONG_DESC = """
 
-The fill_form operation is used to fill in a form in a PDF.
-The <form_data> can be the path to a file in FDF or XFDF format,
-or '-', or 'PROMPT'.
+The `fill_form` operation is used to fill in a form in a PDF.
+The `<form_data>` can be the path to a file in FDF or XFDF format,
+or `-`, or `PROMPT`.
+
+XFDF support is currently somewhere between flaky and non-existent.
 
 """
 
@@ -36,7 +38,7 @@ _FILL_FORM_EXAMPLES = [
 
 @register_operation(
     "fill_form",
-    tags=["in_place", "forms"],
+    tags=["in_place", "forms", "TODO", "alpha"],
     type="single input operation",
     desc="Fill a PDF form",
     long_desc=_FILL_FORM_LONG_DESC,

@@ -19,8 +19,8 @@ from pdftl.utils.user_input import filename_completer
 _GENERATE_FDF_LONG_DESC = """
 
 Generate an FDF file containing PDF form data.
-<output> can be a filename, or '-' to output on stdout,
-or 'PROMPT' to prompt for a filename.
+`<output>` can be a filename, or `-` to output on stdout,
+or `PROMPT` to prompt for a filename.
 
 """
 

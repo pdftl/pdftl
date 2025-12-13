@@ -30,8 +30,8 @@ Chops specified pages into multiple smaller pieces by splitting them
 either horizontally or vertically. The output PDF contains the
 resulting chopped pieces in order. Pages from the input file that are
 not matched by any spec are copied to the output unmodified.  The size
-of each piece may be specified using <spec>...; see examples.
-Depending on your shell, you may need to quote a <spec> which uses
+of each piece may be specified using `<spec>...`; see examples.
+Depending on your shell, you may need to quote a `<spec>` which uses
 parentheses.
 
 The chop operation is controlled by one or more specification strings.
@@ -40,74 +40,75 @@ pages using pageranges or even/odd keywords.
 
 Specification syntax:
 
-    [<page_spec>][cols|rows][<sizes_or_pieces>]
+    `[<page_spec>][cols|rows][<sizes_or_pieces>]`
 
 Examples:
 
-   1-10cols2
+   `1-10cols2`
 
      Apply a vertical 2-piece chop to pages 1 through 10.
 
-   evencols(1:2)
+   `evencols(1:2)`
 
      Apply a vertical 1-to-2 ratio chop to all even pages.
 
-   odd 4-endcols3
+   `odd 4-endcols3`
 
      Apply a vertical 3-piece chop to odd pages from 4 to the end.
 
-   rows
+   `rows`
 
      Chop horizontally (creating rows).
 
-Specification details:
-
-<page_spec> is a page specification, consisting of an
-optional page range (like 1-4) followed immediately by an
-optional 'even' or 'odd'.  If no page range is given, all
-pages are assumed.
+### Specification details
 
 
-<sizes_or_pieces> defines the dimensions of the chopped
+`<page_spec>` is a page specification, consisting of an
+optional page range (like `1-4`) followed immediately by an
+optional `even` or `odd`.  If no page range is given, all
+pages are assumed. See also the help topic [[`page_spec`]].
+
+
+`<sizes_or_pieces>` defines the dimensions of the chopped
 pieces.  This can be specified in several ways.
 
     If omitted, the default is 2 equal pieces.
 
-    <integer>
+    `<integer>`
       Chop into N equal-sized pieces.
 
-      Example: cols3 (Chop into 3 equal vertical columns).
+      Example: `cols3` (Chop into 3 equal vertical columns).
 
-    <list>
+    `<list>`
       comma-separated list of custom sizes. Parentheses are optional.
 
-      Example: rows(100, fill, 100) or rows100,fill,100
+      Example: `rows(100, fill, 100)` or `rows100,fill,100`
 
-   <ratios>
+   `<ratios>`
       A colon-separated list of ratios.
 
-      Example: cols(1:2) (A vertical chop with the second column being
+      Example: `cols(1:2)` (A vertical chop with the second column being
       twice as wide as the first).
 
-Size Units (for use in <list> format):
+Size Units (for use in `<list>` format):
 
-    pt (default)
+    `pt` (default)
 
-      Size in points. 1 inch = 72 points. 100 is the same as 100pt.
+      Size in points. 1 inch = 72 points. `100` is the same as `100pt`.
 
-    %
+    `%`
 
-      Percentage of the total page width (for cols) or height (for rows).
+      Percentage of the total page width (for `cols`) or height (for `rows`).
 
-    fill
+    `fill`
 
       A keyword that expands to fill the remaining space. If used
       multiple times, the remaining space is split evenly between each
       fill .
 
-    d
+    `d`
 
-      Appending 'd' to any size in a custom list will cause that piece
+      Appending `d` to any size in a custom list will cause that piece
       to be discarded from the output. This is useful for trimming
       margins.
 
@@ -147,7 +148,7 @@ _CHOP_EXAMPLES = [
     type="single input operation",
     desc="Chop pages into multiple smaller pieces",
     long_desc=_CHOP_LONG_DESC,
-    usage="<input> chop <spec>... output <file> [<option...>]",
+    usage="<input> chop <spec>... output <file> [<option>...]",
     examples=_CHOP_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )

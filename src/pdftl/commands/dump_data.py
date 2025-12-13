@@ -26,16 +26,16 @@ from pdftl.utils.io_helpers import smart_open_output
 _DUMP_DATA_UTF8_LONG_DESC = """
 
 Extracts document-level metadata and structural information
-from the input PDF, identical to the 'dump_data' operation,
+from the input PDF, identical to the `dump_data` operation,
 except all string values in the output are written as raw
 UTF-8. No XML-style escaping is applied.
 
-This format is designed to be read by the 'update_info_utf8'
+This format is designed to be read by the `update_info_utf8`
 operation. Use this if you need to inspect or process the
 data with tools that do not understand XML escaping.
 
 For a complete description of the output format and all
-possible fields, see the help for 'dump_data'.
+possible fields, see the help for `dump_data`.
 
 """
 
@@ -54,65 +54,65 @@ from the input PDF and prints it to the console (or a
 specified file).
 
 This operation is the primary way to export data for
-inspection or for later use by the 'update_info'
+inspection or for later use by the `update_info`
 operation. All string values in the output are processed
-with XML-style escaping (e.g., '<' becomes '&lt;').
+with XML-style escaping (e.g., `<` becomes `&lt;`).
 
-**Output Format Details:**
+### Output Format Details
 
-The output is a plain-text, line-based, key-value format. It
+The output is a plain text, line-based, key-value format. It
 consists of both simple top-level fields and multi-line
-"stanzas." A stanza is a block of related data that begins
-with a line like 'InfoBegin' or 'BookmarkBegin'.
+"stanzas". A stanza is a block of related data that begins
+with a line like `InfoBegin` or `BookmarkBegin`.
 
-The data from this command is consumed by 'update_info'.
+The data from this command is consumed by `update_info`.
 
-**Top-Level Fields:**
+#### Top-Level Fields
 
-These fields appear as simple 'Key: Value' lines.
+These fields appear as simple `Key: Value` lines.
 
 * `PdfID0: <hex_string>`
     * The first part of the PDF's unique file identifier.
-    * *Updatable by 'update_info'.*
+    * *Updatable by `update_info`.*
 
 * `PdfID1: <hex_string>`
     * The second part of the PDF's unique file identifier.
-    * *Not updatable by 'update_info'.*
+    * *Not updatable by `update_info`.*
 
 * `NumberOfPages: <integer>`
     * The total number of pages in the document.
-    * *Read-only. Not used by 'update_info'.*
+    * *Read-only. Not used by `update_info`.*
 
 * `PdfVersion: <string>`
-    * The PDF version string (e.g., '1.7').
-    * *Read-only. Not used by 'update_info'.*
+    * The PDF version string (e.g., `1.7`).
+    * *Read-only. Not used by `update_info`.*
 
 * `Encrypted: <Yes|No>`
     * Indicates if the document is encrypted.
-    * *Read-only. Not used by 'update_info'.*
+    * *Read-only. Not used by `update_info`.*
 
 * `InputFile: <path>`
     * The local path of the file being processed.
-    * *Read-only. Not used by 'update_info'.*
+    * *Read-only. Not used by `update_info`.*
 
-**Stanzas:**
+#### Stanzas
 
 These are multi-line blocks, each describing a single record.
-These can all be updated by 'update_info'.
+These can all be updated by `update_info`.
 
-**1. Info Stanza (Document Metadata)**
+##### 1. Info Stanza (Document Metadata)
 
-Represents a single entry in the PDF's 'DocInfo' metadata dictionary.
+Represents a single entry in the PDF's `DocInfo` metadata dictionary.
 
 * `InfoBegin`
 * `InfoKey: <key_name>` - a standard PDF metadata field
-    (like 'Title', 'Author', 'Subject', 'Keywords',
-    'Creator', 'Producer', 'CreationDate', 'ModDate') or any
+    (like `Title`, `Author`, `Subject`, `Keywords`,
+    `Creator`, `Producer`, `CreationDate`, `ModDate`) or any
     custom key.
 * `InfoValue: <value_string>`
 
 
-**2. Bookmark Stanza**
+##### 2. Bookmark Stanza
 
 Represents a single bookmark (outline) item.
 
@@ -122,7 +122,7 @@ Represents a single bookmark (outline) item.
 * `BookmarkPageNumber: <integer>` - 1-indexed target page number
 
 
-**3. PageMedia Stanza (Page-level Boxes)**
+##### 3. PageMedia Stanza (Page-level Boxes)
 
 Describes the various geometry boxes for a specific page,
 identified by `PageMediaNumber`. All coordinates are given
@@ -136,7 +136,7 @@ in PDF points.
 * `PageMediaTrimRect: [x1 y1 x2 y2]`
 
 
-**4. PageLabel Stanza (Logical Page Numbers)**
+##### 4. PageLabel Stanza (Logical Page Numbers)
 
 Defines a page labelling style.
 
@@ -144,7 +144,7 @@ Defines a page labelling style.
 * `PageLabelNewIndex: <integer>`
    The 1-indexed physical starting page for this numbering
 * `PageLabelPrefix: <string>`
-   String to prepend to page label (e.g., 'A-' for labels A-1, A-2 etc.)
+   String to prepend to page label (e.g., `A-` for labels A-1, A-2 etc.)
 * `PageLabelNumStyle: <Decimal|RomanUpper|RomanLower|AlphaUpper|AlphaLower>`
 * `PageLabelStart: <integer>`
    The starting number for this labelling (e.g., 4)

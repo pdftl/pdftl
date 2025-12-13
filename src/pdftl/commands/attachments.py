@@ -17,12 +17,14 @@ from pdftl.utils.user_input import dirname_completer
 
 _LIST_FILES_LONG_DESC = """
 
-The list_files operation lists files attached to the input
+The `list_files` operation lists files attached to the input
 PDF file, if there are any.
 
 The output format is
 
+```
   filesize filename
+```
 
 where filesize is in bytes.
 
@@ -38,11 +40,13 @@ _LIST_FILES_EXAMPLES = [
 
 _UNPACK_FILES_LONG_DESC = """
 
-The unpack_files operation unpacks files attached to the input
+The `unpack_files` operation unpacks files attached to the input
 PDF file, if there are any. The directory to save attachments in
 defaults to the working directory, any may be controlled by adding
-'output <directory>'. This silently overwrites any existing files
-with the same filenames.
+`output <directory>`.
+
+**Warning** This command will silently overwrite any existing files with
+clashing filenames.
 
 """
 

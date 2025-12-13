@@ -19,16 +19,16 @@ _DUMP_DATA_FIELDS_UTF8_LONG_DESC = """
 
 Extracts data from all interactive form fields (AcroForm
 fields) within the input PDF, identical to the
-'dump_data_fields' operation, with one difference: all
+`dump_data_fields` operation, with one difference: all
 string values (such as `FieldValue` or `FieldOptions`) are
 written as raw UTF-8. No XML-style escaping is applied.
 
 This output is for informational purposes. It is **not**
-designed to be read by the 'update_info' or
-'update_info_utf8' operations.
+designed to be read by the `update_info` or
+`update_info_utf8` operations.
 
 For a complete description of the stanza format, see the
-help for 'dump_data_fields'.
+help for `dump_data_fields`.
 
 """
 
@@ -46,27 +46,27 @@ Extracts data from all interactive form fields (AcroForm
 fields) within the input PDF.
 
 The output uses a stanza-based format similar to
-'dump_data', but is specific to form fields. All string
+`dump_data`, but is specific to form fields. All string
 values (such as the field's content) are processed with
 XML-style escaping.
 
 This output is for informational purposes or for use in
 external scripts. It is **not** designed to be read by the
-'update_info' operation. To fill form fields, use the
-'fill_form' operation.
+`update_info` operation. To fill form fields, use the
+`fill_form` operation.
 
-**Field Stanza Format:**
+### Field Stanza Format
 
 Each field is represented by a single stanza.
 
 * `FieldBegin`
 
 * `FieldName: <full_field_name>`
-  The unique identifying name of the field (e.g., 'form1.name').
+  The unique identifying name of the field (e.g., `form1.name`).
 
 * `FieldType: <Tx|Btn|Ch|Sig|...>`
   The AcroForm type
-  (e.g., 'Tx' for text, 'Btn' for button, 'Ch' for choice).
+  (e.g., `Tx` for text, `Btn` for button, `Ch` for choice).
 
 * `FieldValue: <current_value>`
   The current value of the field.

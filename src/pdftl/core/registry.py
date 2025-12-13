@@ -6,6 +6,8 @@
 
 """Registry for various data, loaded at runtime"""
 
+import inspect
+import os
 from collections import OrderedDict
 
 
@@ -36,7 +38,12 @@ class Registry:
         """Decorator to register a command."""
 
         def decorator(func):
-            registry.operations[name] = {"function": func, **metadata}
+            caller = inspect.currentframe().f_back
+            registry.operations[name] = {
+                "caller": os.path.basename(caller.f_code.co_filename),
+                "function": func,
+                **metadata,
+            }
             return func  # needed to allow stacking decorators
 
         return decorator

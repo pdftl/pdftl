@@ -49,7 +49,6 @@ def _parse_kv_pair(part: str) -> tuple[str, str]:
         )
 
     key = parts[0].strip()
-    # NEW CHECK: Ensure the key is not empty after stripping.
     if not key:
         raise ValueError(f"Invalid modification: '{part}'. Key cannot be empty.")
     value = _unquote_string(parts[1].strip())
