@@ -41,8 +41,12 @@ SYNOPSIS_TEMPLATE = """
 
 SPECIAL_HELP_TOPICS_MAP = OrderedDict(
     [
-        (("filter", "(omitted)", "omitted", "filter_mode"), "filter_mode"),
-        (("input", "inputs", "<input>"), "input"),
+        (("help", "--help"), "help"),
+        (
+            ("filter", "(omitted)", "omitted", "filter_mode", "filter mode"),
+            "filter_mode",
+        ),
+        (("input", "inputs", "<input>", "Inputs"), "input"),
         (("---", "pipeline", "pipeline syntax"), "pipeline"),
         (
             (
@@ -54,6 +58,7 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
                 "page specs",
                 "page_spec",
                 "page_specs",
+                "page specification syntax",
                 "page specifications",
                 "page_specifications",
             ),

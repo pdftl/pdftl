@@ -10,6 +10,23 @@
 
 CLI_DATA = {
     "extra help topics": {
+        "help": {
+            "title": "pdftl help",
+            "desc": "Get help",
+            "long_desc": """ If a `help` argument is given, the
+            remaining arguments are scanned for a keyword. This can be
+            one of the operation names, or an option name, or a
+            special help topic, or an alias. If a match is found, the
+            help is printed.
+
+            By default, colors are used if printing directly to the
+            terminal, and usually not in other situations (e.g., if
+            the output is redirected). If the environment variable
+            `FORCE_COLORS` is set, then colors should appear in all
+            cases.
+
+            """,
+        },
         "pipeline": {
             "title": "pipeline syntax",
             "desc": "Using `---` to pipe multiple operations together",

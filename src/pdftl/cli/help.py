@@ -175,11 +175,13 @@ def _usage_as_markdown(x: str) -> str:
 
 def _print_topic_help(hprint, topic_data, topic_name):
     """Prints the detailed help for a specific command or topic."""
+    safe_topic_name = (
+        topic_name
+        if any(topic_name in x for x in SPECIAL_HELP_TOPICS_MAP)
+        else f"`{topic_name}`"
+    )
 
-    safe_topic_name = escape(topic_name)
-    safe_whoami = escape(WHOAMI)
-
-    hprint(HelpMarkdown(f"# {safe_whoami}: help for `{safe_topic_name}`"))
+    hprint(HelpMarkdown(f"# {WHOAMI}: help for {safe_topic_name}"))
 
     if desc := topic_data.get("desc", None):
         hprint(HelpMarkdown(f"\n{desc.strip()}"))
@@ -206,9 +208,7 @@ def _print_topic_help(hprint, topic_data, topic_name):
 def print_main_help(hprint):
     """Prints the main, default help screen."""
 
-    safe_whoami = escape(WHOAMI)
-
-    hprint(HelpMarkdown(f"# **{safe_whoami}** - PDF Tackle {get_project_version()}"))
+    hprint(HelpMarkdown(f"# **{WHOAMI}** - PDF Tackle {get_project_version()}"))
     hprint(HelpMarkdown("_A wannabe CLI compatible clone/extension of pdftk_"))
 
     hprint(HelpMarkdown("## Usage"))
@@ -363,6 +363,7 @@ def print_help(command=None, dest=None, raw=False):
             "output_options",
             "pipeline",
             "page_specs",
+            "help",
         ]
         for i, topic in enumerate(all_topics):
             if i > 0:
