@@ -16,6 +16,8 @@ import io
 import logging
 from collections import namedtuple
 
+logger = logging.getLogger(__name__)
+
 # Use a generic exception type from the core project if possible,
 # otherwise fall back to a standard exception.
 try:
@@ -198,7 +200,7 @@ try:
                 self.font_cache[font_name] = font_name
                 return font_name
             except Exception:
-                logging.warning(
+                logger.warning(
                     "Could not find or register font '%s'. Falling back to %s.",
                     font_name,
                     DEFAULT_FONT_NAME,
@@ -299,9 +301,7 @@ try:
                 self.canvas.restoreState()
 
             except Exception as e:
-                logging.warning(
-                    "Skipping one text rule due to error: %s", e, exc_info=e
-                )
+                logger.warning("Skipping one text rule due to error: %s", e, exc_info=e)
 
         def save(self) -> bytes:
             """

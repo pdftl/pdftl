@@ -8,6 +8,8 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 def parse_inject_args(inject_args: list):
     """
@@ -44,8 +46,8 @@ def parse_inject_args(inject_args: list):
             # This is a page specification.
             specs.append(arg)
 
-    logging.debug("heads=%s", heads)
-    logging.debug("tails=%s", tails)
-    logging.debug("specs=%s", specs)
+    logger.debug("heads=%s", heads)
+    logger.debug("tails=%s", tails)
+    logger.debug("specs=%s", specs)
 
     return heads, tails, specs

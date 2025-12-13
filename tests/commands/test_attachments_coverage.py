@@ -61,9 +61,9 @@ def test_unpack_invalid_dir(pdf_with_attachment, tmp_path):
 
 def test_no_attachments_unpack(pdf_no_attachment, caplog):
     """Test handling of PDF with no attachments (Line 107, 157)."""
-    caplog.set_level(logging.DEBUG)
-    with pikepdf.open(pdf_no_attachment) as pdf:
-        unpack_files("fname", pdf, None, operation="unpack_files")
+    with caplog.at_level(logging.DEBUG, logger="pdftl"):
+        with pikepdf.open(pdf_no_attachment) as pdf:
+            unpack_files("fname", pdf, None, operation="unpack_files")
 
     assert "No attachments found" in caplog.text
 

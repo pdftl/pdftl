@@ -11,10 +11,13 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 from typing import Optional
 
 import pikepdf
 
+logger = logging.getLogger(__name__)
 from pdftl.cli.whoami import WHOAMI
 from pdftl.core.registry import registry
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
@@ -47,13 +50,13 @@ class CliStage:
         Looks for "PROMPT" in a parsed stage's inputs
         and prompts the user to resolve them.
         """
-        logging.debug("resolve_stage_io_prompts")
+        logger.debug("resolve_stage_io_prompts")
         # Create an inverse handle map for nice prompts
         handles_inverse = {index: handle for handle, index in self.handles.items()}
         for i, filename in enumerate(self.inputs):
-            logging.debug("i=%s, filename=%s", i, filename)
+            logger.debug("i=%s, filename=%s", i, filename)
             if filename == "PROMPT":
-                logging.debug("Found a PROMPT, asking user")
+                logger.debug("Found a PROMPT, asking user")
                 desc = f"input #{i + 1}"
                 if (handle := handles_inverse.get(i, None)) is not None:
                     desc += f" with handle {handle}"
@@ -82,7 +85,7 @@ class PipelineManager:
 
     def run(self):
         """Executes all stages in the pipeline."""
-        logging.debug("Running pipeline with %s  stages", len(self.stages))
+        logger.debug("Running pipeline with %s  stages", len(self.stages))
         try:
             for i, stage in enumerate(self.stages):
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
@@ -104,14 +107,14 @@ class PipelineManager:
 
     def _validate_and_execute_numbered_stage(self, i, stage):
         if not stage.operation and i == len(self.stages) - 1:
-            logging.debug("Final stage is empty, proceeding to save.")
+            logger.debug("Final stage is empty, proceeding to save.")
             return
 
         is_first = i == 0
         is_last = i == len(self.stages) - 1
 
-        logging.debug("--- PIPELINE: STAGE %d ---", i + 1)
-        logging.debug("Parsed stage: %s", stage)
+        logger.debug("--- PIPELINE: STAGE %d ---", i + 1)
+        logger.debug("Parsed stage: %s", stage)
 
         self._validate_stage_args(stage, is_first, is_last)
         self._execute_stage(stage, is_first)
@@ -135,10 +138,10 @@ class PipelineManager:
 
     def _save_generator_and_cleanup(self, result, opened_pdfs):
         """Save a generator pipeline output and clean up"""
-        logging.debug("Found a PDF generator in the pipeline. Saving.")
+        logger.debug("Found a PDF generator in the pipeline. Saving.")
         # we must consume the generator now, before closing opened pdfs
         for filename, pdf in result:
-            logging.debug("Saving a generator PDF to '%s'", filename)
+            logger.debug("Saving a generator PDF to '%s'", filename)
             save_pdf(
                 pdf, filename, self.input_context.get_input, **self._save_kw_options()
             )
@@ -176,7 +179,7 @@ class PipelineManager:
         if (op_data := registry.operations.get(operation)) is None:
             return
         op_type = op_data.get("type")
-        logging.debug("operation=%s, op_type=%s", operation, op_type)
+        logger.debug("operation=%s, op_type=%s", operation, op_type)
         if op_type == "single input operation" and effective_inputs != 1:
             raise UserCommandLineError(
                 f"The '{operation}' operation requires one input, "
@@ -216,7 +219,7 @@ class PipelineManager:
         try:
             pos_args, kw_args = self._make_op_args(arg_style, call_context)
         except Exception as exception:
-            logging.error(
+            logger.error(
                 "Internal error assigning arguments for operation '%s'. This is a bug.",
                 operation,
             )
@@ -237,7 +240,7 @@ class PipelineManager:
         previous pipeline stage).
         """
         if is_first:
-            logging.debug("Reading PDF from stdin for first stage")
+            logger.debug("Reading PDF from stdin for first stage")
             if sys.stdin.isatty():
                 raise UserCommandLineError(
                     "Expected PDF data from stdin, but none was provided."
@@ -245,7 +248,7 @@ class PipelineManager:
             data = sys.stdin.buffer.read()
             return pikepdf.open(io.BytesIO(data))
 
-        logging.debug("Using PDF from previous stage for input '_'")
+        logger.debug("Using PDF from previous stage for input '_'")
         if not self.pipeline_pdf:
             raise UserCommandLineError(
                 "Pipeline error: No PDF available from previous stage for input '_'."
@@ -258,7 +261,7 @@ class PipelineManager:
         """
         kwargs = {"password": password} if password else {}
         try:
-            logging.debug("Opening file '%s'", filename)
+            logger.debug("Opening file '%s'", filename)
             return pikepdf.open(filename, **kwargs)
         except FileNotFoundError as exception:
             raise UserCommandLineError(exception) from exception

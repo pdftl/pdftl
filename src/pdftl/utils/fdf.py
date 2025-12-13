@@ -10,7 +10,10 @@ import io
 import logging
 import re
 
+logger = logging.getLogger(__name__)
 import pikepdf
+
+logger = logging.getLogger(__name__)
 
 
 def extract_main_fdf_dict(data):
@@ -69,7 +72,7 @@ def wrap_fdf_data_in_pdf_bytes(data):
 
     """
     fdf_bytes = extract_main_fdf_dict(data)
-    logging.debug("Extracted %s bytes of main FDF dictionary", len(fdf_bytes))
+    logger.debug("Extracted %s bytes of main FDF dictionary", len(fdf_bytes))
 
     # Create a skeleton PDF with a blank page so pikepdf will load it
     pdf = pikepdf.Pdf.new()
@@ -89,7 +92,7 @@ def wrap_fdf_data_in_pdf_bytes(data):
     # Determine next free object number
     obj_nums = [int(n) for n in re.findall(rb"(\d+) 0 obj", pdf_bytes)]
     next_obj_number = max(obj_nums) + 1
-    logging.debug("Using object number %s for FDF dictionary", next_obj_number)
+    logger.debug("Using object number %s for FDF dictionary", next_obj_number)
 
     # Construct FDF object bytes
     fdf_obj_bytes = b"\n%d 0 obj\n%s\nendobj\n" % (next_obj_number, fdf_bytes)

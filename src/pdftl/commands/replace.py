@@ -10,8 +10,11 @@ import logging
 import re
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 import pikepdf
 
+logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.normalize import (
@@ -131,7 +134,7 @@ class RegexReplaceContentStream:
             content_stream = get_normalized_page_content_stream(page)
         else:
             content_stream = page.Contents.read_bytes()
-        logging.debug(
+        logger.debug(
             "from_re=%s, to_re=%s, count=%s", self.from_re, self.to_re, self.count
         )
         if self.from_re:

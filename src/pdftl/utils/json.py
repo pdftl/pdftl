@@ -9,6 +9,7 @@
 import decimal
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Array, Dictionary, Name, Object, String
 
 from pdftl.utils.whatisit import is_page
@@ -62,7 +63,7 @@ class PdfToJsonConverter:
         # 1. Loop detection
         try:
             idx = ancestors.index(obj)
-            logging.debug("LOOP detected")
+            logger.debug("LOOP detected")
             return f"Go_Up({idx})"
         except ValueError:
             pass  # Not a loop, continue
@@ -94,30 +95,30 @@ class PdfToJsonConverter:
     # --- Type-Specific Handlers ---
 
     def _handle_none(self, _obj, depth, _ancestors):
-        # logging.debug("%sgot None", self._prefix(depth))
+        # logger.debug("%sgot None", self._prefix(depth))
         # return None (implicit)
         pass
 
     def _handle_python_primitive(self, obj, _depth, _ancestors):
-        # logging.debug("%sgot python data %s", self._prefix(depth), obj)
+        # logger.debug("%sgot python data %s", self._prefix(depth), obj)
         return obj
 
     def _handle_pdf_string_or_name(self, obj, _depth, _ancestors):
         # type_name = type(obj).__name__
-        # logging.debug("%sgot %s '%s'", self._prefix(depth), type_name, str(obj))
+        # logger.debug("%sgot %s '%s'", self._prefix(depth), type_name, str(obj))
         return str(obj)
 
     def _handle_array(self, obj, depth, ancestors):
         # debug_string = str(list(obj)).replace("\n", " ")
-        # logging.debug("%sgot an Array: %s", self._prefix(depth), debug_string)
+        # logger.debug("%sgot an Array: %s", self._prefix(depth), debug_string)
 
         new_ancestors = [obj] + ancestors
         return [self.to_json_recursive(item, depth + 1, new_ancestors) for item in obj]
 
     def _handle_page(self, obj, depth, _ancestors):
-        logging.debug("%sThis seems to be a Page", self._prefix(depth))
+        logger.debug("%sThis seems to be a Page", self._prefix(depth))
         page_num = self.page_object_to_num_map.get(obj.objgen, '"Unknown"')
-        logging.debug("page number is %s", page_num)
+        logger.debug("page number is %s", page_num)
         return {"Page": page_num}
 
     def _handle_dictionary(self, obj, depth, ancestors):
@@ -139,12 +140,12 @@ class PdfToJsonConverter:
     def _handle_unknown(self, obj, depth, _ancestors):
         ret = str(obj)
         if not isinstance(obj, (float, int, str, decimal.Decimal)):
-            logging.debug(
+            logger.debug(
                 "%sUnknown object of type %s. This may be a bug.",
                 self._prefix(depth),
                 type(obj),
             )
-            logging.debug("Attempting fallback to str(...)=%s", ret)
+            logger.debug("Attempting fallback to str(...)=%s", ret)
         return ret
 
     @staticmethod

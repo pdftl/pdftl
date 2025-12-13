@@ -26,6 +26,8 @@ import math
 import re
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 from pikepdf import Pdf
 
 from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
@@ -185,7 +187,7 @@ def expand_specs_to_pages(
     aliases = aliases or {}
     opened_pdfs = opened_pdfs or {}
 
-    logging.debug("specs=%s, aliases=%s, inputs=%s", specs, aliases, inputs)
+    logger.debug("specs=%s, aliases=%s, inputs=%s", specs, aliases, inputs)
 
     if not inputs:
         raise ValueError("inputs were not passed in expand_specs_to_pages")
@@ -199,7 +201,7 @@ def expand_specs_to_pages(
     # Handle the simple case of no specs first and exit early.
     if not specs:
         page_tuples = _handle_no_specs(inputs, opened_pdfs)
-        logging.debug("No specs provided, expanded to %s pages.", len(page_tuples))
+        logger.debug("No specs provided, expanded to %s pages.", len(page_tuples))
         return page_tuples
 
     page_tuples = []
@@ -208,7 +210,7 @@ def expand_specs_to_pages(
             _new_tuples_from_spec_str(spec_str, opened_pdfs_by_alias, default_alias)
         )
 
-    logging.debug("Total specs expanded to %s pages.", len(page_tuples))
+    logger.debug("Total specs expanded to %s pages.", len(page_tuples))
     return page_tuples
 
 
@@ -236,7 +238,7 @@ def _new_tuples_from_spec_str(
     new_tuples = _create_page_tuples_from_numbers(
         final_page_numbers, pdf, page_spec.rotate, page_spec.scale, spec_str
     )
-    logging.debug(
+    logger.debug(
         "Spec '%s' expanded to %s pages from alias '%s'.",
         spec_str,
         len(new_tuples),
@@ -367,7 +369,7 @@ def parse_page_spec(spec, total_pages) -> PageSpec:
     start, end, rotate, scale, qualifiers, omissions
     """
 
-    logging.debug("spec=%s, total_pages=%s", spec, total_pages)
+    logger.debug("spec=%s, total_pages=%s", spec, total_pages)
 
     # 1. Parse the primary page range (e.g., '1-10', 'r5-end')
     start, end, modifier_str = _parse_range_part(spec, total_pages)
@@ -379,8 +381,8 @@ def parse_page_spec(spec, total_pages) -> PageSpec:
     scale, modifier_str = _parse_scaling(modifier_str)
     omissions, modifier_str = _parse_omissions(modifier_str, total_pages)
 
-    logging.debug("finally, modifier_str=%s", modifier_str)
-    logging.debug(
+    logger.debug("finally, modifier_str=%s", modifier_str)
+    logger.debug(
         "start=%s, end=%s, rotate=%s, scale=%s, qualifiers=%s, omissions=%s",
         start,
         end,

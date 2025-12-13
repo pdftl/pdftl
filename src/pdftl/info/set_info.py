@@ -10,8 +10,11 @@ Public: set_metadata_in_pdf"""
 
 import logging
 
+logger = logging.getLogger(__name__)
 import pikepdf
 from pikepdf import Name, NumberTree, OutlineItem
+
+logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
 
@@ -50,14 +53,14 @@ def _set_page_media_entry(pdf, page_media):
     try:
         page_number = int(page_media["Number"])
     except KeyError:
-        logging.warning(
+        logger.warning(
             "Skipping PageMedia metadata with missing page number (PageMediaNumber)."
             " Metadata entry details:\n  %s",
             page_media,
         )
         return
     if len(pdf.pages) < page_number:
-        logging.warning(
+        logger.warning(
             "Nonexistent page %s requested for PageMedia metadata. Skipping.",
             page_number,
         )
@@ -100,7 +103,7 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
             bookmark["Title"],
         )
     except KeyError:
-        logging.warning(
+        logger.warning(
             "Skipping incomplete bookmark, we need Level, PageNumber and Title."
             " Bookmark details:\n  %s",
             bookmark,
@@ -114,7 +117,7 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
     )
 
     if pagenumber > len(pdf.pages):
-        logging.warning(
+        logger.warning(
             "Nonexistent page %s requested for bookmark with title '%s'. Skipping.",
             pagenumber,
             title,
@@ -125,7 +128,7 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
         outline.root.append(new_bookmark_oi)
     elif level > 1:
         if level > len(bookmark_oi_ancestors) + 1:
-            logging.warning(
+            logger.warning(
                 "Bookmark level %s requested (with title '%s'),"
                 "\nbut we are only at level %s in the bookmark tree. Skipping.",
                 level,
@@ -137,7 +140,7 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
         bookmark_parent = bookmark_oi_ancestors[level - 2]
         bookmark_parent.children.append(new_bookmark_oi)
     else:
-        logging.warning(
+        logger.warning(
             "Skipping invalid bookmark with level %s. Levels should be 1 or greater.",
             level,
         )
@@ -163,12 +166,12 @@ def _set_page_labels(pdf, label_list, delete_existing=True):
 def _set_id_info(pdf, id_index, hex_string):
     assert id_index in (0, 1)
     if id_index == 1:
-        logging.warning(CANNOT_SET_PDFID1)
+        logger.warning(CANNOT_SET_PDFID1)
     if pdf.trailer and hasattr(pdf.trailer, "ID"):
         try:
             pdf.trailer.ID[id_index] = bytes.fromhex(hex_string)
         except ValueError:
-            logging.warning(
+            logger.warning(
                 "Could not set PDFID%s to '%s'; invalid hex string?",
                 id_index,
                 hex_string,

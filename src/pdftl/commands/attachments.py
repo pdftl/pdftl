@@ -12,6 +12,8 @@ See also: pdftl.output.attach for adding attachments to output.
 import logging
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 from pdftl.core.registry import register_operation
 from pdftl.utils.user_input import dirname_completer
 
@@ -100,7 +102,7 @@ def unpack_files(input_filename, pdf, get_input, output_dir=None, operation=None
     try:
         output_path = _get_output_path(output_dir, operation, get_input)
     except ValueError as e:
-        logging.error(e)
+        logger.error(e)
         return
 
     action_func = _get_operation_action(operation)
@@ -147,7 +149,7 @@ def _get_operation_action(operation):
     }
     action_func = actions.get(operation)
     if not action_func:
-        logging.warning(
+        logger.warning(
             "No valid operation '%s' specified to process attachments.", operation
         )
     return action_func
@@ -158,13 +160,13 @@ def _handle_no_attachments(operation, input_filename):
     if operation == "list_files":
         print(f"No attachments found in {input_filename}")
     else:
-        logging.debug("No attachments found")
+        logger.debug("No attachments found")
 
 
 def _process_attachments(pdf, action_func, output_path):
     """Iterates through attachments and executes the given action for each one."""
     for name, attachment in pdf.attachments.items():
-        logging.debug("found attachment=%s", name)
+        logger.debug("found attachment=%s", name)
         action_func(attachment, name, output_path)
 
 
@@ -175,12 +177,12 @@ def _unpack_single_file(attachment, name, output_dir):
     """Saves a single attachment to the specified output directory."""
     file_bytes = attachment.get_file().read_bytes()
     output_filename = output_dir / name
-    logging.debug("saving %s bytes to %s", len(file_bytes), output_filename)
+    logger.debug("saving %s bytes to %s", len(file_bytes), output_filename)
     try:
         with open(output_filename, "wb") as f:
             f.write(file_bytes)
     except OSError as e:
-        logging.warning("Could not write file %s: %s", output_filename, e)
+        logger.warning("Could not write file %s: %s", output_filename, e)
 
 
 def _list_single_file(attachment, name, output_dir):

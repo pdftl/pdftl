@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pdftl.cli.pipeline import CliStage
 from pdftl.core.constants import ALLOW_PERMISSIONS, ALLOW_PERMISSIONS_L
 from pdftl.core.registry import registry
@@ -122,7 +123,7 @@ def _parse_attach_files(args, i, options):
 
 def parse_options_and_specs(args):
     """Parses arguments into specifications and keyword options."""
-    logging.debug("args=%s", args)
+    logger.debug("args=%s", args)
     options, specs = ({}, [])
     i = 0
     just_slurped_allow_index = None
@@ -217,7 +218,7 @@ def _assign_passwords(num_inputs, handles, passwords_by_handle, passwords_by_ord
                 input_passwords[i] = next(pw_iter)
             except StopIteration:
                 break
-    logging.debug("input_passwords=%s", input_passwords)
+    logger.debug("input_passwords=%s", input_passwords)
     return input_passwords
 
 
@@ -225,14 +226,14 @@ def _parse_pre_operation_args(pre_op_args, is_first_stage):
     """
     Parses input files, handles, and passwords.
     """
-    logging.debug("pre_op_args=%s", pre_op_args)
+    logger.debug("pre_op_args=%s", pre_op_args)
     file_args, pw_args = _separate_file_and_pw_args(pre_op_args)
-    logging.debug("file_args=%s, pw_args=%s", file_args, pw_args)
+    logger.debug("file_args=%s, pw_args=%s", file_args, pw_args)
     inputs, handles = _parse_file_handles(file_args)
     inputs, handles = _handle_pipeline_input(inputs, handles, is_first_stage)
     passwords_by_handle, passwords_by_order = _parse_passwords(pw_args)
-    logging.debug("passwords_by_handle=%s", passwords_by_handle)
-    logging.debug("passwords_by_order=%s", passwords_by_order)
+    logger.debug("passwords_by_handle=%s", passwords_by_handle)
+    logger.debug("passwords_by_order=%s", passwords_by_order)
     input_passwords = _assign_passwords(
         len(inputs), handles, passwords_by_handle, passwords_by_order
     )
@@ -241,23 +242,23 @@ def _parse_pre_operation_args(pre_op_args, is_first_stage):
 
 def parse_cli_stage(stage_args, is_first_stage):
     """Parses a list of arguments for a single pipeline stage."""
-    logging.debug("stage_args=%s, is_first_stage=%s", stage_args, is_first_stage)
+    logger.debug("stage_args=%s, is_first_stage=%s", stage_args, is_first_stage)
     operation, pre_op, post_op = _find_operation_and_split(stage_args)
-    logging.debug(
+    logger.debug(
         "before filter block: operation=%s, pre_op=%s, post_op=%s",
         operation,
         pre_op,
         post_op,
     )
     if not stage_args:
-        logging.debug("no stage_args, going to filter mode")
+        logger.debug("no stage_args, going to filter mode")
         operation = "filter"
     elif operation is None:
-        logging.debug("no operation, going to filter mode")
+        logger.debug("no operation, going to filter mode")
         operation = "filter"
         pre_op = stage_args
         post_op = []
-    logging.debug(
+    logger.debug(
         "after filter block: operation=%s, pre_op=%s, post_op=%s",
         operation,
         pre_op,
@@ -265,7 +266,7 @@ def parse_cli_stage(stage_args, is_first_stage):
     )
     inputs, handles, passwords = _parse_pre_operation_args(pre_op, is_first_stage)
     specs, options = parse_options_and_specs(post_op)
-    logging.debug(
+    logger.debug(
         "CliStage(operation=%s, inputs=%s, input_passwords=%s,"
         "handles=%s, operation_args=%s, options=%s",
         operation,

@@ -268,7 +268,7 @@ class TestPipelineManagerCoverage:
             pytest.fail(f"_validate_stage_args raised unexpected exception: {e}")
 
     def test_run_operation_make_op_args_internal_error(
-        self, mock_context, mock_pikepdf, mock_logger, mock_registry
+        self, mock_context, mock_pikepdf, mock_registry, caplog
     ):
         """Covers lines 218-223: Catching, logging, and re-raising internal error in _make_op_args."""
         pdf_open_mock, _, pdf_a_ref, _ = mock_pikepdf
@@ -291,14 +291,16 @@ class TestPipelineManagerCoverage:
 
         # Running the op will cause a KeyError because 'non_existent_context_key'
         # is requested in the MOCK_REGISTRY for 'error_op'
-        with pytest.raises(KeyError, match="'non_existent_context_key'"):
-            manager._run_operation(stage, opened_pdfs)
+        with caplog.at_level("ERROR"):
+            with pytest.raises(KeyError, match="'non_existent_context_key'"):
+                manager._run_operation(stage, opened_pdfs)
 
-        # Check that line 219 (logging.error) was called
-        mock_logger.assert_called_once_with(
-            "Internal error assigning arguments for operation '%s'. This is a bug.",
-            "error_op",
-        )
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+
+        assert record.levelname == "ERROR"
+        assert "Internal error assigning arguments for operation" in record.message
+
         # The re-raise of the original exception (KeyError) covers line 223.
 
     def test_open_pdf_from_special_input_stdin(

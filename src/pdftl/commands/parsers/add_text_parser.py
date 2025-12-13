@@ -10,6 +10,8 @@ import logging
 import re
 from collections import defaultdict
 
+logger = logging.getLogger(__name__)
+
 from pdftl.core.constants import UNITS
 
 # We import the same utilities as chop_parser
@@ -98,7 +100,7 @@ def _parse_one_spec_to_rules(
     """
     # 1. Split the spec into its three main parts.
     page_range_part, text_string, options_part = _split_spec_string(spec_str)
-    logging.debug(
+    logger.debug(
         "page_range_part='%s', text_string='%s', options_part='%s'",
         page_range_part,
         text_string,
@@ -180,7 +182,7 @@ def _split_spec_string(spec_str: str):
             f"Invalid text delimiter '{delimiter}'. "
             "Delimiter must be a non-alphanumeric character."
         )
-    logging.debug("Found delimiter: '%s'", delimiter)
+    logger.debug("Found delimiter: '%s'", delimiter)
 
     # 3. Find the *first* occurrence of the delimiter to split
     #    page_range from the text_string.
@@ -540,7 +542,7 @@ def _tokenize_text_string(text_str: str) -> list:
         else:
             parts.append(_parse_var_expression(part[1:-1]))  # It's a var
 
-    logging.debug("parts=%s", parts)
+    logger.debug("parts=%s", parts)
     return parts
 
 
@@ -589,7 +591,7 @@ def _group_specs_with_qualifiers(specs):
     with the spec string that follows them.
     Returns a list of tuples: [(spec_str, qualifier_keyword), ...].
     """
-    logging.debug("got specs=%s", specs)
+    logger.debug("got specs=%s", specs)
     grouped_specs = []
     specs_iterator = iter(specs)
     for spec in specs_iterator:
@@ -604,7 +606,7 @@ def _group_specs_with_qualifiers(specs):
         else:
             # This spec has no preceding keyword qualifier.
             grouped_specs.append((spec, None))
-    logging.debug("returning grouped_specs=%s", grouped_specs)
+    logger.debug("returning grouped_specs=%s", grouped_specs)
     return grouped_specs
 
 

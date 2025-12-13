@@ -13,6 +13,8 @@ which are then applied to the target pages.
 import io
 import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 from pikepdf import Pdf, Rectangle
@@ -166,7 +168,7 @@ def _build_static_context(pdf: Pdf, total_pages: int) -> dict:
         # .docinfo is a property that lazy-loads the info dict
         metadata = {str(k).lstrip("/"): str(v) for k, v in pdf.docinfo.items()}
     except (AttributeError, TypeError, ValueError):
-        logging.warning("Could not read PDF metadata for variable substitution.")
+        logger.warning("Could not read PDF metadata for variable substitution.")
         metadata = {}
 
     filename = ""
@@ -213,7 +215,7 @@ def add_text_pdf(pdf: Pdf, specs: list[str]) -> Pdf:
     # --- 2. Parse all specs ---
     try:
         page_rules = parse_add_text_specs_to_rules(specs, total_pages)
-        logging.debug("page_rules=%s", page_rules)
+        logger.debug("page_rules=%s", page_rules)
     except ValueError as exc:
         raise InvalidArgumentError(f"Error in add_text spec: {exc}") from exc
 
@@ -258,4 +260,4 @@ def _process_page(i, page, page_rules, static_context):
                 # This mutates the page object *in-place*
                 page.add_overlay(overlay_pdf.pages[0])
         except (PdfError, TypeError) as e:
-            logging.warning("Failed to apply overlay to page %d: %s", i + 1, e)
+            logger.warning("Failed to apply overlay to page %d: %s", i + 1, e)

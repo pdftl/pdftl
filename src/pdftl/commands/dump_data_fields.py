@@ -8,8 +8,11 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 import pikepdf
 from pikepdf.form import Form
+
+logger = logging.getLogger(__name__)
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.io_helpers import smart_open_output
@@ -126,7 +129,7 @@ def dump_data_fields(
     """
     Imitate pdftk's dump_data_fields output, writing to a file or stdout.
     """
-    logging.debug("escape_xml=%s", escape_xml)
+    logger.debug("escape_xml=%s", escape_xml)
 
     with smart_open_output(output_file) as file:
 

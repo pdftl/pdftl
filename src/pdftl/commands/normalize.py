@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_operation
 from pdftl.utils.normalize import normalize_page_content_stream
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -57,7 +58,7 @@ def normalize_content_streams(pdf, specs):
     for spec in specs:
         for page_num in page_numbers_matching_page_spec(spec, len(pdf.pages)):
             normalize_page_content_stream(pdf, pdf.pages[page_num - 1])
-            logging.debug(
+            logger.debug(
                 "After normalization, page content starts: %s",
                 pdf.pages[page_num - 1].Contents,
             )

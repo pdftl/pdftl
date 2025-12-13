@@ -18,6 +18,8 @@ the outline for B, followed by the outline for A again.
 
 import logging
 from collections import namedtuple
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 
 from pikepdf import Dictionary, Name, OutlineItem, Pdf
@@ -56,7 +58,7 @@ class OutlineCopier:
         types (explicit, named, action) and coordinate transformations.
         """
 
-        logging.debug("  source_item title is '%s'", source_item.title)
+        logger.debug("  source_item title is '%s'", source_item.title)
         # --- 1. Get/Create a GoTo Action Dictionary ---
         source_action = _get_source_action(source_item)
         final_destination = None  # This will be passed to the constructor
@@ -125,14 +127,14 @@ def rebuild_outlines(
     Returns:
         list: a flat list of [name, dest, ...] for all new dests.
     """
-    logging.debug(
+    logger.debug(
         "rebuild_outlines called. Processing %s pages.", len(source_pages_to_process)
     )
     chunks = _build_outline_chunks(call_context.processed_page_info)
-    logging.debug("_build_outline_chunks created %s chunks.", len(chunks))
+    logger.debug("_build_outline_chunks created %s chunks.", len(chunks))
 
     if not chunks:
-        logging.debug("no chunks found. exiting")
+        logger.debug("no chunks found. exiting")
         return []
 
     # # Build the same caches that rebuild_links() uses.
@@ -192,7 +194,7 @@ def _build_outline_chunks(processed_page_info: list) -> [ChunkData]:
     try:
         current_pdf, first_src_idx, first_inst_num = processed_page_info[0]
     except (IndexError, TypeError, ValueError):
-        logging.warning(
+        logger.warning(
             "Could not build outline chunks: processed_page_info is empty or malformed."
         )
         return []
@@ -259,24 +261,24 @@ def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
     source_pdf = chunk.pdf
 
     # --- Get instance_num from chunk ---
-    logging.debug(
+    logger.debug(
         "Processing outline chunk: start_page=%s, instance_num=%s",
         chunk.output_start_page,
         chunk.instance_num,
     )
 
     has_outlines = bool(source_pdf.Root.get(Name.Outlines))
-    logging.debug("Processing chunk. Source PDF has outlines: %s", has_outlines)
+    logger.debug("Processing chunk. Source PDF has outlines: %s", has_outlines)
 
     if not has_outlines:
-        logging.debug("short-circuiting _process_chunk")
+        logger.debug("short-circuiting _process_chunk")
         return
 
     copier = OutlineCopier(remapper)
 
     with source_pdf.open_outline() as source_outline:
         root_items = list(source_outline.root)
-        logging.debug("[DEBUG] Source outline has %s root items.", len(root_items))
+        logger.debug("[DEBUG] Source outline has %s root items.", len(root_items))
         for source_item in source_outline.root:
             copier.copy_item(
                 source_item,

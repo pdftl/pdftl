@@ -9,10 +9,13 @@ PDF files"""
 
 import logging
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 import pikepdf
 
+logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.utils.io_helpers import can_read_file
@@ -169,7 +172,7 @@ def _process_next_attach_arguments_for_intent(
             attach_args, i, parsed_attachments == [], keyword
         )
         next_arg = attach_args[i + 1]
-        logging.debug("keyword=%s, next_arg=%s", keyword, next_arg)
+        logger.debug("keyword=%s, next_arg=%s", keyword, next_arg)
         if keyword == "relation":
             _set_relationship_in_parsed_attachments(
                 next_arg.capitalize(), parsed_attachments[:i]
@@ -216,7 +219,7 @@ def _resolve_attachments(
             )
 
         if not can_read_file(final_filename):
-            logging.warning("Cannot read attachment '%s'. Skipping.", final_filename)
+            logger.warning("Cannot read attachment '%s'. Skipping.", final_filename)
             continue
 
         pages = (
@@ -308,7 +311,7 @@ def _update_relationship_in_filespec(filespec, relationship):
 
 def _attach_attachment(pdf, attachment, num_attached_by_page):
     """attach an attachment to a pdf"""
-    logging.debug("%s", attachment)
+    logger.debug("%s", attachment)
     if attachment.pages is not None:
         for page in attachment.pages:
             _attach_attachment_to_page(
@@ -334,9 +337,9 @@ def _attachment_rect(rect, index):
 
 
 def _attach_attachment_to_page(pdf, attachment, page_num, num_previous_attachments):
-    logging.debug("%s", page_num)
+    logger.debug("%s", page_num)
     if attachment.path.name not in pdf.attachments:
-        logging.debug("new attachment_filespec object required")
+        logger.debug("new attachment_filespec object required")
         attachment_filespec = pikepdf.AttachedFileSpec.from_filepath(
             pdf, attachment.path
         )

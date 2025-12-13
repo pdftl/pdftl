@@ -9,6 +9,7 @@
 import json
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Name, NameTree
 
 from pdftl.core.registry import register_operation
@@ -45,7 +46,7 @@ def dump_annots(pdf, output_file=None):
     """
     Dumps all annotations from a PDF in JSON format, with compact arrays.
     """
-    logging.debug("Dumping annotations for PDF with %s pages.", len(pdf.pages))
+    logger.debug("Dumping annotations for PDF with %s pages.", len(pdf.pages))
     all_annots_data = _get_all_annots_data(pdf)
     json_string = json.dumps(all_annots_data, indent=2)
 
@@ -83,7 +84,7 @@ def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info):
     """
     Dumps annotation data from a PDF in pdftk style
     """
-    logging.debug(
+    logger.debug(
         "Dumping pdftk-style annotations data for PDF with %s pages.", len(pdf.pages)
     )
     all_annots_data = _get_all_annots_data(pdf)
@@ -116,7 +117,7 @@ def _get_all_annots_data(pdf):
 
 def _data_to_strings(data, string_convert):
     """Convert data to strings for dump_data"""
-    logging.debug(data)
+    logger.debug(data)
     data_strings = []
     for datum in data:
         new_lines = _lines_from_datum(datum, string_convert)
@@ -188,7 +189,7 @@ def _key_value_lines(key, value, prefix, string_convert):
     try:
         return [_data_item_to_string_helper(key, value, prefix, string_convert)]
     except NotImplementedError as exc:
-        logging.warning(exc)
+        logger.warning(exc)
         return []
 
 

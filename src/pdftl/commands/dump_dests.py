@@ -10,6 +10,7 @@ import json
 import logging
 import re
 
+logger = logging.getLogger(__name__)
 from pikepdf import Array, Dictionary, Name, NameTree, Stream, String
 
 from pdftl.core.registry import register_operation
@@ -99,7 +100,7 @@ def dump_dests(pdf, output_file=None):
     Traverses the /Dests name tree of a PDF using pikepdf.NameTree.
     This provides a robust, iterable interface to the destinations.
     """
-    logging.debug("Dumping Dests name tree for PDF with %s pages.", len(pdf.pages))
+    logger.debug("Dumping Dests name tree for PDF with %s pages.", len(pdf.pages))
 
     output_data = {"dests": [], "errors": []}
 
@@ -112,7 +113,7 @@ def dump_dests(pdf, output_file=None):
         dests_tree_obj = pdf.Root.Names.Dests
 
     if not dests_tree_obj:
-        logging.debug("No /Dests name tree found in the document root.")
+        logger.debug("No /Dests name tree found in the document root.")
     else:
         try:
             # 1. Instantiate the NameTree object

@@ -15,6 +15,8 @@
 import logging
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 from pikepdf import Pdf
 
 try:
@@ -33,7 +35,7 @@ try:
 
     OCRMYPDF_IMPORT_FAILED = False
 except ImportError as exc:
-    logging.debug(exc)
+    logger.debug(exc)
     OCRMYPDF_IMPORT_FAILED = True
     DEFAULT_JPEG_QUALITY = None
     DEFAULT_PNG_QUALITY = None
@@ -205,7 +207,7 @@ else:
         jpeg_quality = jpeg_quality or DEFAULT_JPEG_QUALITY
         png_quality = png_quality or DEFAULT_PNG_QUALITY
 
-        logging.debug(
+        logger.debug(
             "optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = %s, %s, %s, %s, %s",
             optimize,
             jpeg_quality,

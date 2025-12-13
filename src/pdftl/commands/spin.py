@@ -9,6 +9,7 @@
 import logging
 import math
 
+logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_operation
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -50,7 +51,7 @@ def spin_pdf(pdf, specs):
         angle = None
         if len(colon_splits) > 1:
             angle = colon_splits[1]
-        logging.debug("spec_str=%s, angle=%s", spec_str, angle)
+        logger.debug("spec_str=%s, angle=%s", spec_str, angle)
         if angle:
             for i in page_numbers_matching_page_spec(spec_str, total_pages):
                 apply_spin(pdf.pages[i - 1], angle)

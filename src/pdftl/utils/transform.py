@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Array, Pdf
 
 from pdftl.utils.page_specs import page_numbers_matching_page_spec, parse_page_spec
@@ -60,7 +61,7 @@ def _rotate_pair(angle, x_coord, y_coord, page_width, page_height):
         new_y = _subtract_or_none(page_width, x_coord)
         return new_x, new_y
     # Fallback to original coordinates
-    logging.warning(
+    logger.warning(
         "Unsupported rotation angle %s° encountered. Coordinate transformation may be incorrect.",
         angle,
     )

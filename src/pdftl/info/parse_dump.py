@@ -15,6 +15,8 @@ contains newlines.
 
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 def parse_dump_data(lines, string_decoder):
     """
@@ -81,7 +83,7 @@ def _handle_line(line, pdf_data, state, string_decoder):
         _handle_begin_tag(key[:-5], pdf_data, state, string_decoder)
         return
 
-    logging.warning(
+    logger.warning(
         "Parsing error for 'update_data': line '%s' does not end in 'Begin'", key
     )
 
@@ -96,7 +98,7 @@ def _handle_begin_tag(key, pdf_data, state, _string_decoder):
         pdf_data[list_name].append(new_record)
         state["current_value"] = new_record
     else:
-        logging.warning("Unknown Begin tag '%s' in metadata. Ignoring.", key)
+        logger.warning("Unknown Begin tag '%s' in metadata. Ignoring.", key)
         _reset_state(state, None)
 
 
@@ -108,7 +110,7 @@ def _handle_key_value(key, value, pdf_data, state, string_decoder):
     lookups = _parse_field_decode_lookups(string_decoder)
     if (current_type := state["current_type"]) in lookups:
         if not key.startswith(current_type):
-            logging.warning(
+            logger.warning(
                 "While parsing metadata: key '%s' in %sBegin block"
                 " should start with '%s'. Ignoring this line.",
                 key,
@@ -183,7 +185,7 @@ def _parse_info_field(key, value, info_dict, state, string_decoder):
             info_dict[state["last_info_key"]] = string_decoder(value)
             state["last_info_key"] = None  # Consume the key
         else:
-            logging.warning("Got InfoValue without a preceding InfoKey. Ignoring")
+            logger.warning("Got InfoValue without a preceding InfoKey. Ignoring")
     else:
         raise ValueError(f"Unknown Info field key '{key}' in metadata. This is a bug.")
 

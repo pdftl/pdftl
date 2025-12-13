@@ -13,8 +13,12 @@ import sys
 import textwrap
 from datetime import date
 
+logger = logging.getLogger(__name__)
+
 import pikepdf
 from rich import box
+
+logger = logging.getLogger(__name__)
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.markdown import Heading, Markdown
 from rich.markup import escape
@@ -371,7 +375,7 @@ def print_help(command=None, dest=None, raw=False):
                 hprint(HelpMarkdown("\n---\n"))
             print_help(topic, dest=dest, raw=raw)
     else:
-        logging.warning(
+        logger.warning(
             "Unknown help topic '%s' requested, showing default help\n", command
         )
         print_main_help(hprint)

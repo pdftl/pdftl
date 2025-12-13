@@ -15,6 +15,7 @@ pdf_info
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_operation
 from pdftl.info.output_info import write_info
 from pdftl.utils.io_helpers import smart_open_output
@@ -196,7 +197,7 @@ def pdf_info(
     """
     Imitate pdftk's dump_data output, writing to a file or stdout.
     """
-    logging.debug("escape_xml=%s", escape_xml)
+    logger.debug("escape_xml=%s", escape_xml)
 
     with smart_open_output(output_file) as file:
 

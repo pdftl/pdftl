@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
@@ -89,19 +90,19 @@ def _apply_crop_rule_to_page(page_rule, i, pdf, preview):
     page = pdf.pages[i]
 
     if (page_box := _get_page_dimensions(page)) is None:
-        logging.warning("Warning: Skipping page %s as it has no valid MediaBox.", i + 1)
+        logger.warning("Warning: Skipping page %s as it has no valid MediaBox.", i + 1)
         return
 
     new_box = _calculate_new_box(page_box, page_rule)
 
     if new_box is None:
-        logging.warning(
+        logger.warning(
             "Warning: Cropping page %s gave zero or negative dimensions. Skipping.",
             i + 1,
         )
         return
 
-    logging.debug(
+    logger.debug(
         "Cropping page %s: New MediaBox [%.2f, %.2f, %.2f, %.2f]",
         i + 1,
         new_box[0],

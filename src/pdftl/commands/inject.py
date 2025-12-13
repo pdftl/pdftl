@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
@@ -89,5 +90,5 @@ def _apply_injection_rules(pdf, page, page_num, rules, injection_type):
         code = rule["code"]
         for spec in rule["specs"]:
             if page_number_matches_page_spec(page_num, spec, total_pages):
-                logging.debug("page %s will have '%s' %s", page_num, code, action_verb)
+                logger.debug("page %s will have '%s' %s", page_num, code, action_verb)
                 affix_content(page, code, injection_type)

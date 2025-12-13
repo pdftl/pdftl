@@ -18,6 +18,8 @@ coordinate and name remapping.
 import logging
 from dataclasses import dataclass, field
 
+logger = logging.getLogger(__name__)
+
 from pikepdf import Array, Dictionary, Name, NameTree
 
 try:
@@ -80,7 +82,7 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
             remapper.source_pdf.make_indirect(original_annot)
         )
     except (ForeignObjectError, ValueError, RuntimeError) as e:
-        logging.warning(
+        logger.warning(
             "Skipping potentially corrupt annotation from source page %s. "
             "Reason: %s\nAnnotation: %s",
             page_idx,
@@ -161,7 +163,7 @@ def write_named_dests(pdf, all_named_dests):
     if not all_named_dests:
         return
 
-    logging.debug(
+    logger.debug(
         "Building/updating NameTree with %s destinations.", len(all_named_dests)
     )
 
@@ -199,7 +201,7 @@ def rebuild_links(pdf, processed_page_info: list, remapper: LinkRemapper) -> lis
     Returns:
         list: A list of (name_str, dest_array) tuples for all new dests.
     """
-    logging.debug("--- Remapping links and named destinations ---")
+    logger.debug("--- Remapping links and named destinations ---")
 
     all_named_dests = []
 
@@ -208,7 +210,7 @@ def rebuild_links(pdf, processed_page_info: list, remapper: LinkRemapper) -> lis
         new_page_dests = _rebuild_annotations_for_page(pdf.pages[i], page_idx, remapper)
         all_named_dests.extend(new_page_dests)
 
-    logging.debug(
+    logger.debug(
         "--- Finished remapping links (returning %s dests) ---", len(all_named_dests)
     )
     return all_named_dests

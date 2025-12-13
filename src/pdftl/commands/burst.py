@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
@@ -60,8 +61,8 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf"):
       relevant to single-page files, e.g., internal links
 
     """
-    logging.debug("%s: opened_pdfs=%s", __name__, opened_pdfs)
-    logging.debug("%s: output_pattern=%s", __name__, output_pattern)
+    logger.debug("%s: opened_pdfs=%s", __name__, opened_pdfs)
+    logger.debug("%s: output_pattern=%s", __name__, output_pattern)
     if output_pattern is None:
         output_pattern = "pg_%04d.pdf"
 
@@ -71,13 +72,13 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf"):
         raise ValueError("Output pattern must include a format specifier (e.g., %d)")
 
     for source_pdf in opened_pdfs:
-        logging.debug("source_pdf=%s", source_pdf)
+        logger.debug("source_pdf=%s", source_pdf)
         for page in source_pdf.pages:
             page_counter += 1
             page_file = output_pattern % page_counter
             new_pdf = Pdf.new()
             new_pdf.pages.append(page)
-            logging.debug(
+            logger.debug(
                 "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",
                 page_file,
                 source_pdf,

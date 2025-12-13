@@ -9,6 +9,8 @@
 import logging
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 from pikepdf import Name, Pdf
 
 from pdftl.core.registry import register_operation
@@ -134,7 +136,7 @@ def _apply_mods_to_annot(
         try:
             py_value = _parse_value_to_python(val_str)
         except ValueError as exc:
-            logging.warning(
+            logger.warning(
                 "Skipping invalid value for key '%s' on page %s: %s",
                 key_str,
                 page_num,
@@ -150,7 +152,7 @@ def _apply_mods_to_annot(
             # Value is 'null', so delete the key
             if key_as_name in annot:
                 del annot[key_as_name]
-                logging.debug(
+                logger.debug(
                     "Deleted key '%s' from annot on page %s",
                     key_str,
                     page_num,
@@ -159,7 +161,7 @@ def _apply_mods_to_annot(
         else:
             # Set the key to the new value
             annot[key_as_name] = py_value
-            logging.debug(
+            logger.debug(
                 "Set key '%s'=%s on annot on page %s",
                 key_str,
                 py_value,
@@ -184,7 +186,7 @@ def modify_annots(pdf: Pdf, specs: list[str]):
     Modifies properties of existing annotations in a PDF.
     """
     if not specs:
-        logging.warning("No modification specs provided. Nothing to do.")
+        logger.warning("No modification specs provided. Nothing to do.")
         return pdf
     pdf_page_count = len(pdf.pages)
     try:
@@ -192,11 +194,11 @@ def modify_annots(pdf: Pdf, specs: list[str]):
         rules = specs_to_modification_rules(specs, pdf_page_count)
     except (ValueError, TypeError) as exc:
         msg = f"Failed to parse modify_annots arguments: {exc}"
-        logging.error(msg)
+        logger.error(msg)
         raise InvalidArgumentError(msg) from exc
 
     if not rules:
-        logging.warning("No modification rules parsed. Nothing to do.")
+        logger.warning("No modification rules parsed. Nothing to do.")
         return pdf
 
     modified_annot_count = 0
@@ -205,7 +207,7 @@ def modify_annots(pdf: Pdf, specs: list[str]):
     for rule in rules:
         for page_num in rule.page_numbers:
             if not 1 <= page_num <= pdf_page_count:
-                logging.warning(
+                logger.warning(
                     "Spec references page %d, but PDF only has %d pages. Skipping.",
                     page_num,
                     pdf_page_count,
@@ -235,7 +237,7 @@ def modify_annots(pdf: Pdf, specs: list[str]):
                 )
                 modified_prop_count += props_changed
 
-    logging.info(
+    logger.info(
         "Modified %d properties across %d annotations.",
         modified_prop_count,
         modified_annot_count,

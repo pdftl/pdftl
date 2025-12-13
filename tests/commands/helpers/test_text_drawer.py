@@ -119,7 +119,7 @@ class TestTextDrawerClass:
 
     @patch("pdftl.commands.helpers.text_drawer.getFont")
     @patch("pdftl.commands.helpers.text_drawer.reportlab_canvas")
-    def test_get_font_name_logic(self, mock_canvas, mock_getFont):
+    def test_get_font_name_logic(self, mock_canvas, mock_getFont, caplog):
         """Tests all logic paths for font validation and fallbacks."""
         mock_page_box = MockPageBox(width=600, height=800)
         drawer = TextDrawer(mock_page_box)
@@ -136,13 +136,14 @@ class TestTextDrawerClass:
 
         # 3. Test bad font: 'Fake-Font-Name'
         mock_getFont.side_effect = Exception("Font not found")
-        with patch("logging.warning") as mock_logging_warn:
+        with caplog.at_level("WARNING"):
             font_name = drawer.get_font_name("Fake-Font-Name")
             assert font_name == DEFAULT_FONT_NAME
             mock_getFont.assert_called_with("Fake-Font-Name")
-            mock_logging_warn.assert_called_once()
+            assert len(caplog.records) == 1
             # Corrected assertion
-            assert "Fake-Font-Name" in mock_logging_warn.call_args[0][1]
+            record = caplog.records[0]
+            assert record.args[0] == "Fake-Font-Name"
 
         mock_getFont.reset_mock()
 
@@ -154,7 +155,7 @@ class TestTextDrawerClass:
 
     @patch("pdftl.commands.helpers.text_drawer.getFont")
     @patch("pdftl.commands.helpers.text_drawer.reportlab_canvas")
-    def test_draw_rule_skips_bad_rule(self, mock_canvas, mock_getFont):
+    def test_draw_rule_skips_bad_rule(self, mock_canvas, mock_getFont, caplog):
         """Tests that one bad rule doesn't stop others (via logging)."""
         mock_page_box = MockPageBox(width=600, height=800)
         drawer = TextDrawer(mock_page_box)
@@ -163,11 +164,12 @@ class TestTextDrawerClass:
         bad_rule = {"text": MagicMock(side_effect=Exception("I am a bad rule!"))}
         context = {"page": 1}
 
-        with patch("logging.warning") as mock_logging_warn:
+        with caplog.at_level("WARNING"):
             drawer.draw_rule(bad_rule, context)
-            mock_logging_warn.assert_called_once()
-            assert "Skipping one text rule" in mock_logging_warn.call_args[0][0]
-            assert "I am a bad rule!" in str(mock_logging_warn.call_args[0][1])
+            assert len(caplog.records) == 1
+            record = caplog.records[0]
+            assert "Skipping one text rule" in record.message
+            assert "I am a bad rule!" in str(record.args[0])
 
     # This helper method is now part of the pytest-style class
     def _run_draw_test(

@@ -9,6 +9,7 @@ another"""
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Pdf, Rectangle
 
 from pdftl.core.registry import register_operation
@@ -131,7 +132,7 @@ def apply_overlay(
     """
 
     def debug(x):
-        logging.debug(x)
+        logger.debug(x)
 
     debug(
         f"  input_pdf={input_pdf}, "

@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 try:
     import pypdfium2 as pdfium
 
@@ -57,7 +58,7 @@ def _extract_text_from_pdf(pdf_path, password=None) -> list:
         raise InvalidArgumentError(_MISSING_DEPS_ERROR_MSG)
 
     with pdfium.PdfDocument(pdf_path, password=password) as pdf:
-        logging.debug("Opened '%s' using pdfium with %s pages.", pdf_path, len(pdf))
+        logger.debug("Opened '%s' using pdfium with %s pages.", pdf_path, len(pdf))
         for page in pdf:
             try:
                 textpage = page.get_textpage()
@@ -81,10 +82,10 @@ def dump_text(input_filename, input_password, output_file=None):
     """
     Dump text content of a PDF file.
     """
-    logging.debug("Dumping text for '%s' using pdfminer", input_filename)
+    logger.debug("Dumping text for '%s' using pdfminer", input_filename)
 
     if input_password is None:
-        logging.debug("No password supplied.")
+        logger.debug("No password supplied.")
         input_password = ""
 
     output_text = "\n\f\n".join(

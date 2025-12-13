@@ -39,15 +39,6 @@ def clean_state():
     return _reset_state()
 
 
-@pytest.fixture
-def mock_logger(monkeypatch):
-    """Fixture to mock the logging module for catching warnings."""
-    mock_log = MagicMock()
-    # Mock the actual logging.warning used in the module
-    monkeypatch.setattr(logging, "warning", mock_log)
-    return mock_log
-
-
 class TestParseDumpCoverage:
 
     def test_handle_line_skip_empty_line(self, pdf_data_struct, clean_state):
@@ -66,42 +57,47 @@ class TestParseDumpCoverage:
         assert clean_state == initial_state
 
     def test_handle_line_parsing_error_warning(
-        self, pdf_data_struct, clean_state, mock_logger
+        self, pdf_data_struct, clean_state, caplog
     ):
         """Covers line 84: logging.warning for unhandled line format (no ':' and not 'Begin')."""
         line = "This is a malformed line"
 
-        _handle_line(line, pdf_data_struct, clean_state, TEST_DECODER)
+        with caplog.at_level("WARNING"):
+            _handle_line(line, pdf_data_struct, clean_state, TEST_DECODER)
 
         # Check that line 84 was hit and logged the warning
-        mock_logger.assert_called_once_with(
-            "Parsing error for 'update_data': line '%s' does not end in 'Begin'",
-            "This is a malformed line",
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert (
+            "does not end in 'Begin'" in record.message
+            and "This is a malformed line" in record.message
         )
 
         # Test with a bytes line to cover decode path in _handle_line
-        mock_logger.reset_mock()
         line_bytes = b"Another malformed line"
-        _handle_line(line_bytes, pdf_data_struct, clean_state, TEST_DECODER)
-        mock_logger.assert_called_once_with(
-            "Parsing error for 'update_data': line '%s' does not end in 'Begin'",
-            "Another malformed line",
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            _handle_line(line_bytes, pdf_data_struct, clean_state, TEST_DECODER)
+        expected = (
+            "Parsing error for 'update_data': line '%s' does not end in 'Begin'"
+            % "Another malformed line"
         )
+        assert [rec.message for rec in caplog.records] == [expected]
 
-    def test_handle_begin_tag_unknown_tag(
-        self, pdf_data_struct, clean_state, mock_logger
-    ):
+    def test_handle_begin_tag_unknown_tag(self, pdf_data_struct, clean_state, caplog):
         """Covers lines 99-100: logging.warning and _reset_state for unknown Begin tag."""
         # Setup: initial state is None
         initial_state = clean_state.copy()
 
         # Call with an unknown tag
-        _handle_begin_tag("UnknownTag", pdf_data_struct, initial_state, TEST_DECODER)
+        with caplog.at_level("WARNING"):
+            _handle_begin_tag(
+                "UnknownTag", pdf_data_struct, initial_state, TEST_DECODER
+            )
 
         # 1. Check line 99: warning logged
-        mock_logger.assert_called_once_with(
-            "Unknown Begin tag '%s' in metadata. Ignoring.", "UnknownTag"
-        )
+        expected = "Unknown Begin tag '%s' in metadata. Ignoring." % "UnknownTag"
+        assert [rec.message for rec in caplog.records] == [expected]
 
         # 2. Check line 100: state reset to None
         assert initial_state["current_type"] is None
@@ -109,7 +105,7 @@ class TestParseDumpCoverage:
         assert initial_state["last_info_key"] is None
 
     def test_handle_key_value_prefix_mismatch_warning(
-        self, pdf_data_struct, clean_state, mock_logger
+        self, pdf_data_struct, clean_state, caplog
     ):
         """
         Covers lines 111-118: logging.warning and return when key doesn't start
@@ -125,16 +121,15 @@ class TestParseDumpCoverage:
         # Ensure the record starts empty
         assert pdf_data_struct["PageMediaList"] == [{}]
 
-        _handle_key_value(key, value, pdf_data_struct, clean_state, TEST_DECODER)
+        with caplog.at_level("WARNING"):
+            _handle_key_value(key, value, pdf_data_struct, clean_state, TEST_DECODER)
 
         # 1. Check lines 111-117: warning logged
-        mock_logger.assert_called_once_with(
+        expected = (
             "While parsing metadata: key '%s' in %sBegin block"
-            " should start with '%s'. Ignoring this line.",
-            key,
-            "PageMedia",
-            "PageMedia",
-        )
+            " should start with '%s'. Ignoring this line."
+        ) % (key, "PageMedia", "PageMedia")
+        assert [rec.message for rec in caplog.records] == [expected]
 
         # 2. Check line 118: return, meaning the current PageMedia record is still empty/unchanged.
         assert pdf_data_struct["PageMediaList"] == [{}]

@@ -8,6 +8,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Name
 
 from pdftl.pages.link_remapper import create_link_remapper
@@ -44,13 +45,11 @@ def add_pages(new_pdf, opened_pdfs, source_pages_to_process: [PageTransform]):
 
     """
     # --- PASS 1: Copy page structure, content, and apply transformations. ---
-    logging.debug(
-        "--- PASS 1: Assembling %s pages... ---", len(source_pages_to_process)
-    )
+    logger.debug("--- PASS 1: Assembling %s pages... ---", len(source_pages_to_process))
     rebuild_context = process_source_pages(new_pdf, source_pages_to_process)
 
     # --- PASS 2: Rebuild links and destinations. ---
-    logging.debug("--- PASS 2: Rebuilding links and destinations... ---")
+    logger.debug("--- PASS 2: Rebuilding links and destinations... ---")
 
     # The link rebuilder needs a map from a PDF's memory address to its
     # original index in the input list.

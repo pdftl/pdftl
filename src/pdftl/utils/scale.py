@@ -10,6 +10,7 @@ Page scaling
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pdftl.core.constants import PAGE_BOXES
 
 
@@ -26,7 +27,7 @@ def _scale_standard_page_boxes(page, scale):
 def _scale_all_annots_in_page(page, scale):
     for annot in getattr(page, "Annots", {}):
         if hasattr(annot, "Rect"):
-            logging.debug("scaling %s", list(annot.Rect))
+            logger.debug("scaling %s", list(annot.Rect))
             annot.Rect = _scale_rect(annot.Rect, scale)
 
 

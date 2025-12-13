@@ -9,6 +9,7 @@
 import logging
 import re
 
+logger = logging.getLogger(__name__)
 from pikepdf import Array
 
 from pdftl.core.constants import UNITS
@@ -92,7 +93,7 @@ def _group_specs_with_qualifiers(specs):
     with the spec string that follows them.
     Returns a list of tuples: [(spec_str, qualifier_keyword), ...].
     """
-    logging.debug("got specs=%s", specs)
+    logger.debug("got specs=%s", specs)
     grouped_specs = []
     specs_iterator = iter(specs)
     for spec in specs_iterator:
@@ -107,7 +108,7 @@ def _group_specs_with_qualifiers(specs):
         else:
             # This spec has no preceding keyword qualifier.
             grouped_specs.append((spec, None))
-    logging.debug("returning grouped_specs=%s", grouped_specs)
+    logger.debug("returning grouped_specs=%s", grouped_specs)
     return grouped_specs
 
 

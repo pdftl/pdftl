@@ -8,8 +8,10 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 import pikepdf
 
+logger = logging.getLogger(__name__)
 LOG_TRUNC = 500
 
 
@@ -19,9 +21,9 @@ def get_normalized_page_content_stream(page):
     arguments per line."""
 
     parsed = pikepdf.parse_content_stream(page)
-    logging.debug("str(parsed)[:%s]=%s", LOG_TRUNC, str(parsed)[:LOG_TRUNC])
+    logger.debug("str(parsed)[:%s]=%s", LOG_TRUNC, str(parsed)[:LOG_TRUNC])
     unparsed = pikepdf.unparse_content_stream(parsed)
-    logging.debug("str(unparsed)[:%s]=%s", LOG_TRUNC, str(unparsed)[:LOG_TRUNC])
+    logger.debug("str(unparsed)[:%s]=%s", LOG_TRUNC, str(unparsed)[:LOG_TRUNC])
     return unparsed
 
 

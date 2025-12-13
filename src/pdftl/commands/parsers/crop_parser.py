@@ -9,6 +9,7 @@
 import logging
 import re
 
+logger = logging.getLogger(__name__)
 from pdftl.core.constants import PAPER_SIZES
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
@@ -29,7 +30,7 @@ def specs_to_page_rules(specs, total_pages):
                 "Expected a format like '1-5(10pt)'."
             )
         page_range_str, margin_str = match.groups()
-        logging.debug("page_range_str=%s, margin_str=%s", page_range_str, margin_str)
+        logger.debug("page_range_str=%s, margin_str=%s", page_range_str, margin_str)
         page_numbers = page_numbers_matching_page_spec(page_range_str, total_pages)
         for page_num in page_numbers:
             # Page numbers from the parser are 1-based; list indices are 0-based

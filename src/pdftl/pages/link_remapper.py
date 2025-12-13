@@ -26,6 +26,8 @@ maps describing the relationship between source and target pages.
 import logging
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 from pikepdf import Array, Dictionary, Name, NameTree, Pdf, String
 
 try:
@@ -108,7 +110,7 @@ class LinkRemapper:
             indirect_action = self.source_pdf.make_indirect(original_action)
             return self.pdf.copy_foreign(indirect_action)
         except ForeignObjectError as fo_error:
-            logging.warning("Failed to copy action object: %s", fo_error)
+            logger.warning("Failed to copy action object: %s", fo_error)
             return None
 
     def _get_new_destination_name(self, original_name: str) -> str:
@@ -241,7 +243,7 @@ class LinkRemapper:
         source_dests = self.context.dest_caches.get(id(self.source_pdf), {})
 
         if original_name not in source_dests:
-            logging.warning(
+            logger.warning(
                 "Named destination '%s' not found. Link will be dropped.",
                 original_name,
             )
@@ -333,7 +335,7 @@ class LinkRemapper:
             tuple: (new_action, None)
         """
         action_type = action.get(Name.S, "Unknown")
-        logging.warning(
+        logger.warning(
             "Unsupported action type '%s' copied without remapping. "
             "It is highly likely to be broken in the final document.",
             action_type,

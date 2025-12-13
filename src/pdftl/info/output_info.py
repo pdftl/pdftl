@@ -15,8 +15,12 @@ write_info
 import logging
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 import pikepdf
 from pikepdf import NameTree, NumberTree, String
+
+logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
 from pdftl.info.read_info import (
@@ -74,7 +78,7 @@ def _write_bookmarks_recursive(
                 item, context.pages, context.named_destinations
             )
         except AssertionError as exc:
-            logging.warning(
+            logger.warning(
                 "Could not resolve page number for bookmark '%s': %s.\n  Using page number 0.",
                 item.title,
                 exc,
@@ -196,7 +200,7 @@ def _write_bookmarks(writer, pdf, escape_xml=True):
                     escape_xml=escape_xml,
                 )
     except pikepdf.exceptions.OutlineStructureError as exc:
-        logging.warning(
+        logger.warning(
             "Warning: Could not read bookmarks. Outline may be corrupted. Error: %s",
             exc,
         )

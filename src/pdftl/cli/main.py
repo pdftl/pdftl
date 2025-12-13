@@ -10,6 +10,7 @@ import getpass
 import logging
 import sys
 
+logger = logging.getLogger(__name__)
 from rich.logging import RichHandler
 
 from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
@@ -57,7 +58,7 @@ def main(argv=None):
 
     except (UserCommandLineError, PackageError) as e:
         print(f"Error: {e}", file=sys.stderr)
-        logging.debug("A user command line error occurred", exc_info=True)
+        logger.debug("A user command line error occurred", exc_info=True)
         sys.exit(1)
 
 
@@ -65,11 +66,11 @@ def main(argv=None):
 
 
 def _prepare_pipeline_from_remaining_args(args_for_parsing):
-    logging.debug("args_for_parsing=%s", args_for_parsing)
+    logger.debug("args_for_parsing=%s", args_for_parsing)
     stages_args = split_args_by_separator(args_for_parsing)
-    logging.debug("stages_args=%s", stages_args)
+    logger.debug("stages_args=%s", stages_args)
     final_stage_args, global_options = parse_options_and_specs(stages_args[-1])
-    logging.debug(
+    logger.debug(
         "final_stage_args=%s, global_options=%s", final_stage_args, global_options
     )
     stages_args[-1] = final_stage_args
@@ -124,8 +125,9 @@ def _is_verbose_and_setup_logging(cli_args) -> tuple[bool, list[str]]:
     else:
         log_format = f"[{WHOAMI}] %(message)s"
 
-    # Configure the root logger
-    logging.basicConfig(level=level, format=log_format, handlers=[RichHandler()])
+    # Configure the root logger and the pdftl-specific loggers
+    logging.basicConfig(format=log_format, handlers=[RichHandler()])
+    logging.getLogger("pdftl").setLevel(level)
     flags_to_remove = VERBOSE_FLAGS.union(DEBUG_FLAGS)
     remaining_args = [x for x in cli_args if x not in flags_to_remove]
     return verbose, remaining_args

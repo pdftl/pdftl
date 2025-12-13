@@ -13,8 +13,10 @@ import importlib
 import logging
 import pkgutil
 
+logger = logging.getLogger(__name__)
 import pdftl
 
+logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ def _discover_modules(parent_modules, label):
             module = importlib.import_module(fq_name)
             loaded_modules.append(fq_name)
 
-    logging.debug("[registry_init] Loaded %s %s modules:", len(loaded_modules), label)
+    logger.debug("[registry_init] Loaded %s %s modules:", len(loaded_modules), label)
     for module in loaded_modules:
         logger.debug("  - %s", module)
 

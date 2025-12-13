@@ -361,7 +361,7 @@ class TestParseDump:
     def test_safe_float_list(self, value, expected):
         assert _safe_float_list(value) == expected
 
-    def test_parse_info_field(self):
+    def test_parse_info_field(self, caplog):
         """Tests the stateful parsing of InfoKey/InfoValue pairs."""
         info_dict = {}
         state = {"last_info_key": None}
@@ -377,10 +377,14 @@ class TestParseDump:
         assert info_dict == {"Title": "My Doc"}
 
         # 2. Value, then Key (should log warning and do nothing)
-        _parse_info_field("InfoValue", "Orphan Value", info_dict, state, decoder)
+        with caplog.at_level("WARNING"):
+            _parse_info_field("InfoValue", "Orphan Value", info_dict, state, decoder)
+
         assert info_dict == {"Title": "My Doc"}
-        parse_dump_module.logging.warning.assert_called_with(
-            "Got InfoValue without a preceding InfoKey. Ignoring"
+        assert len(caplog.records) == 1
+        assert (
+            caplog.records[0].message
+            == "Got InfoValue without a preceding InfoKey. Ignoring"
         )
 
     def test_parse_dump_data_integration(self):
@@ -504,20 +508,30 @@ class TestSetInfo:
         assert mock_page.mediabox == [0, 0, 1, 1]
         assert mock_page.cropbox == [0, 0, 2, 2]
 
-    def test_set_page_media_entry_errors(self, mock_pdf):
+    def test_set_page_media_entry_errors(self, mock_pdf, caplog):
         """Tests error handling for _set_page_media_entry."""
         # 1. Missing page number
-        _set_page_media_entry(mock_pdf, {"Rotation": 90})
-        set_info_module.logging.warning.assert_called_with(
-            "Skipping PageMedia metadata with missing page number (PageMediaNumber)."
-            " Metadata entry details:\n  %s",
-            {"Rotation": 90},
+        with caplog.at_level("WARNING"):
+            _set_page_media_entry(mock_pdf, {"Rotation": 90})
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.message == (
+            (
+                "Skipping PageMedia metadata with missing page number (PageMediaNumber)."
+                " Metadata entry details:\n  %s"
+            )
+            % {"Rotation": 90}
         )
 
         # 2. Non-existent page number
-        _set_page_media_entry(mock_pdf, {"Number": 99})
-        set_info_module.logging.warning.assert_called_with(
-            "Nonexistent page %s requested for PageMedia metadata. Skipping.", 99
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            _set_page_media_entry(mock_pdf, {"Number": 99})
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert (
+            record.message
+            == "Nonexistent page 99 requested for PageMedia metadata. Skipping."
         )
 
     @patch("pikepdf.OutlineItem")
@@ -567,35 +581,41 @@ class TestSetInfo:
         mock_outline.root.append.assert_called_with(oi4)
         assert len(ancestors) == 1
 
-    def test_add_bookmark_errors(self, mock_pdf):
+    def test_add_bookmark_errors(self, mock_pdf, caplog):
         mock_pdf.pages = [MagicMock()]  # 1 page
 
         # 1. Missing key
-        _add_bookmark(mock_pdf, {"Title": "Fail"}, MagicMock(), [])
-        set_info_module.logging.warning.assert_called_with(
+        with caplog.at_level("WARNING"):
+            _add_bookmark(mock_pdf, {"Title": "Fail"}, MagicMock(), [])
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert (
             "Skipping incomplete bookmark, we need Level, PageNumber and Title."
-            " Bookmark details:\n  %s",
-            {"Title": "Fail"},
+            in record.message
         )
 
         # 2. Bad page number
         b = {"Title": "B", "Level": 1, "PageNumber": 99}
-        _add_bookmark(mock_pdf, b, MagicMock(), [])
-        set_info_module.logging.warning.assert_called_with(
-            "Nonexistent page %s requested for bookmark with title '%s'. Skipping.",
-            99,
-            "B",
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            _add_bookmark(mock_pdf, b, MagicMock(), [])
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert (
+            record.message
+            == "Nonexistent page 99 requested for bookmark with title 'B'. Skipping."
         )
 
         # 3. Bad level (too deep)
         b = {"Title": "C", "Level": 3, "PageNumber": 1}
-        _add_bookmark(mock_pdf, b, MagicMock(), [])
-        set_info_module.logging.warning.assert_called_with(
-            "Bookmark level %s requested (with title '%s'),"
-            "\nbut we are only at level %s in the bookmark tree. Skipping.",
-            3,
-            "C",
-            0,
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            _add_bookmark(mock_pdf, b, MagicMock(), [])
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.message == (
+            "Bookmark level 3 requested (with title 'C'),"
+            "\nbut we are only at level 0 in the bookmark tree. Skipping."
         )
 
     @pytest.mark.parametrize(
@@ -639,20 +659,22 @@ class TestSetInfo:
         assert label_obj == mock_indirect
         mock_pdf.make_indirect.assert_called_once_with(Dictionary(expected_dict))
 
-    def test_set_id_info(self, mock_pdf):
+    def test_set_id_info(self, mock_pdf, caplog):
         # 1. Set ID 0
         _set_id_info(mock_pdf, 0, "68656c6c6f")  # "hello"
         assert mock_pdf.trailer.ID[0] == b"hello"
 
         # 2. Set ID 1 (should log warning)
-        _set_id_info(mock_pdf, 1, "world")
-        set_info_module.logging.warning.assert_any_call(CANNOT_SET_PDFID1)
+        with caplog.at_level("WARNING"):
+            _set_id_info(mock_pdf, 1, "world")
+        assert CANNOT_SET_PDFID1 in [rec.message for rec in caplog.records]
 
         # 3. Bad hex string
-        _set_id_info(mock_pdf, 0, "not hex")
-        set_info_module.logging.warning.assert_any_call(
-            "Could not set PDFID%s to '%s'; invalid hex string?", 0, "not hex"
-        )
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            _set_id_info(mock_pdf, 0, "not hex")
+        expected = "Could not set PDFID%s to '%s'; invalid hex string?" % (0, "not hex")
+        assert expected in [rec.message for rec in caplog.records]
 
     @patch("pdftl.info.set_info._set_id_info")
     def test_set_metadata_in_pdf_id1(self, mock_id, mock_pdf):
@@ -748,18 +770,22 @@ class TestSetInfo:
             ]
         )
 
-    def test_add_bookmark_errors_bad_level(self, mock_pdf):
+    def test_add_bookmark_errors_bad_level(self, mock_pdf, caplog):
         """Tests the error case for a bookmark level < 1."""
         mock_pdf.pages = [MagicMock()]
         b = {"Title": "A", "Level": 0, "PageNumber": 1}
         ancestors = []
 
-        result = _add_bookmark(mock_pdf, b, MagicMock(), ancestors)
+        with caplog.at_level("WARNING"):
+            result = _add_bookmark(mock_pdf, b, MagicMock(), ancestors)
 
         # Check that a warning was logged
-        set_info_module.logging.warning.assert_called_with(
-            "Skipping invalid bookmark with level %s. Levels should be 1 or greater.", 0
+        expected = (
+            "Skipping invalid bookmark with level %s. Levels should be 1 or greater."
+            % 0
         )
+        assert expected in [rec.message for rec in caplog.records]
+
         # Check that ancestors list was returned unchanged
         assert result is ancestors
 
@@ -785,18 +811,20 @@ class TestSetInfo:
         # Check that the root was updated
         assert mock_pdf.Root.PageLabels == mock_nt_instance.obj
 
-    def test_set_id_info_bad_hex(self, mock_pdf):
+    def test_set_id_info_bad_hex(self, mock_pdf, caplog):
         """Tests the ValueError exception handler in _set_id_info."""
         # Setup: Ensure trailer.ID is a list-like mock
         mock_pdf.trailer.ID = [b"original_id"]
 
-        _set_id_info(mock_pdf, 0, "not a hex string")
+        with caplog.at_level("WARNING"):
+            _set_id_info(mock_pdf, 0, "not a hex string")
 
         # Check that the warning was logged
-        set_info_module.logging.warning.assert_called_with(
-            "Could not set PDFID%s to '%s'; invalid hex string?",
+        expected = "Could not set PDFID%s to '%s'; invalid hex string?" % (
             0,
             "not a hex string",
         )
+        assert expected in [rec.message for rec in caplog.records]
+
         # Check that the original ID was not modified
         assert mock_pdf.trailer.ID[0] == b"original_id"

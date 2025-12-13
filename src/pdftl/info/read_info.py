@@ -15,6 +15,7 @@ resolve_page_number
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
 
 from pdftl.utils.whatisit import is_page
@@ -44,17 +45,17 @@ def _get_destination_array(item: OutlineItem, named_destinations: NameTree):
     that needs to be looked up. This function isolates that logic.
 
     """
-    # logging.debug("item=%s, type: %s", item, type(item))
+    # logger.debug("item=%s, type: %s", item, type(item))
     # if not isinstance(item, (Dictionary, dict, OutlineItem)) or not hasattr(item, "destination"):
-    #     logging.debug("returning early: item is not a valid container")
+    #     logger.debug("returning early: item is not a valid container")
     #     return None
 
     if not isinstance(item, OutlineItem):
-        logging.warning("Invalid item passed, returning None")
+        logger.warning("Invalid item passed, returning None")
         return None
 
     dest = item.destination
-    logging.debug("dest=%s, type: %s", dest, type(dest))
+    logger.debug("dest=%s, type: %s", dest, type(dest))
     # 1. Fallback to the action's destination if the primary one is missing
     if dest is None and hasattr(item, "action") and hasattr(item.action, "D"):
         dest = item.action.D
@@ -78,7 +79,7 @@ def _get_destination_array(item: OutlineItem, named_destinations: NameTree):
         if isinstance(dest_obj, Array):
             return dest_obj
 
-    logging.debug("fall through from _get_destination_array, returning None")
+    logger.debug("fall through from _get_destination_array, returning None")
     return None
 
 
@@ -91,14 +92,14 @@ def resolve_page_number(item: OutlineItem, pdf_pages, named_destinations):
     """
     dest_array = _get_destination_array(item, named_destinations)
     if not dest_array or len(dest_array) == 0:
-        logging.debug("dest_array=%s", dest_array)
-        logging.debug("Empty(?) dest_array, returning None")
+        logger.debug("dest_array=%s", dest_array)
+        logger.debug("Empty(?) dest_array, returning None")
         return None
 
     # The first element of the destination array is the target page object.
     page_obj = dest_array[0]
     if not is_page(page_obj):
-        logging.debug("Not a page, returning None")
+        logger.debug("Not a page, returning None")
         return None
 
     # just in case:
@@ -107,12 +108,12 @@ def resolve_page_number(item: OutlineItem, pdf_pages, named_destinations):
     # Find the page by comparing object numbers
     for i, page in enumerate(pdf_pages):
         assert hasattr(page, "objgen")
-        logging.debug("page.objgen = %s, type = %s", page.objgen, type(page.objgen))
-        logging.debug(
+        logger.debug("page.objgen = %s, type = %s", page.objgen, type(page.objgen))
+        logger.debug(
             "page_obj.objgen = %s, type = %s", page_obj.objgen, type(page_obj.objgen)
         )
         if page.objgen == page_obj.objgen:
             return i + 1  # Page numbers are 1-indexed
 
-    logging.debug("Fall-through, returning None")
+    logger.debug("Fall-through, returning None")
     return None

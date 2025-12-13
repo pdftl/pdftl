@@ -10,8 +10,11 @@ import inspect
 import logging
 from collections import OrderedDict
 
+logger = logging.getLogger(__name__)
+
 import pikepdf
 
+logger = logging.getLogger(__name__)
 from pdftl.core.constants import ALLOW_PERMISSIONS_MAP
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
@@ -240,7 +243,7 @@ def _build_encryption_object(options, input_context):
     elif passwords or chosen_methods:
         encrypt_opts["allow"] = _build_permissions_object([])
 
-    logging.debug("Final encryption options: %s", encrypt_opts)
+    logger.debug("Final encryption options: %s", encrypt_opts)
     return pikepdf.Encryption(**encrypt_opts)
 
 
@@ -248,7 +251,7 @@ def _build_save_options(options, input_context):
     """Builds the final keyword arguments dictionary for pikepdf.save()."""
     encryption_object = _build_encryption_object(options, input_context)
     if options.get("allow") and not encryption_object:
-        logging.warning(
+        logger.warning(
             "Encryption not requested, so 'allow' permissions will be ignored."
         )
 
@@ -281,7 +284,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
             "An output file must be specified with the 'output' keyword."
         )
 
-    logging.debug("Preparing to save to '%s' with options %s", output_filename, options)
+    logger.debug("Preparing to save to '%s' with options %s", output_filename, options)
 
     if options.get("flatten"):
         pdf.flatten_annotations()
@@ -292,7 +295,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         try:
             pdf.Root.AcroForm[pikepdf.Name.NeedAppearances] = True
         except AttributeError as e:
-            logging.warning(
+            logger.warning(
                 "Problem setting need_appearances: %s %s", e.__class__.__name__, e
             )
 
@@ -301,5 +304,5 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     if set_pdf_id:
         pdf.trailer.ID = set_pdf_id
 
-    logging.debug("Final save options for pikepdf: %s", save_opts)
+    logger.debug("Final save options for pikepdf: %s", save_opts)
     pdf.save(output_filename, **save_opts)

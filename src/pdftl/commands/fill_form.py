@@ -9,8 +9,11 @@
 import logging
 import sys
 
+logger = logging.getLogger(__name__)
 import pikepdf
 from pikepdf.exceptions import PdfError
+
+logger = logging.getLogger(__name__)
 from pikepdf.form import Form, RadioButtonGroup
 
 from pdftl.core.registry import register_operation
@@ -79,7 +82,7 @@ def _fill_form_from_data(pdf, data):
         _fill_form_from_fdf_data(form, data)
     except (PdfError, AttributeError, ValueError) as exc:
         try:
-            logging.debug(
+            logger.debug(
                 "Got %s while trying to read data as FDF: %s", type(exc).__name__, exc
             )
             _fill_form_from_xfdf_data(form, data)
@@ -93,20 +96,20 @@ def _fill_form_from_fdf_data(form, data):
     """Fill in a form, using given FDF data"""
     with pikepdf.open(wrap_fdf_data_in_pdf_bytes(data)) as wrapper_pdf:
         fdf_fields = wrapper_pdf.Root.FDF.Fields
-        # logging.debug(fdf_fields)
+        # logger.debug(fdf_fields)
         for fdf_field in fdf_fields:
             _fill_form_field_from_fdf_field(form, fdf_field)
 
 
 def _fill_form_field_from_fdf_field(form, fdf_field, ancestors=None):
     """Fill in a form field, using given FDF field"""
-    logging.debug("title=%s", getattr(fdf_field, "T", None))
+    logger.debug("title=%s", getattr(fdf_field, "T", None))
     if ancestors is None:
         ancestors = []
     if hasattr(fdf_field, "V"):
         _fill_form_value_from_fdf_field(form, fdf_field, ancestors)
     if hasattr(fdf_field, "Kids"):
-        logging.debug("title=%s has kids", getattr(fdf_field, "T", None))
+        logger.debug("title=%s has kids", getattr(fdf_field, "T", None))
         _process_fdf_field_kids(form, fdf_field, ancestors)
 
 
@@ -122,12 +125,12 @@ def _process_fdf_field_kids(form, fdf_field, ancestors):
 def _fill_form_value_from_fdf_field(form, fdf_field, ancestors):
     """Fill in a form value from an FDF field"""
     fully_qualified_fdf_name = fully_qualified_name(fdf_field, ancestors)
-    logging.debug(fully_qualified_fdf_name)
+    logger.debug(fully_qualified_fdf_name)
     field = next(
         (x for x in form if x.fully_qualified_name == fully_qualified_fdf_name), None
     )
     if field is not None:
-        logging.debug("Got a hit")
+        logger.debug("Got a hit")
         if isinstance(field, RadioButtonGroup):
             idx = next(x for x, y in enumerate(field.obj.Opt) if fdf_field.V == y)
             field.value = pikepdf.Name("/" + str(idx))

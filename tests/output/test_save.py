@@ -424,13 +424,18 @@ def test_build_save_options_linearize(mock_build_enc, mock_input_context):
 
 
 @patch("pdftl.output.save._build_encryption_object", return_value=False)
-def test_build_save_options_allow_warning(mock_build_enc, mock_input_context):
+def test_build_save_options_allow_warning(mock_build_enc, mock_input_context, caplog):
     """Tests warning if 'allow' is given without encryption."""
-    options = {"allow": ["Printing"]}
-    _build_save_options(options, mock_input_context)
 
-    save_module.logging.warning.assert_called_with(
-        "Encryption not requested, so 'allow' permissions will be ignored."
+    options = {"allow": ["Printing"]}
+    with caplog.at_level("WARNING"):
+        _build_save_options(options, mock_input_context)
+
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert (
+        record.message
+        == "Encryption not requested, so 'allow' permissions will be ignored."
     )
 
 
@@ -499,7 +504,7 @@ def test_save_pdf_set_pdf_id(
 @patch("pdftl.output.save.attach_files")
 @patch("pdftl.output.save._build_save_options")
 def test_save_pdf_need_appearances_fails(
-    mock_build_save, mock_attach, mock_pdf, mock_input_context
+    mock_build_save, mock_attach, mock_pdf, mock_input_context, caplog
 ):
     """Tests that a failure in 'need_appearances' is logged as a warning."""
     # Simulate the __setitem__ call raising an AttributeError.
@@ -507,13 +512,14 @@ def test_save_pdf_need_appearances_fails(
     mock_pdf.Root.AcroForm.__setitem__.side_effect = AttributeError("Test error")
 
     options = {"need_appearances": True}
-    save_pdf(mock_pdf, "out.pdf", mock_input_context, options)
+    with caplog.at_level("WARNING"):
+        save_pdf(mock_pdf, "out.pdf", mock_input_context, options)
 
     # Check that a warning was logged and save was still called
-    save_module.logging.warning.assert_called_once()
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
     assert (
-        "Problem setting need_appearances"
-        in save_module.logging.warning.call_args[0][0]
+        record.message == "Problem setting need_appearances: AttributeError Test error"
     )
-    assert "AttributeError" in save_module.logging.warning.call_args[0][1]
+
     mock_pdf.save.assert_called_once()

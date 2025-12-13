@@ -10,6 +10,7 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
 from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
@@ -65,15 +66,15 @@ def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None):
     """
     assert len(opened_pdfs) > 0
     page_tuples_array = _get_page_tuples_array(inputs, specs, opened_pdfs, aliases)
-    # logging.debug("page_tuples_array = \n  %s", page_tuples_array)
+    # logger.debug("page_tuples_array = \n  %s", page_tuples_array)
     if not page_tuples_array:
         raise ValueError("Range specifications gave no pages")
     max_len = max(len(x) for x in page_tuples_array)
-    logging.debug("max_len=%s", max_len)
+    logger.debug("max_len=%s", max_len)
     source_pages_to_process = []
     for i in range(max_len):
         for page_tuples in page_tuples_array:
-            # logging.debug("page_tuples=%s", page_tuples)
+            # logger.debug("page_tuples=%s", page_tuples)
             if i >= len(page_tuples):
                 continue
             source_pages_to_process.append(page_tuples[i % len(page_tuples)])
