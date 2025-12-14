@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI (and ping RTD)
 
 on:
   push:
@@ -16,6 +16,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+	fetch-depth: 0  # get all tags, for dynamic versioning
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -32,3 +34,8 @@ jobs:
 
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+
+  rtd-sync:
+    needs: pypi-publish
+    uses: ./.github/workflows/rtd_rebuild.yml
+    secrets: inherit

@@ -1,0 +1,16 @@
+name: Refresh ReadTheDocs
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger RTD Build
+        run: |
+          curl -fsSL -X POST \
+          -H "Authorization: Token ${{ secrets.RTD_API_V3_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          https://readthedocs.org/api/v3/projects/pdftl/versions/latest/builds/
