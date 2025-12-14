@@ -16,7 +16,6 @@ try:
 
     from pdftl.cli.help import get_synopsis
     from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
-    from pdftl.core.cli_data import CLI_DATA
     from pdftl.core.registry import registry
     from pdftl.registry_init import initialize_registry
 
@@ -47,7 +46,9 @@ def get_docs_data():
         "homepage": HOMEPAGE,
         "synopsis": get_synopsis(),
         # This is the complete, merged list of options
-        "options": {**registry.options, **CLI_DATA.get("options", {})},
+        "options": {
+            **registry.options,
+        },
     }
 
     # Collate all operations and extra help topics into a single dictionary
@@ -55,19 +56,11 @@ def get_docs_data():
 
     # Process operations from the registry
     for name, data in registry.operations.items():
-        topic_data = data.copy()
-        topic_data["type"] = "operation"
-        all_topics[name] = topic_data
+        all_topics[name] = data
 
     # Process extra help topics from the static data file
-    for name, data in CLI_DATA.get("extra help topics", {}).items():
-        all_topics[name] = {
-            "title": data["title"],
-            "desc": data["desc"],
-            "details": data.get("long_desc", ""),
-            "examples": data.get("examples", []),
-            "type": "topic",
-        }
+    for name, data in registry.help_topics.items():
+        all_topics[name] = data
 
     # build complete options topic **
     if app_info["options"]:
@@ -102,11 +95,11 @@ def get_docs_data():
     else:
         print("--- [common.py] No output options found to document.")
 
-    # For all topics, rename 'long_desc' to 'details' for consistency.
-    for name, data in all_topics.items():
-        desc_key = "long_desc" if "long_desc" in data else None
-        if desc_key:
-            data["details"] = data.pop(desc_key)
+    # # For all topics, rename 'long_desc' to 'details' for consistency.
+    # for name, data in all_topics.items():
+    #     desc_key = "long_desc" if "long_desc" in data else None
+    #     if desc_key:
+    #         data["details"] = data.pop(desc_key)
 
     print(
         f"--- [common.py] Finished data prep. Returning {len(all_topics)} total topics."

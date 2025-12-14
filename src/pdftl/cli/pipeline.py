@@ -15,7 +15,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 from pdftl.cli.whoami import WHOAMI
-from pdftl.core.registry import registry
+from pdftl.core.registry import register_help_topic, registry
+from pdftl.core.types import HelpExample
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_pdf
 from pdftl.utils.user_input import pdf_filename_completer
@@ -299,3 +300,87 @@ class PipelineManager:
             self.kept_id = list(opened_pdfs[-1].trailer.ID)
 
         return opened_pdfs
+
+
+@register_help_topic(
+    "pipeline",
+    title="pipeline syntax",
+    desc="Using `---` to pipe multiple operations together",
+    examples=[
+        HelpExample(
+            desc="Shuffle two documents, then crop the resulting pages to A4",
+            cmd="a.pdf b.pdf shuffle --- crop '(a4)' output out.pdf",
+        ),
+        HelpExample(
+            desc=(
+                "Shuffle doc_B with the even pages of doc_A, with B's pages first:\n"
+                "'_' is required to place the piped-in pages second in the given order."
+            ),
+            cmd="doc_A.pdf cat even --- B=doc_B.pdf shuffle B _ output final.pdf",
+        ),
+        HelpExample(
+            desc=(
+                "Crop all pages to A3 in landscape,\n"
+                "and preview the effect of cropping odd pages to A4"
+            ),
+            cmd="in.pdf crop (A3_l) --- crop odd(A4) output out.pdf",
+        ),
+    ],
+)
+def _pipeline_help_topic():
+    """
+    Multiple operations can be chained together using `---` as a
+    separator. The output of one stage becomes the input for the next
+    stage.
+
+    If the next stage has no input files, the result from the previous
+    is used automatically. For multi-input commands where order matters,
+    you can use the special `_` handle to refer to the piped-in input.
+    """
+
+
+@register_help_topic(
+    "input",
+    title="inputs",
+    desc="Specifying input files and passwords",
+)
+def _inputs_help_topic():
+    """
+    The general syntax for providing input to an operation is:
+
+    ```
+    <inputs> [ input_pw <password>... ]
+    ```
+
+    `<inputs>` is a space-separated list of one or more input PDF
+    sources. Each source can be:
+
+      - A file path: `my_doc.pdf`
+
+      - A handle assignment (for referring to files in
+        operations): `A=my_doc.pdf`
+
+      - A single dash `-` to read from standard input (stdin).
+
+      - The keyword `PROMPT` to be interactively asked for a
+        file path.
+
+    `[ input_pw <password>... ]` is an optional block to provide
+    owner passwords for encrypted files. The passwords in the
+    `<password>...` list can be assigned in two ways:
+
+      - By position: Passwords are applied sequentially to the
+        encrypted input files in the order they appear, as in:
+
+          `enc1.pdf plain.pdf enc2.pdf input_pw pass1 pass2`
+
+      - By handle: If an input file has a handle (e.g.,
+        `A=file.pdf`), its password can be assigned using the same
+        handle. This is the most reliable method when using
+        multiple encrypted files. As in:
+
+          `A=enc1.pdf B=enc2.pdf input_pw B=pass2 A=pass1`
+
+    The keyword `PROMPT` can be used in the list to be securely
+    prompted for a password. This is recommended.
+    """

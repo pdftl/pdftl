@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
-from pdftl.core.registry import register_operation
+from pdftl.core.registry import register_help_topic, register_operation
+from pdftl.core.types import HelpExample
 
 # FIXME: repeated data here (cf CLI_DATA)
 
@@ -55,3 +56,25 @@ def filter_pdf(pdf: "Pdf"):
     Return the given PDF.
     """
     return pdf
+
+
+@register_help_topic(
+    "filter_mode",
+    title="filter mode",
+    desc="Filter mode: apply output options only",
+    examples=[
+        HelpExample(cmd="in.pdf output out.pdf", desc="Do nothing"),
+        HelpExample(cmd="in.pdf filter output out.pdf", desc="Do nothing"),
+        HelpExample(
+            cmd="in.pdf output out.pdf uncompress",
+            desc="uncompress the input file, making minimal changes",
+        ),
+    ],
+)
+def _filter_mode_help_topic():
+    """
+    If no operation is given and one input PDF file is specified,
+    then filter mode is activated. The input PDF file is processed
+    minimally and saved with the given output options. This is
+    likely to be less destructive than using cat.
+    """

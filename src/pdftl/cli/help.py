@@ -24,8 +24,8 @@ from pdftl.cli.help_data import (
     VERSION_TEMPLATE,
 )
 from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
-from pdftl.core.cli_data import CLI_DATA
-from pdftl.core.registry import registry
+from pdftl.core.registry import register_help_topic, registry
+from pdftl.core.types import HelpExample
 from pdftl.utils.string import before_space
 
 
@@ -220,8 +220,8 @@ def _discover_examples():
     all_examples = []
     for topic, topic_data in itertools.chain(
         registry.operations.items(),
-        CLI_DATA["extra help topics"].items(),
         registry.options.items(),
+        registry.help_topics.items(),
     ):
         new_examples = topic_data.get("examples", [])
         for example in new_examples:
@@ -249,7 +249,9 @@ def _print_help_dispatch_table():
                     hprint, t_data, t_data["title"]
                 )
             )
-            for topic, data in CLI_DATA["extra help topics"].items()
+            for topic, data in itertools.chain(
+                registry.help_topics.items(),
+            )
         }
     )
     dispatch_table["output_options"] = _print_output_options_help
@@ -373,3 +375,36 @@ def find_option_topic_command(help_topics):
     """Searches for a command that matches a known option."""
     known_options = [before_space(opt) for opt in registry.options]
     return next((topic for topic in help_topics if topic in known_options), None)
+
+
+@register_help_topic(
+    "help",
+    title="pdftl help",
+    desc="Get help",
+    examples=[
+        HelpExample(
+            desc=(
+                "Get all help. This is nice if you set `FORCE_COLORS=1` and pipe "
+                "the output to `less -R`, with the complete command "
+                "`FORCE_COLORS=1 pdftl help all | less -R`."
+            ),
+            cmd="help all",
+        ),
+    ],
+)
+def _help_help_topic():
+    """
+    If a `help` argument is given, the
+    remaining arguments are scanned for a keyword. This can be
+    one of the operation names, or an option name, or a
+    special help topic, or an alias. If a match is found, the
+    help is printed.
+
+    By default, colors are used if printing directly to the
+    terminal, and usually not in other situations (e.g., if
+    the output is redirected). If the environment variable
+    `FORCE_COLORS` is set, then colors should appear in all
+    cases.
+
+    The special help topic `all` is particularly interesting.
+    """

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
+from pdftl.core.types import Compatibility, FeatureType, Status
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 
@@ -49,6 +50,19 @@ _SHUFFLE_EXAMPLES = [
     }
 ]
 
+_SHUFFLE_COMPATABILITY = Compatibility(
+    type=FeatureType.PDFTK_COMPAT,
+    status=Status.STABLE,
+    parity_level="100%",
+    notes="Supports standard shuffling behavior.",
+    pdftk_op="shuffle",
+    todo=[
+        "Investigate link preservation (currently links might be lost)",
+        "Support complex collating patterns (e.g. 2 pages from A, 1 from B)",
+        "Allow reversing input streams during shuffle",
+    ],
+)
+
 
 @register_operation(
     "shuffle",
@@ -61,6 +75,7 @@ _SHUFFLE_EXAMPLES = [
         ["inputs", "operation_args", "opened_pdfs"],
         {"aliases": "aliases"},
     ),
+    compatibility=_SHUFFLE_COMPATABILITY,
 )
 def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None):
     """

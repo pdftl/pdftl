@@ -14,7 +14,6 @@ import pikepdf.form
 import pytest
 
 # Import the CLI_DATA dictionary that contains all the examples
-from pdftl.core.cli_data import CLI_DATA
 from pdftl.core.registry import registry
 from pdftl.registry_init import initialize_registry
 from tests.create_pdf import create_custom_pdf
@@ -126,14 +125,14 @@ def discover_examples():
 
     # 2. Discover examples from the dedicated pipeline help section
     # if "pipeline_help" in CLI_DATA and "examples" in CLI_DATA["pipeline_help"]:
-    for topic_name, topic in CLI_DATA["extra help topics"].items():
+    for topic_name, topic in registry.help_topics.items():
         if "examples" in topic:
             for i, example in enumerate(topic["examples"]):
                 if example.get("cmd"):
                     test_id = f"{topic_name}-example{i+1}"
                     all_examples.append(pytest.param(example["cmd"], id=test_id))
 
-    for topic_name, topic in registry["options"].items():
+    for topic_name, topic in registry.options.items():
         if "examples" in topic:
             for i, example in enumerate(topic["examples"]):
                 if example.get("cmd"):

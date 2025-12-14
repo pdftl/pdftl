@@ -16,6 +16,7 @@ from shutil import copyfile as cp
 from common import get_docs_data
 
 from pdftl.cli.help import print_help
+from pdftl.core.types import HelpTopic, Operation, Option
 
 
 def write_help_topic_to_file(topic, filepath):
@@ -30,12 +31,12 @@ def write_help_topic_to_file(topic, filepath):
 def generate_md_docs(app_data, topics, output_dir="source"):
     """Generates all necessary .md files."""
     print(f"--- [md_gen] Starting md source generation in '{output_dir}'...")
-
+    breakpoint()
     operations = sorted(
-        [item for item in topics.items() if item[1]["type"] == "operation"]
+        [item for item in topics.items() if isinstance(item[1], Operation)]
     )
     general_topics = sorted(
-        [item for item in topics.items() if item[1]["type"] == "topic"]
+        [item for item in topics.items() if isinstance(item[1], HelpTopic)]
     )
     misc = sorted(
         [

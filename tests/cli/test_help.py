@@ -52,6 +52,7 @@ def patch_environment(monkeypatch, tmp_path):
                 "output": fake_opt,
                 "encrypt_aes256": {"desc": "AES256", "type": "flag"},
             }
+            self.help_topics = {"foo": MagicMock()}
 
         def __getitem__(self, key):
             if key in ("operations", "options"):
@@ -62,7 +63,7 @@ def patch_environment(monkeypatch, tmp_path):
             return key in ("operations", "options")
 
     monkeypatch.setattr(helpmod, "registry", FakeRegistry())
-    monkeypatch.setattr(helpmod, "CLI_DATA", fake_cli)
+    # monkeypatch.setattr(helpmod, "CLI_DATA", fake_cli)
     monkeypatch.setattr(
         helpmod, "SPECIAL_HELP_TOPICS_MAP", {("input", "in"): "help input"}
     )
