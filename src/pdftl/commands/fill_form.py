@@ -10,11 +10,11 @@ import logging
 import sys
 
 logger = logging.getLogger(__name__)
-import pikepdf
-from pikepdf.exceptions import PdfError
 
-logger = logging.getLogger(__name__)
-from pikepdf.form import Form, RadioButtonGroup
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import UserCommandLineError
@@ -49,7 +49,7 @@ _FILL_FORM_EXAMPLES = [
     examples=_FILL_FORM_EXAMPLES,
     args=(["input_pdf", "operation_args", "get_input"], {}),
 )
-def fill_form(pdf: pikepdf.Pdf, args: [str], get_input: callable):
+def fill_form(pdf: "Pdf", args: [str], get_input: callable):
     """
     Fill in a form, treating the first argument as a filename (or similar) for data
     """
@@ -76,6 +76,9 @@ def _fill_form_from_data(pdf, data):
     """
     Fill in a form, using given data
     """
+    from pikepdf.exceptions import PdfError
+    from pikepdf.form import Form
+
     form = Form(pdf)
 
     try:
@@ -94,6 +97,8 @@ def _fill_form_from_data(pdf, data):
 
 def _fill_form_from_fdf_data(form, data):
     """Fill in a form, using given FDF data"""
+    import pikepdf
+
     with pikepdf.open(wrap_fdf_data_in_pdf_bytes(data)) as wrapper_pdf:
         fdf_fields = wrapper_pdf.Root.FDF.Fields
         # logger.debug(fdf_fields)
@@ -124,6 +129,9 @@ def _process_fdf_field_kids(form, fdf_field, ancestors):
 
 def _fill_form_value_from_fdf_field(form, fdf_field, ancestors):
     """Fill in a form value from an FDF field"""
+    import pikepdf
+    from pikepdf.form import RadioButtonGroup
+
     fully_qualified_fdf_name = fully_qualified_name(fdf_field, ancestors)
     logger.debug(fully_qualified_fdf_name)
     field = next(

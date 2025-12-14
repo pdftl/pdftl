@@ -6,7 +6,10 @@
 
 """Rotate PDF pages by multiples of 90 degrees"""
 
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.transform import transform_pdf
@@ -45,7 +48,7 @@ _ROTATE_EXAMPLES = [
     examples=_ROTATE_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def rotate_pdf(source_pdf: Pdf, specs: list):
+def rotate_pdf(source_pdf: "Pdf", specs: list):
     """
     Applies rotations and/or scaling to specified pages of a PDF.
     """

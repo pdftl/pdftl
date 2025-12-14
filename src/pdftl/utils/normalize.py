@@ -9,9 +9,6 @@
 import logging
 
 logger = logging.getLogger(__name__)
-import pikepdf
-
-logger = logging.getLogger(__name__)
 LOG_TRUNC = 500
 
 
@@ -19,6 +16,7 @@ def get_normalized_page_content_stream(page):
     """Return a normalized version of the content stream of
     a page. This should have one PDF operator and its
     arguments per line."""
+    import pikepdf
 
     parsed = pikepdf.parse_content_stream(page)
     logger.debug("str(parsed)[:%s]=%s", LOG_TRUNC, str(parsed)[:LOG_TRUNC])

@@ -11,7 +11,10 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
-from pikepdf import Array, Dictionary, Name, NameTree, Stream, String
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Array, Dictionary, Name, NameTree, Stream, String
 
 from pdftl.core.registry import register_operation
 from pdftl.output.dump import dump
@@ -26,6 +29,8 @@ def _pdf_obj_to_json(obj, page_object_to_num_map, visited=None):
     of PDF structures. It handles circular references and maps page
     objects to their page numbers for readability.
     """
+    from pikepdf import Array, Dictionary
+
     if visited is None:
         visited = set()
 
@@ -46,6 +51,8 @@ def _pdf_obj_to_json(obj, page_object_to_num_map, visited=None):
 
 
 def _compound_obj_to_json(obj, page_object_to_num_map, visited):
+    from pikepdf import Array, Dictionary
+
     if isinstance(obj, Dictionary):
         return {
             str(k): _pdf_obj_to_json(v, page_object_to_num_map, visited)
@@ -57,6 +64,8 @@ def _compound_obj_to_json(obj, page_object_to_num_map, visited):
 
 
 def _atomic_obj_to_json(obj):
+    from pikepdf import Name, Stream, String
+
     if isinstance(obj, Name):
         return str(obj)
     if isinstance(obj, (String, Stream)):
@@ -100,6 +109,8 @@ def dump_dests(pdf, output_file=None):
     Traverses the /Dests name tree of a PDF using pikepdf.NameTree.
     This provides a robust, iterable interface to the destinations.
     """
+    from pikepdf import NameTree
+
     logger.debug("Dumping Dests name tree for PDF with %s pages.", len(pdf.pages))
 
     output_data = {"dests": [], "errors": []}

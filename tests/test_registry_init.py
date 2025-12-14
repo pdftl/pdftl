@@ -114,7 +114,7 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
         reg_init.importlib, "import_module", lambda name: types.ModuleType(name)
     )
 
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger="pdftl.registry_init")
     loaded = reg_init._discover_modules([fake_pkg], "operation")
 
     assert any("Loaded" in msg for msg in caplog.messages)

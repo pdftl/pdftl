@@ -10,7 +10,11 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
-from pikepdf import Array
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Array
 
 from pdftl.core.constants import UNITS
 from pdftl.utils.page_specs import parse_page_spec
@@ -18,7 +22,7 @@ from pdftl.utils.page_specs import parse_page_spec
 MAX_PIECES = 10_000
 
 
-def parse_chop_spec(spec_str: str, page_rect: Array):
+def parse_chop_spec(spec_str: str, page_rect: "Array"):
     """
     Parses a chop spec string with flexible syntax into a list of
     pikepdf.Rectangle objects representing the desired chops.
@@ -165,6 +169,8 @@ def _parse_chop_spec_prep(spec_str: str):
 
 def _build_rects(final_sizes, delete_flags, direction, page_width, page_height):
     """Builds a list of pikepdf.Array rectangles from calculated sizes."""
+    from pikepdf import Array
+
     rects = []
     current_offset = 0
     for i, size in enumerate(final_sizes):

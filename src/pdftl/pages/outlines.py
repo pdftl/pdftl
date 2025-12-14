@@ -21,8 +21,10 @@ from collections import namedtuple
 
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from pikepdf import Dictionary, Name, OutlineItem, Pdf
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.pages.links import RebuildLinksPartialContext
@@ -57,6 +59,7 @@ class OutlineCopier:
         This function uses the LinkRemapper to handle all destination
         types (explicit, named, action) and coordinate transformations.
         """
+        from pikepdf import OutlineItem
 
         logger.debug("  source_item title is '%s'", source_item.title)
         # --- 1. Get/Create a GoTo Action Dictionary ---
@@ -98,6 +101,8 @@ class OutlineCopier:
 
 
 def _get_source_action(source_item):
+    from pikepdf import Dictionary, Name
+
     source_action = None
     if source_item.destination:
         # Case 1: Has .destination. Wrap it in a /GoTo action.
@@ -110,7 +115,7 @@ def _get_source_action(source_item):
 
 
 def rebuild_outlines(
-    new_pdf: Pdf,
+    new_pdf: "Pdf",
     source_pages_to_process: list,
     call_context: RebuildLinksPartialContext,
     remapper: LinkRemapper,
@@ -170,7 +175,7 @@ def rebuild_outlines(
 
 @dataclass
 class _OutlineChunkState:
-    pdf: Pdf
+    pdf: "Pdf"
     chunks: list
     chunk_map: dict
     page_in_chunk_idx: int
@@ -258,6 +263,8 @@ def _build_outline_chunks_helper(
 
 
 def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
+    from pikepdf import Name
+
     source_pdf = chunk.pdf
 
     # --- Get instance_num from chunk ---

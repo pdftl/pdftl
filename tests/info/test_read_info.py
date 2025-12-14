@@ -82,7 +82,7 @@ class TestGetNamedDestinations:
         mock_pdf.Root.Names = mock_names
 
         # We patch NameTree to just return its input, to check it was called
-        with patch("pdftl.info.read_info.NameTree", lambda x: x) as mock_name_tree:
+        with patch("pikepdf.NameTree", lambda x: x) as mock_name_tree:
             result = get_named_destinations(mock_pdf)
             assert result == "DestsObject"
 

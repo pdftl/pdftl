@@ -9,7 +9,10 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.affix_content import affix_content
@@ -49,7 +52,7 @@ _INJECT_EXAMPLES = [
     examples=_INJECT_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def inject_pdf(pdf: Pdf, inject_args: list):
+def inject_pdf(pdf: "Pdf", inject_args: list):
     """
     Injects code at the start and/or end of page content streams.
     """

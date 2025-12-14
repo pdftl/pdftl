@@ -6,7 +6,10 @@
 
 """Delete pages from a single PDF file"""
 
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
@@ -45,7 +48,7 @@ _DELETE_EXAMPLES = [
     examples=_DELETE_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def delete_pages(pdf: Pdf, specs):
+def delete_pages(pdf: "Pdf", specs):
     """
     Deletes pages from input PDF, and otherwise leaves the PDF
     structure essentially unchanged.

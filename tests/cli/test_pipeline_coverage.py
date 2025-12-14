@@ -93,7 +93,7 @@ def mock_registry():
 @pytest.fixture
 def mock_pikepdf():
     """Mock pikepdf.open and Pdf class for instance checking."""
-    with patch("pdftl.cli.pipeline.pikepdf.open", autospec=True) as mock_open_pdf:
+    with patch("pikepdf.open", autospec=True) as mock_open_pdf:
         # We need a different mock object for each open call
         pdf_a = MockPdf("A")
         pdf_b = MockPdf("B")
@@ -107,7 +107,7 @@ def mock_pikepdf():
             pdf_b,
         ]  # Cycle through A, B, A, B...
 
-        with patch("pdftl.cli.pipeline.pikepdf.Pdf", MockPdf) as mock_pdf_class:
+        with patch("pikepdf.Pdf", MockPdf) as mock_pdf_class:
             yield mock_open_pdf, mock_pdf_class, pdf_a, pdf_b
 
 
@@ -291,7 +291,8 @@ class TestPipelineManagerCoverage:
 
         # Running the op will cause a KeyError because 'non_existent_context_key'
         # is requested in the MOCK_REGISTRY for 'error_op'
-        with caplog.at_level("ERROR"):
+        with caplog.at_level("ERROR", logger="pdftl.cli.pipeline"):
+            caplog.clear()
             with pytest.raises(KeyError, match="'non_existent_context_key'"):
                 manager._run_operation(stage, opened_pdfs)
 

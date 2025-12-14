@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import the logic functions directly for easier testing
-from pdftl.commands.optimize_images import _parse_args_to_options
+from pdftl.commands.optimize_images import _parse_args_to_options, optimize_images_pdf
 from pdftl.exceptions import InvalidArgumentError, PackageError
 
 # --- 1. Parameter Parsing Tests (Lines 207-278) ---
@@ -80,44 +80,17 @@ def test_optimize_args_errors():
 
 def test_optimize_images_import_failure():
     """
-    Test the behavior when ocrmypdf cannot be imported.
-    We must force an ImportError during module reload.
+    Test that a proper PackageError is raised when ocrmypdf is missing.
     """
-    # 1. Mock sys.modules to raise ImportError when 'ocrmypdf' is accessed
-    # We remove it from modules so importlib tries to load it,
-    # and use a side_effect on the loader or just patch the import mechanism?
-    # Easier: Patch sys.modules with an object that raises ImportError on access?
-    # Actually, simpler: patch sys.modules['ocrmypdf'] to None usually indicates 'not found'
-    # but the code does `from ocrmypdf.optimize import ...`.
+    # Force import failure for 'ocrmypdf'
+    with patch.dict(sys.modules, {"ocrmypdf": None, "ocrmypdf.optimize": None}):
 
-    with patch.dict(sys.modules, {"ocrmypdf.optimize": None, "ocrmypdf": None}):
-        # Use a side_effect to force the specific import failure logic
-        # We need to target the `from` import statement.
-        # The cleanest way in pytest is often to just ensure it's NOT in sys.modules
-        # and let the real import fail (if not installed).
-        # IF IT IS INSTALLED, we need to break it.
+        # We also need to mock the inputs since we are calling the function directly
+        mock_pdf = MagicMock()
 
-        # We will wrap the builtin __import__ to fail for this specific module
-        real_import = __import__
-
-        def fail_import(name, *args, **kwargs):
-            if "ocrmypdf" in name:
-                raise ImportError("Mocked failure")
-            return real_import(name, *args, **kwargs)
-
-        with patch("builtins.__import__", side_effect=fail_import):
-            # Reload the module under test so it hits the `except ImportError` block
-            import pdftl.commands.optimize_images
-
-            importlib.reload(pdftl.commands.optimize_images)
-
-            # Check if the flag was set (Line 37)
-            assert pdftl.commands.optimize_images.OCRMYPDF_IMPORT_FAILED is True
-
-            # Now verify that calling the function raises PackageError (Lines 125-130)
-            with pytest.raises(PackageError, match="Loading OCRmyPDF failed"):
-                # We call the function that was registered when import failed
-                pdftl.commands.optimize_images.optimize_images_pdf()
+        # The assertion: Does calling the function raise the expected error?
+        with pytest.raises(PackageError, match="Loading OCRmyPDF failed"):
+            optimize_images_pdf(mock_pdf, [], "dummy_out.pdf")
 
 
 # --- 3. Success Logic (Mocked) ---
@@ -137,9 +110,6 @@ def test_optimize_images_success(two_page_pdf):
         import pdftl.commands.optimize_images
 
         importlib.reload(pdftl.commands.optimize_images)
-
-        # Verify flag
-        assert pdftl.commands.optimize_images.OCRMYPDF_IMPORT_FAILED is False
 
         import pikepdf
 

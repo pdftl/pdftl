@@ -216,7 +216,7 @@ def test_copy_item_remaps_and_collects_dests(mock_remapper):
     new_parent_list = []
 
     # 2. Act
-    with patch("pdftl.pages.outlines.OutlineItem", MagicMock()) as mock_OI_constructor:
+    with patch("pikepdf.OutlineItem", MagicMock()) as mock_OI_constructor:
         copier = OutlineCopier(mock_remapper)
         copier.copy_item(
             mock_item,
@@ -290,9 +290,7 @@ def test_copy_item_recursive_pruning(mock_remapper):
     mock_constructor.return_value = mock_new_item
 
     copier = OutlineCopier(mock_remapper)
-    with patch(
-        "pdftl.pages.outlines.OutlineItem", mock_constructor
-    ) as mock_OI_constructor:
+    with patch("pikepdf.OutlineItem", mock_constructor) as mock_OI_constructor:
         copier.copy_item(mock_item, new_parent_list)
 
     # 3. Assert

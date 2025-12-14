@@ -12,6 +12,8 @@ import re
 import unittest
 from collections import namedtuple
 
+import pytest
+
 # --- Mocks for dependencies ---
 # We mock the external dependencies of add_text_parser for isolated testing.
 
@@ -55,64 +57,25 @@ def mock_parse_page_spec(page_range_part, total_pages):
         raise
 
 
-# --- Import the module to be tested ---
-try:
-    # We will import the module from its full path
-    import pdftl.commands.parsers.add_text_parser
+import pdftl.commands.parsers.add_text_parser
 
-    # Now, we can import the functions to be tested from the *new* module path
-    # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
-    from pdftl.commands.parsers.add_text_parser import (  # Import new function for testing
-        _compile_text_renderer,
-        _parse_options_string,
-        _split_spec_string,
-        parse_add_text_specs_to_rules,
-    )
+# Now, we can import the functions to be tested from the *new* module path
+# Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
+from pdftl.commands.parsers.add_text_parser import (  # Import new function for testing
+    _compile_text_renderer,
+    _parse_options_string,
+    _split_spec_string,
+    parse_add_text_specs_to_rules,
+)
 
-    # --- Monkey-patching the parser's imports ---
-    # We must replace the imported names *within the parser module*
-    pdftl.commands.parsers.add_text_parser.UNITS = UNITS
-    pdftl.commands.parsers.add_text_parser.parse_page_spec = mock_parse_page_spec
-    # We also need to give it the 're' module for the fixed _split_spec_string
-    pdftl.commands.parsers.add_text_parser.re = re
-
-    MODULE_NOT_FOUND = None
-
-except ImportError as e:
-    print(
-        f"\nFailed to import 'pdftl.commands.parsers.add_text_parser'.\n"
-        f"Ensure 'add_text_parser.py' is in the correct package directory.\n"
-        f"Error: {e}\n"
-    )
-    # Define dummy classes and functions so the test file can at least load
-    # and be skipped, rather than crashing the test runner.
-    MODULE_NOT_FOUND = e
-
-    class TestAddTextParser(unittest.TestCase):
-        pass
-
-    class TestAddTextParserHypothesis(unittest.TestCase):
-        pass
-
-    def parse_add_text_specs_to_rules(*args, **kwargs):
-        pass
-
-    def _split_spec_string(*args, **kwargs):
-        pass
-
-    def _parse_options_string(*args, **kwargs):
-        pass
-
-    # Define a dummy function with the *new* name
-    def _compile_text_renderer(*args, **kwargs):
-        pass
+# --- Monkey-patching the parser's imports ---
+# We must replace the imported names *within the parser module*
+pdftl.commands.parsers.add_text_parser.UNITS = UNITS
+pdftl.commands.parsers.add_text_parser.parse_page_spec = mock_parse_page_spec
+# We also need to give it the 're' module for the fixed _split_spec_string
+pdftl.commands.parsers.add_text_parser.re = re
 
 
-# Suppress logging during tests
-logging.disable(logging.CRITICAL)
-
-
-@unittest.skipIf(MODULE_NOT_FOUND, "Skipping tests: 'add_text_parser' module not found")
 class TestAddTextParser(unittest.TestCase):
     """Traditional unit tests for specific inputs and error cases."""
 
@@ -412,262 +375,240 @@ class TestAddTextParser(unittest.TestCase):
             parse_add_text_specs_to_rules(["1 /Missing Delim"], self.total_pages)
 
 
-# --- Hypothesis Property-Based Tests ---
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from hypothesis.errors import InvalidArgument
 
-try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
-    from hypothesis.errors import InvalidArgument
+# --- Strategies for generating valid-looking inputs ---
+# A valid non-alphanumeric delimiter
+st_delimiter = st.characters(min_codepoint=33, max_codepoint=126).filter(
+    lambda c: not c.isalnum() and c not in "()'"
+)
 
-    # --- Strategies for generating valid-looking inputs ---
-    # A valid non-alphanumeric delimiter
-    st_delimiter = st.characters(min_codepoint=33, max_codepoint=126).filter(
-        lambda c: not c.isalnum() and c not in "()'"
-    )
+# Text string that won't contain the delimiter (usually)
+st_text_content = st.text(
+    st.characters(min_codepoint=32, max_codepoint=126),
+    min_size=0,
+    max_size=50,
+).filter(lambda s: "(" not in s and ")" not in s and "{" not in s)
 
-    # Text string that won't contain the delimiter (usually)
-    st_text_content = st.text(
-        st.characters(min_codepoint=32, max_codepoint=126),
-        min_size=0,
-        max_size=50,
-    ).filter(lambda s: "(" not in s and ")" not in s and "{" not in s)
+st_page_range = st.one_of(
+    st.just(""),  # default
+    st.just("1-10"),
+    st.just("1"),
+    st.just("5-10"),
+    st.just("1-end"),
+    st.just("even"),
+    st.just("odd"),
+    st.just("1-10even"),
+    st.just("1-10odd"),
+)
 
-    st_page_range = st.one_of(
-        st.just(""),  # default
-        st.just("1-10"),
-        st.just("1"),
-        st.just("5-10"),
-        st.just("1-end"),
-        st.just("even"),
-        st.just("odd"),
-        st.just("1-10even"),
-        st.just("1-10odd"),
-    )
+# --- Option Strategies ---
+st_font = st.builds(
+    lambda v: f"font={v}",
+    st.one_of(st.just("Helvetica"), st.just("'Times New Roman'")),
+)
+st_size = st.builds(
+    lambda v: f"size={v}",
+    st.floats(min_value=1, max_value=100, allow_nan=False, allow_infinity=False),
+)
+st_align = st.builds(
+    lambda v: f"align={v}",
+    st.one_of(st.just("left"), st.just("center"), st.just("right")),
+)
+st_rotate = st.builds(
+    lambda v: f"rotate={v}",
+    st.floats(min_value=-360, max_value=360, allow_nan=False, allow_infinity=False),
+)
 
-    # --- Option Strategies ---
-    st_font = st.builds(
-        lambda v: f"font={v}",
-        st.one_of(st.just("Helvetica"), st.just("'Times New Roman'")),
-    )
-    st_size = st.builds(
-        lambda v: f"size={v}",
-        st.floats(min_value=1, max_value=100, allow_nan=False, allow_infinity=False),
-    )
-    st_align = st.builds(
-        lambda v: f"align={v}",
-        st.one_of(st.just("left"), st.just("center"), st.just("right")),
-    )
-    st_rotate = st.builds(
-        lambda v: f"rotate={v}",
-        st.floats(min_value=-360, max_value=360, allow_nan=False, allow_infinity=False),
-    )
+st_pos_preset = st.just(
+    f"position={st.one_of(st.sampled_from(pdftl.commands.parsers.add_text_parser.PRESET_POSITIONS))}"
+)
 
-    st_pos_preset = st.just(
-        f"position={st.one_of(st.sampled_from(pdftl.commands.parsers.add_text_parser.PRESET_POSITIONS))}"
-    )
+st_dim_floats = st.floats(
+    min_value=0, max_value=1000, allow_nan=False, allow_infinity=False
+)
+st_unit = st.one_of(
+    st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just("")
+)
+st_dim_str = st.builds(lambda v, u: f"{v}{u}", st_dim_floats, st_unit)
 
-    st_dim_floats = st.floats(
-        min_value=0, max_value=1000, allow_nan=False, allow_infinity=False
-    )
-    st_unit = st.one_of(
-        st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just("")
-    )
-    st_dim_str = st.builds(lambda v, u: f"{v}{u}", st_dim_floats, st_unit)
+st_pos_xy = st.builds(lambda x, y: f"x={x}, y={y}", st_dim_str, st_dim_str)
 
-    st_pos_xy = st.builds(lambda x, y: f"x={x}, y={y}", st_dim_str, st_dim_str)
+st_offsets = st.builds(
+    lambda x, y: f"offset-x={x}, offset-y={y}", st_dim_str, st_dim_str
+)
 
-    st_offsets = st.builds(
-        lambda x, y: f"offset-x={x}, offset-y={y}", st_dim_str, st_dim_str
-    )
+# st_color_named = st.builds(
+#     lambda v: f"color={v}",
+#     st.one_of(st.just('red'), st.just('blue'))
+# )
+st_color_gray = st.just("color=0.1")
+st_color_rgb = st.just("color=0.1 0.2 0.3")
+st_color_rgba = st.just("color=0.1 0.2 0.3 0.4")
 
-    # st_color_named = st.builds(
-    #     lambda v: f"color={v}",
-    #     st.one_of(st.just('red'), st.just('blue'))
-    # )
-    st_color_gray = st.just("color=0.1")
-    st_color_rgb = st.just("color=0.1 0.2 0.3")
-    st_color_rgba = st.just("color=0.1 0.2 0.3 0.4")
+st_option = st.one_of(
+    st_font,
+    st_size,
+    st_align,
+    st_rotate,
+    st_color_gray,
+    st_color_rgb,
+    st_color_rgba,
+    st_offsets,
+)
 
-    st_option = st.one_of(
-        st_font,
-        st_size,
-        st_align,
-        st_rotate,
-        st_color_gray,
-        st_color_rgb,
-        st_color_rgba,
-        st_offsets,
-    )
 
-    # A strategy for a list of options, ensuring position/xy are mutually exclusive
-    @st.composite
-    def st_options_list(draw):
-        # Base options
-        options = draw(st.lists(st_option, min_size=0, max_size=4, unique=True))
+# A strategy for a list of options, ensuring position/xy are mutually exclusive
+@st.composite
+def st_options_list(draw):
+    # Base options
+    options = draw(st.lists(st_option, min_size=0, max_size=4, unique=True))
 
-        # Add positioning
-        if draw(st.booleans()):
-            options.append(draw(st_pos_preset))
-        else:
-            options.append(draw(st_pos_xy))
+    # Add positioning
+    if draw(st.booleans()):
+        options.append(draw(st_pos_preset))
+    else:
+        options.append(draw(st_pos_xy))
 
-        return options
+    return options
 
-    # Strategy for the full options string "(key=value, ...)"
-    @st.composite
-    def st_options_string(draw):
-        options = draw(st_options_list())
-        if not options:
-            return "()"
-        return f"({', '.join(options)})"
 
-    # --- Full Spec Strategy ---
-    @st.composite
-    def st_full_spec(draw):
-        page = draw(st_page_range)
-        delim = draw(st_delimiter)
-        # Ensure text doesn't contain the chosen delimiter
-        text = draw(
-            st_text_content.filter(
-                lambda s: delim not in s
-                and not s.startswith(" ")
-                and not s.endswith(" ")
-            )
+# Strategy for the full options string "(key=value, ...)"
+@st.composite
+def st_options_string(draw):
+    options = draw(st_options_list())
+    if not options:
+        return "()"
+    return f"({', '.join(options)})"
+
+
+# --- Full Spec Strategy ---
+@st.composite
+def st_full_spec(draw):
+    page = draw(st_page_range)
+    delim = draw(st_delimiter)
+    # Ensure text doesn't contain the chosen delimiter
+    text = draw(
+        st_text_content.filter(
+            lambda s: delim not in s and not s.startswith(" ") and not s.endswith(" ")
         )
-        opts = draw(st_options_string())
-
-        # Build the string without fussy spaces
-        page_part = page
-        # Add a space only if page part is not empty
-        if page:
-            page_part = page + " "
-
-        return f"{page_part}{delim}{text}{delim} {opts}"
-
-    # --- Strategies for INVALID specs ---
-
-    st_invalid_options = st.one_of(
-        st.just("(size=foo)"),  # Not a float
-        st.just("(rotate=bar)"),  # Not a float
-        st.just("(position=top-left, x=10)"),  # Conflicting
-        st.just("(unknown=key)"),  # Unknown key
-        st.just("(position=top-left"),  # Missing paren
-        st.just("position=top-left)"),  # Missing paren
-        st.just("(align=middle)"),  # Invalid align value
-        st.just("(position=top)"),  # Invalid position value
     )
+    opts = draw(st_options_string())
 
-    st_invalid_variables = st.one_of(
-        st.just("{page+foo}"),  # Non-numeric math
-        st.just("{meta:Title+1}"),  # Math on meta
-        st.just("{foo}"),  # Unknown variable
-        st.just("{page-bar}"),  # Non-numeric math
-        st.just("{page*1}"),  # Invalid operator
-    )
+    # Build the string without fussy spaces
+    page_part = page
+    # Add a space only if page part is not empty
+    if page:
+        page_part = page + " "
 
-    st_invalid_structure = st.one_of(
-        st.just("1 /no-end-delim (size=10)"),  # Unmatched delimiter
-        st.just("1 /text/ no-parens-options"),  # Options not in parens
-        st.just("1 bad-delimiter text / (options)"),  # Alphanumeric delimiter
-    )
+    return f"{page_part}{delim}{text}{delim} {opts}"
 
-    @st.composite
-    def st_invalid_specs(draw):
-        """Builds a full, invalid spec string."""
-        base_spec = draw(st_full_spec())
-        parts = base_spec.split(" ")
 
-        case = draw(st.integers(0, 2))
-        if case == 0:  # Replace options
-            invalid_opts = draw(st_invalid_options)
-            return f"1 /text/ {invalid_opts}"
-        elif case == 1:  # Replace text
-            invalid_text = draw(st_invalid_variables)
-            return f"1 /{invalid_text}/ (size=10)"
-        else:  # Replace structure
-            return draw(st_invalid_structure)
+# --- Strategies for INVALID specs ---
 
-    @unittest.skipIf(
-        MODULE_NOT_FOUND, "Skipping tests: 'add_text_parser' module not found"
-    )
-    class TestAddTextParserHypothesis(unittest.TestCase):
-        """Property-based tests for robustness."""
+st_invalid_options = st.one_of(
+    st.just("(size=foo)"),  # Not a float
+    st.just("(rotate=bar)"),  # Not a float
+    st.just("(position=top-left, x=10)"),  # Conflicting
+    st.just("(unknown=key)"),  # Unknown key
+    st.just("(position=top-left"),  # Missing paren
+    st.just("position=top-left)"),  # Missing paren
+    st.just("(align=middle)"),  # Invalid align value
+    st.just("(position=top)"),  # Invalid position value
+)
 
-        @given(spec=st_full_spec())
-        @settings(max_examples=200, deadline=None)
-        def test_parser_does_not_crash_on_valid_input(self, spec):
-            """Test that the parser can handle a wide variety of
-            valid-looking inputs without raising an unhandled exception.
-            """
-            try:
-                parse_add_text_specs_to_rules([spec], total_pages=20)
-            except ValueError:
-                # ValueErrors are expected for some generated inputs
-                # (e.g., if text filtering fails)
-                pass
-            except InvalidArgument:
-                # Hypothesis can throw this
-                pass
-            except Exception as e:
-                # Catch any other unexpected exceptions
-                self.fail(f"Parser crashed on spec: '{spec}'\nError: {e}")
+st_invalid_variables = st.one_of(
+    st.just("{page+foo}"),  # Non-numeric math
+    st.just("{meta:Title+1}"),  # Math on meta
+    st.just("{foo}"),  # Unknown variable
+    st.just("{page-bar}"),  # Non-numeric math
+    st.just("{page*1}"),  # Invalid operator
+)
 
-        @given(specs=st.lists(st_full_spec(), min_size=1, max_size=5))
-        @settings(max_examples=50, deadline=None)
-        def test_parser_returns_dict_with_list_values(self, specs):
-            """Test that the parser's return structure is correct."""
-            try:
-                rules = parse_add_text_specs_to_rules(specs, total_pages=20)
+st_invalid_structure = st.one_of(
+    st.just("1 /no-end-delim (size=10)"),  # Unmatched delimiter
+    st.just("1 /text/ no-parens-options"),  # Options not in parens
+    st.just("1 bad-delimiter text / (options)"),  # Alphanumeric delimiter
+)
 
-                self.assertIsInstance(rules, dict)
-                for page_index, rule_list in rules.items():
-                    self.assertIsInstance(page_index, int)
-                    self.assertIsInstance(rule_list, list)
-                    self.assertTrue(page_index >= 0 and page_index < 20)
-                    for rule in rule_list:
-                        self.assertIsInstance(rule, dict)
-                        self.assertIn("text", rule)
-                        # Test the new structure: 'text' is a function
-                        self.assertTrue(callable(rule["text"]))
 
-            except ValueError:
-                pass  # Expected
-            except InvalidArgument:
-                pass
-            except Exception as e:
-                # Catch any other unexpected exceptions
-                self.fail(f"Parser crashed on specs: '{specs}'\nError: {e}")
+@st.composite
+def st_invalid_specs(draw):
+    """Builds a full, invalid spec string."""
+    base_spec = draw(st_full_spec())
+    parts = base_spec.split(" ")
 
-        @given(invalid_spec=st_invalid_specs())
-        @settings(max_examples=200, deadline=None)
-        def test_parser_raises_valueerror_on_invalid_syntax(self, invalid_spec):
-            """
-            Tests that the parser correctly raises ValueError for
-            syntax that is known to be invalid.
-            """
-            with self.assertRaises(ValueError):
-                parse_add_text_specs_to_rules([invalid_spec], total_pages=10)
+    case = draw(st.integers(0, 2))
+    if case == 0:  # Replace options
+        invalid_opts = draw(st_invalid_options)
+        return f"1 /text/ {invalid_opts}"
+    elif case == 1:  # Replace text
+        invalid_text = draw(st_invalid_variables)
+        return f"1 /{invalid_text}/ (size=10)"
+    else:  # Replace structure
+        return draw(st_invalid_structure)
 
-except ImportError as e:
-    # Handle hypothesis not being installed, or the initial module import failing
-    if "hypothesis" in str(e):
-        print("\n'hypothesis' not installed. Skipping property-based tests.")
-        print("Install with: pip install hypothesis\n")
 
-    # If the module itself was not found, we've already printed a message.
-    # We just need to ensure the test class is defined for unittest.main()
-    if "TestAddTextParserHypothesis" not in globals():
+@pytest.mark.slow
+class TestAddTextParserHypothesis(unittest.TestCase):
+    """Property-based tests for robustness."""
 
-        class TestAddTextParserHypothesis(unittest.TestCase):
+    @given(spec=st_full_spec())
+    @settings(max_examples=200, deadline=None)
+    def test_parser_does_not_crash_on_valid_input(self, spec):
+        """Test that the parser can handle a wide variety of
+        valid-looking inputs without raising an unhandled exception.
+        """
+        try:
+            parse_add_text_specs_to_rules([spec], total_pages=20)
+        except ValueError:
+            # ValueErrors are expected for some generated inputs
+            # (e.g., if text filtering fails)
             pass
-
-except Exception as e:
-    print(f"\nAn error occurred setting up Hypothesis tests: {e}")
-    print("Skipping property-based tests.")
-    if "TestAddTextParserHypothesis" not in globals():
-
-        class TestAddTextParserHypothesis(unittest.TestCase):
+        except InvalidArgument:
+            # Hypothesis can throw this
             pass
+        except Exception as e:
+            # Catch any other unexpected exceptions
+            self.fail(f"Parser crashed on spec: '{spec}'\nError: {e}")
+
+    @given(specs=st.lists(st_full_spec(), min_size=1, max_size=5))
+    @settings(max_examples=50, deadline=None)
+    def test_parser_returns_dict_with_list_values(self, specs):
+        """Test that the parser's return structure is correct."""
+        try:
+            rules = parse_add_text_specs_to_rules(specs, total_pages=20)
+
+            self.assertIsInstance(rules, dict)
+            for page_index, rule_list in rules.items():
+                self.assertIsInstance(page_index, int)
+                self.assertIsInstance(rule_list, list)
+                self.assertTrue(page_index >= 0 and page_index < 20)
+                for rule in rule_list:
+                    self.assertIsInstance(rule, dict)
+                    self.assertIn("text", rule)
+                    # Test the new structure: 'text' is a function
+                    self.assertTrue(callable(rule["text"]))
+
+        except ValueError:
+            pass  # Expected
+        except InvalidArgument:
+            pass
+        except Exception as e:
+            # Catch any other unexpected exceptions
+            self.fail(f"Parser crashed on specs: '{specs}'\nError: {e}")
+
+    @given(invalid_spec=st_invalid_specs())
+    @settings(max_examples=200, deadline=None)
+    def test_parser_raises_valueerror_on_invalid_syntax(self, invalid_spec):
+        """
+        Tests that the parser correctly raises ValueError for
+        syntax that is known to be invalid.
+        """
+        with self.assertRaises(ValueError):
+            parse_add_text_specs_to_rules([invalid_spec], total_pages=10)
 
 
 if __name__ == "__main__":

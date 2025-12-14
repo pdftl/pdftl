@@ -11,9 +11,6 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
-import pikepdf
-
-logger = logging.getLogger(__name__)
 
 
 def extract_main_fdf_dict(data):
@@ -71,11 +68,13 @@ def wrap_fdf_data_in_pdf_bytes(data):
     file at 'fdf_path') at 'pdf.Root.FDF'.
 
     """
+    import pikepdf
+
     fdf_bytes = extract_main_fdf_dict(data)
     logger.debug("Extracted %s bytes of main FDF dictionary", len(fdf_bytes))
 
     # Create a skeleton PDF with a blank page so pikepdf will load it
-    pdf = pikepdf.Pdf.new()
+    pdf = pikepdf.new()
     pdf.add_blank_page()
 
     pdf_buffer = io.BytesIO()

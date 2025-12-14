@@ -28,7 +28,10 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
 
@@ -37,7 +40,7 @@ from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
 class PageTransform:
     """A dataclass for passing page transformation data around"""
 
-    pdf: Pdf
+    pdf: "Pdf"
     index: int
     rotation: (int | float, bool)
     scale: float

@@ -18,7 +18,9 @@ def pdf():
 
 def test_add_text_parser_error(pdf):
     """Test wrapping of parser ValueError."""
-    with patch("pdftl.commands.add_text.parse_add_text_specs_to_rules") as mock_parse:
+    with patch(
+        "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules"
+    ) as mock_parse:
         mock_parse.side_effect = ValueError("Bad syntax")
 
         with pytest.raises(InvalidArgumentError, match="Error in add_text spec"):
@@ -29,7 +31,7 @@ def test_add_text_skip_page(pdf):
     """Test that pages with no rules are skipped."""
     spec = "1/Hello/"
 
-    with patch("pdftl.commands.add_text.TextDrawer") as MockDrawer:
+    with patch("pdftl.commands.helpers.text_drawer.TextDrawer") as MockDrawer:
         add_text_pdf(pdf, [spec])
         # Instantiated once for dependency check, once for Page 1.
         # Should NOT be instantiated for Page 2.
@@ -43,12 +45,12 @@ def test_add_text_overlay_exception(pdf, caplog):
 
     spec = "1/Hello/"
 
-    with patch("pdftl.commands.add_text.TextDrawer") as MockDrawer:
+    with patch("pdftl.commands.helpers.text_drawer.TextDrawer") as MockDrawer:
         instance = MockDrawer.return_value
         instance.save.return_value = b"%PDF-1.0 dummy"
 
         # Make Pdf.open raise exception immediately to simulate corrupt overlay or IO error
-        with patch("pdftl.commands.add_text.Pdf.open") as MockPdfOpen:
+        with patch("pikepdf.Pdf.open") as MockPdfOpen:
             MockPdfOpen.side_effect = pikepdf.PdfError("Corrupt overlay")
 
             add_text_pdf(pdf, [spec])

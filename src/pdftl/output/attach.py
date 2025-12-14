@@ -9,11 +9,7 @@ PDF files"""
 
 import logging
 from dataclasses import dataclass
-
-logger = logging.getLogger(__name__)
 from pathlib import Path
-
-import pikepdf
 
 logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_option
@@ -299,12 +295,16 @@ def _validate_topage_and_convert_to_ints(spec, num_pages):
 
 
 def _attach_attachment_to_document(pdf, attachment):
+    import pikepdf
+
     attachment_filespec = pikepdf.AttachedFileSpec.from_filepath(pdf, attachment.path)
     _update_relationship_in_filespec(attachment_filespec, attachment.relationship)
     pdf.attachments[attachment.path.name] = attachment_filespec
 
 
 def _update_relationship_in_filespec(filespec, relationship):
+    import pikepdf
+
     if relationship is not None:
         filespec.relationship = pikepdf.Name("/" + relationship)
 
@@ -337,6 +337,8 @@ def _attachment_rect(rect, index):
 
 
 def _attach_attachment_to_page(pdf, attachment, page_num, num_previous_attachments):
+    import pikepdf
+
     logger.debug("%s", page_num)
     if attachment.path.name not in pdf.attachments:
         logger.debug("new attachment_filespec object required")

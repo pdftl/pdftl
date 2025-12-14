@@ -18,7 +18,10 @@ syntax' section below.
 
 """
 
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 
@@ -152,7 +155,7 @@ _CHOP_EXAMPLES = [
     examples=_CHOP_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def chop_pages(source_pdf: Pdf, specs: list):
+def chop_pages(source_pdf: "Pdf", specs: list):
     """
     Chops specified pages of a PDF into multiple smaller pages.
 
@@ -192,7 +195,7 @@ def chop_pages(source_pdf: Pdf, specs: list):
 ##################################################
 
 
-def _apply_chop_to_page(pdf: Pdf, source_page, chop_spec_to_use):
+def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
     """Chops a single source page into multiple smaller pages based on the specified chop rule.
 
     The function uses the provided chopping specification (`chop_spec_to_use`) to determine

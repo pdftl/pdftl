@@ -9,10 +9,11 @@
 import logging
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
-import pikepdf
 
 logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_operation
@@ -120,7 +121,7 @@ def _parse_replace_spec(pdf, spec, normalize_input, normalize_output):
 class RegexReplaceContentStream:
     """A regular expression replacer for PDF content streams"""
 
-    pdf: pikepdf.Pdf
+    pdf: "Pdf"
     from_re: str = ""
     to_re: str = ""
     count: int = 0

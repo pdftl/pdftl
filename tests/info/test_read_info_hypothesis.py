@@ -2,6 +2,7 @@ import string
 from unittest.mock import MagicMock, Mock, patch
 
 import pikepdf
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -172,6 +173,7 @@ def test_get_destination_array_hypothesis(named_dests_map, data):
         mock_dests.get.assert_called_with(expected_key)
 
 
+@pytest.mark.slow
 @given(num_pages=st.integers(min_value=0, max_value=20), data=st.data())
 @settings(max_examples=100, deadline=None)
 # Patch _get_destination_array to isolate the logic

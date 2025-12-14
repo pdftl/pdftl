@@ -9,7 +9,10 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.affix_content import affix_content
@@ -71,7 +74,7 @@ _CROP_EXAMPLES = [
     examples=_CROP_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def crop_pages(pdf: Pdf, specs: list):
+def crop_pages(pdf: "Pdf", specs: list):
     """
     Crop pages in a PDF using specs like '1-3(10pt,5%)'.
     """

@@ -10,7 +10,6 @@ import decimal
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Array, Dictionary, Name, Object, String
 
 from pdftl.utils.whatisit import is_page
 
@@ -74,6 +73,8 @@ class PdfToJsonConverter:
 
     def _get_handler(self, obj):
         """Selects the correct handler method based on the object's type."""
+        from pikepdf import Array, Dictionary, Name, Object, String
+
         # Fallback for any other types
         handler = self._handle_unknown
         if is_page(obj):
@@ -185,6 +186,7 @@ def _add_resolved_destination_if_goto(
                          to its page number (integer).
         named_dests: A dictionary of all named destinations in the PDF.
     """
+    from pikepdf import Array, Dictionary, Name, Object, String
 
     dest_obj = _dest_obj_if_resolvable_goto_action(action_dict, named_dests)
 

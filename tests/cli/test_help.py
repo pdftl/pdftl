@@ -5,7 +5,7 @@ import io
 import sys
 import types
 from contextlib import redirect_stderr, redirect_stdout
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,7 +18,6 @@ def patch_environment(monkeypatch, tmp_path):
     monkeypatch.setattr(helpmod, "WHOAMI", "pdftl")
     monkeypatch.setattr(helpmod, "HOMEPAGE", "https://example.com")
     monkeypatch.setattr(helpmod, "PACKAGE", "pdftl")
-    monkeypatch.setattr(helpmod, "console", MagicMock())
 
     # Create fake operations and options
     fake_op = {
@@ -132,24 +131,25 @@ def test_get_project_version_no_pyproject(monkeypatch):
 
 
 def test_print_version_to_console(monkeypatch):
-    monkeypatch.setattr(
-        helpmod,
+    monkeypatch.setitem(
+        sys.modules,
         "pikepdf",
         types.SimpleNamespace(__version__="10.0", __libqpdf_version__="11.0"),
     )
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
     buf_out, buf_err = io.StringIO(), io.StringIO()
-    with redirect_stdout(buf_out), redirect_stderr(buf_err):
-        helpmod.print_version()
-    helpmod.console.print.assert_called_once()
+    with patch("rich.console.Console") as MockConsole:
+        with redirect_stdout(buf_out), redirect_stderr(buf_err):
+            helpmod.print_version()
+        MockConsole.return_value.print.assert_called_once()
     # Optionally check that the output buffer is empty (since print_version uses console)
     assert buf_out.getvalue() == ""
     assert buf_err.getvalue() == ""
 
 
 def test_print_version_to_file(monkeypatch):
-    monkeypatch.setattr(
-        helpmod,
+    monkeypatch.setitem(
+        sys.modules,
         "pikepdf",
         types.SimpleNamespace(__version__="10.0", __libqpdf_version__="11.0"),
     )
@@ -173,25 +173,26 @@ def test_print_help_variants(monkeypatch, cmd):
 
 
 def test_print_version_to_console(monkeypatch):
-    monkeypatch.setattr(
-        helpmod,
+    monkeypatch.setitem(
+        sys.modules,
         "pikepdf",
         type(
             "FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"}
         )(),
     )
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
-    helpmod.print_version()
-    helpmod.console.print.assert_called_once()
-    # optionally, check content:
-    printed = helpmod.console.print.call_args[0][0]
-    assert "pdftl 1.0.0" in printed
-    assert "pikepdf 10.0" in printed
+    with patch("rich.console.Console") as MockConsole:
+        helpmod.print_version()
+        MockConsole.return_value.print.assert_called_once()
+        # optionally, check content:
+        printed = MockConsole.return_value.print.call_args[0][0]
+        assert "pdftl 1.0.0" in printed
+        assert "pikepdf 10.0" in printed
 
 
 def test_print_version_to_file(monkeypatch):
-    monkeypatch.setattr(
-        helpmod,
+    monkeypatch.setitem(
+        sys.modules,
         "pikepdf",
         type(
             "FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"}

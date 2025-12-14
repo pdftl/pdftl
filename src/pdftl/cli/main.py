@@ -11,16 +11,8 @@ import logging
 import sys
 
 logger = logging.getLogger(__name__)
-from rich.logging import RichHandler
 
 from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
-from pdftl.cli.help import (
-    find_operator_topic_command,
-    find_option_topic_command,
-    find_special_topic_command,
-    print_help,
-    print_version,
-)
 from pdftl.cli.parser import (
     parse_cli_stage,
     parse_options_and_specs,
@@ -90,6 +82,8 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
 
 def _print_help_and_exit(command):
     """Prints the relevant help topic and exits the program."""
+    from pdftl.cli.help import print_help
+
     print_help(command=command, dest=sys.stdout)
     sys.exit(0)
 
@@ -99,6 +93,12 @@ def _find_help_command(cli_args):
     Determines the specific help command based on CLI arguments.
     It searches topics in a specific order: special, operator, then option.
     """
+    from pdftl.cli.help import (
+        find_operator_topic_command,
+        find_option_topic_command,
+        find_special_topic_command,
+    )
+
     help_topics = [arg for arg in cli_args if arg not in HELP_FLAGS]
     first_topic = help_topics[0].lower() if help_topics else None
     help_args = [arg for arg in cli_args if arg in HELP_FLAGS]
@@ -126,7 +126,14 @@ def _is_verbose_and_setup_logging(cli_args) -> tuple[bool, list[str]]:
         log_format = f"[{WHOAMI}] %(message)s"
 
     # Configure the root logger and the pdftl-specific loggers
-    logging.basicConfig(format=log_format, handlers=[RichHandler()])
+    if debug:
+        from rich.logging import RichHandler
+
+        logging.basicConfig(format=log_format, handlers=[RichHandler()])
+    else:
+        # avoid importing rich.logging this way
+        logging.basicConfig(format=log_format)
+
     logging.getLogger("pdftl").setLevel(level)
     flags_to_remove = VERBOSE_FLAGS.union(DEBUG_FLAGS)
     remaining_args = [x for x in cli_args if x not in flags_to_remove]
@@ -138,6 +145,8 @@ def _handle_special_flags(nonverbose_cli_args):
     Handles --version and --help flags by delegating to helper functions (and exiting).
     """
     if any(arg in VERSION_FLAGS for arg in nonverbose_cli_args):
+        from pdftl.cli.help import print_version
+
         print_version()
         sys.exit(0)
     if any(arg in HELP_FLAGS for arg in nonverbose_cli_args):

@@ -6,7 +6,10 @@
 
 """Concatenate PDFs, attempting to preserve links as far as possible."""
 
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.pages.add_pages import add_pages
@@ -68,7 +71,9 @@ def cat_pages(inputs, specs, opened_pdfs, aliases=None):
     links and named destinations, including transforming link target
     coordinates.
     """
-    new_pdf = Pdf.new()
+    import pikepdf
+
+    new_pdf = pikepdf.new()
 
     # Resolve the user's page specifications into a concrete list of pages.
     source_pages_to_process = expand_specs_to_pages(specs, aliases, inputs, opened_pdfs)

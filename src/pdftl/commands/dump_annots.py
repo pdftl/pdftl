@@ -10,7 +10,10 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Name, NameTree
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.io_helpers import smart_open_output
@@ -101,8 +104,10 @@ def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info):
 ##################################################
 
 
-def _get_all_annots_data(pdf):
+def _get_all_annots_data(pdf: "Pdf"):
     """Get all annotations data for a PDF"""
+    from pikepdf import Name, NameTree
+
     page_object_to_num_map = {p.obj.objgen: i + 1 for i, p in enumerate(pdf.pages)}
     named_dests = {}
     if Name.Names in pdf.Root and Name.Dests in pdf.Root.Names:
@@ -179,7 +184,7 @@ def _lines_from_datum(datum, string_convert):
 
 def _key_value_lines(key, value, prefix, string_convert):
     """Convert a key-value pair to strings for dump_annots"""
-    if key == Name.A:
+    if key == "/A":
         return [
             _data_item_to_string_helper(key2, value2, prefix + "Action", string_convert)
             for key2, value2 in value.items()

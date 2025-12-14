@@ -6,7 +6,10 @@
 
 """Pass-through operation"""
 
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 
@@ -47,7 +50,7 @@ _FILTER_EXAMPLES = [
     examples=_FILTER_EXAMPLES,
     args=(["input_pdf"], {}),
 )
-def filter_pdf(pdf: Pdf):
+def filter_pdf(pdf: "Pdf"):
     """
     Return the given PDF.
     """

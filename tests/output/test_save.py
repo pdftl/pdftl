@@ -214,9 +214,7 @@ def test_set_permission_or_raise_error_unknown_flag():
 def test_build_permissions_object_all_features(mocker):
     """Tests the 'AllFeatures' shortcut."""
     # Mock the class *inside* the test
-    mock_permissions_cls = mocker.patch(
-        "pdftl.output.save.pikepdf.Permissions", autospec=True
-    )
+    mock_permissions_cls = mocker.patch("pikepdf.Permissions", autospec=True)
     mock_instance = mock_permissions_cls.return_value
 
     result = _build_permissions_object(["AllFeatures"])
@@ -232,9 +230,7 @@ def test_build_permissions_object_empty(mocker):
     real_default_perms = _default_permissions_object()
 
     # 2. Patch the class constructor
-    mock_permissions_cls = mocker.patch(
-        "pdftl.output.save.pikepdf.Permissions", autospec=True
-    )
+    mock_permissions_cls = mocker.patch("pikepdf.Permissions", autospec=True)
     mock_instance = mock_permissions_cls.return_value
 
     # 3. Patch the helper to return the REAL dict
@@ -267,9 +263,7 @@ def test_build_permissions_object_specific(mocker):
     expected_perms["accessibility"] = True
 
     # 3. Patch the class constructor
-    mock_permissions_cls = mocker.patch(
-        "pdftl.output.save.pikepdf.Permissions", autospec=True
-    )
+    mock_permissions_cls = mocker.patch("pikepdf.Permissions", autospec=True)
     mock_instance = mock_permissions_cls.return_value
 
     # 4. Patch the helper to return the REAL default dict
@@ -310,7 +304,7 @@ def test_build_encryption_object_by_method_only(
     mock_build_perms, mock_get_pass, mock_input_context, mocker
 ):
     """Tests triggering encryption by method, with no passwords."""
-    mock_encryption_cls = mocker.patch("pdftl.output.save.pikepdf.Encryption")
+    mock_encryption_cls = mocker.patch("pikepdf.Encryption")
     options = {"encrypt_aes256": True}
     mock_default_perms = MagicMock()
     mock_build_perms.return_value = mock_default_perms
@@ -336,7 +330,7 @@ def test_build_encryption_object_by_password_only(
     mock_build_perms, mock_get_pass, mock_input_context, mocker
 ):
     """Tests triggering encryption by password only."""
-    mock_encryption_cls = mocker.patch("pdftl.output.save.pikepdf.Encryption")
+    mock_encryption_cls = mocker.patch("pikepdf.Encryption")
     options = {"user_pw": "123"}
     mock_default_perms = MagicMock()
     mock_build_perms.return_value = mock_default_perms
@@ -361,7 +355,7 @@ def test_build_encryption_object_full(
     mock_build_perms, mock_get_pass, mock_input_context, mocker
 ):
     """Tests a full encryption call with method, passwords, and perms."""
-    mock_encryption_cls = mocker.patch("pdftl.output.save.pikepdf.Encryption")
+    mock_encryption_cls = mocker.patch("pikepdf.Encryption")
     options = {
         "user_pw": "123",
         "encrypt_128bit": True,

@@ -117,13 +117,13 @@ class TestAddTextIntegration(unittest.TestCase):
 
         # 3. Patch the parser
         self.patch_parser = patch(
-            "pdftl.commands.add_text.parse_add_text_specs_to_rules"
+            "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules"
         )
         self.mock_parser = self.patch_parser.start()
         self.mock_parser.return_value = {}  # Default to no rules
 
         # 4. Patch the TextDrawer
-        self.patch_drawer = patch("pdftl.commands.add_text.TextDrawer")
+        self.patch_drawer = patch("pdftl.commands.helpers.text_drawer.TextDrawer")
         self.mock_TextDrawer = self.patch_drawer.start()
 
         # Configure the mock drawer instance

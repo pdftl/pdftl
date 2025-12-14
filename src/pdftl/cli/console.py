@@ -6,6 +6,18 @@
 
 """A global rich console"""
 
-from rich.console import Console
+from typing import TYPE_CHECKING
 
-console = Console()
+if TYPE_CHECKING:
+    from rich.console import Console
+
+_CONSOLE = None
+
+
+def get_console() -> "Console":
+    global _CONSOLE
+    if _CONSOLE is None:
+        from rich.console import Console
+
+        _CONSOLE = Console()
+    return _CONSOLE

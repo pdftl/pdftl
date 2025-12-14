@@ -11,10 +11,6 @@ import logging
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
-
-import pikepdf
-
-logger = logging.getLogger(__name__)
 from pdftl.core.constants import ALLOW_PERMISSIONS_MAP
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
@@ -172,6 +168,8 @@ def _get_passwords_from_options(options, input_context):
 
 def _default_permissions_object():
     """Return default permission flags: all False (permission denied)"""
+    import pikepdf
+
     return {
         flag: False
         for flag, _ in inspect.getmembers(
@@ -194,6 +192,8 @@ def _set_permission_or_raise_error(perm, permissions_dict):
 
 def _build_permissions_object(allow_options: list):
     """Builds a pikepdf.Permissions object from the 'allow' options list."""
+    import pikepdf
+
     if "AllFeatures" in allow_options:
         # The default pikepdf.Permissions constructor seems to allow all
         # except for assembly. So we specify that.
@@ -244,11 +244,16 @@ def _build_encryption_object(options, input_context):
         encrypt_opts["allow"] = _build_permissions_object([])
 
     logger.debug("Final encryption options: %s", encrypt_opts)
+
+    import pikepdf
+
     return pikepdf.Encryption(**encrypt_opts)
 
 
 def _build_save_options(options, input_context):
     """Builds the final keyword arguments dictionary for pikepdf.save()."""
+    import pikepdf
+
     encryption_object = _build_encryption_object(options, input_context)
     if options.get("allow") and not encryption_object:
         logger.warning(
@@ -292,6 +297,8 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     attach_files(pdf, options, input_context)
 
     if options.get("need_appearances"):
+        import pikepdf
+
         try:
             pdf.Root.AcroForm[pikepdf.Name.NeedAppearances] = True
         except AttributeError as e:

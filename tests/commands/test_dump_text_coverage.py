@@ -15,10 +15,12 @@ def test_dump_text_missing_dependency():
         importlib.reload(pdftl.commands.dump_text)
 
         # We must invoke the helper that checks the flag
-        from pdftl.commands.dump_text import _extract_text_from_pdf
+        from pdftl.commands.dump_text import dump_text
 
-        with pytest.raises(InvalidArgumentError, match="requires the 'pdfium' library"):
-            _extract_text_from_pdf("dummy.pdf")
+        with pytest.raises(
+            InvalidArgumentError, match="requires the 'pypdfium2' library"
+        ):
+            dump_text("dummy.pdf", "passwd123")
 
 
 def test_dump_text_password_none():
@@ -51,7 +53,7 @@ def test_dump_text_real_iteration():
 
         importlib.reload(pdftl.commands.dump_text)
 
-        with patch("pdftl.commands.dump_text.pdfium.PdfDocument") as MockDoc:
+        with patch("pypdfium2.PdfDocument") as MockDoc:
             MockDoc.return_value.__enter__.return_value = mock_pdf
 
             with patch("pdftl.commands.dump_text.dump") as mock_dump:

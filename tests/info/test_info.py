@@ -544,7 +544,7 @@ class TestSetInfo:
         # Mock OutlineItem to track children
         def new_oi(title, destination):
             oi = MagicMock(spec=OutlineItem, title=title)
-            oi.children = MagicMock()
+            oi.children = []
             return oi
 
         mock_OutlineItem.side_effect = new_oi
@@ -789,7 +789,7 @@ class TestSetInfo:
         # Check that ancestors list was returned unchanged
         assert result is ancestors
 
-    @patch("pdftl.info.set_info.NumberTree")
+    @patch("pikepdf.NumberTree")
     def test_set_page_labels_no_delete(self, mock_NumberTree, mock_pdf):
         """Tests the 'delete_existing=False' branch of _set_page_labels."""
         # 1. Setup: PDF must have existing PageLabels

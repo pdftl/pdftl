@@ -9,13 +9,17 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Array, Pdf
+
+from typing import TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from pikepdf import Array, Pdf
 
 from pdftl.utils.page_specs import page_numbers_matching_page_spec, parse_page_spec
 from pdftl.utils.scale import apply_scaling
 
 
-def transform_pdf(source_pdf: Pdf, specs: list):
+def transform_pdf(source_pdf: "Pdf", specs: list):
     """
     Applies rotations and/or scaling to specified pages of a PDF.
 
@@ -75,7 +79,7 @@ def _subtract_or_none(a, b):
 
 
 def transform_destination_coordinates(
-    coords: list, page_box: Array | list, angle: int, scale: float
+    coords: list, page_box: Union["Array", list], angle: int, scale: float
 ) -> list:
     """
     Applies rotation and scaling to a set of PDF destination coordinates.

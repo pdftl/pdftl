@@ -9,12 +9,6 @@
 import logging
 
 logger = logging.getLogger(__name__)
-try:
-    import pypdfium2 as pdfium
-
-    import_pypdfium2_error = False
-except ImportError:
-    import_pypdfium2_error = True
 
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
@@ -28,7 +22,10 @@ and dumps it to stdout or the given output file.
 
 **Warning** This is experimental and may be unreliable.
 
-It uses the python library `pypdfium2`.
+It uses the python library `pypdfium2`. To automatically install this
+optional dependency run:
+
+    pip install pdftl[dump-text]
 
 """
 
@@ -41,21 +38,17 @@ _DUMP_TEXT_EXAMPLES = [
 ]
 
 _MISSING_DEPS_ERROR_MSG = """
-The 'dump_text' operation requires the 'pdfium' library.
-To install this optional dependency, run:
-
-    pip install pdftl[dump-text]
+The dump_text operation requires the 'pypdfium2' library.
+To automatically install this optional dependency: pip install pdftl[dump-text]
 """
 
 
-def _extract_text_from_pdf(pdf_path, password=None) -> list:
+def _extract_text_from_pdf(pdf_path, pdfium, password=None) -> list:
     """
     Opens a PDF, iterates over each page, and return a list of text blocks,
     one per page.
     """
     texts = []
-    if import_pypdfium2_error:
-        raise InvalidArgumentError(_MISSING_DEPS_ERROR_MSG)
 
     with pdfium.PdfDocument(pdf_path, password=password) as pdf:
         logger.debug("Opened '%s' using pdfium with %s pages.", pdf_path, len(pdf))
@@ -88,10 +81,15 @@ def dump_text(input_filename, input_password, output_file=None):
         logger.debug("No password supplied.")
         input_password = ""
 
+    try:
+        import pypdfium2
+    except ImportError:
+        raise InvalidArgumentError(_MISSING_DEPS_ERROR_MSG)
+
     output_text = "\n\f\n".join(
         map(
             remove_ignored_nonprinting_chars,
-            _extract_text_from_pdf(input_filename, input_password),
+            _extract_text_from_pdf(input_filename, pypdfium2, input_password),
         )
     )
     dump(output_text, dest=output_file)

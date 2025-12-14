@@ -15,37 +15,20 @@
 import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
-from pikepdf import Pdf
-
-try:
-    from ocrmypdf.optimize import DEFAULT_EXECUTOR  # FLATE_JPEG_THRESHOLD,
-    from ocrmypdf.optimize import (
-        DEFAULT_JPEG_QUALITY,
-        DEFAULT_PNG_QUALITY,
-        convert_to_jbig2,
-        deflate_jpegs,
-        extract_images_generic,
-        extract_images_jbig2,
-        png_name,
-        transcode_jpegs,
-        transcode_pngs,
-    )
-
-    OCRMYPDF_IMPORT_FAILED = False
-except ImportError as exc:
-    logger.debug(exc)
-    OCRMYPDF_IMPORT_FAILED = True
-    DEFAULT_JPEG_QUALITY = None
-    DEFAULT_PNG_QUALITY = None
-    DEFAULT_EXECUTOR = None
-
-
 from pdftl.core.registry import register_operation
+from pdftl.core.types import Compatibility, FeatureType, Status
 from pdftl.exceptions import InvalidArgumentError, PackageError
 
-_OPTIMIZE_IMAGES_LONG_DESC_MD = """
+logger = logging.getLogger(__name__)
+
+# NOTE: Heavy imports (pikepdf, ocrmypdf) are moved inside the function
+# to prevent startup performance regression.
+
+# Static defaults for help text generation to avoid importing ocrmypdf
+DEFAULT_JPEG_QUALITY_STR = "75"
+DEFAULT_PNG_QUALITY_STR = "70"
+
+_OPTIMIZE_IMAGES_LONG_DESC_MD = f"""
 
 The operation **optimize_images** optimizes images in a PDF file.
 
@@ -71,8 +54,8 @@ These options can be passed as arguments following `optimize_images`.
 * **all** (aliases: `full`):
     * Use all of the above.
 
-* **jpeg_quality=**`<n>` (default: 75)
-* **png_quality=**`<n>` (default: 70)
+* **jpeg_quality=**`<n>` (default: {DEFAULT_JPEG_QUALITY_STR})
+* **png_quality=**`<n>` (default: {DEFAULT_PNG_QUALITY_STR})
 * **quality=**`<n>`
     * Set JPEG and/or PNG quality to `<n>`.
     * `<n>` must be an integer between 0 and 100.
@@ -85,14 +68,11 @@ These options can be passed as arguments following `optimize_images`.
     * If `<n>` is 0, this is set automatically.
 """
 
-_OPTIMIZE_IMAGES_LONG_DESC = """
+_OPTIMIZE_IMAGES_LONG_DESC = f"""
 
 The operation 'optimize_images' optimizes images in a PDF file.
 
 This features requires 'ocrmypdf' to be installed.
-"""
-if not OCRMYPDF_IMPORT_FAILED:
-    _OPTIMIZE_IMAGES_LONG_DESC += f"""
 
 Valid optimize_options:
 
@@ -112,8 +92,8 @@ jbig2_lossy:
 all (aliases: full):
   use all of the above
 
-jpeg_quality=<n> (default: {DEFAULT_JPEG_QUALITY})
-png_quality=<n>  (default: {DEFAULT_PNG_QUALITY})
+jpeg_quality=<n> (default: {DEFAULT_JPEG_QUALITY_STR})
+png_quality=<n>  (default: {DEFAULT_PNG_QUALITY_STR})
 quality=<n>
   set JPEG and/or PNG quality to <n>.
   <n> must be an integer between 0 and 100.
@@ -152,92 +132,108 @@ class OptimizeOptions:
         self.jbig2_page_group_size = 10 if jb2lossy else 1
 
 
-registration_dict = {
-    "tags": ["in_place"],
-    "type": "single input operation",
-    "desc": "Optimize images",
-    "long_desc": _OPTIMIZE_IMAGES_LONG_DESC_MD,
-    "usage": "<input> optimize_images [<optimize_option>...] output <file> [<option...>]",
-    "examples": _OPTIMIZE_IMAGES_EXAMPLES,
-    "args": (["input_pdf", "operation_args", "output"], {}),
-}
+_COMPATIBILITY_INFO = Compatibility(
+    type=FeatureType.PDFTL_EXTENSION,
+    status=Status.BETA,
+    description="Optimize images",
+    notes="Requires ocrmypdf to be installed.",
+    enhancements=["Provides interface to ocrmypdf optimization features"],
+)
 
-if OCRMYPDF_IMPORT_FAILED:
 
-    @register_operation("optimize_images", **registration_dict)
-    def optimize_images_pdf(*_args):
-        """
-        Raise an error with a message about installing ocrmypdf
-        """
+@register_operation(
+    "optimize_images",
+    tags=["in_place"],
+    type="single input operation",
+    desc="Optimize images",
+    long_desc=_OPTIMIZE_IMAGES_LONG_DESC_MD,
+    usage="<input> optimize_images [<optimize_option>...] output <file> [<option...>]",
+    examples=_OPTIMIZE_IMAGES_EXAMPLES,
+    args=(["input_pdf", "operation_args", "output"], {}),
+    compatibility=_COMPATIBILITY_INFO,
+)
+def optimize_images_pdf(pdf, operation_args: list, output_filename: str):
+    """
+    Optimize images in the given PDF.
+    """
+    # pylint: disable=import-outside-toplevel
+    from pikepdf import Pdf
+
+    try:
+        from ocrmypdf.optimize import DEFAULT_EXECUTOR  # FLATE_JPEG_THRESHOLD,
+        from ocrmypdf.optimize import (
+            DEFAULT_JPEG_QUALITY,
+            DEFAULT_PNG_QUALITY,
+            convert_to_jbig2,
+            deflate_jpegs,
+            extract_images_generic,
+            extract_images_jbig2,
+            png_name,
+            transcode_jpegs,
+            transcode_pngs,
+        )
+    except ImportError as exc:
         raise PackageError(
             "Loading OCRmyPDF failed.\n pip install pdftl.[optimize-images] to fix this."
-        )
+        ) from exc
 
-else:
+    # Optimization options for ocrmypdf:
+    #   Control how the PDF is optimized after OCR
 
-    @register_operation("optimize_images", **registration_dict)
-    def optimize_images_pdf(pdf: Pdf, operation_args: list, output_filename: str):
-        """
-        Optimize images in the given PDF.
-        """
+    #   -O {0,1,2,3}, --optimize {0,1,2,3}
+    #                             Control how PDF is optimized after processing:0 - do not
+    #                             optimize; 1 - do safe, lossless optimizations (default); 2 - do
+    #                             lossy JPEG and JPEG2000 optimizations; 3 - do more aggressive
+    #                             lossy JPEG and JPEG2000 optimizations. To enable lossy JBIG2,
+    #                             see --jbig2-lossy.
+    #   --jpeg-quality Q          Adjust JPEG quality level for JPEG optimization. 100 is best
+    #                             quality and largest output size; 1 is lowest quality and
+    #                             smallest output; 0 uses the default.
+    #   --png-quality Q           Adjust PNG quality level to use when quantizing PNGs. Values
+    #                             have same meaning as with --jpeg-quality
+    #   --jbig2-lossy             Enable JBIG2 lossy mode (better compression, not suitable for
+    #                             some use cases - see documentation). Only takes effect if
+    #                             --optimize 1 or higher is also enabled.
+    #   --jbig2-threshold T       Adjust JBIG2 symbol code classification threshold (default
+    #                             0.85), range 0.4 to 0.9.
 
-        # Optimization options for ocrmypdf:
-        #   Control how the PDF is optimized after OCR
+    options = _parse_args_to_options(operation_args)
+    optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = options
 
-        #   -O {0,1,2,3}, --optimize {0,1,2,3}
-        #                         Control how PDF is optimized after processing:0 - do not
-        #                         optimize; 1 - do safe, lossless optimizations (default); 2 - do
-        #                         lossy JPEG and JPEG2000 optimizations; 3 - do more aggressive
-        #                         lossy JPEG and JPEG2000 optimizations. To enable lossy JBIG2,
-        #                         see --jbig2-lossy.
-        #   --jpeg-quality Q      Adjust JPEG quality level for JPEG optimization. 100 is best
-        #                         quality and largest output size; 1 is lowest quality and
-        #                         smallest output; 0 uses the default.
-        #   --png-quality Q       Adjust PNG quality level to use when quantizing PNGs. Values
-        #                         have same meaning as with --jpeg-quality
-        #   --jbig2-lossy         Enable JBIG2 lossy mode (better compression, not suitable for
-        #                         some use cases - see documentation). Only takes effect if
-        #                         --optimize 1 or higher is also enabled.
-        #   --jbig2-threshold T   Adjust JBIG2 symbol code classification threshold (default
-        #                         0.85), range 0.4 to 0.9.
+    jpeg_quality = jpeg_quality or DEFAULT_JPEG_QUALITY
+    png_quality = png_quality or DEFAULT_PNG_QUALITY
 
-        options = _parse_args_to_options(operation_args)
-        optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = options
+    logger.debug(
+        "optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = %s, %s, %s, %s, %s",
+        optimize,
+        jpeg_quality,
+        png_quality,
+        jbig2_lossy,
+        jobs,
+    )
 
-        jpeg_quality = jpeg_quality or DEFAULT_JPEG_QUALITY
-        png_quality = png_quality or DEFAULT_PNG_QUALITY
+    options = OptimizeOptions(
+        jobs=jobs,
+        optimize=optimize,
+        jpeg_quality=jpeg_quality,
+        png_quality=png_quality,
+        jb2lossy=jbig2_lossy,
+    )
+    root = Path(output_filename).parent / "images"
+    root.mkdir(exist_ok=True)
+    executor = DEFAULT_EXECUTOR
+    jpegs, pngs = extract_images_generic(pdf, root, options)
+    transcode_jpegs(pdf, jpegs, root, options, executor)
+    deflate_jpegs(pdf, root, options, executor)
+    # if options.optimize >= 2:
+    # # Try pngifying the jpegs
+    #      transcode_pngs(pdf, jpegs, jpg_name, root, options, executor)
+    transcode_pngs(pdf, pngs, png_name, root, options, executor)
 
-        logger.debug(
-            "optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = %s, %s, %s, %s, %s",
-            optimize,
-            jpeg_quality,
-            png_quality,
-            jbig2_lossy,
-            jobs,
-        )
+    jbig2_groups = extract_images_jbig2(pdf, root, options)
+    convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
 
-        options = OptimizeOptions(
-            jobs=jobs,
-            optimize=optimize,
-            jpeg_quality=jpeg_quality,
-            png_quality=png_quality,
-            jb2lossy=jbig2_lossy,
-        )
-        root = Path(output_filename).parent / "images"
-        root.mkdir(exist_ok=True)
-        executor = DEFAULT_EXECUTOR
-        jpegs, pngs = extract_images_generic(pdf, root, options)
-        transcode_jpegs(pdf, jpegs, root, options, executor)
-        deflate_jpegs(pdf, root, options, executor)
-        # if options.optimize >= 2:
-        # # Try pngifying the jpegs
-        #     transcode_pngs(pdf, jpegs, jpg_name, root, options, executor)
-        transcode_pngs(pdf, pngs, png_name, root, options, executor)
-
-        jbig2_groups = extract_images_jbig2(pdf, root, options)
-        convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
-
-        return pdf
+    return pdf
 
 
 def _raise_for_invalid_keyword(arg):

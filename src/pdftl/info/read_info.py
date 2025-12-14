@@ -16,7 +16,12 @@ resolve_page_number
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import OutlineItem, NameTree
+
 
 from pdftl.utils.whatisit import is_page
 
@@ -32,12 +37,14 @@ def pdf_id_metadata_as_strings(pdf):
 
 def get_named_destinations(pdf):
     """Get the named destinations NameTree from the PDF, if there is one"""
+    from pikepdf import NameTree
+
     if "/Names" in pdf.Root and "/Dests" in pdf.Root.Names:
         return NameTree(pdf.Root.Names.Dests)
     return None
 
 
-def _get_destination_array(item: OutlineItem, named_destinations: NameTree):
+def _get_destination_array(item: "OutlineItem", named_destinations: "NameTree"):
     """
     Extracts the destination array from a bookmark item.
 
@@ -49,6 +56,7 @@ def _get_destination_array(item: OutlineItem, named_destinations: NameTree):
     # if not isinstance(item, (Dictionary, dict, OutlineItem)) or not hasattr(item, "destination"):
     #     logger.debug("returning early: item is not a valid container")
     #     return None
+    from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
 
     if not isinstance(item, OutlineItem):
         logger.warning("Invalid item passed, returning None")
@@ -83,7 +91,7 @@ def _get_destination_array(item: OutlineItem, named_destinations: NameTree):
     return None
 
 
-def resolve_page_number(item: OutlineItem, pdf_pages, named_destinations):
+def resolve_page_number(item: "OutlineItem", pdf_pages, named_destinations):
     """
     Resolves a bookmark item to a specific page number.
 

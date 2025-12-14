@@ -8,11 +8,21 @@
 Tools to identify (and convert) pikepdf objects
 """
 
-from pikepdf import Array, Dictionary, Name, NameTree, Object, Page, Pdf, Stream, String
-
 
 def whatis(x):
     """Return a list of matching types"""
+    from pikepdf import (
+        Array,
+        Dictionary,
+        Name,
+        NameTree,
+        Object,
+        Page,
+        Pdf,
+        Stream,
+        String,
+    )
+
     return [
         t
         for t in [
@@ -43,6 +53,8 @@ def whatis_guess(x):
 
 def is_page(obj):
     """Is this a pikepdf page?"""
+    from pikepdf import Dictionary, Name
+
     return (
         isinstance(obj, Dictionary)
         and hasattr(obj, "Type")

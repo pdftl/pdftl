@@ -9,8 +9,6 @@
 
 from collections import OrderedDict
 
-from pikepdf import Name
-
 ##################################################
 # Permissions constants
 # fixme: co-locate permissions constants in output/ ?
@@ -203,11 +201,11 @@ PAPER_SIZES = {
 
 
 PAGE_BOXES = [
-    Name.MediaBox,
-    Name.CropBox,
-    Name.TrimBox,
-    Name.BleedBox,
-    Name.ArtBox,
+    "/MediaBox",
+    "/CropBox",
+    "/TrimBox",
+    "/BleedBox",
+    "/ArtBox",
 ]
 
 ##################################################

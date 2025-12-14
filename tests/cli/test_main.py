@@ -13,20 +13,19 @@ from pdftl.exceptions import UserCommandLineError
 @pytest.fixture(autouse=True)
 def patch_main_help_functions(monkeypatch):
     """Patch the functions actually used by main.py."""
-    monkeypatch.setattr(mainmod, "print_help", MagicMock())
-    monkeypatch.setattr(mainmod, "print_version", MagicMock())
+    monkeypatch.setattr("pdftl.cli.help.print_help", MagicMock())
+    monkeypatch.setattr("pdftl.cli.help.print_version", MagicMock())
     monkeypatch.setattr(
-        mainmod,
-        "find_special_topic_command",
+        "pdftl.cli.help.find_special_topic_command",
         lambda x: "special" if x == "special" else None,
     )
     monkeypatch.setattr(
-        mainmod,
-        "find_operator_topic_command",
+        "pdftl.cli.help.find_operator_topic_command",
         lambda x: "operator" if "op" in x else None,
     )
     monkeypatch.setattr(
-        mainmod, "find_option_topic_command", lambda x: "option" if "opt" in x else None
+        "pdftl.cli.help.find_option_topic_command",
+        lambda x: "option" if "opt" in x else None,
     )
 
 
@@ -86,17 +85,17 @@ def test_handle_special_flags_calls(monkeypatch):
 
     # Version flag triggers print_version and exit
     mainmod._handle_special_flags(list(VERSION_FLAGS))
-    mainmod.print_version.assert_called_once()
+    helpmod.print_version.assert_called_once()
     fake_sys.exit.assert_called_once_with(0)
 
     # Reset mocks
-    mainmod.print_version.reset_mock()
-    mainmod.print_help.reset_mock()
+    helpmod.print_version.reset_mock()
+    helpmod.print_help.reset_mock()
     fake_sys.exit.reset_mock()
 
     # Help flag triggers print_help and exit
     mainmod._handle_special_flags(list(HELP_FLAGS))
-    mainmod.print_help.assert_called_once()
+    helpmod.print_help.assert_called_once()
     fake_sys.exit.assert_called_once_with(0)
 
 
@@ -129,7 +128,7 @@ def test_print_help_exits(monkeypatch):
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
     mainmod._print_help_and_exit("somecmd")
-    mainmod.print_help.assert_called_once_with(command="somecmd", dest=fake_sys.stdout)
+    helpmod.print_help.assert_called_once_with(command="somecmd", dest=fake_sys.stdout)
     fake_sys.exit.assert_called_once_with(0)
 
 

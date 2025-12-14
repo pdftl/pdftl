@@ -20,14 +20,6 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-from pikepdf import Array, Dictionary, Name, NameTree
-
-try:
-    # Compatibility for pikepdf >= 9.5.0
-    from pikepdf.exceptions import ForeignObjectError
-except ImportError:
-    from pikepdf import ForeignObjectError
-
 from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
 from pdftl.pages.link_remapper import LinkRemapper
 
@@ -77,6 +69,8 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
             - new_annotation (Dictionary | None): The copied annotation.
             - new_named_dest_data (list | None): A flat list of (name, dest) pairs.
     """
+    from pikepdf import Array, Dictionary, ForeignObjectError, Name, NameTree
+
     try:
         new_annot = remapper.pdf.copy_foreign(
             remapper.source_pdf.make_indirect(original_annot)
@@ -122,6 +116,8 @@ def _rebuild_annotations_for_page(new_page, page_idx, remapper: LinkRemapper):
     Returns:
         list: A flat list of (name, dest) tuples for newly created named destinations.
     """
+    from pikepdf import Array, Dictionary, Name, NameTree
+
     source_page = remapper.source_pdf.pages[page_idx]
     if Name.Annots not in source_page:
         return []
@@ -160,6 +156,8 @@ def write_named_dests(pdf, all_named_dests):
         pdf: The destination PDF.
         all_named_dests (list): A list of (name_str, dest_array) tuples.
     """
+    from pikepdf import Array, Dictionary, Name, NameTree
+
     if not all_named_dests:
         return
 

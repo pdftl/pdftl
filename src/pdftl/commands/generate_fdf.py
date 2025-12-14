@@ -8,9 +8,6 @@
 
 import os
 
-from pikepdf import Name, String
-from pikepdf.form import ChoiceField, Form, RadioButtonGroup
-
 from pdftl.core.constants import FDF_END, FDF_START
 from pdftl.core.registry import register_operation
 from pdftl.utils.io_helpers import smart_open_output
@@ -44,6 +41,8 @@ _GENERATE_FDF_EXAMPLES = [
 )
 def generate_fdf(pdf, get_input, output_file):
     """Output FDF data for the given PDF"""
+    from pikepdf.form import Form
+
     if output_file == "PROMPT":
         output_file = None
     while not output_file or (
@@ -66,6 +65,9 @@ def generate_fdf(pdf, get_input, output_file):
 
 def _write_field_as_fdf_to_file(field_name, field, file):
     """Write FDF data for a single field to a file"""
+
+    from pikepdf import Name, String
+    from pikepdf.form import ChoiceField, Form, RadioButtonGroup
 
     def _write(x):
         _write_string_to_binary_file(x, file)

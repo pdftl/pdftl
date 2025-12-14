@@ -6,8 +6,6 @@
 
 """Delete annotations"""
 
-import pikepdf
-
 from pdftl.core.registry import register_operation
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
@@ -41,6 +39,8 @@ def delete_annots(pdf, specs):
     """
     Delete annotations from a PDF.
     """
+    import pikepdf
+
     if not specs:
         specs = ["-"]
 

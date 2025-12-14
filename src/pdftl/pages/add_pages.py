@@ -9,7 +9,6 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Name
 
 from pdftl.pages.link_remapper import create_link_remapper
 from pdftl.pages.links import (
@@ -31,6 +30,8 @@ def _apply_rotation(page, source_page, rotation):
         source_page: The original source pikepdf.Page object.
         rotation: A tuple (angle, absolute) specifying the rotation.
     """
+    from pikepdf import Name
+
     angle, absolute = rotation
     if absolute or angle != 0:
         current_rotation = source_page.get(Name.Rotate, 0)

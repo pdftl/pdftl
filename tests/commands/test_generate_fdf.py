@@ -104,12 +104,12 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
 
     # 1. Patch 'String' in the module so `isinstance(val, String)` returns True
     # 2. Patch 'Form' to return our FailingString object as a field value
-    with patch("pdftl.commands.generate_fdf.String", FailingString):
+    with patch("pikepdf.String", FailingString):
 
         mock_field = MagicMock()
         mock_field.value = FailingString()
 
-        with patch("pdftl.commands.generate_fdf.Form") as MockForm:
+        with patch("pikepdf.form.Form") as MockForm:
             # Mock form iteration to yield our problematic field
             MockForm.return_value.items.return_value = [("BinaryField", mock_field)]
 

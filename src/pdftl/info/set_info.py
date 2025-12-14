@@ -11,10 +11,11 @@ Public: set_metadata_in_pdf"""
 import logging
 
 logger = logging.getLogger(__name__)
-import pikepdf
-from pikepdf import Name, NumberTree, OutlineItem
 
-logger = logging.getLogger(__name__)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import OutlineItem
 
 from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
 
@@ -39,6 +40,8 @@ def set_metadata_in_pdf(pdf, meta_dict):
 
 def _set_docinfo(pdf, info_dict):
     """Set fields in a PDF's Info dictionary"""
+    from pikepdf import Name
+
     for key, value in info_dict.items():
         pdf.docinfo[Name("/" + key)] = value
 
@@ -89,7 +92,7 @@ def _set_bookmarks(pdf, bookmark_list, delete_existing_bookmarks=True):
             )
 
 
-def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
+def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: list["OutlineItem"]):
     """Add a bookmark (given as a dict) to the PDF document.
 
     Returns the ancestors of this bookmark, including this bookmark
@@ -123,6 +126,9 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
             title,
         )
         return bookmark_oi_ancestors
+
+    from pikepdf import OutlineItem
+
     new_bookmark_oi = OutlineItem(title, destination=pagenumber - 1)
     if level == 1:
         outline.root.append(new_bookmark_oi)
@@ -150,6 +156,7 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: [OutlineItem]):
 
 def _set_page_labels(pdf, label_list, delete_existing=True):
     """Set a PDF document's page label definitions."""
+    from pikepdf import NumberTree
 
     if hasattr(pdf.Root, "PageLabels") and not delete_existing:
         page_labels = NumberTree(pdf.Root.PageLabels)
@@ -184,6 +191,8 @@ def _make_page_label(pdf, label_data):
     tree. Returns: index, page_label.
 
     """
+    import pikepdf
+
     prefix = label_data.get("Prefix", None)
     style = label_data.get("NumStyle", None)
     start = label_data.get("Start", 1)
@@ -192,7 +201,7 @@ def _make_page_label(pdf, label_data):
     if prefix is not None:
         ret["/P"] = prefix
     if (style_name_string := PAGE_LABEL_STYLE_MAP.get(style, None)) is not None:
-        ret["/S"] = Name(style_name_string)
+        ret["/S"] = pikepdf.Name(style_name_string)
     if start != 1:
         ret["/St"] = start
 

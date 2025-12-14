@@ -28,12 +28,10 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-from pikepdf import Array, Dictionary, Name, NameTree, Pdf, String
+from typing import TYPE_CHECKING, Union
 
-try:
-    from pikepdf.exceptions import ForeignObjectError
-except ImportError:
-    from pikepdf import ForeignObjectError
+if TYPE_CHECKING:
+    from pikepdf import Pdf, Dictionary, Array
 
 from pdftl.utils.transform import transform_destination_coordinates
 
@@ -76,11 +74,11 @@ class LinkRemapper:
     def __init__(self, context: RemapperContext):
         self.context = context
         # Initialize Per-Call Context
-        self.pdf: Pdf | None = None
-        self.source_pdf: Pdf | None = None
-        self.instance_num: int | None = None
+        self.pdf: Union["Pdf", None] = None
+        self.source_pdf: Union["Pdf", None] = None
+        self.instance_num: Union[int, None] = None
 
-    def set_call_context(self, pdf: Pdf, source_pdf: Pdf, instance_num: int):
+    def set_call_context(self, pdf: "Pdf", source_pdf: "Pdf", instance_num: int):
         """Set per-call remapper context variables.
 
         pdf: target pdf
@@ -91,7 +89,7 @@ class LinkRemapper:
         self.source_pdf = source_pdf
         self.instance_num = instance_num
 
-    def _copy_action(self, original_action: Dictionary) -> Dictionary | None:
+    def _copy_action(self, original_action: "Dictionary") -> Union["Dictionary", None]:
         """
         Safely copy a PDF action dictionary from the source to the target PDF.
 
@@ -106,6 +104,8 @@ class LinkRemapper:
             Dictionary | None: A deep copy of the action, owned by `self.pdf`,
             or None if copying failed due to a ForeignObjectError.
         """
+        from pikepdf import ForeignObjectError
+
         try:
             indirect_action = self.source_pdf.make_indirect(original_action)
             return self.pdf.copy_foreign(indirect_action)
@@ -136,7 +136,7 @@ class LinkRemapper:
 
         return f"{self.instance_num}-{original_name}"
 
-    def _transform_destination_array(self, dest_array: Array, target_page) -> Array:
+    def _transform_destination_array(self, dest_array: "Array", target_page) -> "Array":
         """
         Apply page rotation and scaling transforms to an explicit destination array.
 
@@ -151,6 +151,8 @@ class LinkRemapper:
         Returns:
             Array: A transformed destination array referencing the target page.
         """
+        from pikepdf import Array, Name
+
         d_details = list(dest_array)[1:]
         rotation, scale = self.context.page_transforms.get(
             target_page.obj.objgen, ((0, False), 1.0)
@@ -174,7 +176,7 @@ class LinkRemapper:
 
         return Array([target_page.obj] + d_details)
 
-    def _find_remapped_page(self, source_dest_array: Array):
+    def _find_remapped_page(self, source_dest_array: "Array"):
         """
         Locate the corresponding page in the output PDF for a given source destination.
 
@@ -185,6 +187,8 @@ class LinkRemapper:
         Returns:
             Page | None: The remapped page object, or None if no mapping exists.
         """
+        from pikepdf import Array
+
         if not isinstance(source_dest_array, Array) or len(source_dest_array) == 0:
             return None
 
@@ -200,7 +204,7 @@ class LinkRemapper:
         page_key = (id(self.source_pdf), target_idx, self.instance_num)
         return self.context.page_map.get(page_key)
 
-    def _remap_explicit_destination_data(self, resolved_array: Array):
+    def _remap_explicit_destination_data(self, resolved_array: "Array"):
         """
         Remap an explicit (array-based) GoTo destination.
 
@@ -239,6 +243,8 @@ class LinkRemapper:
                 - new_named_dest (tuple | None): A (String, Dictionary) pair defining the
                   new named destination, or None if remapping failed.
         """
+        from pikepdf import Dictionary, Name, String
+
         original_name = str(resolved_name).lstrip("/")
         source_dests = self.context.dest_caches.get(id(self.source_pdf), {})
 
@@ -271,7 +277,7 @@ class LinkRemapper:
 
         return new_action_dest, new_named_dest
 
-    def remap_goto_action(self, action: Dictionary):
+    def remap_goto_action(self, action: "Dictionary"):
         """
         Remap a /GoTo action, handling both named and explicit destinations.
 
@@ -285,6 +291,8 @@ class LinkRemapper:
                 - new_action (Dictionary | None): The remapped action object.
                 - new_named_dest (tuple | None): A new named destination, if created.
         """
+        from pikepdf import Array, Dictionary, Name, String
+
         dest = action.D
         resolved = dest.resolve() if isinstance(dest, Dictionary) else dest
         new_action_dest = None
@@ -309,7 +317,7 @@ class LinkRemapper:
 
         return new_action, new_named_dest
 
-    def copy_self_contained_action(self, action: Dictionary):
+    def copy_self_contained_action(self, action: "Dictionary"):
         """
         Copy an action that requires no remapping (e.g., URI, Launch, GoToR).
 
@@ -321,7 +329,7 @@ class LinkRemapper:
         """
         return self._copy_action(action), None
 
-    def copy_unsupported_action(self, action: Dictionary):
+    def copy_unsupported_action(self, action: "Dictionary"):
         """
         Copy an unsupported or non-remappable action, such as JavaScript or Forms.
 
@@ -334,6 +342,8 @@ class LinkRemapper:
         Returns:
             tuple: (new_action, None)
         """
+        from pikepdf import Name
+
         action_type = action.get(Name.S, "Unknown")
         logger.warning(
             "Unsupported action type '%s' copied without remapping. "
@@ -348,6 +358,8 @@ def _build_link_caches(source_pages_to_process, source_pdfs):
     Build caches for reverse page mapping and named destinations.
     (This function is copied from links.py)
     """
+    from pikepdf import Dictionary, Name, NameTree
+
     source_rev_maps, source_named_dests_cache = {}, {}
     include_instance = any(inst > 0 for _, _, inst in source_pages_to_process)
     include_pdf_id = len(source_pdfs) > 1

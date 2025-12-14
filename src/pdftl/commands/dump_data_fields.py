@@ -9,10 +9,6 @@
 import logging
 
 logger = logging.getLogger(__name__)
-import pikepdf
-from pikepdf.form import Form
-
-logger = logging.getLogger(__name__)
 
 from pdftl.core.registry import register_operation
 from pdftl.utils.io_helpers import smart_open_output
@@ -176,6 +172,8 @@ def _write_field_flags(writer, field):
 
 def _write_field_value(writer, field):
     """Write field value for dump_data_fields"""
+    import pikepdf
+
     # The value is usually stored in /V.
     # For some button types (checkboxes), it might be /AS or require resolving.
     # We check the raw object first.
@@ -195,6 +193,8 @@ def _write_field_value(writer, field):
 
 def _write_field_options(writer, field):
     """Write field options for dump_data_fields"""
+    import pikepdf
+
     if hasattr(field.obj, "Opt"):
         for opt in field.obj.Opt:
             if isinstance(opt, pikepdf.Array):
@@ -214,6 +214,8 @@ def _write_field_justification(writer, field, short_type_string):
 
 def write_fields(writer, pdf, extra_info):
     """Write form field info"""
+    from pikepdf.form import Form
+
     form = Form(pdf)
 
     num_fields = len(list(form.items()))

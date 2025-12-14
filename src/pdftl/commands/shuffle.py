@@ -11,7 +11,10 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.pages.add_pages import add_pages
@@ -64,6 +67,8 @@ def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None):
     Shuffles (interleaves) pages from multiple PDFs, applying
     transformations like rotation and scaling.
     """
+    from pikepdf import Pdf
+
     assert len(opened_pdfs) > 0
     page_tuples_array = _get_page_tuples_array(inputs, specs, opened_pdfs, aliases)
     # logger.debug("page_tuples_array = \n  %s", page_tuples_array)

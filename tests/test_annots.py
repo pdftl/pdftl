@@ -136,6 +136,7 @@ def _compare_named_dests(original_dump: str, processed_dump: str) -> list[str]:
     return errors
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("pdf_basename", PDF_TEST_CASES)
 @pytest.mark.xdist_group(name="serial_io_tests")
 def test_cat_operation_is_idempotent(get_pdf_path, pdf_basename, tmp_path):
@@ -166,6 +167,7 @@ def test_cat_operation_is_idempotent(get_pdf_path, pdf_basename, tmp_path):
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("pdf_basename", PDF_TEST_CASES)
 @pytest.mark.xdist_group(name="serial_io_tests")
 def test_cat_preserves_annotations_with_repair(get_pdf_path, pdf_basename, tmp_path):

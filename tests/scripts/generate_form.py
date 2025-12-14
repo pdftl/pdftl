@@ -112,7 +112,7 @@ def generate():
     c.drawString(240, 300, "Female")
 
     c.save()
-    print("Generated tests/assets/Form.pdf")
+    # print("Generated tests/assets/Form.pdf")
 
 
 if __name__ == "__main__":

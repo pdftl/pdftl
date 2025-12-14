@@ -9,7 +9,10 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from pikepdf import Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 
@@ -61,6 +64,8 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf"):
       relevant to single-page files, e.g., internal links
 
     """
+    import pikepdf
+
     logger.debug("%s: opened_pdfs=%s", __name__, opened_pdfs)
     logger.debug("%s: output_pattern=%s", __name__, output_pattern)
     if output_pattern is None:
@@ -76,7 +81,7 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf"):
         for page in source_pdf.pages:
             page_counter += 1
             page_file = output_pattern % page_counter
-            new_pdf = Pdf.new()
+            new_pdf = pikepdf.Pdf.new()
             new_pdf.pages.append(page)
             logger.debug(
                 "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",

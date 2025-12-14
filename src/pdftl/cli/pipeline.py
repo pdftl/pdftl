@@ -11,11 +11,7 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
-
-logger = logging.getLogger(__name__)
 from typing import Optional
-
-import pikepdf
 
 logger = logging.getLogger(__name__)
 from pdftl.cli.whoami import WHOAMI
@@ -99,6 +95,8 @@ class PipelineManager:
                     **self._save_kw_options(),
                 )
         finally:
+            import pikepdf
+
             if isinstance(self.pipeline_pdf, pikepdf.Pdf):
                 self.pipeline_pdf.close()
 
@@ -246,6 +244,8 @@ class PipelineManager:
                     "Expected PDF data from stdin, but none was provided."
                 )
             data = sys.stdin.buffer.read()
+            import pikepdf
+
             return pikepdf.open(io.BytesIO(data))
 
         logger.debug("Using PDF from previous stage for input '_'")
@@ -259,6 +259,8 @@ class PipelineManager:
         """
         Opens a PDF from a file path, handling passwords and file-related errors.
         """
+        import pikepdf
+
         kwargs = {"password": password} if password else {}
         try:
             logger.debug("Opening file '%s'", filename)

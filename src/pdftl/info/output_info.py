@@ -14,11 +14,10 @@ write_info
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Union
 
-logger = logging.getLogger(__name__)
-
-import pikepdf
-from pikepdf import NameTree, NumberTree, String
+if TYPE_CHECKING:
+    from pikepdf import NameTree
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class BookmarkWriterContext:
 
     outline_items: list
     pages: list
-    named_destinations: NameTree | None
+    named_destinations: Union["NameTree", None]
 
 
 def write_info(writer, pdf, input_filename, escape_xml=True, extra_info=False):
@@ -129,6 +128,8 @@ def _write_page_media_info(writer, pdf):
 
 def _write_page_labels(writer, pdf):
     """Writes the document's page label definitions."""
+    from pikepdf import NumberTree, String
+
     if not hasattr(pdf.Root, "PageLabels"):
         return
 
@@ -172,6 +173,8 @@ def _write_docinfo(writer, pdf, escape_xml):
     if not pdf.docinfo:
         return
 
+    from pikepdf import String
+
     def output_item(key, value):
         if not isinstance(value, (String, str)) or not str(value):
             return
@@ -184,6 +187,8 @@ def _write_docinfo(writer, pdf, escape_xml):
 
 def _write_bookmarks(writer, pdf, escape_xml=True):
     """Writes the document's bookmarks (outline) to the output."""
+    from pikepdf.exceptions import OutlineStructureError
+
     try:
         with pdf.open_outline() as outline:
             if outline.root:
@@ -199,7 +204,7 @@ def _write_bookmarks(writer, pdf, escape_xml=True):
                     context,
                     escape_xml=escape_xml,
                 )
-    except pikepdf.exceptions.OutlineStructureError as exc:
+    except OutlineStructureError as exc:
         logger.warning(
             "Warning: Could not read bookmarks. Outline may be corrupted. Error: %s",
             exc,

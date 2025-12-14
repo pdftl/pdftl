@@ -356,6 +356,7 @@ def st_full_rule(draw):
     return rule
 
 
+@pytest.mark.slow
 class TestTextDrawerHypothesis(unittest.TestCase):
     """Property-based tests for the coordinate logic functions."""
 

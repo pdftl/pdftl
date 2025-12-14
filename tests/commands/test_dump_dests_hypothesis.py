@@ -219,11 +219,11 @@ class MockStream(MockString):
 MODULE_PATH = "pdftl.commands.dump_dests"
 
 
-@patch(f"{MODULE_PATH}.Dictionary", new=MockDictionary)
-@patch(f"{MODULE_PATH}.Array", new=MockArray)
-@patch(f"{MODULE_PATH}.Name", new=MockName)
-@patch(f"{MODULE_PATH}.String", new=MockString)
-@patch(f"{MODULE_PATH}.Stream", new=MockStream)
+@patch(f"pikepdf.Dictionary", new=MockDictionary)
+@patch(f"pikepdf.Array", new=MockArray)
+@patch(f"pikepdf.Name", new=MockName)
+@patch(f"pikepdf.String", new=MockString)
+@patch(f"pikepdf.Stream", new=MockStream)
 def _run_patched_test(test_function, *args):
     """
     A helper to run a test function with all patches active.

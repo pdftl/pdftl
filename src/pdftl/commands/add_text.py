@@ -16,15 +16,13 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from pikepdf import Pdf, Rectangle
-from pikepdf.exceptions import PdfError
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
-
-from .helpers.text_drawer import TextDrawer
-from .parsers.add_text_parser import parse_add_text_specs_to_rules
 
 _ADD_TEXT_LONG_DESC = """
 Add user-specified text strings to PDF pages.
@@ -162,7 +160,7 @@ _ADD_TEXT_EXAMPLES = [
 ]
 
 
-def _build_static_context(pdf: Pdf, total_pages: int) -> dict:
+def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
     """Builds the context dict for variables that are the same for all pages."""
     try:
         # .docinfo is a property that lazy-loads the info dict
@@ -200,13 +198,18 @@ def _build_static_context(pdf: Pdf, total_pages: int) -> dict:
     examples=_ADD_TEXT_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def add_text_pdf(pdf: Pdf, specs: list[str]) -> Pdf:
+def add_text_pdf(pdf: "Pdf", specs: list[str]) -> "Pdf":
     """
     Applies all parsed add_text rules to a PDF **in-place**.
 
     This function coordinates the parser and the TextDrawer to
     apply text overlays to the input PDF.
     """
+    from pikepdf import Rectangle
+
+    from .helpers.text_drawer import TextDrawer
+    from .parsers.add_text_parser import parse_add_text_specs_to_rules
+
     total_pages = len(pdf.pages)
 
     # --- 1. Build static context ---
@@ -230,12 +233,15 @@ def add_text_pdf(pdf: Pdf, specs: list[str]) -> Pdf:
 
     # --- 4. Process all pages in-place ---
     for i, page in enumerate(pdf.pages):
-        _process_page(i, page, page_rules, static_context)
+        _process_page(i, page, page_rules, static_context, TextDrawer)
 
     return pdf
 
 
-def _process_page(i, page, page_rules, static_context):
+def _process_page(i, page, page_rules, static_context, drawer_class):
+
+    from pikepdf import Rectangle
+
     rules_for_page = page_rules.get(i)
     if not rules_for_page:
         return
@@ -243,9 +249,9 @@ def _process_page(i, page, page_rules, static_context):
     page_box = Rectangle(*page.trimbox)
     page_context = {**static_context, "page": i + 1}
 
-    # --- 5. Delegate drawing to TextDrawer ---
+    # --- 5. Delegate drawing to drawer = TextDrawer ---
     # Create a new drawer for each page
-    drawer = TextDrawer(page_box=page_box)
+    drawer = drawer_class(page_box=page_box)
 
     for rule in rules_for_page:
         drawer.draw_rule(rule, page_context)
@@ -255,6 +261,9 @@ def _process_page(i, page, page_rules, static_context):
 
     # --- 6. Apply the overlay ---
     if overlay_bytes:
+        from pikepdf import Pdf
+        from pikepdf.exceptions import PdfError
+
         try:
             with Pdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
                 # This mutates the page object *in-place*

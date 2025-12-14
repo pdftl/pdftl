@@ -11,7 +11,6 @@ remapping tasks. It preserves the original API by acting as a compatibility
 layer over the robust, class-based implementation in `link_remapper.py`.
 """
 
-from pikepdf import Name
 
 from pdftl.pages.link_remapper import LinkRemapper
 
@@ -33,15 +32,15 @@ def _handle_unsupported_action(remapper: LinkRemapper, original_action):
 
 # ACTION_HANDLERS provides the stable, public API for this module.
 ACTION_HANDLERS = {
-    Name.GoTo: _handle_goto_action,
-    Name.GoToR: _handle_self_contained_action,
-    Name.Launch: _handle_self_contained_action,
-    Name.URI: _handle_self_contained_action,
-    Name.Sound: _handle_self_contained_action,
-    Name.JavaScript: _handle_unsupported_action,
-    Name.SubmitForm: _handle_unsupported_action,
-    Name.ResetForm: _handle_unsupported_action,
-    Name.ImportData: _handle_unsupported_action,
+    "/GoTo": _handle_goto_action,
+    "/GoToR": _handle_self_contained_action,
+    "/Launch": _handle_self_contained_action,
+    "/URI": _handle_self_contained_action,
+    "/Sound": _handle_self_contained_action,
+    "/JavaScript": _handle_unsupported_action,
+    "/SubmitForm": _handle_unsupported_action,
+    "/ResetForm": _handle_unsupported_action,
+    "/ImportData": _handle_unsupported_action,
 }
 
 # public constant

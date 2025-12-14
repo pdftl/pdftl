@@ -212,3 +212,29 @@ def runner(temp_dir):
 
 def pytest_addoption(parser):
     parser.addoption("--pdftk", action="store", default=None)
+
+
+def pytest_addoption(parser):
+    """Add command-line options to pytest."""
+    parser.addoption(
+        "--skip-slow", action="store_true", default=False, help="skip slow tests"
+    )
+
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line("markers", "slow: mark test as slow to run")
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Skip tests marked as slow if --skip-slow is provided.
+    """
+    if not config.getoption("--skip-slow"):
+        # --skip-slow not provided: run all tests by default
+        return
+
+    skip_slow = pytest.mark.skip(reason="skipped due to --skip-slow option")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)

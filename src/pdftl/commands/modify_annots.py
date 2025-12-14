@@ -11,7 +11,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from pikepdf import Name, Pdf
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Name, Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
@@ -85,6 +88,8 @@ def _parse_value_to_python(val_str: str):
     Converts a value string from the parser into a Python type that
     pikepdf can use in its high-level API.
     """
+    from pikepdf import Name
+
     val_str = val_str.strip()
 
     static_values = {
@@ -131,6 +136,8 @@ def _apply_mods_to_annot(
     Applies a list of (key, value) modifications to a single annotation.
     Returns the count of properties modified.
     """
+    from pikepdf import Name
+
     prop_count = 0
     for key_str, val_str in modifications:
         try:
@@ -181,10 +188,13 @@ def _apply_mods_to_annot(
     examples=_MODIFY_ANNOTS_EXAMPLES,
     args=(["input_pdf", "operation_args"], {}),
 )
-def modify_annots(pdf: Pdf, specs: list[str]):
+def modify_annots(pdf: "Pdf", specs: list[str]):
     """
     Modifies properties of existing annotations in a PDF.
     """
+
+    from pikepdf import Name
+
     if not specs:
         logger.warning("No modification specs provided. Nothing to do.")
         return pdf

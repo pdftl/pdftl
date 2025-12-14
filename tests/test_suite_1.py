@@ -67,7 +67,7 @@ CAT_SPECS = [
 ]
 
 
-# Use the parametrize decorator to create a test for each spec
+@pytest.mark.slow
 @pytest.mark.parametrize("spec", CAT_SPECS)
 def test_cat(runner, temp_dir, six_page_pdf, spec):
     """Compares the 'cat' operation for various page specifications."""

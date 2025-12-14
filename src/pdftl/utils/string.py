@@ -10,8 +10,6 @@ xml_{de,en}code_for_info"""
 import itertools
 import re
 
-from pikepdf import Array, Name
-
 from pdftl.utils.whatisit import whatis_guess
 
 IGNORED_NONPRINTING_CHAR_RE = re.compile(
@@ -124,6 +122,8 @@ def pdf_rect_to_string(arr):
 
 def pdf_obj_to_string(x):
     """Convert a pdf object to a string, for dump_data_annots style output"""
+    from pikepdf import Array, Name
+
     guess = whatis_guess(x)
     if guess == Name:
         return str(x)[1:]

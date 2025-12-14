@@ -13,19 +13,11 @@ import sys
 import textwrap
 from datetime import date
 
-logger = logging.getLogger(__name__)
-
-import pikepdf
 from rich import box
 
 logger = logging.getLogger(__name__)
-from rich.console import Console, ConsoleOptions, RenderResult
-from rich.markdown import Heading, Markdown
-from rich.markup import escape
-from rich.panel import Panel
-from rich.text import Text
 
-from pdftl.cli.console import console
+from pdftl.cli.console import get_console
 from pdftl.cli.help_data import (
     SPECIAL_HELP_TOPICS_MAP,
     SYNOPSIS_TEMPLATE,
@@ -35,40 +27,6 @@ from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
 from pdftl.core.cli_data import CLI_DATA
 from pdftl.core.registry import registry
 from pdftl.utils.string import before_space
-
-
-class LeftJustifiedHeading(Heading):
-    def __rich_console__(
-        self, console: Console, options: ConsoleOptions
-    ) -> RenderResult:
-        text = self.text
-        text.justify = "left"
-        if self.tag == "h1":
-            # Draw a border around h1s
-            yield Panel(
-                text,
-                box=box.HEAVY,
-                style="markdown.h1.border",
-            )
-        else:
-            # Styled text for h2 and beyond
-            if self.tag == "h2":
-                yield Text("")
-            yield text
-
-
-class HelpMarkdown(Markdown):
-    elements = {
-        **Markdown.elements,
-        "heading_open": LeftJustifiedHeading,
-    }
-
-    def __init__(self, markup, *args, **kwargs):
-        self.source = markup
-        super().__init__(markup, *args, **kwargs)
-
-    def __str__(self):
-        return self.source
 
 
 def get_synopsis():
@@ -109,6 +67,7 @@ def get_project_version():
 
 def print_version(dest=None):
     """Prints detailed version information for the package and its core dependencies."""
+    import pikepdf
 
     dependencies = "\n".join(
         [
@@ -137,7 +96,7 @@ def print_version(dest=None):
     )
 
     if dest is None or dest is sys.stdout or dest is sys.stderr:
-        console.print(output)
+        get_console().print(output)
     else:
         print(output, file=dest)
 
@@ -185,40 +144,40 @@ def _print_topic_help(hprint, topic_data, topic_name):
         else f"`{topic_name}`"
     )
 
-    hprint(HelpMarkdown(f"# {WHOAMI}: help for {safe_topic_name}"))
+    hprint(f"# {WHOAMI}: help for {safe_topic_name}")
 
     if desc := topic_data.get("desc", None):
-        hprint(HelpMarkdown(f"\n{desc.strip()}"))
+        hprint(f"\n{desc.strip()}")
 
     if usage := topic_data.get("usage", None):
         usage_string = f"## Usage\n> {WHOAMI} {_usage_as_markdown(usage)}"
-        hprint(HelpMarkdown(usage_string))
+        hprint(usage_string)
 
     if long_desc := topic_data.get("long_desc", None):
         cleaned_desc = long_desc.strip()
-        hprint(HelpMarkdown("\n## Details\n" + cleaned_desc))
+        hprint("\n## Details\n" + cleaned_desc)
 
     if examples := topic_data.get("examples", None):
         example_markdown = _format_examples_block(examples)
-        hprint(HelpMarkdown(example_markdown))
+        hprint(example_markdown)
 
     if tags := topic_data.get("tags", None):
-        hprint(HelpMarkdown(f"\n**Tags**: {', '.join(tags)}"))
+        hprint(f"\n**Tags**: {', '.join(tags)}")
 
     if caller := topic_data.get("caller", None):
-        hprint(HelpMarkdown(f"\n*Source: {caller}*"))
+        hprint(f"\n*Source: {caller}*")
 
 
 def print_main_help(hprint):
     """Prints the main, default help screen."""
 
-    hprint(HelpMarkdown(f"# **{WHOAMI}** - PDF Tackle {get_project_version()}"))
-    hprint(HelpMarkdown("_A wannabe CLI compatible clone/extension of pdftk_"))
+    hprint(f"# **{WHOAMI}** - PDF Tackle {get_project_version()}")
+    hprint("_A wannabe CLI compatible clone/extension of pdftk_")
 
-    hprint(HelpMarkdown("## Usage"))
-    hprint(HelpMarkdown("\n```\n" + get_synopsis().strip() + "\n```"))
+    hprint("## Usage")
+    hprint("\n```\n" + get_synopsis().strip() + "\n```")
 
-    # hprint(HelpMarkdown("## Operations\n\n\n"))
+    # hprint("## Operations\n\n\n")
     all_ops_and_opts = list(registry.operations) + list(registry.options)
 
     # # Define a fixed column width based on the longest command name
@@ -231,29 +190,29 @@ def print_main_help(hprint):
 def _print_desc_table(hprint, title, container):
     table = f"|{title}||\n|-|-|\n"
     for operation, info in sorted(list(container.items())):
-        table += f"|`{escape(operation)}`|{info['desc']}|\n"
-    hprint(HelpMarkdown(table))
+        table += f"|`{operation}`|{info['desc']}|\n"
+    hprint(table)
 
 
 def _print_output_options_help(hprint):
     """Prints detailed help for all output options."""
-    hprint(HelpMarkdown("# Options for PDF output\n"))
+    hprint("# Options for PDF output\n")
     for opt, info in sorted(registry.options.items()):
-        safe_opt = escape(opt)
-        hprint(HelpMarkdown(f"\n## `{safe_opt}`"))
-        hprint(HelpMarkdown(f"\n> {info['desc']}\n"))
+        safe_opt = opt
+        hprint(f"\n## `{safe_opt}`")
+        hprint(f"\n> {info['desc']}\n")
         if "long_desc" in info:
             cleaned_desc = info["long_desc"].strip()
-            hprint(HelpMarkdown("\n## Details\n"))
-            hprint(HelpMarkdown(cleaned_desc))
+            hprint("\n## Details\n")
+            hprint(cleaned_desc)
         if examples := info.get("examples", None):
             example_markdown = _format_examples_block(examples)
-            hprint(HelpMarkdown(example_markdown))
+            hprint(example_markdown)
 
 
 def _print_examples_help(hprint):
     """Prints all examples and not much else (uses HelpMarkdown output)."""
-    hprint(HelpMarkdown(_format_examples_block(_discover_examples(), show_topics=True)))
+    hprint(_format_examples_block(_discover_examples(), show_topics=True))
 
 
 def _discover_examples():
@@ -309,47 +268,59 @@ def print_help(command=None, dest=None, raw=False):
                                       Defaults to sys.stdout.
         raw (bool, optional): If True, output raw markdown/text instead of rendered Rich output.
     """
+    from rich.console import Console, ConsoleOptions, RenderResult
+    from rich.markdown import Heading, Markdown
+    from rich.panel import Panel
+    from rich.text import Text
 
-    def hprint(*args):
-        # 1. Process all arguments into rich-compatible objects or raw strings.
-        processed_args = []
-        for arg in args:
-            if isinstance(arg, HelpMarkdown):
-                processed_args.append(arg)
-            elif isinstance(arg, str):
-                if raw:
-                    processed_args.append(arg)
-                else:
-                    processed_args.append(Text.from_markup(arg))
+    class LeftJustifiedHeading(Heading):
+        def __rich_console__(
+            self, console: Console, options: ConsoleOptions
+        ) -> RenderResult:
+            text = self.text
+            text.justify = "left"
+            if self.tag == "h1":
+                # Draw a border around h1s
+                yield Panel(
+                    text,
+                    box=box.HEAVY,
+                    style="markdown.h1.border",
+                )
             else:
-                processed_args.append(arg)
+                # Styled text for h2 and beyond
+                if self.tag == "h2":
+                    yield Text("")
+                yield text
 
-        # 2. Output handling.
+    class HelpMarkdown(Markdown):
+        elements = {
+            **Markdown.elements,
+            "heading_open": LeftJustifiedHeading,
+        }
+
+        def __init__(self, markup, *args, **kwargs):
+            self.source = markup
+            super().__init__(markup, *args, **kwargs)
+
+        def __str__(self):
+            return self.source
+
+    def hprint(x):
         use_rich_console = not raw and (
             dest is None or dest is sys.stdout or dest is sys.stderr
         )
-
         if use_rich_console:
-            console.print(*processed_args)
+            get_console().print(HelpMarkdown(x))
         elif not raw:
             # Rendered output for files/pipes (fixes missing table format in files)
+            console = get_console()
             width = console.width if console.width else 80
             file_console = Console(file=dest, width=width, force_terminal=False)
-            file_console.print(*processed_args)
+            file_console.print(HelpMarkdown(x))
         else:
             # Raw output (Markdown source)
-            output_parts = []
-            for arg in processed_args:
-                if isinstance(arg, HelpMarkdown):
-                    output_parts.append(str(arg))
-                elif isinstance(arg, Text):
-                    output_parts.append(arg.plain)
-                else:
-                    output_parts.append(str(arg))
-
-            output_string = " ".join(output_parts)
             target = dest if dest is not None else sys.stdout
-            print(output_string, file=target)
+            print(x, file=target)
 
     safe_command = command.lower() if command else None
 
@@ -372,7 +343,7 @@ def print_help(command=None, dest=None, raw=False):
         for i, topic in enumerate(all_topics):
             if i > 0:
                 # Use a separator line
-                hprint(HelpMarkdown("\n---\n"))
+                hprint("\n---\n")
             print_help(topic, dest=dest, raw=raw)
     else:
         logger.warning(
