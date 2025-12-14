@@ -29,7 +29,10 @@ The special help topic `all` is particularly interesting.
             """,
             "examples": [
                 {
-                    "desc": "Get all help. This is nice if you set `FORCE_COLORS=1` and pipe the output to `less -R`, with the complete command `FORCE_COLORS=1 pdftl help all | less -R`.",
+                    "desc": """Get all help. This is nice if
+you set `FORCE_COLORS=1` and pipe the output to `less -R`, with the
+complete command `FORCE_COLORS=1 pdftl help all | less -R`.
+""",
                     "cmd": "help all",
                 },
             ],
@@ -71,38 +74,40 @@ you can use the special `_` handle to refer to the piped-in input.
             "long_desc": """
 The general syntax for providing input to an operation is:
 
-  <inputs> [ input_pw <password...> ]
+```
+<inputs> [ input_pw <password>... ]
+```
 
-<inputs> is a space-separated list of one or more input PDF
+`<inputs>` is a space-separated list of one or more input PDF
 sources. Each source can be:
 
-  - A file path: my_doc.pdf
+  - A file path: `my_doc.pdf`
 
   - A handle assignment (for referring to files in
-    operations): A=my_doc.pdf
+    operations): `A=my_doc.pdf`
 
-  - A single dash '-' to read from standard input (stdin).
+  - A single dash `-` to read from standard input (stdin).
 
-  - The keyword 'PROMPT' to be interactively asked for a
+  - The keyword `PROMPT` to be interactively asked for a
     file path.
 
-[ input_pw <password...> ] is an optional block to provide
+`[ input_pw <password>... ]` is an optional block to provide
 owner passwords for encrypted files. The passwords in the
-<password...> list can be assigned in two ways:
+`<password>...` list can be assigned in two ways:
 
   - By position: Passwords are applied sequentially to the
     encrypted input files in the order they appear, as in:
 
-      enc1.pdf plain.pdf enc2.pdf input_pw pass1 pass2
+      `enc1.pdf plain.pdf enc2.pdf input_pw pass1 pass2`
 
   - By handle: If an input file has a handle (e.g.,
-    A=file.pdf), its password can be assigned using the same
+    `A=file.pdf`), its password can be assigned using the same
     handle. This is the most reliable method when using
     multiple encrypted files. As in:
 
-      A=enc1.pdf B=enc2.pdf input_pw B=pass2 A=pass1
+      `A=enc1.pdf B=enc2.pdf input_pw B=pass2 A=pass1`
 
-The keyword 'PROMPT' can be used in the list to be securely
+The keyword `PROMPT` can be used in the list to be securely
 prompted for a password. This is recommended.
 """,
         },
