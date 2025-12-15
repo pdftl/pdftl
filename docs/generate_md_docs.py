@@ -31,7 +31,6 @@ def write_help_topic_to_file(topic, filepath):
 def generate_md_docs(app_data, topics, output_dir="source"):
     """Generates all necessary .md files."""
     print(f"--- [md_gen] Starting md source generation in '{output_dir}'...")
-    breakpoint()
     operations = sorted(
         [item for item in topics.items() if isinstance(item[1], Operation)]
     )

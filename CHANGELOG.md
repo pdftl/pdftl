@@ -5,7 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-<!-- ## [Unreleased] -->
+## [Unreleased]
+
+### Fixed
+
+- performance improvements (lazy-loaded imports)
 
 ## [0.2.0] - 2025-12-13
 
