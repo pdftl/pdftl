@@ -45,7 +45,7 @@ _FILTER_EXAMPLES = [
     "filter",
     tags=["in_place"],
     type="single input operation",
-    desc="Do nothing. (The default if no `<operation>` is given.)",
+    desc="Do nothing (the default if `<operation>` is absent)",
     long_desc=_FILTER_LONG_DESC,
     usage="<input> [filter] output <file> [<option...>]",
     examples=_FILTER_EXAMPLES,

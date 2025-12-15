@@ -13,10 +13,12 @@ license = "MPL-2.0"
 keywords = ["pdf", "pdftk", "pdftl", "cli", "manipulation", "automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: Console",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "Topic :: Utilities",
     "Topic :: Text Processing",
@@ -30,7 +32,8 @@ dependencies = [
 Homepage = "https://github.com/pdftl/pdftl"
 Issues = "https://github.com/pdftl/pdftl/issues"
 Repository = "https://github.com/pdftl/pdftl"
-# Documentation = "https://pdftl.readthedocs.io" # not yet set up
+Documentation = "https://pdftl.readthedocs.io"
+Changelog = "https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pdftl = "pdftl.cli.main:main"
@@ -40,7 +43,7 @@ pdftl = "pdftl.cli.main:main"
 add-text = ["reportlab"]
 dump-text = ["pypdfium2"]
 optimize-images = ["ocrmypdf"]
-crop-visible = ["PyMuPDF"]
+crop-visible = ["pypdfium2"]
 
 # All optional CLI dependencies
 extras = [
@@ -74,7 +77,7 @@ dev = [
     "ruff",
     "toml; python_version < '3.11.0'",
     "hypothesis",
-    "PyMuPDF",
+    "PyMuPDF", # for testing only
     "reportlab",
     # Include full feature set so tests run against all capabilities
     "pdftl[full]",
@@ -88,7 +91,7 @@ dev-all = [
 ]
 
 [tool.setuptools_scm]
-version_scheme = "post-release" 
+version_scheme = "post-release"
 local_scheme = "dirty-tag"
 write_to = "src/pdftl/_version.py"
 

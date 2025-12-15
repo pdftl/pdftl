@@ -101,7 +101,7 @@ def _allow_option():
     pass
 
 
-@register_option("compress", desc="(default) Compress output file streams", type="flag")
+@register_option("compress", desc="Compress output file streams (default)", type="flag")
 @register_option(
     "uncompress", desc="Disables compression of output file streams", type="flag"
 )

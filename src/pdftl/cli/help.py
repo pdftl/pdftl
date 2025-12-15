@@ -171,7 +171,7 @@ def _print_topic_help(hprint, topic_data, topic_name):
 def print_main_help(hprint):
     """Prints the main, default help screen."""
 
-    hprint(f"# **{WHOAMI}** - PDF Tackle {get_project_version()}")
+    hprint(f"# **{WHOAMI}** - PDF tackle {get_project_version()}")
     hprint("_A wannabe CLI compatible clone/extension of pdftk_")
 
     hprint("## Usage")
