@@ -23,84 +23,6 @@ initialize_registry()
 # --- Test Setup: Create Dummy PDF Files ---
 
 
-@pytest.fixture(scope="module")
-def dummy_pdfs(tmp_path_factory, assets_dir):
-    """
-    A pytest fixture that creates a set of dummy PDF files with enough pages
-    to satisfy all example commands.
-    """
-    tmp_path = tmp_path_factory.mktemp("example_files")
-
-    # Create a main PDF with plenty of pages (e.g., 20)
-    main_pdf_path = tmp_path / "main_20_page.pdf"
-    main_pdf = create_custom_pdf(main_pdf_path, pages=20)
-    # pikepdf.Pdf.new()
-    # for _ in range(20):
-    #     main_pdf.add_blank_page()
-    # main_pdf.save(main_pdf_path)
-
-    # Create a smaller PDF for overlays, stamps, etc.
-    overlay_pdf = pikepdf.Pdf.new()
-    for _ in range(5):
-        overlay_pdf.add_blank_page()
-    overlay_pdf_path = tmp_path / "overlay_5_page.pdf"
-    overlay_pdf.save(overlay_pdf_path)
-
-    # --- Create symlinks for all placeholder names used in examples ---
-    placeholder_names = {
-        "a.pdf",
-        "b.pdf",
-        "c.pdf",
-        "doc1.pdf",
-        "doc2.pdf",
-        "in.pdf",
-        "cover.pdf",
-        "body.pdf",
-        "index.pdf",
-        "my.pdf",
-        "main.pdf",
-        "watermark.pdf",
-        "overlay.pdf",
-        "letterhead.pdf",
-        "bgs.pdf",
-        "stamps.pdf",
-        "signatures.pdf",
-        "contract.pdf",
-        "doc_A.pdf",
-        "doc_B.pdf",
-        "twopagetest.pdf",
-    }
-
-    paths = {}
-    for name in placeholder_names:
-        # Point overlay-like files to the smaller PDF, everything else to the main one.
-        is_overlay_type = any(
-            keyword in name
-            for keyword in [
-                "watermark",
-                "overlay",
-                "letterhead",
-                "stamp",
-                "signature",
-                "bg",
-            ]
-        )
-
-        target_pdf = overlay_pdf_path if is_overlay_type else main_pdf_path
-
-        link_path = tmp_path / name
-        if not link_path.exists():
-            link_path.symlink_to(target_pdf)
-        paths[name] = link_path
-
-    # 1. Ensure meta.txt is copied to the test working directory
-    shutil.copy(assets_dir / "meta.txt", tmp_path / "meta.txt")
-
-    # 2. Ensure Form.pdf is copied to the test working directory
-    shutil.copy(assets_dir / "Form.pdf", tmp_path / "Form.pdf")
-    return paths
-
-
 # --- Test Generation: Discover and Parameterize Examples ---
 
 
@@ -147,89 +69,118 @@ def discover_examples():
 
 @pytest.mark.serial
 @pytest.mark.parametrize("command_str", discover_examples())
-def test_example_command(command_str, dummy_pdfs, tmp_path):
+def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     """
-    This single function tests all example commands discovered from CLI_DATA.
+    Tests all example commands discovered from CLI_DATA in a fully isolated environment.
     """
+    # --- Step 0: Setup Isolation ---
+    # Create a completely fresh workspace for this specific test run
+    work_dir = tmp_path / "work_area"
+    work_dir.mkdir()
+
+    # Copy all fixture PDFs into the clean workspace
+    # This prevents tests from corrupting shared files (the "Form.pdf" crash)
+    for filename, source_path in dummy_pdfs.items():
+        shutil.copy(source_path, work_dir / filename)
+
+    # Copy extra assets if they exist
+    for filename in ["meta.txt", "Form.pdf"]:
+        if (assets_dir / filename).exists():
+            shutil.copy(assets_dir / filename, work_dir / filename)
+
+    # --- Step 1: Prepare Arguments ---
     args = shlex.split(command_str)
-    with open(tmp_path / "args.txt", "w") as f:
-        f.write("\n".join(args))
-
-    output_file = None
-    output_template = None
-
-    # --- Step 1: Prepare arguments ---
     processed_args = []
-    # Find the 'output' keyword to determine where to redirect output files
-    try:
-        # Find last occurrence of 'output' in case it's in specs
-        output_indices = [i for i, arg in enumerate(args) if arg.lower() == "output"]
-        output_index = output_indices[-1] if output_indices else -1
 
-        if output_index != -1:
-            output_arg = args[output_index + 1]
+    # Track output location for assertions later
+    output_target = None
+    is_template = False
 
-            if "%" in output_arg:
-                output_template = str(tmp_path / Path(output_arg).name)
-                args[output_index + 1] = output_template
-            else:
-                output_file = tmp_path / Path(output_arg).name
-                args[output_index + 1] = str(output_file)
+    # Iterate through args to fix file paths
+    i = 0
+    while i < len(args):
+        arg = args[i]
 
-    except IndexError:
-        # This command might have 'output' as the very last word with no file
-        pytest.fail(f"Malformed 'output' argument in command: {command_str}")
+        # Handle 'output' keyword specially
+        if arg.lower() == "output":
+            processed_args.append(arg)
+            # The next argument is the output path
+            if i + 1 < len(args):
+                out_arg = args[i + 1]
 
-    # Substitute placeholder input filenames with real paths to dummy PDFs
-    for arg in args:
+                if "%" in out_arg:
+                    # It's a template (e.g., 'page_%d.pdf')
+                    # We want the output in work_dir, but we pass just the filename
+                    # because we will run subprocess with cwd=work_dir
+                    processed_args.append(out_arg)
+                    output_target = work_dir / Path(out_arg).name  # For assertion only
+                    is_template = True
+                else:
+                    # It's a standard file path
+                    # We pass just the filename to let the tool write to CWD
+                    processed_args.append(Path(out_arg).name)
+                    output_target = work_dir / Path(out_arg).name
+
+                i += 2  # Skip the next arg since we handled it
+                continue
+
+        # Handle Input Files
+        # If the argument matches a known dummy file, pass ONLY the filename.
+        # Since we run in cwd=work_dir, the tool will find the local copy.
         if arg in dummy_pdfs:
-            processed_args.append(str(dummy_pdfs[arg]))
+            processed_args.append(arg)  # Just "a.pdf", not "/tmp/.../a.pdf"
+
         elif "=" in arg and arg.split("=")[1] in dummy_pdfs:
+            # Handle "source=a.pdf" format
             handle, filename = arg.split("=", 1)
-            processed_args.append(f"{handle}={dummy_pdfs[filename]}")
+            processed_args.append(f"{handle}={filename}")
+
         else:
+            # Pass through other flags/args unchanged
             processed_args.append(arg)
 
+        i += 1
+
+    # Some commands (like unpack_files) expect a tmp/ subdirectory
+    (work_dir / "tmp").mkdir(parents=True, exist_ok=True)
+
+    # --- Step 2: Locate Executable ---
     pdftl_executable = shutil.which("pdftl")
     if not pdftl_executable:
-        pytest.fail(
-            "Could not find the 'pdftl' executable in the environment's PATH. "
-            "Ensure you have run 'pip install -e .'"
-        )
+        pytest.fail("Could not find 'pdftl'. Ensure you ran 'pip install -e .'")
 
     command_to_run = [pdftl_executable] + processed_args
 
-    # --- Step 2: Run the command ---
-    # Run from the directory where dummy files are, so burst works without an output path
-    cwd_child = next(iter(dummy_pdfs.values()))
-    cwd = cwd_child.parent
-    # hack in ./tmp for some tests to pass
-    try:
-        Path.mkdir(tmp_path / "tmp")
-    except FileExistsError:
-        pass
-    # print(command_to_run)
-    result = subprocess.run(command_to_run, capture_output=True, text=True, cwd=cwd)
+    # Debug helper: Save what we are about to run
+    with open(tmp_path / "debug_command.txt", "w") as f:
+        f.write(f"CWD: {work_dir}\nCMD: {command_to_run}")
 
-    # --- Step 3: Assert success ---
+    # --- Step 3: Run the Command ---
+    # CRITICAL: We run inside work_dir. The tool sees "a.pdf" and finds it locally.
+    result = subprocess.run(
+        command_to_run, capture_output=True, text=True, cwd=work_dir
+    )
+
+    # --- Step 4: Assert Success ---
     assert result.returncode == 0, (
         f"Command failed with exit code {result.returncode}.\n"
         f"Command: {' '.join(command_to_run)}\n"
+        f"CWD: {work_dir}\n"
         f"Stderr: {result.stderr}\n"
         f"Stdout: {result.stdout}"
     )
 
-    # --- Step 4: Assert output file(s) exist ---
-    if output_file:
-        assert output_file.exists(), f"Output file was not created: {output_file}"
-        assert output_file.stat().st_size > 0, f"Output file is empty: {output_file}"
-
-    if output_template:
-        # Check that at least the first burst file was created
-        expected_first_file = Path(output_template % 1)
-        assert (
-            expected_first_file.exists()
-        ), f"Burst output file was not created: {expected_first_file}"
-        assert (
-            expected_first_file.stat().st_size > 0
-        ), f"Burst output file is empty: {expected_first_file}"
+    # --- Step 5: Verify Output ---
+    if output_target:
+        if is_template:
+            # Check for the first file of the sequence (e.g., page_1.pdf)
+            # We reconstruct the likely path using the python string format
+            expected_first = work_dir / (Path(output_target).name % 1)
+            assert expected_first.exists(), f"Burst output missing: {expected_first}"
+            assert expected_first.stat().st_size > 0, "Burst output file is empty"
+        else:
+            assert output_target.exists(), f"Output missing: {output_target}"
+            if output_target.is_file():
+                assert (
+                    output_target.stat().st_size > 0
+                ), f"Output file is empty: {output_target}"

@@ -25,6 +25,50 @@ SCRIPT_PATH = TESTS_DIR / "scripts" / "generate_form.py"
 ASSETS_DIR = TESTS_DIR / "assets"
 FORM_PDF = ASSETS_DIR / "Form.pdf"
 
+import copy
+import sys
+
+import pytest
+
+from pdftl.core.registry import registry  # Import the REAL object
+
+
+@pytest.fixture
+def mock_missing_dependency():
+    """Simulates a missing dependency and ensures cleanup."""
+
+    def _simulate(dependency_name, module_to_reload):
+        with mock.patch.dict(sys.modules, {dependency_name: None}):
+            importlib.reload(module_to_reload)
+            yield
+        # Teardown: Restore the module to working state
+        importlib.reload(module_to_reload)
+
+    return _simulate
+
+
+@pytest.fixture(autouse=True)
+def isolated_registry():
+    """
+    Global Registry Armor.
+
+    Runs before EVERY test. It creates a deep copy of the registry's internal state,
+    lets the test run, and then forcibly restores the original state into the
+    EXISTING registry object.
+    """
+    # 1. SNAPSHOT: Deep copy ensures we capture nested objects (Operations, Options)
+    #    This protects against tests that mutate existing operations (e.g. changing an arg).
+    backup_state = copy.deepcopy(registry.__dict__)
+
+    yield  # The test runs here
+
+    # 2. WIPE: Clear the dirty state from the Real Registry
+    registry.__dict__.clear()
+
+    # 3. RESTORE: Pour the clean backup state back into the Real Registry
+    #    We use 'update' so we modify the object in-place.
+    registry.__dict__.update(backup_state)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_form_pdf():
@@ -238,3 +282,83 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
+
+
+@pytest.fixture(scope="module")
+def dummy_pdfs(tmp_path_factory, assets_dir):
+    """
+    A pytest fixture that creates a set of dummy PDF files with enough pages
+    to satisfy all example commands.
+    """
+    import pikepdf
+
+    tmp_path = tmp_path_factory.mktemp("example_files")
+
+    # Create a main PDF with plenty of pages (e.g., 20)
+    main_pdf_path = tmp_path / "main_20_page.pdf"
+    main_pdf = create_custom_pdf(main_pdf_path, pages=20)
+    # pikepdf.Pdf.new()
+    # for _ in range(20):
+    #     main_pdf.add_blank_page()
+    # main_pdf.save(main_pdf_path)
+
+    # Create a smaller PDF for overlays, stamps, etc.
+    overlay_pdf = pikepdf.Pdf.new()
+    for _ in range(5):
+        overlay_pdf.add_blank_page()
+    overlay_pdf_path = tmp_path / "overlay_5_page.pdf"
+    overlay_pdf.save(overlay_pdf_path)
+
+    # --- Create symlinks for all placeholder names used in examples ---
+    placeholder_names = {
+        "a.pdf",
+        "b.pdf",
+        "c.pdf",
+        "doc1.pdf",
+        "doc2.pdf",
+        "in.pdf",
+        "cover.pdf",
+        "body.pdf",
+        "index.pdf",
+        "my.pdf",
+        "main.pdf",
+        "watermark.pdf",
+        "overlay.pdf",
+        "letterhead.pdf",
+        "bgs.pdf",
+        "stamps.pdf",
+        "signatures.pdf",
+        "contract.pdf",
+        "doc_A.pdf",
+        "doc_B.pdf",
+        "twopagetest.pdf",
+    }
+
+    paths = {}
+    for name in placeholder_names:
+        # Point overlay-like files to the smaller PDF, everything else to the main one.
+        is_overlay_type = any(
+            keyword in name
+            for keyword in [
+                "watermark",
+                "overlay",
+                "letterhead",
+                "stamp",
+                "signature",
+                "bg",
+            ]
+        )
+
+        target_pdf = overlay_pdf_path if is_overlay_type else main_pdf_path
+
+        link_path = tmp_path / name
+        if not link_path.exists():
+            link_path.symlink_to(target_pdf)
+        paths[name] = link_path
+
+    # 1. Ensure meta.txt is copied to the test working directory
+    shutil.copy(assets_dir / "meta.txt", tmp_path / "meta.txt")
+
+    # 2. Ensure Form.pdf is copied to the test working directory
+    shutil.copy(assets_dir / "Form.pdf", tmp_path / "Form.pdf")
+    return paths

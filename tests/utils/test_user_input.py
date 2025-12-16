@@ -28,11 +28,17 @@ def test_user_input_context():
 
 def test_get_input_no_completer(mocker):
     """Tests get_input in its simplest form (no completer)."""
+    try:
+        import readline
+    except ImportError:
+        return
+
     # Patch the built-in input() function
     mock_input = mocker.patch("builtins.input", return_value="test_output")
 
-    # Patch readline just to ensure it's not touched
-    mock_readline = mocker.patch("pdftl.utils.user_input.readline")
+    # Patch the lazy-loaded readline module
+    mock_readline = MagicMock()
+    mocker.patch.dict("sys.modules", {"readline": mock_readline})
 
     result = get_input("My Prompt: ")
 
@@ -49,11 +55,17 @@ def test_get_input_with_completer(mocker):
     Tests that get_input correctly sets up and tears down
     the readline completer.
     """
+    try:
+        import readline
+    except ImportError:
+        return
+
     # Patch the built-in input() function
     mock_input = mocker.patch("builtins.input", return_value="test_file.pdf")
 
-    # Patch the readline module imported by the pipeline
-    mock_readline = mocker.patch("pdftl.utils.user_input.readline")
+    # Patch the lazy-loaded readline module
+    mock_readline = MagicMock()
+    mocker.patch.dict("sys.modules", {"readline": mock_readline})
 
     # --- Arrange mock readline state ---
     # Store the (mock) old state

@@ -101,7 +101,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 minversion = "6.0"
-addopts = "-v -s --basetemp=/tmp/test_output --strict-markers"
+addopts = "-v -s --strict-markers"
 testpaths = ["tests"]
 
 filterwarnings = [

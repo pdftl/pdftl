@@ -65,3 +65,5 @@ src/pdftl/_version.py
 _*/
 tests/assets/Form.pdf
 .hypothesis/
+.complexipy_cache/
+complexipy*.json

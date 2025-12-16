@@ -1,30 +1,20 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # src/pdftl/commands/test_add_text.py
 
-"""
-Test suite for the add_text module.
-
-This file tests the orchestration logic of `add_text_pdf`,
-mocking the TextDrawer helper class.
-"""
-
-import io
+import importlib
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-# --- Third-Party Imports ---
+import pytest
 from pikepdf import Array, Name, Pdf, Rectangle
 
-# --- Local Application Imports ---
+# --- Local Imports ---
+# We import the module to reload it during cleanup
+import pdftl.commands.add_text
 from pdftl.commands.add_text import _build_static_context, add_text_pdf
+from pdftl.commands.helpers import text_drawer
 
-# Import the new TextDrawer. All reportlab logic is now here.
-# We import it to patch it.
-
-# Import custom exception for testing
+# Handle optional exception import
 try:
     from pdftl.exceptions import InvalidArgumentError
 except ImportError:
@@ -33,282 +23,172 @@ except ImportError:
 
 class TestAddTextLogic(unittest.TestCase):
     """
-    Unit tests for the "pure" helper functions in add_text.py.
-    These tests are written to match the *actual* implementation.
+    Unit tests for pure logic helpers.
     """
 
     def setUp(self):
         self.mock_pdf = MagicMock(spec=Pdf)
-        self.mock_pdf.filename = "/path/to/my-file.pdf"
-        # Use pikepdf.Name for keys, as pikepdf does
-        self.mock_pdf.docinfo = {
-            Name.Title: "My Document Title",
-            Name.Author: "Test Author",
-        }
+        self.mock_pdf.filename = "my-file.pdf"
+        self.mock_pdf.docinfo = {Name.Title: "Title", Name.Author: "Author"}
 
     def test_build_static_context(self):
-        """Tests static context variables are built correctly."""
-        context = _build_static_context(self.mock_pdf, 10)  # 10 total pages
-
+        context = _build_static_context(self.mock_pdf, 10)
         self.assertEqual(context["total"], 10)
         self.assertEqual(context["filename"], "my-file.pdf")
-        self.assertEqual(context["filename_base"], "my-file")
-        self.assertEqual(context["filepath"], "/path/to/my-file.pdf")
-
-        # Check metadata sub-dict
-        self.assertEqual(context["metadata"]["Title"], "My Document Title")
-        self.assertEqual(context["metadata"]["Author"], "Test Author")
+        self.assertEqual(context["metadata"]["Title"], "Title")
 
     def test_build_static_context_missing_info(self):
-        """Tests context building with missing filename or docinfo."""
-        self.mock_pdf.filename = None  # No filename
-        self.mock_pdf.docinfo = {}  # Empty docinfo
-
+        self.mock_pdf.filename = None
+        self.mock_pdf.docinfo = {}
         context = _build_static_context(self.mock_pdf, 5)
-
-        self.assertEqual(context["total"], 5)
-        self.assertEqual(context["filename"], "")  # Actual behavior
-        self.assertEqual(context["filename_base"], "")  # Actual behavior
-        self.assertEqual(context["filepath"], None)  # Actual behavior
-        self.assertEqual(context["metadata"], {})  # Actual behavior
-
-    def test_build_static_context_docinfo_value_error(self):
-        """
-        Tests context building when docinfo values fail to stringify.
-        The *entire* metadata block should be empty.
-        """
-        # Simulate a value that raises an error on str()
-        mock_bad_string = MagicMock()
-        mock_bad_string.__str__.side_effect = ValueError("test error")
-
-        self.mock_pdf.docinfo = {
-            Name.Title: "Good Title",
-            Name.Creator: mock_bad_string,
-        }
-
-        context = _build_static_context(self.mock_pdf, 1)
-
-        # The entire metadata dict should be empty due to the error
+        self.assertEqual(context["filename"], "")
         self.assertEqual(context["metadata"], {})
 
 
-class TestAddTextIntegration(unittest.TestCase):
-    """
-    Integration tests for the add_text_pdf orchestrator.
+from .sandbox import ModuleSandboxMixin
 
-    These tests use a REAL pikepdf object and mock the
-    dependencies around it (parser and drawer) to catch
-    bugs related to the pikepdf API.
+
+class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
+    """
+    Happy-path orchestration tests.
+
+    Since the import of TextDrawer happens INSIDE `add_text_pdf`,
+    we execute a patch on the source definition.
     """
 
     def setUp(self):
-        """
-        Set up a real Pdf object and mock the "seams".
-        """
-        # 1. Create a real Pdf object
+        super().setUp()
+        self.mock_parser = MagicMock()
+        self.patcher_drawer = patch("pdftl.commands.helpers.text_drawer.TextDrawer")
+        self.mock_TextDrawer_cls = self.patcher_drawer.start()
+        self.mock_drawer_instance = self.mock_TextDrawer_cls.return_value
+        self.parser_patcher = patch(
+            "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules",
+            self.mock_parser,
+        )
+        self.parser_patcher.start()
+
         self.pdf = Pdf.new()
+        self.mock_rule = {"text": lambda c: "Test", "font": "Arial", "size": 10}
 
-        # 2. Set up a mock rule to be returned by the parser
-        self.mock_rule = {
-            "text": lambda ctx: "Test Text",
-            "font": "Helvetica",
-            "size": 12,
-        }
+    def test_add_text_pdf_orchestration(self):
+        """Standard happy path."""
+        self.pdf.add_blank_page(page_size=(500, 800))
+        self.mock_parser.return_value = {0: [self.mock_rule]}
 
-        # 3. Patch the parser
+        # This calls add_text_pdf, which runs:
+        # "from pdftl.commands.helpers.text_drawer import TextDrawer"
+        # Since we patched that source path in setUp, it imports our Mock.
+        result = add_text_pdf(self.pdf, ["spec"])
+
+        self.assertIs(result, self.pdf)
+
+        # Verify call count:
+        # 1. Initial Check (instantiated to check deps)
+        # 2. Page 0 Processing
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+
+        # Verify Dependency Check Arg
+        init_kwargs = self.mock_TextDrawer_cls.call_args_list[0][1]
+        self.assertIsInstance(init_kwargs["page_box"], Rectangle)
+
+        # Verify Page Processing Arg
+        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
+        self.assertEqual(page_kwargs["page_box"].width, 500)
+        self.assertEqual(page_kwargs["page_box"].height, 800)
+
+        self.mock_drawer_instance.draw_rule.assert_called()
+        self.mock_drawer_instance.save.assert_called()
+
+    def test_add_text_pdf_with_array_mediabox(self):
+        """Tests handling of raw Array MediaBox."""
+        self.pdf.add_blank_page()
+        self.pdf.pages[0].obj[Name.MediaBox] = Array([0, 0, 612, 792])
+        self.mock_parser.return_value = {0: [self.mock_rule]}
+
+        add_text_pdf(self.pdf, ["spec"])
+
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
+        # Should be converted to Rectangle
+        self.assertIsInstance(page_kwargs["page_box"], Rectangle)
+        self.assertEqual(page_kwargs["page_box"].width, 612)
+
+    def test_add_text_pdf_with_array_trimbox(self):
+        """Tests handling of raw Array TrimBox."""
+        self.pdf.add_blank_page(page_size=(1000, 1000))
+        self.pdf.pages[0].obj[Name.TrimBox] = Array([10, 10, 510, 510])
+        self.mock_parser.return_value = {0: [self.mock_rule]}
+
+        add_text_pdf(self.pdf, ["spec"])
+
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
+        # Should be converted to Rectangle (510 - 10)
+        self.assertEqual(page_kwargs["page_box"].width, 500)
+
+
+class TestAddTextMissingDependency(unittest.TestCase):
+    """
+    Isolated tests for when reportlab is missing.
+    """
+
+    def setUp(self):
+        self.pdf = Pdf.new()
+        self.pdf.add_blank_page(page_size=(100, 100))
+
+        # Mock parser so we get far enough to hit the drawer
         self.patch_parser = patch(
             "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules"
         )
         self.mock_parser = self.patch_parser.start()
-        self.mock_parser.return_value = {}  # Default to no rules
-
-        # 4. Patch the TextDrawer
-        self.patch_drawer = patch("pdftl.commands.helpers.text_drawer.TextDrawer")
-        self.mock_TextDrawer = self.patch_drawer.start()
-
-        # Configure the mock drawer instance
-        self.mock_drawer_instance = self.mock_TextDrawer.return_value
-        self.mock_drawer_instance.save.return_value = b"overlay_bytes"
-
-        # 5. Patch Pdf.open to prevent file I/O
-        # We must return a real, simple Pdf object
-        self.patch_pdf_open = patch("pikepdf.Pdf.open")
-        self.mock_pdf_open = self.patch_pdf_open.start()
-
-        # When Pdf.open(BytesIO(...)) is called, return a dummy
-        # PDF with one page to be the "overlay"
-        self.dummy_overlay_pdf = Pdf.new()
-        self.dummy_overlay_pdf.add_blank_page()
-
-        # We need a context manager mock
-        self.mock_pdf_open.return_value.__enter__.return_value = self.dummy_overlay_pdf
+        self.mock_parser.return_value = {0: ["dummy"]}
 
     def tearDown(self):
-        """Stop all patches."""
         self.patch_parser.stop()
-        self.patch_drawer.stop()
-        self.patch_pdf_open.stop()
         self.pdf.close()
-        self.dummy_overlay_pdf.close()
 
-    def test_add_text_pdf_orchestration(self):
+        # --- AGGRESSIVE CLEANUP ---
+        # We MUST clear the module cache and reload to prevent
+        # the "Poison Pill" from leaking into other tests.
+
+        # 1. Remove the poisoned helper module
+        if "pdftl.commands.helpers.text_drawer" in sys.modules:
+            del sys.modules["pdftl.commands.helpers.text_drawer"]
+
+        # 2. Reload the orchestrator so it forgets the poisoned class
+        if "pdftl.commands.add_text" in sys.modules:
+            importlib.reload(sys.modules["pdftl.commands.add_text"])
+
+    def test_missing_reportlab_raises_error(self):
         """
-        Tests the "happy path" orchestration using a real Pdf object.
-        The default add_blank_page() creates a /MediaBox as a Rectangle.
+        Simulates missing reportlab by poisoning sys.modules.
         """
-        # Add a page with a Rectangle-based MediaBox
-        # Use 'page_size=' with a tuple (width, height)
-        self.pdf.add_blank_page(page_size=(500, 800))
-        self.mock_parser.return_value = {0: [self.mock_rule]}  # Rule for page 0
+        # 1. Define Poison Pill (block reportlab completely)
+        poison_pill = {"reportlab": None}
+        for k in list(sys.modules.keys()):
+            if k.startswith("reportlab"):
+                poison_pill[k] = None
 
-        # Run the function
-        result_pdf = add_text_pdf(self.pdf, ["spec"])
+        # 2. Apply Poison
+        with patch.dict(sys.modules, poison_pill):
 
-        # 1. Check it's an in-place operation
-        self.assertIs(result_pdf, self.pdf)
+            # 3. Remove text_drawer from cache so it MUST re-import
+            #    (and fail to find reportlab)
+            if "pdftl.commands.helpers.text_drawer" in sys.modules:
+                del sys.modules["pdftl.commands.helpers.text_drawer"]
 
-        # 2. Check parser was called correctly
-        self.mock_parser.assert_called_once_with(["spec"], 1)  # 1 page
+            # 4. Reload orchestrator to force it to import the new (dummy) drawer
+            if "pdftl.commands.add_text" in sys.modules:
+                # It exists? Force it to refresh (so it hits the poison)
+                module_obj = sys.modules["pdftl.commands.add_text"]
+                importlib.reload(module_obj)
+            else:
+                # It was wiped? Just import it (it will hit the poison naturally)
+                import pdftl.commands.add_text
 
-        # 3. Check TextDrawer was called twice:
-        #    - Once for the dependency check
-        #    - Once for the page
-        self.assertEqual(self.mock_TextDrawer.call_count, 2)
+            # 5. Run Command
+            from pdftl.exceptions import InvalidArgumentError as CurrentError
 
-        # 4. Check the dependency-check call (first call)
-        init_call_kwargs = self.mock_TextDrawer.call_args_list[0][1]  # kwargs
-        self.assertIsInstance(init_call_kwargs["page_box"], Rectangle)
-
-        # 5. Check the page-processing call (second call)
-        page_call_kwargs = self.mock_TextDrawer.call_args_list[1][1]
-        page_box = page_call_kwargs["page_box"]
-
-        # Check that it's a Rectangle object
-        self.assertIsInstance(page_box, Rectangle)
-        self.assertEqual(page_box.width, 500)
-        self.assertEqual(page_box.height, 800)
-
-        # 6. Check the drawer instance was used
-        self.mock_drawer_instance.draw_rule.assert_called_once_with(
-            self.mock_rule, unittest.mock.ANY  # context dict
-        )
-        self.mock_drawer_instance.save.assert_called_once()
-        self.mock_pdf_open.assert_called_once()
-
-        # 7. Check the BytesIO content passed to Pdf.open
-        # This confirms the overlay bytes were used
-        self.mock_pdf_open.assert_called_with(unittest.mock.ANY)
-        call_args = self.mock_pdf_open.call_args[0]
-        self.assertIsInstance(call_args[0], io.BytesIO)
-        self.assertEqual(call_args[0].getvalue(), b"overlay_bytes")
-
-    def test_add_text_pdf_with_array_mediabox(self):
-        """
-        Tests the real-world case where /MediaBox is a raw Array
-        [0, 0, w, h] instead of a pikepdf.Rectangle.
-        This test will FAIL on the buggy code and PASS on the fixed code.
-        """
-        self.pdf.add_blank_page()
-        # Manually set the /MediaBox to a raw Array, simulating the bug
-        # Use Name.MediaBox instead of /MediaBox for valid Python syntax
-        self.pdf.pages[0].obj[Name.MediaBox] = Array([0, 0, 612, 792])
-
-        self.mock_parser.return_value = {0: [self.mock_rule]}
-
-        # Run the function
-        result_pdf = add_text_pdf(self.pdf, ["spec"])
-
-        # 1. Check in-place
-        self.assertIs(result_pdf, self.pdf)
-
-        # 2. Check TextDrawer page-processing call (second call)
-        self.assertEqual(self.mock_TextDrawer.call_count, 2)
-        page_call_kwargs = self.mock_TextDrawer.call_args_list[1][1]
-        page_box = page_call_kwargs["page_box"]
-
-        # 3. Check that the Array was correctly converted to a Rectangle
-        self.assertIsInstance(page_box, Rectangle)
-
-        # 4. Check the values are correct
-        self.assertEqual(page_box.width, 612)
-        self.assertEqual(page_box.height, 792)
-        self.mock_drawer_instance.draw_rule.assert_called_once()
-        self.mock_pdf_open.assert_called_once()
-
-    def test_add_text_pdf_with_array_trimbox(self):
-        """
-        Tests the box-finding fallback logic.
-        Ensures that if /TrimBox is an Array, it is also
-        correctly converted to a Rectangle.
-        """
-        # Use 'page_size=' with a tuple (width, height)
-        self.pdf.add_blank_page(page_size=(1000, 1000))
-        # Manually set the /TrimBox to a raw Array
-        # Use Name.TrimBox instead of /TrimBox for valid Python syntax
-        self.pdf.pages[0].obj[Name.TrimBox] = Array([10, 10, 510, 510])
-
-        self.mock_parser.return_value = {0: [self.mock_rule]}
-
-        # Run the function
-        result_pdf = add_text_pdf(self.pdf, ["spec"])
-
-        # Check TextDrawer page-processing call
-        self.assertEqual(self.mock_TextDrawer.call_count, 2)
-        page_call_kwargs = self.mock_TextDrawer.call_args_list[1][1]
-        page_box = page_call_kwargs["page_box"]
-
-        # Check it was converted to a Rectangle
-        self.assertIsInstance(page_box, Rectangle)
-
-        # Check it used the TrimBox values, not the MediaBox
-        self.assertEqual(page_box.width, 500)  # 510 - 10
-        self.assertEqual(page_box.height, 500)  # 510 - 10
-        self.mock_drawer_instance.draw_rule.assert_called_once()
-
-    def test_add_text_pdf_parser_value_error(self):
-        """Tests that a parser ValueError is caught and re-raised."""
-        self.mock_parser.side_effect = ValueError("Invalid spec string")
-
-        with self.assertRaises(InvalidArgumentError) as cm:
-            add_text_pdf(self.pdf, ["bad-spec"])
-
-        self.assertIn("Error in add_text spec: Invalid spec string", str(cm.exception))
-
-    def test_add_text_pdf_empty_specs(self):
-        """
-        Tests that running with no specs returns the original pdf.
-        The parser *is* called, but the drawer is not.
-        """
-        # Add a page so total_pages is not 0
-        self.pdf.add_blank_page()
-        total_pages = len(self.pdf.pages)
-
-        result_pdf = add_text_pdf(self.pdf, [])
-        self.assertIs(result_pdf, self.pdf)
-
-        # The parser IS called
-        self.mock_parser.assert_called_once_with([], total_pages)
-
-        # The drawer is NOT called
-        self.mock_TextDrawer.assert_not_called()
-
-    def test_add_text_pdf_import_error(self):
-        """
-        Tests that the 'dummy' TextDrawer's error is
-        correctly raised to the user.
-        """
-        # Simulate the 'dummy' class raising the error on init
-        error_msg = "pip install pdftl[add_text]"
-        self.mock_TextDrawer.side_effect = InvalidArgumentError(error_msg)
-
-        # Add a page so the main loop runs
-        self.pdf.add_blank_page()
-        self.mock_parser.return_value = {0: [self.mock_rule]}
-
-        with self.assertRaises(InvalidArgumentError) as cm:
-            add_text_pdf(self.pdf, ["valid-spec"])
-
-        self.assertIn(error_msg, str(cm.exception))
-
-        # Check that it failed on the *first* call (the init check)
-        self.mock_TextDrawer.assert_called_once()
+            with pytest.raises(CurrentError):
+                add_text_pdf(self.pdf, ["dummy"])

@@ -182,13 +182,25 @@ def test_print_version_to_console(monkeypatch):
         )(),
     )
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
-    with patch("rich.console.Console") as MockConsole:
+
+    with patch.object(helpmod, "get_console") as mock_get_console:
+
+        # Run the command
         helpmod.print_version()
-        MockConsole.return_value.print.assert_called_once()
-        # optionally, check content:
-        printed = MockConsole.return_value.print.call_args[0][0]
-        assert "pdftl 1.0.0" in printed
-        assert "pikepdf 10.0" in printed
+
+        # 3. Capture the mock console instance that get_console() returned
+        mock_console_instance = mock_get_console.return_value
+
+        # 4. Verify 'print' was called on that instance
+        mock_console_instance.print.assert_called_once()
+
+        # 5. Check the content
+        #    We convert to str() in case rich passed a renderable object (like Text or Panel)
+        args, _ = mock_console_instance.print.call_args
+        printed_content = str(args[0])
+
+        assert "pdftl 1.0.0" in printed_content
+        assert "pikepdf 10.0" in printed_content
 
 
 def test_print_version_to_file(monkeypatch):

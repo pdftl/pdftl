@@ -254,21 +254,16 @@ def _parse_args_to_options(operation_args):
         clean_arg = arg.strip().lower()
         if clean_arg in ("low", "lossless", "safe"):
             optimize = 1
-            continue
-        if clean_arg in ("medium", "lossy_medium"):
+        elif clean_arg in ("medium", "lossy_medium"):
             optimize = 2
-            continue
-        if clean_arg in ("high", "aggressive", "lossy_high"):
+        elif clean_arg in ("high", "aggressive", "lossy_high"):
             optimize = 3
-            continue
-        if clean_arg in ("jbig2_lossy", "jb2lossy", "jb2_lossy"):
+        elif clean_arg in ("jbig2_lossy", "jb2lossy", "jb2_lossy"):
             jbig2_lossy = True
-            continue
-        if clean_arg in ("all", "full", "lossy_full"):
+        elif clean_arg in ("all", "full", "lossy_full"):
             jbig2_lossy = True
             optimize = 3
-            continue
-        if "=" in clean_arg:
+        elif "=" in clean_arg:
             # next method raises on invalid keyval arguments
             var, val = _parse_keyval_option(clean_arg, arg)
             if var == "jpeg_quality":
@@ -280,9 +275,8 @@ def _parse_args_to_options(operation_args):
                 png_quality = val
             elif var == "jobs":
                 jobs = val
-            continue
-        # fall-through means invalid argument, so:
-        _raise_for_invalid_keyword(arg)
+        else:
+            _raise_for_invalid_keyword(arg)
 
     return optimize, jpeg_quality, png_quality, jbig2_lossy, jobs
 

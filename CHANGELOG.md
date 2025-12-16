@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-
-## [0.3.0] - 2025-12-16
+## [0.2.1] - 2025-12-17
 
 ### Added
 
@@ -18,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - extended NOTICE.md: acknowledge `pikepdf`/`qpdf` and `pypdfium2`
 
-- request Windows tests in ci.yml
+- Windows testing
 
 ### Fixed
 

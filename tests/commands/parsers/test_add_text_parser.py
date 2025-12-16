@@ -375,7 +375,7 @@ class TestAddTextParser(unittest.TestCase):
             parse_add_text_specs_to_rules(["1 /Missing Delim"], self.total_pages)
 
 
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.errors import InvalidArgument
 
@@ -575,7 +575,11 @@ class TestAddTextParserHypothesis(unittest.TestCase):
             self.fail(f"Parser crashed on spec: '{spec}'\nError: {e}")
 
     @given(specs=st.lists(st_full_spec(), min_size=1, max_size=5))
-    @settings(max_examples=50, deadline=None)
+    @settings(
+        max_examples=50,
+        deadline=None,
+        suppress_health_check=[HealthCheck.filter_too_much],
+    )
     def test_parser_returns_dict_with_list_values(self, specs):
         """Test that the parser's return structure is correct."""
         try:

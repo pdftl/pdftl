@@ -9,7 +9,6 @@
 import glob
 import logging
 import os
-import readline
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -24,8 +23,19 @@ class UserInputContext:
 
 
 def get_input(msg, completer=None):
-    """Get user input, with optional readline tab completion"""
+    """
+    Get user input, with optional readline tab completion,
+    if readline is available.
+
+    Note: readline is probably not available on Windows.
+    """
     if completer is None:
+        return input(msg)
+
+    try:
+        import readline
+    except ImportError:
+        # e.g., Windows has no readline
         return input(msg)
 
     old_completer = readline.get_completer()

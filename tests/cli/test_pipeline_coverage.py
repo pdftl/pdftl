@@ -85,6 +85,12 @@ def mock_save_pdf():
 @pytest.fixture
 def mock_registry():
     """Mock the global registry."""
+    # reset to prevent state pollution
+    for op in MOCK_REGISTRY.operations.values():
+        if "function" in op:
+            op["function"].side_effect = None
+            op["function"].reset_mock()
+
     # Patch with the SimpleNamespace object
     with patch("pdftl.cli.pipeline.registry", MOCK_REGISTRY):
         yield MOCK_REGISTRY

@@ -19,11 +19,18 @@ def _read_page_content(page):
     return ret
 
 
-def _read_xobject_content(container, visited=set()):
+def _read_xobject_content(container, visited=None):
+    if visited is None:
+        visited = set()
+
     resources = getattr(container, "Resources", None)
     if not isinstance(resources, pikepdf.Dictionary):
-        return
+        return []  # Return empty list, not None
+
     xobjects = getattr(resources, "XObject", None)
+    if not xobjects:  # Handle case where Resources exists but XObject doesn't
+        return []
+
     streams = []
     for _, xobject_ref in xobjects.items():
         oid = xobject_ref.objgen
@@ -34,7 +41,8 @@ def _read_xobject_content(container, visited=set()):
 
         new_res = getattr(xobject_ref, "Resources", None)
         if new_res:
-            streams.extend(_read_xobject_content(new_res), visited)
+            streams.extend(_read_xobject_content(new_res, visited))
+
     return streams
 
 

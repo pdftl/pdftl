@@ -61,10 +61,8 @@ def generate_md_docs(app_data, topics, output_dir="source"):
         def heading(title):
             return f"\n.. toctree::\n   :maxdepth: 1\n   :caption: {title}:\n\n"
 
-        def incl(filetitle):
-            return f"   {filetitle}\n"
-
         f.write(heading("Overview"))
+        include_project_mdfile(f, output_dir, "README.md")
         f.write(incl("overview"))
         write_help_topic_to_file(None, Path(output_dir) / "overview.md")
 
@@ -85,15 +83,22 @@ def generate_md_docs(app_data, topics, output_dir="source"):
         ]:
             process(*x)
 
-        project_dir = Path(output_dir) / "project"
-        project_dir.mkdir(exist_ok=True)
         f.write(heading("Project files"))
-        for x in ("README.md", "CHANGELOG.md"):
-            y = x
-            cp(Path("..") / x, project_dir / y)
-            f.write(incl("project/" + y.replace(".md", "")))
-
+        for x in ("CHANGELOG.md", "NOTICE.md"):
+            include_project_mdfile(f, output_dir, x)
     print("--- [md_gen] Finished")
+
+
+def include_project_mdfile(f, output_dir, x, y=None):
+    project_dir = Path(output_dir) / "project"
+    project_dir.mkdir(exist_ok=True)
+    if y is None:
+        y = x
+    cp(Path("..") / x, project_dir / y)
+    f.write(incl("project/" + y.replace(".md", "")))
+
+def incl(filetitle):
+    return f"   {filetitle}\n"
 
 
 if __name__ == "__main__":

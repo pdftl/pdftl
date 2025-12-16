@@ -134,6 +134,37 @@ def _parse_one_spec_to_rules(
 ##################################################
 
 
+def _find_options_part(s):
+    # Find the options_part (if it exists) by searching from the right.
+    # As per the prompt, we assume if a balanced (...) block exists at
+    # the end, it is the options block.
+    options_part = ""
+    rest_of_spec = s
+    if not s.endswith(")"):
+        return options_part, rest_of_spec
+
+    nest_level = 0
+    split_pos = -1
+    for i in range(len(s) - 1, -1, -1):
+        char = s[i]
+        if char == ")":
+            nest_level += 1
+        elif char == "(":
+            nest_level -= 1
+
+        if nest_level == 0 and char == "(":
+            # Found the start of the balanced block
+            split_pos = i
+            break
+
+    if split_pos != -1:
+        # We found a balanced block. Treat it as the options.
+        options_part = s[split_pos:].strip()
+        rest_of_spec = s[:split_pos].strip()
+
+    return options_part, rest_of_spec
+
+
 def _split_spec_string(spec_str: str):
     """
     Splits a raw add_text spec string into its constituent parts,
@@ -146,31 +177,8 @@ def _split_spec_string(spec_str: str):
     if not s:
         raise ValueError("Empty add_text spec")
 
-    options_part = ""
-    rest_of_spec = s
-
-    # 1. Find the options_part (if it exists) by searching from the right.
-    # As per the prompt, we assume if a balanced (...) block exists at
-    # the end, it is the options block.
-    if s.endswith(")"):
-        nest_level = 0
-        split_pos = -1
-        for i in range(len(s) - 1, -1, -1):
-            char = s[i]
-            if char == ")":
-                nest_level += 1
-            elif char == "(":
-                nest_level -= 1
-
-            if nest_level == 0 and char == "(":
-                # Found the start of the balanced block
-                split_pos = i
-                break
-
-        if split_pos != -1:
-            # We found a balanced block. Treat it as the options.
-            options_part = s[split_pos:].strip()
-            rest_of_spec = s[:split_pos].strip()
+    # 1. Find the options_part (if it exists)
+    options_part, rest_of_spec = _find_options_part(s)
 
     if not rest_of_spec:
         raise ValueError("Missing text string component")

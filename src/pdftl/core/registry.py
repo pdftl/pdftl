@@ -105,16 +105,10 @@ class Registry:
         def decorator(func):
 
             if "examples" in metadata:
-                safe_examples = []
-                for ex in metadata["examples"]:
-                    if isinstance(ex, dict):
-                        safe_examples.append(HelpExample(**ex))
-                    elif isinstance(ex, HelpExample):
-                        safe_examples.append(ex)
-                    else:
-                        raise ValueError(
-                            f"Invalid example format in operation '{name}'"
-                        )
+                safe_examples = [
+                    _to_help_example_helper(ex, name) for ex in metadata["examples"]
+                ]
+
                 metadata["examples"] = safe_examples
 
             if "compatibility" in metadata:
@@ -183,6 +177,15 @@ class Registry:
             return func
 
         return decorator
+
+
+def _to_help_example_helper(ex, name):
+    if isinstance(ex, dict):
+        return HelpExample(**ex)
+    elif isinstance(ex, HelpExample):
+        return ex
+    else:
+        raise ValueError(f"Invalid example format in operation '{name}'")
 
 
 registry = Registry()

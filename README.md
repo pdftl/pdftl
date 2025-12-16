@@ -22,7 +22,7 @@ Leveraging the power of [`pikepdf`](https://github.com/pikepdf/pikepdf) ([qpdf](
 
 ## Installation
 
-First install `pipx` using your package manager. Then install `pdftl` with all features enabled (recommended)
+Install [`pipx`](https://pipx.pypa.io), and then:
 
 ```bash
 pipx install pdftl[full]
@@ -50,12 +50,12 @@ A simple `pip install pdftl[full]` install is also supported.
 
 ### 📝 Forms & annotations
 
-* **Forms:** `fill_form` (FDF/XFDF), `generate_fdf`, `dump_data_fields`.
+* **Forms:** `fill_form`, `generate_fdf`, `dump_data_fields`.
 * **Annotations:** `modify_annots` (surgical edits to link properties, colors, borders), `delete_annots`, `dump_annots`.
 
 ### 🛠️ Advanced
 
-* **Text replacement:** `replace` text in content streams using Regex (experimental).
+* **Text replacement:** `replace` text in content streams using regular expressions (experimental).
 * **Code injection:** `inject` raw PDF operators at the head/tail of content streams.
 * **Optimization:** `optimize_images` (smart compression via OCRmyPDF).
 * **Dynamic text:** `add_text` adds page numbers, filenames, or timestamps to pages.

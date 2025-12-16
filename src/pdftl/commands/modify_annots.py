@@ -193,8 +193,6 @@ def modify_annots(pdf: "Pdf", specs: list[str]):
     Modifies properties of existing annotations in a PDF.
     """
 
-    from pikepdf import Name
-
     if not specs:
         logger.warning("No modification specs provided. Nothing to do.")
         return pdf
@@ -215,37 +213,9 @@ def modify_annots(pdf: "Pdf", specs: list[str]):
     modified_prop_count = 0
 
     for rule in rules:
-        for page_num in rule.page_numbers:
-            if not 1 <= page_num <= pdf_page_count:
-                logger.warning(
-                    "Spec references page %d, but PDF only has %d pages. Skipping.",
-                    page_num,
-                    pdf_page_count,
-                )
-                continue  # Skip this page number
-
-            # page_num is 1-based, list index is 0-based
-            page = pdf.pages[page_num - 1]
-
-            # Check if the /Annots key exists.
-            if Name.Annots not in page:
-                continue  # No annotations on this page
-
-            # Iterate over the page.Annots array
-            for annot in page.Annots:
-                # Check if the annotation type matches the rule's selector
-                if rule.type_selector:
-                    # Ensure annot.Subtype exists before comparing
-                    annot_subtype = annot.get(Name.Subtype)
-                    if annot_subtype != Name(rule.type_selector):
-                        continue
-
-                # This annotation is a match. Apply all modifications.
-                modified_annot_count += 1
-                props_changed = _apply_mods_to_annot(
-                    annot, rule.modifications, page_num
-                )
-                modified_prop_count += props_changed
+        rule_annot_count, rule_prop_count = _apply_rule(pdf, rule, pdf_page_count)
+        modified_annot_count += rule_annot_count
+        modified_prop_count += rule_prop_count
 
     logger.info(
         "Modified %d properties across %d annotations.",
@@ -254,3 +224,40 @@ def modify_annots(pdf: "Pdf", specs: list[str]):
     )
 
     return pdf
+
+
+def _apply_rule(pdf, rule, pdf_page_count):
+    from pikepdf import Name
+
+    annot_count = 0
+    prop_count = 0
+    for page_num in rule.page_numbers:
+        if not 1 <= page_num <= pdf_page_count:
+            logger.warning(
+                "Spec references page %d, but PDF only has %d pages. Skipping.",
+                page_num,
+                pdf_page_count,
+            )
+            continue  # Skip this page number
+
+        # page_num is 1-based, list index is 0-based
+        page = pdf.pages[page_num - 1]
+
+        # Check if the /Annots key exists.
+        if Name.Annots not in page:
+            continue  # No annotations on this page
+
+        # Iterate over the page.Annots array
+        for annot in page.Annots:
+            # Check if the annotation type matches the rule's selector
+            if rule.type_selector:
+                # Ensure annot.Subtype exists before comparing
+                annot_subtype = annot.get(Name.Subtype)
+                if annot_subtype != Name(rule.type_selector):
+                    continue
+
+            # This annotation is a match. Apply all modifications.
+            annot_count += 1
+            prop_count += _apply_mods_to_annot(annot, rule.modifications, page_num)
+
+    return annot_count, prop_count

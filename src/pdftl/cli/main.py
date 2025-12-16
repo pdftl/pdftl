@@ -127,6 +127,7 @@ def _is_verbose_and_setup_logging(cli_args) -> tuple[bool, list[str]]:
 
     # Configure the root logger and the pdftl-specific loggers
     if debug:
+        import rich
         from rich.logging import RichHandler
 
         logging.basicConfig(format=log_format, handlers=[RichHandler()])

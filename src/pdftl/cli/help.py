@@ -13,8 +13,6 @@ import sys
 import textwrap
 from datetime import date
 
-from rich import box
-
 logger = logging.getLogger(__name__)
 
 from pdftl.cli.console import get_console
@@ -259,17 +257,8 @@ def _print_help_dispatch_table():
     return dispatch_table
 
 
-def print_help(command=None, dest=None, raw=False):
-    """
-    Displays help information for the tool, a specific command, or a topic.
-
-    Args:
-        command (str, optional): The command or topic to get help for.
-                                 If None, the main help screen is shown.
-        dest (file object, optional): The destination to write help text to.
-                                      Defaults to sys.stdout.
-        raw (bool, optional): If True, output raw markdown/text instead of rendered Rich output.
-    """
+def _load_help_markdown():
+    from rich import box
     from rich.console import Console, ConsoleOptions, RenderResult
     from rich.markdown import Heading, Markdown
     from rich.panel import Panel
@@ -307,6 +296,12 @@ def print_help(command=None, dest=None, raw=False):
         def __str__(self):
             return self.source
 
+    return HelpMarkdown
+
+
+def _load_hprint(dest, raw):
+    HelpMarkdown = _load_help_markdown()
+
     def hprint(x):
         use_rich_console = not raw and (
             dest is None or dest is sys.stdout or dest is sys.stderr
@@ -314,6 +309,8 @@ def print_help(command=None, dest=None, raw=False):
         if use_rich_console:
             get_console().print(HelpMarkdown(x))
         elif not raw:
+            from rich.console import Console
+
             # Rendered output for files/pipes (fixes missing table format in files)
             console = get_console()
             width = console.width if console.width else 80
@@ -323,6 +320,23 @@ def print_help(command=None, dest=None, raw=False):
             # Raw output (Markdown source)
             target = dest if dest is not None else sys.stdout
             print(x, file=target)
+
+    return hprint
+
+
+def print_help(command=None, dest=None, raw=False):
+    """
+    Displays help information for the tool, a specific command, or a topic.
+
+    Args:
+        command (str, optional): The command or topic to get help for.
+                                 If None, the main help screen is shown.
+        dest (file object, optional): The destination to write help text to.
+                                      Defaults to sys.stdout.
+        raw (bool, optional): If True, output raw markdown/text instead of rendered Rich output.
+    """
+
+    hprint = _load_hprint(dest, raw)
 
     safe_command = command.lower() if command else None
 

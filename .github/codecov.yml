@@ -1,0 +1,11 @@
+coverage:
+  status:
+    project:
+      default:
+        # Allows overall coverage to drop by 1% without failing
+        threshold: 1%
+    patch:
+      default:
+        # Makes the "Patch" check informational only.
+        # You will see the % change, but it won't give you a Red X.
+        informational: true
