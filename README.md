@@ -207,8 +207,13 @@ Usage
 
 ```
 
-## License
+## Links
 
-This project is licensed under the [Mozilla Public License 2.0](LICENSE).
+* **License:** This project is licensed under the [Mozilla Public License 2.0][1].
+* **Changelog:** [CHANGELOG.md][2].
+* **Documentation:** [pdftl.readthedocs.io][3].
 
-## Changelog
+
+[1]: https://raw.githubusercontent.com/pdftl/pdftl/main/LICENSE
+[2]: https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md
+[3]: https://pdftl.readthedocs.io

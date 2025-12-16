@@ -126,7 +126,7 @@ def _format_examples_block(examples, show_topics=False):
         assert "desc" in ex and "cmd" in ex
 
         # Use a quote block for description and a fenced code block for command
-        output += f"> {ex['desc']}\n"
+        output += f"> {ex.get('desc','')}\n"
         output += f"```\n{WHOAMI} {ex['cmd'].strip()}\n```\n\n"
 
     return output.rstrip()
@@ -190,7 +190,7 @@ def print_main_help(hprint):
 def _print_desc_table(hprint, title, container):
     table = f"|{title}||\n|-|-|\n"
     for operation, info in sorted(list(container.items())):
-        table += f"|`{operation}`|{info['desc']}|\n"
+        table += f"|`{operation}`|{info.get('desc','')}|\n"
     hprint(table)
 
 
@@ -200,7 +200,7 @@ def _print_output_options_help(hprint):
     for opt, info in sorted(registry.options.items()):
         safe_opt = opt
         hprint(f"\n## `{safe_opt}`")
-        hprint(f"\n> {info['desc']}\n")
+        hprint(f"\n> {info.get('desc','')}\n")
         if "long_desc" in info:
             cleaned_desc = info["long_desc"].strip()
             hprint("\n## Details\n")

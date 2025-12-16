@@ -7,9 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.3.0] - 2025-12-16
+
+### Added
+
+- `crop`: added `fit` and `fit-group`
+
+- artwork
+
+- extended NOTICE.md: acknowledge `pikepdf`/`qpdf` and `pypdfium2`
+
+- request Windows tests in ci.yml
+
 ### Fixed
 
 - performance improvements (lazy-loaded imports)
+
+- help tweaks: add sources for non-operations; more help topic aliases
 
 ## [0.2.0] - 2025-12-13
 
@@ -17,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - readthedocs integration and docs generation
 
-### Fixed 
+### Fixed
 
 - Improved help text
 

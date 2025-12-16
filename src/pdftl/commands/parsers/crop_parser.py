@@ -27,15 +27,94 @@ def specs_to_page_rules(specs, total_pages):
         if not (match := spec_pattern.match(spec)):
             raise ValueError(
                 f"Invalid crop specification format: '{spec}'. "
-                "Expected a format like '1-5(10pt)'."
+                "Expected a format like '1-5(10pt)' or '1-end(fit)'."
             )
-        page_range_str, margin_str = match.groups()
-        logger.debug("page_range_str=%s, margin_str=%s", page_range_str, margin_str)
+        page_range_str, content_str = match.groups()
+        logger.debug("page_range_str=%s, content_str=%s", page_range_str, content_str)
+
+        # --- VALIDATION STEP ---
+        # We try to parse the content string immediately to catch typos like 'fit-groupp'.
+        # We pass (0, 0) as dimensions because we don't care about the numeric result
+        # of percentages here, only the structural validity.
+        try:
+            parse_crop_content(content_str, 1000, 1000)
+        except Exception as e:
+            raise ValueError(
+                f"Error parsing crop content '{content_str}' in spec '{spec}': {e}"
+            )
+        # -----------------------
+
         page_numbers = page_numbers_matching_page_spec(page_range_str, total_pages)
         for page_num in page_numbers:
             # Page numbers from the parser are 1-based; list indices are 0-based
-            page_rules[page_num - 1] = margin_str
+            page_rules[page_num - 1] = content_str
     return page_rules, preview
+
+
+def parse_crop_content(content_str, page_width, page_height):
+    """
+    Master parser for the content string inside the parentheses.
+    Dispatches to Smart Crop, Paper Size, or Margin parsers in order.
+
+    Returns a dict with a 'type' key:
+      - {'type': 'fit', 'mode': 'fit'|'fit-group', 'source': str|None, 'padding': (l,t,r,b)}
+      - {'type': 'paper', 'size': (w, h)}
+      - {'type': 'margin', 'values': (l, t, r, b)}
+    """
+    # 1. Try Smart Crop (fit/fit-group)
+    smart_crop = parse_smart_crop_spec(content_str, page_width, page_height)
+    if smart_crop:
+        return smart_crop
+
+    # 2. Try Paper Size (e.g. "a4", "a4_l")
+    paper_size = parse_paper_spec(content_str)
+    if paper_size:
+        return {"type": "paper", "size": paper_size}
+
+    # 3. Default: Margins (e.g. "10pt, 20pt")
+    margins = parse_crop_margins(content_str, page_width, page_height)
+    return {"type": "margin", "values": margins}
+
+
+def parse_smart_crop_spec(spec_str, page_width, page_height):
+    """
+    Parses 'fit' or 'fit-group' syntax.
+    Format: mode[=source], [padding...]
+    Example: fit-group=1-5, 10pt
+    """
+    parts = [p.strip() for p in spec_str.split(",")]
+    head = parts[0].lower()
+
+    if not head.startswith("fit"):
+        return None
+
+    mode = "fit"
+    source_spec = None
+
+    # Handle "fit-group" and optional "=source"
+    if head.startswith("fit-group"):
+        mode = "fit-group"
+        if "=" in head:
+            # e.g. "fit-group=1-5"
+            _, source_spec = head.split("=", 1)
+            source_spec = source_spec.strip()
+    elif head != "fit":
+        # If it starts with fit but isn't "fit" or "fit-group" (e.g. "fitting"),
+        # return None to let downstream parsers fail or handle it.
+        return None
+
+    # Padding logic:
+    # Everything after the first comma is treated as padding arguments
+    padding_str = ",".join(parts[1:])
+
+    if not padding_str:
+        # Default: 0 padding
+        padding = (0.0, 0.0, 0.0, 0.0)
+    else:
+        # Reuse the existing robust margin parser for padding
+        padding = parse_crop_margins(padding_str, page_width, page_height)
+
+    return {"type": "fit", "mode": mode, "source": source_spec, "padding": padding}
 
 
 def parse_paper_spec(spec_str):
@@ -67,15 +146,6 @@ def parse_crop_margins(spec_str, page_width, page_height):
     """
     Parses a comma-separated crop spec string into four point values
     for left, top, right, and bottom margins.
-
-    The shorthand logic is as follows:
-    - 1 value:  [all sides]
-    - 2 values: [left] [top]      (implies right=left, bottom=top)
-    - 3 values: [left] [top] [right] (implies bottom=top)
-    - 4 values: [left] [top] [right] [bottom]
-
-    Note: `page_width` is used for left, top, and right calculations.
-          `page_height` is used ONLY for the bottom calculation if specified.
     """
     parts = [p.strip() for p in spec_str.split(",")]
     num_parts = len(parts)
@@ -103,9 +173,6 @@ def parse_crop_margins(spec_str, page_width, page_height):
     return left, top, right, bottom
 
 
-##################################################
-
-
 def _parse_single_margin_value(val_str, total_dimension):
     """
     Parses a single crop dimension string (e.g., '10%', '2in', '50pt')
@@ -125,7 +192,11 @@ def _parse_single_margin_value(val_str, total_dimension):
     if val_str.endswith("%"):
         # Percentage is a special case that depends on the total dimension.
         numeric_part = val_str[:-1]
-        return (float(numeric_part) / 100.0) * total_dimension
+        try:
+            return (float(numeric_part) / 100.0) * total_dimension
+        except ValueError:
+            # Let it fall through to the float conversion below which will raise error
+            pass
 
     for unit, multiplier in unit_multipliers.items():
         if val_str.endswith(unit):

@@ -1,7 +1,8 @@
 import sys
-import pytest
-from unittest.mock import patch
 from contextlib import contextmanager
+from unittest.mock import patch
+
+import pytest
 
 from pdftl.cli.main import main
 
@@ -9,20 +10,20 @@ from pdftl.cli.main import main
 def strict_imports(forbidden_modules):
     """
     Context manager that 'poisons' specific modules in sys.modules.
-    
-    If the code attempts to import any module in `forbidden_modules` within 
+
+    If the code attempts to import any module in `forbidden_modules` within
     this block, it will immediately raise an ImportError.
     """
     forbidden_modules = forbidden_modules or []
     stash = {}
-    
+
     # 1. Snapshot and Poison
     for mod in forbidden_modules:
         # If it's currently loaded, stash it and remove it
         if mod in sys.modules:
             stash[mod] = sys.modules[mod]
             del sys.modules[mod]
-        
+
         # Poison: Setting to None causes ImportError on import attempt
         sys.modules[mod] = None
 
@@ -34,10 +35,11 @@ def strict_imports(forbidden_modules):
             # Remove the poison
             if mod in sys.modules and sys.modules[mod] is None:
                 del sys.modules[mod]
-            
+
             # Restore stashed module if it existed
             if mod in stash:
                 sys.modules[mod] = stash[mod]
+
 
 def test_cli_help_imports_rich_only(capsys):
     """
@@ -58,10 +60,10 @@ def test_cli_help_imports_rich_only(capsys):
 
     # check (and discard) help output
     captured = capsys.readouterr()
-    assert 'pdftl' in captured.out
-    assert 'cat' in captured.out
-    assert 'encrypt' in captured.out
-    
+    assert "pdftl" in captured.out
+    assert "cat" in captured.out
+    assert "encrypt" in captured.out
+
     assert not captured.err
 
 
@@ -73,7 +75,7 @@ def test_cli_processing_imports_pikepdf_only(tmp_path, two_page_pdf, capsys):
       - MUST NOT Import: rich, ocrmypdf, pypdfium2 (UI or extra features)
     """
     forbidden = ["rich", "ocrmypdf", "pypdfium2"]
-    
+
     input_pdf = two_page_pdf
     output_pdf = tmp_path / "out.pdf"
     test_argv = ["pdftl", str(input_pdf), "output", str(output_pdf)]
@@ -83,7 +85,7 @@ def test_cli_processing_imports_pikepdf_only(tmp_path, two_page_pdf, capsys):
             main()
 
     assert "pikepdf" in sys.modules, "pikepdf should have been imported for processing"
-    
+
     # output should be empty, let's check while we're at it
     captured = capsys.readouterr()
     assert not captured.out

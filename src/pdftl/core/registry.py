@@ -14,6 +14,12 @@ from dataclasses import fields
 from pdftl.core.types import Compatibility, HelpExample, HelpTopic, Operation, Option
 
 
+def caller_dict(current_frame):
+    """Helper to get caller ("source") data for registry decorators"""
+    caller = current_frame.f_back
+    return {"caller": os.path.basename(caller.f_code.co_filename)}
+
+
 class Registry:
     """Registry for data which is loaded upon initialization"""
 
@@ -97,7 +103,6 @@ class Registry:
         """Decorator to register a command."""
 
         def decorator(func):
-            caller = inspect.currentframe().f_back
 
             if "examples" in metadata:
                 safe_examples = []
@@ -120,7 +125,7 @@ class Registry:
             fixed_args = {
                 "name": name,
                 "function": func,
-                "caller": os.path.basename(caller.f_code.co_filename),
+                **caller_dict(inspect.currentframe()),
             }
 
             op = self._create_and_extend(Operation, fixed_args, metadata)
@@ -133,8 +138,12 @@ class Registry:
         """Decorator to register an option."""
 
         def decorator(func):
+            full_metadata = {
+                **metadata,
+                **caller_dict(inspect.currentframe()),
+            }
             fixed_args = {"name": name, "handler": func}
-            op = self._create_and_extend(Option, fixed_args, metadata)
+            op = self._create_and_extend(Option, fixed_args, full_metadata)
             registry.options[name] = op
             return func  # needed to allow stacking decorators
 
@@ -166,6 +175,9 @@ class Registry:
                 long_desc=long_desc,
                 examples=safe_examples,
             )
+            caller_details = caller_dict(inspect.currentframe())
+            for k, v in caller_details.items():
+                setattr(topic, k, v)
 
             registry.help_topics[name] = topic
             return func

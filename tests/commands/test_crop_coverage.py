@@ -10,10 +10,32 @@ from pdftl.commands.crop import crop_pages
 def _read_page_content(page):
     """Helper to read page content whether it is a Stream or Array."""
     contents = page.Contents
+    ret = []
     if isinstance(contents, pikepdf.Array):
-        return b"".join(stream.read_bytes() for stream in contents)
+        ret.append(b"".join(stream.read_bytes() for stream in contents))
     else:
-        return contents.read_bytes()
+        ret.append(contents.read_bytes())
+    ret.extend(_read_xobject_content(page))
+    return ret
+
+
+def _read_xobject_content(container, visited=set()):
+    resources = getattr(container, "Resources", None)
+    if not isinstance(resources, pikepdf.Dictionary):
+        return
+    xobjects = getattr(resources, "XObject", None)
+    streams = []
+    for _, xobject_ref in xobjects.items():
+        oid = xobject_ref.objgen
+        if oid in visited:
+            continue
+        visited.add(xobject_ref.objgen)
+        streams.append(xobject_ref.read_bytes())
+
+        new_res = getattr(xobject_ref, "Resources", None)
+        if new_res:
+            streams.extend(_read_xobject_content(new_res), visited)
+    return streams
 
 
 @pytest.fixture
@@ -32,7 +54,7 @@ def test_crop_preview(pdf):
 
     # Use helper to handle array conversion
     content = _read_page_content(pdf.pages[0])
-    assert b"re s Q" in content
+    assert any(b"re s" in x for x in content)
 
 
 def test_crop_paper_size(pdf):

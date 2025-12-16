@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+from pdftl.commands.helpers.crop_fit import FitCropContext
 from pdftl.core.registry import register_operation
 from pdftl.utils.affix_content import affix_content
 
 from .parsers.crop_parser import (
-    parse_crop_margins,
-    parse_paper_spec,
+    parse_crop_content,
     specs_to_page_rules,
 )
 
@@ -42,6 +42,17 @@ Many paper size names are allowed, see `data/paper_sizes.py`.
 
 For landscape add the suffix `_l` to the paper size, e.g.,  `a4_l`.
 
+You can also crop to the visible content using `fit`:
+
+- `1-end(fit)` or simply '(fit)' crops each page to its content.
+
+- `1-10(fit-group)` crops pages 1-10 to the union of their content.
+
+- `1-10(fit-group=2-3)` crops pages 1-10 to the union of the contents of pages 2-3.
+
+You can also include a comma-separated list of up to 4 dimensions
+  to expand the crop rectangle: `(fit,1cm)` or `(fit-group, 10,0,20,50)`.
+
 If the `preview` keyword is given, a rectangle will be drawn instead of cropping.
 
 """
@@ -53,6 +64,10 @@ _CROP_EXAMPLES = [
             "Remove a 1cm margin from the sides\n"
             "and 2cm from the top and bottom of all pages:"
         ),
+    },
+    {
+        "cmd": "in.pdf crop '1-end(fit,10pt)' output clean.pdf",
+        "desc": "Crop every page to its visible content plus 10pt padding.",
     },
     {
         "cmd": "in.pdf crop '2-8even(a5)' preview output out.pdf",
@@ -80,23 +95,29 @@ def crop_pages(pdf: "Pdf", specs: list):
     """
     page_rules, preview = specs_to_page_rules(specs, len(pdf.pages))
 
+    # Initialize context for smart cropping (lazy loads engine if needed)
+    fit_ctx = FitCropContext(pdf)
+
     for i in range(len(pdf.pages)):
         if i in page_rules:
-            _apply_crop_rule_to_page(page_rules[i], i, pdf, preview)
+            # We pass fit_ctx and all_rules to handle 'fit-group' logic
+            _apply_crop_rule_to_page(
+                page_rules[i], i, pdf, preview, fit_ctx, page_rules
+            )
 
     return pdf
 
 
-def _apply_crop_rule_to_page(page_rule, i, pdf, preview):
+def _apply_crop_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules):
     assert i < len(pdf.pages)
 
     page = pdf.pages[i]
 
-    if (page_box := _get_page_dimensions(page)) is None:
+    if (page_dims := _get_page_dimensions(page)) is None:
         logger.warning("Warning: Skipping page %s as it has no valid MediaBox.", i + 1)
         return
 
-    new_box = _calculate_new_box(page_box, page_rule)
+    new_box = _calculate_new_box(page_dims, page_rule, i, fit_ctx, all_rules)
 
     if new_box is None:
         logger.warning(
@@ -117,21 +138,28 @@ def _apply_crop_rule_to_page(page_rule, i, pdf, preview):
     _apply_crop_or_preview(page, new_box, preview)
 
 
-def _calculate_new_box(page_box, spec_str):
+def _calculate_new_box(page_dims, spec_str, page_idx, fit_ctx, all_rules):
     """
-    Calculates the new mediabox from the current box and a spec string.
+    Calculates the new mediabox from the current box dimensions and a spec string.
     Returns a tuple (x0, y0, x1, y1) or None if calculation fails.
     """
-    x0, y0, width, height = page_box
+    x0, y0, width, height = page_dims
 
-    paper_size = parse_paper_spec(spec_str)
-    if paper_size:
+    # Use the master parser which handles fit/paper/margin modes
+    parsed = parse_crop_content(spec_str, width, height)
+
+    if parsed["type"] == "fit":
+        # 'fit' mode calculates absolute coordinates directly
+        return fit_ctx.calculate_rect(page_idx, parsed, spec_str, all_rules)
+
+    elif parsed["type"] == "paper":
         left, top, right, bottom = _crop_margins_from_paper_size(
-            width, height, *paper_size
+            width, height, *parsed["size"]
         )
-    else:
-        left, top, right, bottom = parse_crop_margins(spec_str, width, height)
+    else:  # type == 'margin'
+        left, top, right, bottom = parsed["values"]
 
+    # Apply relative margins to the current box
     new_x0, new_x1 = x0 + left, (x0 + width) - right
     new_y0, new_y1 = y0 + bottom, (y0 + height) - top
 
@@ -141,21 +169,41 @@ def _calculate_new_box(page_box, spec_str):
     return new_x0, new_y0, new_x1, new_y1
 
 
+def _box_width_height(box):
+    return abs(box[2] - box[0]), abs(box[3] - box[1])
+
+
 def _apply_crop_or_preview(page, new_box, preview):
     """Applies the calculated crop box or a preview rectangle to the page."""
     if preview:
-        new_x0, new_y0, new_x1, new_y1 = new_box
-        width, height = new_x1 - new_x0, new_y1 - new_y0
-        stream = f"q 1 0 0 RG {new_x0} {new_y0} {width} {height} re s Q"
-        # The 'pdf' object isn't needed if 'inject' can be simplified
-        # to just operate on the page's streams.
-        affix_content(page, stream, "tail")
+        _overlay_preview_rectangle(page, new_box)
     else:
         # When cropping, update all relevant boxes to the new dimensions.
         page.mediabox = new_box
         for box_key in ("/CropBox", "/TrimBox", "/BleedBox"):
             if box_key in page:
                 page[box_key] = new_box
+
+
+def _overlay_preview_rectangle(page, new_box):
+    import pikepdf
+
+    new_x0, new_y0, new_x1, new_y1 = new_box
+    crop_width, crop_height = _box_width_height(new_box)
+    page_size = _box_width_height(page.mediabox)
+    with pikepdf.new() as overlay_pdf:
+        overlay_pdf.add_blank_page(page_size=page_size)
+        overlay_page = overlay_pdf.pages[0]
+
+        # overlay geometry should mirror source
+        # use list to avoid copy_foreign shenanigans
+        overlay_page.mediabox = list(page.mediabox)
+        if hasattr(page, "Rotate"):
+            overlay_page.Rotate = int(page.Rotate)
+
+        stream = f"q 1 0 0 RG {new_x0} {new_y0} {crop_width} {crop_height} re s"
+        affix_content(overlay_page, stream, "tail")
+        page.add_overlay(overlay_page)
 
 
 def _crop_margins_from_paper_size(width, height, paper_width, paper_height):
@@ -167,7 +215,9 @@ def _crop_margins_from_paper_size(width, height, paper_width, paper_height):
 
 
 def _get_page_dimensions(page):
-    """Safely retrieves the page's MediaBox dimensions."""
+    """Safely retrieves the page's MediaBox dimensions.
+    Returns: origin_x, origin_y, signed_width, signed_height, or None on error.
+    """
     try:
         x0, y0, x1, y1 = (float(p) for p in page.mediabox)
         return x0, y0, x1 - x0, y1 - y0
