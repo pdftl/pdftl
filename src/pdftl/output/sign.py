@@ -1,9 +1,71 @@
-# src/pdftl/output/parsers/sign_parser.py
-import getpass
+# src/pdftl/output/sign.py
+import io
+import logging
 import os
 
 from pdftl.core.registry import register_help_topic, register_option
 from pdftl.exceptions import UserCommandLineError
+
+logger = logging.getLogger(__name__)
+
+
+def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
+    import io
+
+    import pikepdf
+    from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+    from pyhanko.sign import signers
+
+    # 1. Correctly extract the Encryption object
+    enc_obj = save_opts.get("encryption")
+    user_pw = ""
+    owner_pw = ""
+
+    if enc_obj:
+        # Extract the actual values from the pikepdf.Encryption object
+        user_pw = enc_obj.user or ""
+        owner_pw = enc_obj.owner or ""
+        print(f"[DEBUG] Found encryption object. User: {user_pw}, Owner: {owner_pw}")
+
+    # 2. Save pikepdf state to buffer WITH the encryption object
+    # Passing the enc_obj directly back to save() is the most reliable way
+    buffer = io.BytesIO()
+    pdf.save(buffer, encryption=enc_obj, static_id=True)
+    buffer.seek(0)
+
+    # Verify the buffer
+    if b"/Encrypt" in buffer.getvalue():
+        print("[DEBUG] SUCCESS: Buffer is now encrypted.")
+    else:
+        print(
+            "[DEBUG] ERROR: Buffer still missing /Encrypt. Check if pdf object is modified."
+        )
+
+    # 3. Setup pyHanko writer
+    w = IncrementalPdfFileWriter(buffer)
+    if enc_obj:
+        # Use the single-argument encrypt() which handles both
+        # decrypting the reader and cloning the encryption for the writer.
+        pw_to_use = (user_pw or owner_pw).encode("utf-8")
+        w.encrypt(user_pwd=pw_to_use)
+        print("[DEBUG] pyHanko writer encrypted (cloned from base)")
+
+    # 4. Load the Signer
+    key_and_cert = (sign_cfg["key"], sign_cfg["cert"])
+    key_passphrase = sign_cfg["passphrase"].encode() if sign_cfg["passphrase"] else None
+
+    # (Logger logic omitted for brevity, but keep it if you prefer)
+    cms_signer = signers.SimpleSigner.load(*key_and_cert, key_passphrase=key_passphrase)
+
+    # 5. Apply Signature
+    requested_field = sign_cfg["field"] or "Signature1"
+    with open(output_filename, "wb") as out_file:
+        signers.sign_pdf(
+            w,
+            signers.PdfSignatureMetadata(field_name=requested_field),
+            signer=cms_signer,
+            output=out_file,
+        )
 
 
 def parse_sign_options(options, input_context):
@@ -22,7 +84,6 @@ def parse_sign_options(options, input_context):
             "Digital signing requires both 'sign_key' and 'sign_cert'."
         )
 
-    # Security-conscious passphrase handling
     if "sign_pass_env" in options:
         sign_cfg["passphrase"] = os.environ.get(options["sign_pass_env"])
         if not sign_cfg["passphrase"]:
@@ -30,7 +91,7 @@ def parse_sign_options(options, input_context):
                 f"Environment variable {options['sign_pass_env']} not found."
             )
     elif options.get("sign_pass_prompt"):
-        # Note: In a production CLI, you might want to check if sys.stdin.isatty()
+        # Uses the context helper to securely get the password
         sign_cfg["passphrase"] = input_context.get_pass(
             "Enter private key passphrase: "
         )
@@ -43,6 +104,7 @@ def parse_sign_options(options, input_context):
     desc="Path to private key PEM",
     type="one mandatory argument",
     long_desc="""The path to your private key file (`.pem`). This is required for signing. See also `sign_cert`.""",
+    tags=["security", "signatures"],
 )
 def _sign_key_option():
     pass
@@ -53,6 +115,7 @@ def _sign_key_option():
     desc="Path to certificate PEM",
     type="one mandatory argument",
     long_desc="""The path to your certificate file (`.pem`), also known as the public key. This is required for signing.""",
+    tags=["security", "signatures"],
 )
 def _sign_cert_option():
     pass
@@ -62,6 +125,7 @@ def _sign_cert_option():
     "sign_field <name>",
     desc="Signature field name (default: `Signature1`)",
     type="one mandatory argument",
+    tags=["security", "signatures"],
 )
 def _sign_field_option():
     pass
@@ -72,6 +136,7 @@ def _sign_field_option():
     desc="Environment variable with `sign_cert` passphrase",
     long_desc="""The name of an environment variable containing the passphrase for your public signing certificate, as specificed by `sign_cert`.""",
     type="one mandatory argument",
+    tags=["security", "signatures"],
 )
 def _sign_pass_env_option():
     pass
@@ -81,6 +146,7 @@ def _sign_pass_env_option():
     "sign_pass_prompt",
     desc="Prompt for `sign_cert` passphrase",
     type="flag",
+    tags=["security", "signatures"],
 )
 def _sign_pass_prompt_option():
     pass

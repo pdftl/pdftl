@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Get `help` by tag with `pdftl help tag:<tagname>`
+
+- `dump_signatures`: view and validate PDF signatures
+
 - PDF signature output options:
 
 	- `sign_cert`

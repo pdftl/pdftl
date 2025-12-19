@@ -26,6 +26,8 @@ from pdftl.core.registry import register_help_topic, registry
 from pdftl.core.types import HelpExample
 from pdftl.utils.string import before_space
 
+TAG_PREFIX = "tag:"
+
 
 def get_synopsis():
     """Returns the main synopsis text for the application."""
@@ -160,10 +162,16 @@ def _print_topic_help(hprint, topic_data, topic_name):
         hprint(example_markdown)
 
     if tags := topic_data.get("tags", None):
-        hprint(f"\n**Tags**: {', '.join(tags)}")
+        hprint(_format_tags(tags))
 
     if caller := topic_data.get("caller", None):
         hprint(f"\n*Source: {caller}*")
+
+    hprint(f"\n*Type: {type(topic_data).__name__}*")
+
+
+def _format_tags(tags):
+    return f"\n\n**Tags**: {', '.join(tags)}"
 
 
 def print_main_help(hprint):
@@ -194,18 +202,21 @@ def _print_desc_table(hprint, title, container):
 
 def _print_output_options_help(hprint):
     """Prints detailed help for all output options."""
-    hprint("# Options for PDF output\n")
+    hprint("# pdftl: Options for PDF output\n")
     for opt, info in sorted(registry.options.items()):
         safe_opt = opt
         hprint(f"\n## `{safe_opt}`")
         hprint(f"\n> {info.get('desc','')}\n")
-        if "long_desc" in info:
-            cleaned_desc = info["long_desc"].strip()
-            hprint("\n## Details\n")
-            hprint(cleaned_desc)
-        if examples := info.get("examples", None):
-            example_markdown = _format_examples_block(examples)
+        if hasattr(info, "long_desc"):
+            cleaned_desc = info.long_desc.strip()
+            if cleaned_desc:
+                hprint("\n## Details\n")
+                hprint(cleaned_desc)
+        if hasattr(info, "examples"):
+            example_markdown = _format_examples_block(info.examples)
             hprint(example_markdown)
+        if hasattr(info, "tags"):
+            hprint(_format_tags(info.tags))
 
 
 def _print_examples_help(hprint):
@@ -342,6 +353,20 @@ def print_help(command=None, dest=None, raw=False):
 
     if safe_command is None:
         print_main_help(hprint)
+    elif safe_command.startswith(TAG_PREFIX):
+        tag = safe_command[len(TAG_PREFIX) :]
+        taggable_topics = itertools.chain(
+            registry.operations.items(),
+            registry.options.items(),
+            registry.help_topics.items(),
+        )
+        tagged_topics = [
+            before_space(k)
+            for k, t in taggable_topics
+            if hasattr(t, "tags") and tag in t.tags
+        ]
+        _print_multiple_topics(tagged_topics, hprint, dest, raw)
+
     elif safe_command in (dispatch_table := _print_help_dispatch_table()):
         dispatch_table[safe_command](hprint)
     elif safe_command == "all":
@@ -357,16 +382,19 @@ def print_help(command=None, dest=None, raw=False):
             "pipeline",
             "help",
         ]
-        for i, topic in enumerate(all_topics):
-            if i > 0:
-                # Use a separator line
-                hprint("\n---\n")
-            print_help(topic, dest=dest, raw=raw)
+        _print_multiple_topics(all_topics, hprint, dest, raw)
     else:
         logger.warning(
             "Unknown help topic '%s' requested, showing default help\n", command
         )
         print_main_help(hprint)
+
+
+def _print_multiple_topics(topics, hprint, dest, raw):
+    for i, topic in enumerate(topics):
+        if i > 0:
+            hprint("\n---\n")
+        print_help(topic, dest=dest, raw=raw)
 
 
 def find_special_topic_command(topic):
@@ -405,15 +433,17 @@ def find_option_topic_command(help_topics):
             ),
             cmd="help all",
         ),
+        HelpExample(
+            desc=("Get help topics tagged with `encryption`"), cmd="help tag:encryption"
+        ),
     ],
 )
 def _help_help_topic():
-    """
-    If a `help` argument is given, the
-    remaining arguments are scanned for a keyword. This can be
-    one of the operation names, or an option name, or a
-    special help topic, or an alias. If a match is found, the
-    help is printed.
+    """If a `help` argument is given, the remaining arguments are
+    scanned for a keyword. This can be `tag:<tagname>`, or one of the
+    operation names, or an option name, or a special help topic, or an
+    alias. If a match is found, the help is printed. Tags are printed
+    at the end of any help topics which have tags.
 
     By default, colors are used if printing directly to the
     terminal, and usually not in other situations (e.g., if
@@ -422,4 +452,5 @@ def _help_help_topic():
     cases.
 
     The special help topic `all` is particularly interesting.
+
     """

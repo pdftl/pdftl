@@ -159,6 +159,7 @@ Usage
   dump_data_fields_utf8   Print PDF form field data in UTF-8
   dump_data_utf8          Metadata, page and bookmark info (in UTF-8)
   dump_dests              Print PDF named destinations data to the console
+  dump_signatures         List and validate digital signatures
   dump_text               Print PDF text data to the console or a file
   fill_form               Fill a PDF form
   filter                  Do nothing (the default if <operation> is absent)
