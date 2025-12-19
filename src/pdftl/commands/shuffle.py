@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
-from pdftl.core.types import Compatibility, FeatureType, Status
+from pdftl.core.types import Compatibility, FeatureType, Status, Parity
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 
@@ -53,7 +53,7 @@ _SHUFFLE_EXAMPLES = [
 _SHUFFLE_COMPATABILITY = Compatibility(
     type=FeatureType.PDFTK_COMPAT,
     status=Status.STABLE,
-    parity_level="100%",
+    parity=Parity.FULL,
     notes="Supports standard shuffling behavior.",
     pdftk_op="shuffle",
     todo=[

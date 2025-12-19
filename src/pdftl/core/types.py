@@ -13,9 +13,9 @@ Contains dataclasses and structural schemas used by the registry.
 
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional
+from enum import Enum
 
-
-class FeatureType:
+class FeatureType(str, Enum):
     """Category of the operation relative to pdftk."""
 
     # Aims for 1:1 behavior with a pdftk command (drop-in replacement).
@@ -29,7 +29,7 @@ class FeatureType:
     INTERNAL = "internal"
 
 
-class Status:
+class Status(str, Enum):
     """Current development lifecycle stage of the feature."""
 
     STABLE = "stable"  # Production ready, battle-tested
@@ -58,6 +58,14 @@ class LegacyDictAccess:
         return getattr(self, key, default)
 
 
+class Parity(str, Enum):
+    # Indication of feature completeness vs pdftk (e.g. "100%", "Partial").
+    FULL = "full"           # Identical behavior
+    SUPERSET = "superset"   # Identical behavior + extra arguments
+    PARTIAL = "partial"     # Implemented but missing edge cases/flags
+    UNCLEAR = "unclear"     # IDK
+    NONE = "none"           # Not applicable (pure extension)
+    
 @dataclass
 class Compatibility(LegacyDictAccess):
     """
@@ -68,9 +76,7 @@ class Compatibility(LegacyDictAccess):
     status: str  # Use Status constants
     description: str = ""  # Short summary for the feature matrix
 
-    # Indication of feature completeness vs pdftk (e.g. "100%", "Partial").
-    # If the feature is a superset (enhanced), this should still be "100%".
-    parity_level: str = ""
+    parity: Parity = Parity.UNCLEAR
 
     # Specific enhancements over the original pdftk command.
     enhancements: List[str] = field(default_factory=list)
@@ -136,3 +142,4 @@ class Option(LegacyDictAccess):
     desc: str = ""
     long_desc: str = ""
     type: Any = None  # usage hint (str) or python type (type)
+    compatibility: Optional[Compatibility] = None
