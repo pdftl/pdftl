@@ -17,6 +17,7 @@ coordinate and name remapping.
 
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,9 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
     return new_annot, new_named_dest_data
 
 
-def _rebuild_annotations_for_page(new_page, page_idx, remapper: LinkRemapper):
+def _rebuild_annotations_for_page(
+    new_page, source_page, page_idx, remapper: LinkRemapper, pikepdf: Any
+):
     """
     Rebuild all annotations for a given page.
 
@@ -110,20 +113,21 @@ def _rebuild_annotations_for_page(new_page, page_idx, remapper: LinkRemapper):
 
     Args:
         new_page (pikepdf.Page): The target page to populate.
+        source_page (pikepdf.Page): The correpsonding source page.
         page_idx (int): The index of the corresponding source page.
         remapper (LinkRemapper): Configured remapper for this PDF.
+        pikepdf: (Any): dependency injection of pikepdf module.
 
     Returns:
         list: A flat list of (name, dest) tuples for newly created named destinations.
     """
-    from pikepdf import Array, Dictionary, Name, NameTree
+    Array = pikepdf.Array
 
-    source_page = remapper.source_pdf.pages[page_idx]
-    if Name.Annots not in source_page:
+    if "/Annots" not in source_page:
         return []
 
     # Ensure we don’t duplicate /Annots from a previous copy
-    if Name.Annots in new_page:
+    if "/Annots" in new_page:
         del new_page.Annots
 
     new_annots = Array()
@@ -199,13 +203,41 @@ def rebuild_links(pdf, processed_page_info: list, remapper: LinkRemapper) -> lis
     Returns:
         list: A list of (name_str, dest_array) tuples for all new dests.
     """
+    import pikepdf
+
     logger.debug("--- Remapping links and named destinations ---")
 
     all_named_dests = []
 
-    for i, (src_pdf, page_idx, instance_num) in enumerate(processed_page_info):
+    # --- 1. CACHE SOURCE PAGES (The Fix) ---
+    # Create a map of { source_pdf_id: [page_object_0, page_object_1, ...] }
+    # This turns the O(N) tree lookup into an O(1) list lookup.
+    source_pages_cache = {}
+
+    # Pre-fill the cache for all unique source PDFs
+    unique_sources = {info[0] for info in processed_page_info}
+    for src in unique_sources:
+        source_pages_cache[id(src)] = list(src.pages)
+
+    annots_key = pikepdf.Name("/Annots")
+
+    # --- 2. LOOP ---
+    for target_page, (src_pdf, page_idx, instance_num) in zip(
+        pdf.pages, processed_page_info
+    ):
+        source_page_obj = source_pages_cache[id(src_pdf)][page_idx]
+        if annots_key not in source_page_obj:
+            continue
+
         remapper.set_call_context(pdf, src_pdf, instance_num)
-        new_page_dests = _rebuild_annotations_for_page(pdf.pages[i], page_idx, remapper)
+
+        new_page_dests = _rebuild_annotations_for_page(
+            target_page,
+            source_page_obj,
+            page_idx,
+            remapper,
+            pikepdf,
+        )
         all_named_dests.extend(new_page_dests)
 
     logger.debug(

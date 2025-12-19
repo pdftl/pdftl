@@ -97,6 +97,7 @@ def include_project_mdfile(f, output_dir, x, y=None):
     cp(Path("..") / x, project_dir / y)
     f.write(incl("project/" + y.replace(".md", "")))
 
+
 def incl(filetitle):
     return f"   {filetitle}\n"
 

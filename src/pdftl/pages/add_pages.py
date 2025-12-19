@@ -79,68 +79,100 @@ def add_pages(new_pdf, opened_pdfs, source_pages_to_process: [PageTransform]):
 
 
 def process_source_pages(
-    new_pdf, source_pages_to_process: [PageTransform]
-) -> RebuildLinksPartialContext:
-    """
-    Handles PASS 1: Assembling pages and applying transformations.
+    new_pdf, source_pages_to_process: list
+):  # Return type hint omitted for brevity
+    """Handles PASS 1: Assembling pages and applying transformations.
 
     This function iterates through source pages, copies them to the new PDF,
-    applies transformations, and builds the necessary data structures for link
-    rebuilding in PASS 2.
+    applies transformations (rotation/scaling), and builds the necessary data
+    structures for link rebuilding in PASS 2.
 
-    It uses a "pristine copy" technique: for each unique source page, an
-    unmodified copy is first added to ensure all necessary objects from the
-    source PDF are available in the new document's context. The actual
-    (potentially transformed) page is then added. Finally, all temporary
-    pristine copies are deleted.
+    It implements an optimized resource deduplication strategy:
+    1.  **First Encounter:** The page is appended normally. This imports all
+        resources (images, fonts) into the new PDF. The resulting page object
+        is independent, so transformations can be applied without affecting
+        the source.
+    2.  **Repeat Encounter:** A new blank page is created, and the source
+        dictionary keys (Content, Resources, MediaBox, etc.) are shallow-copied.
+        This ensures the new page shares the heavy resources already imported
+        during the first encounter, while remaining a distinct object that can
+        be rotated or scaled independently.
 
     Args:
         new_pdf: The pikepdf.Pdf object being built.
-        source_pages_to_process: A list of PageTransform instances
+        source_pages_to_process: A list of PageTransform instances defining
+            the source page and the transformations to apply.
 
     Returns:
-        A RebuildLinksPartialContext instance
+        A RebuildLinksPartialContext instance containing the mapping of
+        (source_page, instance_index) -> new_page_object, needed for
+        resolving destinations in PASS 2.
     """
+    import pikepdf
+
     ret = RebuildLinksPartialContext()
 
     instance_counts = {}
     seen_pages = set()
-    pristine_copy_indices = []
+
+    # Pre-cache source pages to avoid repeated attribute access/hashing
+    unique_sources = {p.pdf for p in source_pages_to_process}
+    source_pages_cache = {}
+    for src in unique_sources:
+        source_pages_cache[id(src)] = list(src.pages)
+
+    # Local variable lookups for speed inside the loop
+    new_pdf_pages_append = new_pdf.pages.append
+    new_pdf_add_blank = new_pdf.add_blank_page
+    new_pdf_copy_foreign = new_pdf.copy_foreign
 
     for page_data in source_pages_to_process:
-        ret.unique_source_pdfs.add(page_data.pdf)
-        source_page = page_data.pdf.pages[page_data.index]
-        page_key = (id(page_data.pdf), page_data.index)
+        pdf_id = id(page_data.pdf)
 
-        # If a page is seen for the first time, add a pristine (unmodified)
-        # copy to establish object context. Its index is recorded for later
-        # deletion.
+        # Fast lookup from cache
+        source_page = source_pages_cache[pdf_id][page_data.index]
+
         page_identity = (page_data.pdf, page_data.index)
+        page_key = (pdf_id, page_data.index)
+
+        ret.unique_source_pdfs.add(page_data.pdf)
+
         if page_identity not in seen_pages:
-            new_pdf.pages.append(source_page)
+            # --- FIRST ENCOUNTER ---
+
+            # Make an explicit copy instead of standard append so that
+            # we get the handle without an expensive lookup.
+            new_page_obj = new_pdf_copy_foreign(source_page.obj)
+            new_page = pikepdf.Page(new_page_obj)
+            new_pdf.pages.append(new_page)
             seen_pages.add(page_identity)
-            pristine_copy_indices.append(len(new_pdf.pages) - 1)
 
-        # Append the actual page that will be used and transformed.
-        new_pdf.pages.append(source_page)
-        new_page = new_pdf.pages[-1]
+        else:
+            # --- REPEAT ENCOUNTER ---
+            # We need a fresh object to allow unique rotation/scaling,
+            # but it must share the underlying heavy resources (Images/Fonts).
+            new_page = new_pdf_add_blank()
 
-        # Track page instances for link rebuilding.
+            # Shallow copy keys to point to existing resources in new_pdf
+            src_obj = source_page.obj
+            for k, v in src_obj.items():
+                if k != "/Parent":
+                    new_page[k] = new_pdf_copy_foreign(page_data.pdf.make_indirect(v))
+
+        # --- COMMON POST-PROCESSING ---
+
         instance_num = instance_counts.get(page_key, 0)
         instance_counts[page_key] = instance_num + 1
 
-        # Populate data structures needed for link rebuilding in PASS 2.
+        # Store metadata for PASS 2
         ret.page_map[(*page_key, instance_num)] = new_page
         ret.processed_page_info.append((*page_identity, instance_num))
+
+        # Record transforms (needed for link coordinate recalculation)
         ret.page_transforms[new_page.obj.objgen] = (page_data.rotation, page_data.scale)
 
-        # Apply transformations to the new page.
+        # Apply visual transformations
         _apply_rotation(new_page, source_page, page_data.rotation)
         apply_scaling(new_page, page_data.scale)
-
-    # Clean up by deleting the temporary pristine copies in reverse order
-    # to avoid index shifting issues.
-    for idx in sorted(pristine_copy_indices, reverse=True):
-        del new_pdf.pages[idx]
 
     return ret

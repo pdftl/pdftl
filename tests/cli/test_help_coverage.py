@@ -1,6 +1,6 @@
-import sys
 import io
 import logging
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -65,7 +65,7 @@ class TestHelpRichRendering(unittest.TestCase):
         self.assertIn("PDF tackle", output)
         # Check for Rich box-drawing characters (indicating LeftJustifiedHeading worked)
         # doesn't work on windows: Rich degrades. So restrict test to linux only.
-        if 'linux' in sys.platform:
+        if "linux" in sys.platform:
             self.assertTrue(any(c in output for c in ["┏", "━", "┃"]))
 
     @patch("pdftl.cli.help.get_console")

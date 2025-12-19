@@ -67,3 +67,4 @@ tests/assets/Form.pdf
 .hypothesis/
 .complexipy_cache/
 complexipy*.json
+*.lprof

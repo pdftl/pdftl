@@ -1,10 +1,16 @@
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
+import pikepdf
 import pytest
 from pikepdf import Dictionary, Name, Pdf
 
 # --- Import module and functions to test ---
-from pdftl.pages.add_pages import _apply_rotation, add_pages, process_source_pages
+from pdftl.pages.add_pages import (
+    PageTransform,
+    _apply_rotation,
+    add_pages,
+    process_source_pages,
+)
 from pdftl.pages.link_remapper import LinkRemapper
 
 # --- Import dependencies needed for testing ---
@@ -98,94 +104,123 @@ def _make_mock_transform(pdf, index, rotation, scale):
     return mock
 
 
-@patch("pdftl.pages.add_pages.apply_scaling")
-@patch("pdftl.pages.add_pages._apply_rotation")
-def test_process_source_pages_full(
-    mock_apply_rotation,
-    mock_apply_scaling,
-    mock_new_pdf,
-    mock_source_pdf,
-    mock_source_pdf_b,
-):
+def test_process_source_pages_full():
     """
-    Tests process_source_pages with multiple PDFs, duplicate pages,
-    and checks transformations and context building.
+    Tests process_source_pages with multiple PDFs and duplicate pages.
+
+    This test verifies:
+    1. Correct page assembly order.
+    2. Proper handling of repeated pages (independent rotation vs shared resources).
+    3. Transformation functions are called with the correct arguments.
+    4. Context data structures are populated correctly.
+
+    It uses real pikepdf objects for the PDFs to ensure that operations like
+    `add_blank_page` and `copy_foreign` function as intended within the library's
+    internal logic.
     """
     # 1. Arrange
-    # We will add 3 pages in this order:
-    # 1. source_pdf, page 1 (instance 0)
-    # 2. source_pdf_b, page 0 (instance 0)
-    # 3. source_pdf, page 1 (instance 1)
+    # Create real in-memory PDFs to act as Source A and Source B
+    # Source A: 2 blank pages
+    source_pdf = pikepdf.Pdf.new()
+    source_pdf.add_blank_page()  # Page 0
+    source_pdf.add_blank_page()  # Page 1
 
+    # Source B: 1 blank page
+    source_pdf_b = pikepdf.Pdf.new()
+    source_pdf_b.add_blank_page()  # Page 0
+
+    # Create the Destination PDF
+    new_pdf = pikepdf.Pdf.new()
+
+    # Define transformation specs
+    # Spec 1: Source A, Page 1 (First encounter) -> Rotate 90
     tf1_rot, tf1_scale = (90, False), 1.0
+
+    # Spec 2: Source B, Page 0 (First encounter) -> Rotate 0, Scale 0.5
     tf2_rot, tf2_scale = (0, True), 0.5
-    tf3_rot, tf3_scale = (0, False), 1.5
 
-    # Create mock PageTransform objects
+    # Spec 3: Source A, Page 1 (Repeat encounter) -> Rotate 180
+    # This checks if the repeat encounter logic (add_blank_page + copy_foreign)
+    # works correctly, allowing a different rotation on the same source content.
+    tf3_rot, tf3_scale = (180, False), 1.5
+
+    # Create PageTransform objects
     page_transforms = [
-        _make_mock_transform(mock_source_pdf, 1, tf1_rot, tf1_scale),
-        _make_mock_transform(mock_source_pdf_b, 0, tf2_rot, tf2_scale),
-        _make_mock_transform(mock_source_pdf, 1, tf3_rot, tf3_scale),
+        PageTransform(source_pdf, 1, tf1_rot, tf1_scale),
+        PageTransform(source_pdf_b, 0, tf2_rot, tf2_scale),
+        PageTransform(source_pdf, 1, tf3_rot, tf3_scale),
     ]
 
-    # Get references to the source pages
-    source_p1 = mock_source_pdf.pages[1]
-    source_b_p0 = mock_source_pdf_b.pages[0]
+    # Mock the transformation functions. We want to verify they are called,
+    # but we don't need them to actually modify the PDF content for this test.
+    with (
+        patch("pdftl.pages.add_pages.apply_scaling") as mock_scale,
+        patch("pdftl.pages.add_pages._apply_rotation") as mock_rot,
+    ):
 
-    # 2. Act
-    ctx = process_source_pages(mock_new_pdf, page_transforms)
+        # 2. Act
+        ctx = process_source_pages(new_pdf, page_transforms)
 
-    # 3. Assert
+        # 3. Assert
 
-    # --- A. Check final PDF state ---
-    # Two pristine copies (source_pdf p1, source_pdf_b p0) were added
-    # and removed. The final PDF should have exactly 3 pages.
-    assert len(mock_new_pdf.pages) == 3
-    page_0, page_1, page_2 = mock_new_pdf.pages
+        # --- A. Check final PDF state ---
+        # The final PDF should have exactly 3 pages.
+        assert len(new_pdf.pages) == 3
+        page_0 = new_pdf.pages[0]
+        page_1 = new_pdf.pages[1]
+        page_2 = new_pdf.pages[2]
 
-    # --- B. Check transformations ---
-    mock_apply_rotation.assert_has_calls(
-        [
-            call(page_0, source_p1, tf1_rot),
-            call(page_1, source_b_p0, tf2_rot),
-            call(page_2, source_p1, tf3_rot),
+        # --- B. Check transformations ---
+        # Ensure _apply_rotation was called 3 times with the correct arguments.
+        # Note: The second argument to _apply_rotation is the SOURCE page.
+        mock_rot.assert_has_calls(
+            [
+                call(page_0, source_pdf.pages[1], tf1_rot),
+                call(page_1, source_pdf_b.pages[0], tf2_rot),
+                call(page_2, source_pdf.pages[1], tf3_rot),
+            ]
+        )
+
+        # Ensure apply_scaling was called 3 times
+        mock_scale.assert_has_calls(
+            [
+                call(page_0, tf1_scale),
+                call(page_1, tf2_scale),
+                call(page_2, tf3_scale),
+            ]
+        )
+
+        # --- C. Check returned context ---
+        # Verify unique sources are tracked
+        assert ctx.unique_source_pdfs == {source_pdf, source_pdf_b}
+
+        # Verify processed_page_info matches the input sequence
+        # Format: (source_pdf_obj, source_page_index, instance_counter)
+        expected_page_info = [
+            (source_pdf, 1, 0),
+            (source_pdf_b, 0, 0),
+            (source_pdf, 1, 1),  # Second instance of source_pdf page 1
         ]
-    )
-    mock_apply_scaling.assert_has_calls(
-        [
-            call(page_0, tf1_scale),
-            call(page_1, tf2_scale),
-            call(page_2, tf3_scale),
-        ]
-    )
+        assert ctx.processed_page_info == expected_page_info
 
-    # --- C. Check returned context ---
-    assert isinstance(ctx, RebuildLinksPartialContext)
-    assert ctx.unique_source_pdfs == {mock_source_pdf, mock_source_pdf_b}
+        # Verify page_map
+        # Maps (id(source_pdf), source_index, instance_counter) -> destination_page_obj
+        expected_page_map = {
+            (id(source_pdf), 1, 0): page_0,
+            (id(source_pdf_b), 0, 0): page_1,
+            (id(source_pdf), 1, 1): page_2,
+        }
+        assert ctx.page_map == expected_page_map
 
-    # Check processed_page_info (tracks (pdf, index, instance_num))
-    expected_page_info = [
-        (mock_source_pdf, 1, 0),
-        (mock_source_pdf_b, 0, 0),
-        (mock_source_pdf, 1, 1),
-    ]
-    assert ctx.processed_page_info == expected_page_info
-
-    # Check page_map (maps (id(pdf), index, instance_num) -> new page)
-    expected_page_map = {
-        (id(mock_source_pdf), 1, 0): page_0,
-        (id(mock_source_pdf_b), 0, 0): page_1,
-        (id(mock_source_pdf), 1, 1): page_2,
-    }
-    assert ctx.page_map == expected_page_map
-
-    # Check page_transforms (maps new page objgen -> transforms)
-    expected_page_transforms = {
-        page_0.obj.objgen: (tf1_rot, tf1_scale),
-        page_1.obj.objgen: (tf2_rot, tf2_scale),
-        page_2.obj.objgen: (tf3_rot, tf3_scale),
-    }
-    assert ctx.page_transforms == expected_page_transforms
+        # Verify page_transforms
+        # Maps destination_page.obj.objgen -> (rotation, scale)
+        # This is used in Pass 2 to adjust link coordinates.
+        expected_page_transforms = {
+            page_0.obj.objgen: (tf1_rot, tf1_scale),
+            page_1.obj.objgen: (tf2_rot, tf2_scale),
+            page_2.obj.objgen: (tf3_rot, tf3_scale),
+        }
+        assert ctx.page_transforms == expected_page_transforms
 
 
 def test_process_source_pages_empty(mock_new_pdf):

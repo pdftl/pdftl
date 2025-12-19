@@ -238,7 +238,9 @@ def test_rebuild_annotations_for_page(mocker, mock_remapper):
     ]
 
     # 2. Act
-    new_dests = _rebuild_annotations_for_page(new_page, 0, mock_remapper)
+    new_dests = _rebuild_annotations_for_page(
+        new_page, mock_source_page, 0, mock_remapper, pikepdf
+    )
 
     # 3. Assert
     # Check that the old /Annots was deleted (by checking if it's empty)
@@ -315,6 +317,7 @@ def test_rebuild_links_orchestration(
     """
     # 1. Arrange
     # Mock the helper function to return different dests for each page
+    mock_source_pdf = MagicMock(name="mock_source_pdf_simple")
     mock_rebuild_annots.side_effect = [
         ["page_0_dest"],
         ["page_1_dest_A", "page_1_dest_B"],
@@ -325,6 +328,12 @@ def test_rebuild_links_orchestration(
 
     # Create a mock target PDF with two pages
     mock_pdf = MagicMock(spec=Pdf, pages=[MagicMock(), MagicMock()])
+
+    src_p0 = MagicMock()
+    src_p0.__contains__.return_value = True
+    src_p1 = MagicMock()
+    src_p1.__contains__.return_value = True
+    mock_source_pdf.pages = [src_p0, src_p1]
 
     # Define the processed_page_info list that rebuild_links will iterate over
     processed_page_info = [
@@ -352,11 +361,13 @@ def test_rebuild_links_orchestration(
     )
 
     # 2. Assert annotations are rebuilt for each page
+    from unittest.mock import ANY
+
     assert mock_rebuild_annots.call_count == 2
     mock_rebuild_annots.assert_has_calls(
         [
-            call(mock_pdf.pages[0], 0, mock_remapper_instance),
-            call(mock_pdf.pages[1], 1, mock_remapper_instance),
+            call(mock_pdf.pages[0], src_p0, 0, mock_remapper_instance, ANY),
+            call(mock_pdf.pages[1], src_p1, 1, mock_remapper_instance, ANY),
         ]
     )
 
@@ -403,7 +414,9 @@ def test_rebuild_annots_page_with_no_annots_key(
     mock_remapper.source_pdf.pages = [mock_source_page]
 
     # 2. Act
-    new_dests = _rebuild_annotations_for_page(real_page, 0, mock_remapper)
+    new_dests = _rebuild_annotations_for_page(
+        real_page, mock_source_page, 0, mock_remapper, pikepdf
+    )
 
     # 3. Assert
     assert new_dests == []
@@ -436,7 +449,9 @@ def test_rebuild_annots_page_with_empty_annots_list(
     mock_remapper.source_pdf.pages = [mock_source_page]
 
     # 2. Act
-    new_dests = _rebuild_annotations_for_page(real_page, 0, mock_remapper)
+    new_dests = _rebuild_annotations_for_page(
+        real_page, mock_source_page, 0, mock_remapper, pikepdf
+    )
 
     # 3. Assert
     assert new_dests == []
@@ -486,7 +501,9 @@ def test_rebuild_annots_pruning_logic(mock_process, mock_remapper, mock_real_pag
     ]
 
     # 2. Act
-    new_dests = _rebuild_annotations_for_page(real_page, 0, mock_remapper)
+    new_dests = _rebuild_annotations_for_page(
+        real_page, mock_source_page, 0, mock_remapper, pikepdf
+    )
 
     # 3. Assert
     assert new_dests == ["new_dest_1"]
