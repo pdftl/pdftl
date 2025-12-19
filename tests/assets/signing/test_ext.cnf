@@ -1,0 +1,12 @@
+[ req ]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[ req_distinguished_name ]
+CN = PDTFL Test Signer
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, nonRepudiation
+extendedKeyUsage = 1.2.840.113583.1.1.5
