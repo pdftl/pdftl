@@ -12,8 +12,9 @@ Contains dataclasses and structural schemas used by the registry.
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional
 from enum import Enum
+from typing import Any, Callable, List, Optional
+
 
 class FeatureType(str, Enum):
     """Category of the operation relative to pdftk."""
@@ -60,12 +61,13 @@ class LegacyDictAccess:
 
 class Parity(str, Enum):
     # Indication of feature completeness vs pdftk (e.g. "100%", "Partial").
-    FULL = "full"           # Identical behavior
-    SUPERSET = "superset"   # Identical behavior + extra arguments
-    PARTIAL = "partial"     # Implemented but missing edge cases/flags
-    UNCLEAR = "unclear"     # IDK
-    NONE = "none"           # Not applicable (pure extension)
-    
+    FULL = "full"  # Identical behavior
+    SUPERSET = "superset"  # Identical behavior + extra arguments
+    PARTIAL = "partial"  # Implemented but missing edge cases/flags
+    UNCLEAR = "unclear"  # IDK
+    NONE = "none"  # Not applicable (pure extension)
+
+
 @dataclass
 class Compatibility(LegacyDictAccess):
     """

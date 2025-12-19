@@ -43,6 +43,10 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
     [
         (("help", "--help"), "help"),
         (
+            ("sign", "signing", "signature", "signatures", "signing files", "signing PDF files"),
+            "signing"
+        ),
+        (
             ("filter", "(omitted)", "omitted", "filter_mode", "filter mode"),
             "filter_mode",
         ),

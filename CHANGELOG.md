@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- PDF signature output options:
+
+	- `sign_cert`
+
+	- `sign_field`
+
+	- `sign_key`
+
+	- `sign_pass`
+
+	- `sign_pass`
+
 ### Fixed
 
 - performance improvements for `cat`

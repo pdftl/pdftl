@@ -352,8 +352,9 @@ def print_help(command=None, dest=None, raw=False):
             *sorted(registry.operations),
             "filter_mode",
             "output_options",
-            "pipeline",
+            "signing",
             "page_specs",
+            "pipeline",
             "help",
         ]
         for i, topic in enumerate(all_topics):

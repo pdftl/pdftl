@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
-from pdftl.core.types import Compatibility, FeatureType, Status, Parity
+from pdftl.core.types import Compatibility, FeatureType, Parity, Status
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 

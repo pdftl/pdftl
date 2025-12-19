@@ -44,6 +44,7 @@ add-text = ["reportlab"]
 dump-text = ["pypdfium2"]
 optimize-images = ["ocrmypdf"]
 crop-visible = ["pypdfium2"]
+signing = ["pyhanko"]
 
 # All optional CLI dependencies
 extras = [
@@ -51,6 +52,7 @@ extras = [
     "pdftl[dump-text]",
     "pdftl[optimize-images]",
     "pdftl[crop-visible]",
+    "pdftl[signing]",
 ]
 
 # User-facing "Batteries Included" install

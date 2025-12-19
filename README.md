@@ -127,9 +127,9 @@ pdftl in.pdf replace '/0 0 0 (RG|rg)/1 0 0 \1/' output redder.pdf
 
 ```
 $ pdftl
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ pdftl - PDF tackle x.y.z                                                     ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ pdftl - PDF tackle a.b.c                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 A wannabe CLI compatible clone/extension of pdftk
 
 Usage
@@ -137,7 +137,7 @@ Usage
  pdftl <input>... <operation> [<option...>]
  pdftl <input>... <operation> --- <operation>... [<option...>]
  pdftl help [<operation> | <option>]
- pdftl help [help | filter | input | --- | pages | output | examples | all]
+ pdftl help [help | sign | filter | input | --- | pages | output | example | all]
  pdftl --version
 
 
@@ -199,11 +199,14 @@ Usage
   need_appearances         Set a form rendering flag in the output PDF
   output <file>            The output file path, or a template for burst
   owner_pw <pw>            Set owner password and encrypt output
-  uncompress               Disables compression of output file streams
+  sign_cert <file>         Path to certificate PEM
+  sign_field <name>        Signature field name (default: Signature1)
+  sign_key <file>          Path to private key PEM
+  sign_pass_env <var>      Environment variable with sign_cert passphrase
+  sign_pass_prompt         Prompt for sign_cert passphrase
+  uncompress               Disable compression of output file streams
   user_pw <pw>             Set user password and encrypt output
   verbose                  Turn on verbose output
-
-
 
 ```
 

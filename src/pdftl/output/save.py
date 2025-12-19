@@ -7,14 +7,16 @@
 """Methods for saving PDF files, with options registered for CLI."""
 
 import inspect
+import io
 import logging
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 from pdftl.core.constants import ALLOW_PERMISSIONS_MAP
 from pdftl.core.registry import register_option
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.exceptions import InvalidArgumentError, MissingArgumentError, PackageError
 from pdftl.output.attach import attach_files
+from pdftl.output.sign import parse_sign_options
 
 # ---------------------------------------------------------------------------
 # Register options for PDF output
@@ -103,7 +105,7 @@ def _allow_option():
 
 @register_option("compress", desc="Compress output file streams (default)", type="flag")
 @register_option(
-    "uncompress", desc="Disables compression of output file streams", type="flag"
+    "uncompress", desc="Disable compression of output file streams", type="flag"
 )
 def _compress_options():
     pass
@@ -311,5 +313,69 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     if set_pdf_id:
         pdf.trailer.ID = set_pdf_id
 
-    logger.debug("Final save options for pikepdf: %s", save_opts)
-    pdf.save(output_filename, **save_opts)
+    logger.debug("Save options for pikepdf: %s", save_opts)
+
+    is_signing = any(k.startswith("sign_") for k in options)
+    if is_signing:
+        sign_cfg = parse_sign_options(options, input_context)
+        _save_and_sign(pdf, sign_cfg, save_opts, output_filename)
+    else:
+        pdf.save(output_filename, **save_opts)
+
+
+def _save_and_sign(pdf, sign_cfg, save_opts, output_filename):
+    # --- Digital Signature Workflow ---
+
+    # Lazy-load pyHanko to keep pdftl lightweight for non-signing tasks
+    try:
+        from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+        from pyhanko.sign import signers
+    except ImportError:
+        raise PackageError("The 'pyhanko' library is required for digital signatures.")
+
+    # 1. Save pikepdf to in-memory buffer first
+    in_buffer = io.BytesIO()
+    pdf.save(in_buffer, **save_opts)
+    in_buffer.seek(0)
+
+    # 2. Setup pyHanko signer
+    key_and_cert = (sign_cfg["key"], sign_cfg["cert"])
+    key_passphrase = None
+    if sign_cfg["passphrase"]:
+        key_passphrase = sign_cfg["passphrase"].encode()
+
+    hanko_logger = logging.getLogger("pyhanko")
+    if hanko_logger:
+        hanko_logger.setLevel(logging.CRITICAL)
+
+    cms_signer = signers.SimpleSigner.load(*key_and_cert, key_passphrase=key_passphrase)
+    if key_passphrase and not cms_signer:  # try with no passphrase
+        logging.warning(
+            "Loading private key with given passphrase failed. Retrying without a passphrase."
+        )
+        cms_signer = signers.SimpleSigner.load(*key_and_cert)
+    if not cms_signer:
+        raise InvalidArgumentError(
+            "Could not load given private key. Check the passphrase."
+        )
+
+    # 3. Apply Signature into a second buffer
+    out_buffer = io.BytesIO()
+    w = IncrementalPdfFileWriter(in_buffer)
+    requested_field = sign_cfg["field"] or "Signature1"
+
+    signers.sign_pdf(
+        w,
+        signers.PdfSignatureMetadata(field_name=requested_field),
+        signer=cms_signer,
+        output=out_buffer,
+        existing_fields_only=False,
+    )
+    out_buffer.seek(0)
+
+    # 4. Final Write to Disk or Stdout
+    if output_filename == "-":
+        sys.stdout.buffer.write(out_buffer.read())
+    else:
+        with open(output_filename, "wb") as f:
+            f.write(out_buffer.read())

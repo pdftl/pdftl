@@ -25,6 +25,13 @@ from pdftl.output.save import (
     _user_pw_option,
     save_pdf,
 )
+from pdftl.output.sign import (
+    _sign_cert_option,
+    _sign_field_option,
+    _sign_key_option,
+    _sign_pass_env_option,
+    _sign_pass_prompt_option,
+)
 
 
 class TestSaveOptionsRegistration:
@@ -37,17 +44,22 @@ class TestSaveOptionsRegistration:
 
     def test_option_functions_execute_pass(self):
         # Simply calling the functions executes the single 'pass' statement inside each.
-        _output_option()
-        _owner_pw_option()
-        _user_pw_option()
-        _encrypt_options()
         _allow_option()
         _compress_options()
-        _linearize_option()
         _drop_options()
+        _encrypt_options()
         _flatten_option()
         _keep_id_options()
+        _linearize_option()
         _need_appearances_option()
+        _output_option()
+        _owner_pw_option()
+        _sign_cert_option()
+        _sign_field_option()
+        _sign_key_option()
+        _sign_pass_env_option()
+        _sign_pass_prompt_option()
+        _user_pw_option()
 
         # Test passes if no exceptions are raised during execution.
         assert True
