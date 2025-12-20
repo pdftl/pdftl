@@ -159,8 +159,10 @@ class TestTextDrawerClass(TextDrawerTestMixin):
         assert font_name == "Times-Bold"
         mock_getFont.assert_not_called()
 
+        from reportlab.pdfbase.pdfmetrics import FontNotFoundError
+
         # 3. Test bad font: 'Fake-Font-Name'
-        mock_getFont.side_effect = Exception("Font not found")
+        mock_getFont.side_effect = FontNotFoundError("Font not found")
         with caplog.at_level("WARNING"):
             font_name = drawer.get_font_name("Fake-Font-Name")
             assert font_name == self.DEFAULT_FONT_NAME
@@ -186,7 +188,7 @@ class TestTextDrawerClass(TextDrawerTestMixin):
         drawer = self.TextDrawer(mock_page_box)
 
         # Rule 1: Bad. The text lambda will fail.
-        bad_rule = {"text": MagicMock(side_effect=Exception("I am a bad rule!"))}
+        bad_rule = {"text": MagicMock(side_effect=TypeError("I am a bad rule!"))}
         context = {"page": 1}
 
         with caplog.at_level("WARNING"):
@@ -310,7 +312,7 @@ from unittest.mock import MagicMock
 sys.modules["reportlab"] = None
 sys.modules["reportlab.pdfgen"] = None
 sys.modules["reportlab.pdfgen.canvas"] = None
-
+from pdftl.exceptions import UserCommandLineError
 try:
     # 2. Import the module under test
     from pdftl.commands.helpers.text_drawer import TextDrawer, _PageBox
@@ -319,7 +321,7 @@ try:
     page_box = _PageBox(width=100, height=100)
     TextDrawer(page_box)
 
-except Exception as e:
+except UserCommandLineError as e:
     # 4. Print the error so the parent process can read it
     print(f"CAUGHT: {e}")
     sys.exit(0) # Exit cleanly if we caught the expected error

@@ -195,11 +195,13 @@ try:
                 self.font_cache[font_name] = _FONT_NAME_MAP[lower_name]
                 return self.font_cache[font_name]
 
+            from reportlab.pdfbase.pdfmetrics import FontError, FontNotFoundError
+
             try:
-                getFont(font_name)  # Check if it's registered
+                getFont(font_name)
                 self.font_cache[font_name] = font_name
                 return font_name
-            except Exception:
+            except (FontError, FontNotFoundError, KeyError, AttributeError):
                 logger.warning(
                     "Could not find or register font '%s'. Falling back to %s.",
                     font_name,
@@ -300,8 +302,10 @@ try:
 
                 self.canvas.restoreState()
 
-            except Exception as e:
-                logger.warning("Skipping one text rule due to error: %s", e, exc_info=e)
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                # These are likely due to bad user input in the 'rule' dict
+                logger.warning("Skipping one text rule due to invalid data: %s", e)
+                logger.debug("Detailed traceback for text rule failure:", exc_info=True)
 
         def save(self) -> bytes:
             """

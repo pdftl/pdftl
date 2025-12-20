@@ -249,7 +249,7 @@ def _parse_options_string(options_part: str):
     # 1. Split by commas, but respect commas inside quotes.
     try:
         parts = COMMA_SPLIT_REGEX.split(content)
-    except Exception as exc:
+    except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError(f"Could not parse options: {content}") from exc
 
     for part in parts:

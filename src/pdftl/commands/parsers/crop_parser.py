@@ -38,10 +38,10 @@ def specs_to_page_rules(specs, total_pages):
         # of percentages here, only the structural validity.
         try:
             parse_crop_content(content_str, 1000, 1000)
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError) as e:
             raise ValueError(
                 f"Error parsing crop content '{content_str}' in spec '{spec}': {e}"
-            )
+            ) from e
         # -----------------------
 
         page_numbers = page_numbers_matching_page_spec(page_range_str, total_pages)
