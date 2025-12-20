@@ -41,14 +41,14 @@ These options can be passed as arguments following `optimize_images`.
 * **low** (aliases: `lossless`, `safe`):
     * Apply lossless optimizations only.
 
-* **medium** (aliases: `lossy_medium`, `lossy`):
+* **medium** (default; aliases: `lossy_medium`, `lossy`):
     * Also allow some lossy optimizations.
 
 * **high** (aliases: `aggressive`, `high`, `lossy_high`):
     * Also allow more aggressive lossy optimizations.
 
 * **jbig2_lossy**:
-    * JBIG2 lossy mode (see ocrmypdf documentation).
+    * Enable JBIG2 lossy mode (see ocrmypdf documentation).
     * This is independent of the preceding options.
 
 * **all** (aliases: `full`):

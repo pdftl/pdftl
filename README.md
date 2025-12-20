@@ -16,9 +16,32 @@ Leveraging the power of [`pikepdf`](https://github.com/pikepdf/pikepdf) ([qpdf](
 * **Familiar syntax:** Command-line compatible with `pdftk`. So `sed s/pdftk/pdftl/g` should result in working scripts. _(work in progress but mostly done)_
 * **Pipelining:** Chain multiple operations in a single command using `---`.
 * **Probably performant:** `pdftl` seems faster than `pdftk` for many operations _(untested hunch; data needed)_. Reason: `pdftl` mostly drives `pikepdf` which drives `qpdf`, a fast C++ library.
-* **Extra/enhanced operations and features** compared to `pdftk`, such as zooming pages using `cat`, cropping/chopping up pages, text extraction, optimizing images.
+* **Extra/enhanced operations and features** such as zooming pages, smart merging preserving links and outlines, cropping/chopping up pages, text extraction, optimizing images.
 * **Modern security:** Supports AES-256 encryption and modern permission flags out of the box.
 * **Content editing:** Find & replace text via regular expressions, inject raw PDF operators, or overlay dynamic text.
+
+`pdftl` maintains command-line compatibility with `pdftk` while introducing features required for modern PDF workflows.
+
+| Feature | `pdftk` (Legacy) | `pdftl` (Modern) |
+| :--- | :--- | :--- |
+| **Pipelining** | ❌ (Requires temp files) | ✅ **Native** (Chain ops with `---`) |
+| **Encryption** | ⚠️ (Obsolete RC4) | ✅ **AES-256 Support** |
+| **Syntax** | Standard | ✅ **Compatible Extension** |
+| **Page Geometry** | ❌ | ✅ **Crop to fit, Zoom, & Chop** |
+| **Pipelined Logic** | ❌ | ✅ **Rotate + Stamp in one command** |
+| **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
+| **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
+| **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
+
+### Comparison Examples
+
+#### 1. The Power of Pipelining (`---`)
+In `pdftk`, performing a rotation and then a watermark requires two commands and a temporary file. In `pdftl`, it is a single continuous operation:
+
+**Standard pdftk:**
+```bash
+pdftk in.pdf rotate 1-endsouth output temp.pdf
+pdftk temp.pdf stamp mark.pdf output final.pdf
 
 ## Installation
 
