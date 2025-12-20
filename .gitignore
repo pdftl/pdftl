@@ -68,3 +68,4 @@ tests/assets/Form.pdf
 .complexipy_cache/
 complexipy*.json
 *.lprof
+.github/assets/pdftl.png
