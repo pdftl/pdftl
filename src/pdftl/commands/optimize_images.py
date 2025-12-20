@@ -13,7 +13,6 @@
 """Optimize images in a PDF using ocrmypdf"""
 
 import logging
-from pathlib import Path
 
 from pdftl.core.registry import register_operation
 from pdftl.core.types import Compatibility, FeatureType, Status
@@ -219,6 +218,8 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str):
         png_quality=png_quality,
         jb2lossy=jbig2_lossy,
     )
+    from pathlib import Path
+
     root = Path(output_filename).parent / "images"
     root.mkdir(exist_ok=True)
     executor = DEFAULT_EXECUTOR

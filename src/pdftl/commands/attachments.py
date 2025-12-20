@@ -10,7 +10,6 @@ See also: pdftl.output.attach for adding attachments to output.
 """
 
 import logging
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +120,8 @@ def unpack_files(input_filename, pdf, get_input, output_dir=None, operation=None
 
 def _get_output_path(output_dir_str, operation, get_input):
     """Determines and validates the output directory path."""
+    from pathlib import Path
+
     path_str = output_dir_str if output_dir_str is not None else "./"
 
     if operation == "unpack_files":

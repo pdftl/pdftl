@@ -15,7 +15,6 @@ import logging
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -162,6 +161,8 @@ _ADD_TEXT_EXAMPLES = [
 
 def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
     """Builds the context dict for variables that are the same for all pages."""
+    from pathlib import Path
+
     try:
         # .docinfo is a property that lazy-loads the info dict
         metadata = {str(k).lstrip("/"): str(v) for k, v in pdf.docinfo.items()}

@@ -5,52 +5,56 @@ import pytest
 
 
 class TestCLILazyImports:
-
     def _run_isolated_cli_check(self, args, forbidden_modules):
-        """
-        Runs the CLI in a subprocess and checks sys.modules *inside* that process.
-        """
-        # We construct a mini-script that runs your CLI and then inspects memory.
-        # This script runs INSIDE the subprocess.
         scanner_script = f"""
 import sys
-import pytest # Mocking argv usually requires ensuring sys is clean, simpler to set it here
-sys.argv = {args}
+import importlib
 
-# Wrap execution to catch the expected SystemExit from CLI tools
+culprits = set()
+forbidden = {forbidden_modules}
+
+# The Magic: A hook that runs every time a module is loaded
+class TraceImports:
+    def __init__(self):
+        self.loading_stack = []
+
+    def __call__(self, name, globals=None, locals=None, fromlist=None, level=0):
+        # We check if this import is one of our forbidden fruits
+        if any(name == f or name.startswith(f + ".") for f in forbidden):
+            # Look at the stack to find the last 'pdftl.commands' module
+            import inspect
+            for frame in inspect.stack():
+                module = inspect.getmodule(frame[0])
+                if module and module.__name__.startswith("pdftl.commands"):
+                    culprits.add(module.__name__)
+                    break
+        return original_import(name, globals, locals, fromlist, level)
+
+original_import = __builtins__.__import__
+__builtins__.__import__ = TraceImports()
+
+# Run the CLI
+sys.argv = {args}
 try:
     from pdftl.cli.main import main
     main()
 except SystemExit:
     pass
-except Exception as e:
-    print(f"CRASH: {{e}}")
-    sys.exit(1)
 
-# --- INSPECTION TIME ---
-import sys
-loaded_modules = set(sys.modules.keys())
-forbidden = {forbidden_modules}
-
-# Check if any forbidden module is in the loaded list
-violations = [m for m in forbidden if any(m == k or k.startswith(m + ".") for k in loaded_modules)]
-
-if violations:
-    print(f"VIOLATION: Found forbidden modules loaded: {{violations}}")
+if culprits:
+    print("--- SURGICAL EDIT LIST ---")
+    for c in sorted(culprits):
+        print(f"culprit: {{c}}")
     sys.exit(1)
 
 print("SUCCESS")
 """
-
-        # Run the script in a fresh python process
         result = subprocess.run(
             [sys.executable, "-c", scanner_script], capture_output=True, text=True
         )
 
-        # 1. Did the script crash or find violations?
         if result.returncode != 0:
-            # Print stdout/stderr so you can debug "Why" it failed
-            pytest.fail(f"Lazy import check failed:\n{result.stdout}\n{result.stderr}")
+            pytest.fail(f"Lazy import check failed!\\n\\n{result.stdout}")
 
     def test_cli_help_imports_rich_only(self):
         """
@@ -58,7 +62,7 @@ print("SUCCESS")
         """
         self._run_isolated_cli_check(
             args=["pdftl", "--help"],
-            forbidden_modules=["pikepdf", "ocrmypdf", "pypdfium2"],
+            forbidden_modules=["pikepdf", "ocrmypdf", "pypdfium2", "pathlib"],
         )
 
     def test_cli_processing_imports_pikepdf_only(self, tmp_path, two_page_pdf):

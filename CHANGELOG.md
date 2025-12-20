@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [Unreleased]
+## [0.3.0] - 2025-12-20
 
 ### Added
 
@@ -15,15 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - PDF signature output options:
 
-	- `sign_cert`
+    - `sign_cert <file>` Path to certificate PEM
 
-	- `sign_field`
+	- `sign_field <name>` Signature field name (default: Signature1)
 
-	- `sign_key`
+    - `sign_key <file>` Path to private key PEM
 
-	- `sign_pass`
+    - `sign_pass_env <var>` Environment variable with sign_cert passphrase
 
-	- `sign_pass`
+    - `sign_pass_prompt` Prompt for sign_cert passphrase
+
+- `dump_layers`: dump PDF optional content groups (OCGs), a.k.a. "layers"
 
 ### Fixed
 
