@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import Array, Dictionary, Name, NameTree, Stream, String
+    pass
 
 from pdftl.core.registry import register_operation
 from pdftl.output.dump import dump
@@ -55,8 +55,7 @@ def _compound_obj_to_json(obj, page_object_to_num_map, visited):
 
     if isinstance(obj, Dictionary):
         return {
-            str(k): _pdf_obj_to_json(v, page_object_to_num_map, visited)
-            for k, v in obj.items()
+            str(k): _pdf_obj_to_json(v, page_object_to_num_map, visited) for k, v in obj.items()
         }
     if isinstance(obj, Array):
         return [_pdf_obj_to_json(item, page_object_to_num_map, visited) for item in obj]

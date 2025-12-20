@@ -151,9 +151,7 @@ def _get_qualified_page_numbers(start, end, qualifier):
 
 def _parse_chop_spec_prep(spec_str: str):
     if not spec_str.startswith(("cols", "rows")):
-        raise ValueError(
-            f"Chop spec must start with 'cols' or 'rows', not '{spec_str[0]}'"
-        )
+        raise ValueError(f"Chop spec must start with 'cols' or 'rows', not '{spec_str[0]}'")
 
     direction = spec_str[:4]
 
@@ -197,9 +195,7 @@ def _parse_integer_spec(content, total_dim):
         if pieces <= 0:
             raise ValueError("Number of pieces must be positive.")
         if pieces > MAX_PIECES:
-            raise ValueError(
-                f"Number of pieces is larger than MAX_PIECES={MAX_PIECES}."
-            )
+            raise ValueError(f"Number of pieces is larger than MAX_PIECES={MAX_PIECES}.")
         piece_size = total_dim / pieces
         final_sizes = [piece_size] * pieces
         delete_flags = [False] * pieces

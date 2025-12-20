@@ -11,9 +11,10 @@ Contains dataclasses and structural schemas used by the registry.
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, List, Optional
+from typing import Any
 
 
 class FeatureType(str, Enum):
@@ -81,7 +82,7 @@ class Compatibility(LegacyDictAccess):
     parity: Parity = Parity.UNCLEAR
 
     # Specific enhancements over the original pdftk command.
-    enhancements: List[str] = field(default_factory=list)
+    enhancements: list[str] = field(default_factory=list)
 
     # Technical context, known issues, or parity gaps.
     notes: str = ""
@@ -90,9 +91,9 @@ class Compatibility(LegacyDictAccess):
     # - "cat": Explicit mapping to a named operation
     # - "": Maps to the empty/filter operation
     # - None: No pdftk equivalent (pure extension)
-    pdftk_op: Optional[str] = None
+    pdftk_op: str | None = None
 
-    todo: List[str] = field(default_factory=list)  # Future plans
+    todo: list[str] = field(default_factory=list)  # Future plans
 
 
 @dataclass
@@ -112,7 +113,7 @@ class HelpTopic(LegacyDictAccess):
     title: str
     desc: str  # Short description
     long_desc: str  # Full documentation (usually from docstring)
-    examples: List[HelpExample] = field(default_factory=list)
+    examples: list[HelpExample] = field(default_factory=list)
 
 
 @dataclass
@@ -127,10 +128,10 @@ class Operation(LegacyDictAccess):
     desc: str = ""  # Short description for list
     usage: str = ""  # Usage syntax string
     long_desc: str = ""  # Detailed help text
-    tags: List[str] = field(default_factory=list)
-    examples: List[HelpExample] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    examples: list[HelpExample] = field(default_factory=list)
     args: Any = None  # Complex argument spec (tuple structure)
-    compatibility: Optional[Compatibility] = None
+    compatibility: Compatibility | None = None
 
 
 @dataclass
@@ -144,4 +145,4 @@ class Option(LegacyDictAccess):
     desc: str = ""
     long_desc: str = ""
     type: Any = None  # usage hint (str) or python type (type)
-    compatibility: Optional[Compatibility] = None
+    compatibility: Compatibility | None = None

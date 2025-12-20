@@ -10,7 +10,6 @@ import importlib.metadata
 import itertools
 import logging
 import sys
-import textwrap
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -32,12 +31,8 @@ TAG_PREFIX = "tag:"
 def get_synopsis():
     """Returns the main synopsis text for the application."""
     # Note: Using Markdown syntax here provides better output when rendered by rich
-    special_help_topics = " | ".join(
-        [f"{x[0]}" for x in SPECIAL_HELP_TOPICS_MAP.keys()]
-    )
-    ret = SYNOPSIS_TEMPLATE.strip().format(
-        whoami=WHOAMI, special_help_topics=special_help_topics
-    )
+    special_help_topics = " | ".join([f"{x[0]}" for x in SPECIAL_HELP_TOPICS_MAP.keys()])
+    ret = SYNOPSIS_TEMPLATE.strip().format(whoami=WHOAMI, special_help_topics=special_help_topics)
     return ret
 
 
@@ -86,11 +81,7 @@ def print_version(dest=None):
         whoami=WHOAMI,
         package=PACKAGE,
         project_version=get_project_version(),
-        years=(
-            str(start_year)
-            if current_year <= start_year
-            else f"{start_year}-{current_year}"
-        ),
+        years=(str(start_year) if current_year <= start_year else f"{start_year}-{current_year}"),
         homepage=HOMEPAGE,
         dependencies=dependencies,
     )
@@ -120,7 +111,11 @@ def _format_examples_block(examples, show_topics=False):
             topic = ex["topic"]
 
             # Use Markdown heading or strong text for topics
-            heading_text = f"Example{f' {per_example_topic_count}' if per_example_topic_count > 1 else ''} for '`{topic}`'"
+            heading_text = (
+                "Example"
+                + (f" {per_example_topic_count}" if per_example_topic_count > 1 else "")
+                + f" for '`{topic}`'"
+            )
             output += f"### {heading_text}\n"
 
         assert "desc" in ex and "cmd" in ex
@@ -139,9 +134,7 @@ def _usage_as_markdown(x: str) -> str:
 def _print_topic_help(hprint, topic_data, topic_name):
     """Prints the detailed help for a specific command or topic."""
     safe_topic_name = (
-        topic_name
-        if any(topic_name in x for x in SPECIAL_HELP_TOPICS_MAP)
-        else f"`{topic_name}`"
+        topic_name if any(topic_name in x for x in SPECIAL_HELP_TOPICS_MAP) else f"`{topic_name}`"
     )
 
     hprint(f"# {WHOAMI}: help for {safe_topic_name}")
@@ -182,12 +175,6 @@ def print_main_help(hprint):
 
     hprint("## Usage")
     hprint("\n```\n" + get_synopsis().strip() + "\n```")
-
-    # hprint("## Operations\n\n\n")
-    all_ops_and_opts = list(registry.operations) + list(registry.options)
-
-    # # Define a fixed column width based on the longest command name
-    # col_width = max(len(x) for x in all_ops_and_opts) + 4
 
     _print_desc_table(hprint, "Operations", registry.operations)
     _print_desc_table(hprint, "Options", registry.options)
@@ -243,21 +230,13 @@ def _print_help_dispatch_table():
     """Return a dispatch table for print_help"""
     dispatch_table = {
         before_space(op): (
-            lambda hprint, op_info=info, op_name=op: _print_topic_help(
-                hprint, op_info, op_name
-            )
+            lambda hprint, op_info=info, op_name=op: _print_topic_help(hprint, op_info, op_name)
         )
-        for op, info in itertools.chain(
-            registry.operations.items(), registry.options.items()
-        )
+        for op, info in itertools.chain(registry.operations.items(), registry.options.items())
     }
     dispatch_table.update(
         {
-            topic: (
-                lambda hprint, t_data=data: _print_topic_help(
-                    hprint, t_data, t_data["title"]
-                )
-            )
+            topic: (lambda hprint, t_data=data: _print_topic_help(hprint, t_data, t_data["title"]))
             for topic, data in itertools.chain(
                 registry.help_topics.items(),
             )
@@ -276,9 +255,7 @@ def _load_help_markdown():
     from rich.text import Text
 
     class LeftJustifiedHeading(Heading):
-        def __rich_console__(
-            self, console: Console, options: ConsoleOptions
-        ) -> RenderResult:
+        def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
             text = self.text
             text.justify = "left"
             if self.tag == "h1":
@@ -314,9 +291,7 @@ def _load_hprint(dest, raw):
     HelpMarkdown = _load_help_markdown()
 
     def hprint(x):
-        use_rich_console = not raw and (
-            dest is None or dest is sys.stdout or dest is sys.stderr
-        )
+        use_rich_console = not raw and (dest is None or dest is sys.stdout or dest is sys.stderr)
         if use_rich_console:
             get_console().print(HelpMarkdown(x))
         elif not raw:
@@ -361,9 +336,7 @@ def print_help(command=None, dest=None, raw=False):
             registry.help_topics.items(),
         )
         tagged_topics = [
-            before_space(k)
-            for k, t in taggable_topics
-            if hasattr(t, "tags") and tag in t.tags
+            before_space(k) for k, t in taggable_topics if hasattr(t, "tags") and tag in t.tags
         ]
         _print_multiple_topics(tagged_topics, hprint, dest, raw)
 
@@ -384,9 +357,7 @@ def print_help(command=None, dest=None, raw=False):
         ]
         _print_multiple_topics(all_topics, hprint, dest, raw)
     else:
-        logger.warning(
-            "Unknown help topic '%s' requested, showing default help\n", command
-        )
+        logger.warning("Unknown help topic '%s' requested, showing default help\n", command)
         print_main_help(hprint)
 
 
@@ -409,9 +380,7 @@ def find_special_topic_command(topic):
 
 def find_operator_topic_command(help_topics):
     """Searches for a command that matches a known operator."""
-    return next(
-        (topic for topic in help_topics if topic.lower() in registry.operations), None
-    )
+    return next((topic for topic in help_topics if topic.lower() in registry.operations), None)
 
 
 def find_option_topic_command(help_topics):
@@ -433,9 +402,7 @@ def find_option_topic_command(help_topics):
             ),
             cmd="help all",
         ),
-        HelpExample(
-            desc=("Get help topics tagged with `encryption`"), cmd="help tag:encryption"
-        ),
+        HelpExample(desc=("Get help topics tagged with `encryption`"), cmd="help tag:encryption"),
     ],
 )
 def _help_help_topic():

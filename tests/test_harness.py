@@ -6,8 +6,8 @@
 
 import shlex
 import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List
 
 import pytest
 
@@ -30,7 +30,7 @@ def run_test_case(
     *,
     input_pdf_generator: Callable[[], Path] | None,
     args_template: str,
-    comparison_fns: List[Callable[[Path, Path], None]] = [],
+    comparison_fns: list[Callable[[Path, Path], None]] = [],
     validation_fn: Callable[[Path], None] = None,
     commands: [str] = ["pdftl", "pdftk"],
     expected_stderrs: [str] = None,  # not implemented
@@ -54,13 +54,10 @@ def run_test_case(
         output = temp_dir / f"output_{command}.pdf"
 
         args = [
-            str(arg)
-            for arg in shlex.split(args_template.format(input=input_pdf, output=output))
+            str(arg) for arg in shlex.split(args_template.format(input=input_pdf, output=output))
         ]
         with open(temp_dir / f"params_{command}.txt", "w") as cmd_file:
-            cmd_file.write(
-                f"command: {command}\nargs: {' '.join(args)}\n[args]: {args}"
-            )
+            cmd_file.write(f"command: {command}\nargs: {' '.join(args)}\n[args]: {args}")
 
         result = runner.run(command, args, check=False)
         results[command] = result

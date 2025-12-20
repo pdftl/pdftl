@@ -11,7 +11,6 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 from pdftl.cli.whoami import WHOAMI
@@ -35,9 +34,9 @@ class CliStage:
     A structured representation of a single stage in a processing pipeline.
     """
 
-    operation: Optional[str] = None
+    operation: str | None = None
     inputs: list[str] = field(default_factory=list)
-    input_passwords: list[Optional[str]] = field(default_factory=list)
+    input_passwords: list[str | None] = field(default_factory=list)
     handles: dict[str, int] = field(default_factory=dict)
     operation_args: list[str] = field(default_factory=list)
     options: dict[str, any] = field(default_factory=dict)
@@ -141,9 +140,7 @@ class PipelineManager:
         # we must consume the generator now, before closing opened pdfs
         for filename, pdf in result:
             logger.debug("Saving a generator PDF to '%s'", filename)
-            save_pdf(
-                pdf, filename, self.input_context.get_input, **self._save_kw_options()
-            )
+            save_pdf(pdf, filename, self.input_context.get_input, **self._save_kw_options())
             pdf.close()
         # generator finished, so close all opened pdfs
         for pdf in opened_pdfs:
@@ -241,9 +238,7 @@ class PipelineManager:
         if is_first:
             logger.debug("Reading PDF from stdin for first stage")
             if sys.stdin.isatty():
-                raise UserCommandLineError(
-                    "Expected PDF data from stdin, but none was provided."
-                )
+                raise UserCommandLineError("Expected PDF data from stdin, but none was provided.")
             data = sys.stdin.buffer.read()
             import pikepdf
 

@@ -43,20 +43,14 @@ def extract_main_fdf_dict(data):
 
 def add_fdf_to_catalog(pdf_bytes, fdf_obj_num):
     """Update Catalog to reference the new FDF object"""
-    catalog_match = re.search(
-        rb"(\d+) 0 obj\s*<<.*?/Type\s*/Catalog.*?>>", pdf_bytes, re.DOTALL
-    )
+    catalog_match = re.search(rb"(\d+) 0 obj\s*<<.*?/Type\s*/Catalog.*?>>", pdf_bytes, re.DOTALL)
     if not catalog_match:
         raise ValueError("Could not find catalog object in PDF")
     catalog_bytes = catalog_match.group(0)
     if b"/FDF" not in catalog_bytes:
-        catalog_bytes = re.sub(
-            b" *>>$", b" /FDF %d 0 R >>" % fdf_obj_num, catalog_bytes
-        )
+        catalog_bytes = re.sub(b" *>>$", b" /FDF %d 0 R >>" % fdf_obj_num, catalog_bytes)
         pdf_bytes = (
-            pdf_bytes[: catalog_match.start()]
-            + catalog_bytes
-            + pdf_bytes[catalog_match.end() :]
+            pdf_bytes[: catalog_match.start()] + catalog_bytes + pdf_bytes[catalog_match.end() :]
         )
     return pdf_bytes
 

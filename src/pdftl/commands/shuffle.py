@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf
+    pass
 
 from pdftl.core.registry import register_operation
 from pdftl.core.types import Compatibility, FeatureType, Parity, Status
@@ -30,9 +30,7 @@ def _get_page_tuples_array(inputs, specs, opened_pdfs, aliases=None):
             for input_idx, input in enumerate(inputs)
         ]
 
-    return [
-        expand_specs_to_pages([spec], aliases, inputs, opened_pdfs) for spec in specs
-    ]
+    return [expand_specs_to_pages([spec], aliases, inputs, opened_pdfs) for spec in specs]
 
 
 _SHUFFLE_LONG_DESC = """

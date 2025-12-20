@@ -40,9 +40,7 @@ def test_unpack_prompt(pdf_with_attachment, tmp_path):
     """Test 'PROMPT' for output directory (Line 122)."""
     with pikepdf.open(pdf_with_attachment) as pdf:
         mock_input = lambda msg, **kwargs: str(tmp_path)
-        unpack_files(
-            "fname", pdf, mock_input, output_dir="PROMPT", operation="unpack_files"
-        )
+        unpack_files("fname", pdf, mock_input, output_dir="PROMPT", operation="unpack_files")
 
     assert (tmp_path / "test.txt").exists()
 
@@ -54,9 +52,7 @@ def test_unpack_invalid_dir(pdf_with_attachment, tmp_path):
 
     with pikepdf.open(pdf_with_attachment) as pdf:
         # Should catch ValueError and log error, returning None
-        unpack_files(
-            "fname", pdf, None, output_dir=str(file_path), operation="unpack_files"
-        )
+        unpack_files("fname", pdf, None, output_dir=str(file_path), operation="unpack_files")
 
 
 def test_no_attachments_unpack(pdf_no_attachment, caplog):
@@ -85,8 +81,6 @@ def test_write_error(pdf_with_attachment, tmp_path, caplog):
         # Simple patch: make open() raise OSError immediately
         with patch("builtins.open") as mock_file:
             mock_file.side_effect = OSError("Disk full")
-            unpack_files(
-                "fname", pdf, None, output_dir=str(tmp_path), operation="unpack_files"
-            )
+            unpack_files("fname", pdf, None, output_dir=str(tmp_path), operation="unpack_files")
 
     assert "Could not write file" in caplog.text

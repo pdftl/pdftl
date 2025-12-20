@@ -83,9 +83,7 @@ def _handle_line(line, pdf_data, state, string_decoder):
         _handle_begin_tag(key[:-5], pdf_data, state, string_decoder)
         return
 
-    logger.warning(
-        "Parsing error for 'update_data': line '%s' does not end in 'Begin'", key
-    )
+    logger.warning("Parsing error for 'update_data': line '%s' does not end in 'Begin'", key)
 
 
 def _handle_begin_tag(key, pdf_data, state, _string_decoder):
@@ -118,9 +116,7 @@ def _handle_key_value(key, value, pdf_data, state, string_decoder):
                 current_type,
             )
             return
-        _parse_field(
-            key, value, state["current_value"], current_type, lookups[current_type]
-        )
+        _parse_field(key, value, state["current_value"], current_type, lookups[current_type])
     elif key in ("InfoKey", "InfoValue"):
         _parse_info_field(key, value, pdf_data["Info"], state, string_decoder)
     else:

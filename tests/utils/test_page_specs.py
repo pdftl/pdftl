@@ -342,18 +342,10 @@ def test_handle_no_specs(mock_pdfs_fixture):
 
     # Should contain all 10 pages from A, then all 5 from B
     assert len(result) == 15
-    assert result[0] == PageTransform(
-        pdf=pdf_A, index=0, rotation=(0, False), scale=1.0
-    )
-    assert result[9] == PageTransform(
-        pdf=pdf_A, index=9, rotation=(0, False), scale=1.0
-    )
-    assert result[10] == PageTransform(
-        pdf=pdf_B, index=0, rotation=(0, False), scale=1.0
-    )
-    assert result[14] == PageTransform(
-        pdf=pdf_B, index=4, rotation=(0, False), scale=1.0
-    )
+    assert result[0] == PageTransform(pdf=pdf_A, index=0, rotation=(0, False), scale=1.0)
+    assert result[9] == PageTransform(pdf=pdf_A, index=9, rotation=(0, False), scale=1.0)
+    assert result[10] == PageTransform(pdf=pdf_B, index=0, rotation=(0, False), scale=1.0)
+    assert result[14] == PageTransform(pdf=pdf_B, index=4, rotation=(0, False), scale=1.0)
 
 
 def test_resolve_alias_and_spec(mock_pdfs_fixture):
@@ -401,9 +393,7 @@ def test_create_page_tuples_from_numbers_out_of_range(mock_pdfs_fixture):
     """Tests that _create_page_tuples_from_numbers raises on invalid page num."""
     pdf = mock_pdfs_fixture["pdf_B"]  # 5 pages
 
-    with pytest.raises(
-        UserCommandLineError, match="includes page 6 but there are only 5"
-    ):
+    with pytest.raises(UserCommandLineError, match="includes page 6 but there are only 5"):
         _create_page_tuples_from_numbers(
             page_numbers=[1, 6],  # 6 is out of range
             pdf=pdf,
@@ -418,9 +408,7 @@ def test_create_page_tuples_from_numbers_catches_r0(mock_pdfs_fixture):
     """Tests that the error from 'r0' (page 11) is caught here."""
     pdf = mock_pdfs_fixture["pdf_A"]  # 10 pages
 
-    with pytest.raises(
-        UserCommandLineError, match="includes page 11 but there are only 10"
-    ):
+    with pytest.raises(UserCommandLineError, match="includes page 11 but there are only 10"):
         # This simulates the pipeline: 'r0' -> 11
         _create_page_tuples_from_numbers(
             page_numbers=[11],
@@ -473,40 +461,20 @@ def test_expand_specs_to_pages_with_specs(mock_pdfs_fixture):
     )
 
     # Check "A1-2"
-    assert result[0] == PageTransform(
-        pdf=pdf_A, index=0, rotation=(0, False), scale=1.0
-    )
-    assert result[1] == PageTransform(
-        pdf=pdf_A, index=1, rotation=(0, False), scale=1.0
-    )
+    assert result[0] == PageTransform(pdf=pdf_A, index=0, rotation=(0, False), scale=1.0)
+    assert result[1] == PageTransform(pdf=pdf_A, index=1, rotation=(0, False), scale=1.0)
     # Check "B1"
-    assert result[2] == PageTransform(
-        pdf=pdf_B, index=0, rotation=(0, False), scale=1.0
-    )
+    assert result[2] == PageTransform(pdf=pdf_B, index=0, rotation=(0, False), scale=1.0)
     # Check "A5-4" (reverse)
-    assert result[3] == PageTransform(
-        pdf=pdf_A, index=4, rotation=(0, False), scale=1.0
-    )
-    assert result[4] == PageTransform(
-        pdf=pdf_A, index=3, rotation=(0, False), scale=1.0
-    )
+    assert result[3] == PageTransform(pdf=pdf_A, index=4, rotation=(0, False), scale=1.0)
+    assert result[4] == PageTransform(pdf=pdf_A, index=3, rotation=(0, False), scale=1.0)
     # Check "Aevenx2.0" (A has 10 pages)
     # Evens: 2, 4, 6, 8, 10
-    assert result[5] == PageTransform(
-        pdf=pdf_A, index=1, rotation=(0, False), scale=2.0
-    )
-    assert result[6] == PageTransform(
-        pdf=pdf_A, index=3, rotation=(0, False), scale=2.0
-    )
-    assert result[7] == PageTransform(
-        pdf=pdf_A, index=5, rotation=(0, False), scale=2.0
-    )
-    assert result[8] == PageTransform(
-        pdf=pdf_A, index=7, rotation=(0, False), scale=2.0
-    )
-    assert result[9] == PageTransform(
-        pdf=pdf_A, index=9, rotation=(0, False), scale=2.0
-    )
+    assert result[5] == PageTransform(pdf=pdf_A, index=1, rotation=(0, False), scale=2.0)
+    assert result[6] == PageTransform(pdf=pdf_A, index=3, rotation=(0, False), scale=2.0)
+    assert result[7] == PageTransform(pdf=pdf_A, index=5, rotation=(0, False), scale=2.0)
+    assert result[8] == PageTransform(pdf=pdf_A, index=7, rotation=(0, False), scale=2.0)
+    assert result[9] == PageTransform(pdf=pdf_A, index=9, rotation=(0, False), scale=2.0)
     # Check total length
     assert len(result) == 10
 
@@ -529,9 +497,5 @@ def test_new_tuples_from_spec_str(mock_pdfs_fixture):
     # Rotation 'east' -> (90, False)
 
     assert len(result) == 2
-    assert result[0] == PageTransform(
-        pdf=pdf_A, index=0, rotation=(90, False), scale=1.0
-    )
-    assert result[1] == PageTransform(
-        pdf=pdf_A, index=2, rotation=(90, False), scale=1.0
-    )
+    assert result[0] == PageTransform(pdf=pdf_A, index=0, rotation=(90, False), scale=1.0)
+    assert result[1] == PageTransform(pdf=pdf_A, index=2, rotation=(90, False), scale=1.0)

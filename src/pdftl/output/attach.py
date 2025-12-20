@@ -170,9 +170,7 @@ def _process_next_attach_arguments_for_intent(
         next_arg = attach_args[i + 1]
         logger.debug("keyword=%s, next_arg=%s", keyword, next_arg)
         if keyword == "relation":
-            _set_relationship_in_parsed_attachments(
-                next_arg.capitalize(), parsed_attachments[:i]
-            )
+            _set_relationship_in_parsed_attachments(next_arg.capitalize(), parsed_attachments[:i])
         elif keyword == "to_page":
             # pdftk seems to only accept one to_page argument
             # but we accept: attach_files file1 to_page end file2 file3 to_page 5
@@ -210,9 +208,7 @@ def _resolve_attachments(
     for parsed in parsed_items:
         final_filename = parsed.path
         if final_filename == "PROMPT":
-            final_filename = _resolve_prompt_to_filename(
-                input_context, len(resolved_list) + 1
-            )
+            final_filename = _resolve_prompt_to_filename(input_context, len(resolved_list) + 1)
 
         if not can_read_file(final_filename):
             logger.warning("Cannot read attachment '%s'. Skipping.", final_filename)
@@ -270,13 +266,9 @@ def _raise_exception_if_invalid_after_keyword(
 
     """
     if attachments_is_empty:
-        raise MissingArgumentError(
-            f"Missing filename before '{keyword}' in 'attach_files'"
-        )
+        raise MissingArgumentError(f"Missing filename before '{keyword}' in 'attach_files'")
     if i + 1 >= len(attach_args):
-        raise MissingArgumentError(
-            f"Missing argument after '{keyword}' in 'attach_files'"
-        )
+        raise MissingArgumentError(f"Missing argument after '{keyword}' in 'attach_files'")
 
 
 def _validate_topage_and_convert_to_ints(spec, num_pages):
@@ -342,9 +334,7 @@ def _attach_attachment_to_page(pdf, attachment, page_num, num_previous_attachmen
     logger.debug("%s", page_num)
     if attachment.path.name not in pdf.attachments:
         logger.debug("new attachment_filespec object required")
-        attachment_filespec = pikepdf.AttachedFileSpec.from_filepath(
-            pdf, attachment.path
-        )
+        attachment_filespec = pikepdf.AttachedFileSpec.from_filepath(pdf, attachment.path)
         pdf.attachments[attachment.path.name] = attachment_filespec
 
     attachment_filespec = pdf.attachments[attachment.path.name]

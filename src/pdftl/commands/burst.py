@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf
+    pass
 
 from pdftl.core.registry import register_operation
 

@@ -36,9 +36,7 @@ def messy_pdf_setup():
         }
     )
     font_ref = pdf.make_indirect(font_dict)
-    page.Resources = pikepdf.Dictionary(
-        {"/Font": pikepdf.Dictionary({"/F1": font_ref})}
-    )
+    page.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font_ref})})
 
     # Set the page's content to our messy stream
     page.Contents = pdf.make_stream(MESSY_STREAM_BYTES)

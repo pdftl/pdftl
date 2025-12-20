@@ -1,6 +1,4 @@
-import logging
-from collections import namedtuple
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +12,6 @@ from pdftl.info.parse_dump import (
     _parse_info_field,
     _parse_top_level_field,
     _reset_state,
-    parse_dump_data,
 )
 
 # Simple decoder for testing (just returns the value)
@@ -56,9 +53,7 @@ class TestParseDumpCoverage:
         assert pdf_data_struct == initial_data
         assert clean_state == initial_state
 
-    def test_handle_line_parsing_error_warning(
-        self, pdf_data_struct, clean_state, caplog
-    ):
+    def test_handle_line_parsing_error_warning(self, pdf_data_struct, clean_state, caplog):
         """Covers line 84: logging.warning for unhandled line format (no ':' and not 'Begin')."""
         line = "This is a malformed line"
 
@@ -91,9 +86,7 @@ class TestParseDumpCoverage:
 
         # Call with an unknown tag
         with caplog.at_level("WARNING"):
-            _handle_begin_tag(
-                "UnknownTag", pdf_data_struct, initial_state, TEST_DECODER
-            )
+            _handle_begin_tag("UnknownTag", pdf_data_struct, initial_state, TEST_DECODER)
 
         # 1. Check line 99: warning logged
         expected = "Unknown Begin tag '%s' in metadata. Ignoring." % "UnknownTag"
@@ -104,9 +97,7 @@ class TestParseDumpCoverage:
         assert initial_state["current_value"] is None
         assert initial_state["last_info_key"] is None
 
-    def test_handle_key_value_prefix_mismatch_warning(
-        self, pdf_data_struct, clean_state, caplog
-    ):
+    def test_handle_key_value_prefix_mismatch_warning(self, pdf_data_struct, clean_state, caplog):
         """
         Covers lines 111-118: logging.warning and return when key doesn't start
         with the expected current_type prefix (e.g., PageMedia but key is Title).
@@ -152,15 +143,11 @@ class TestParseDumpCoverage:
         value = "some_value"
 
         # Test the dispatch via _handle_key_value
-        with pytest.raises(
-            ValueError, match="Unknown key BookmarkUnknownKey in metadata"
-        ):
+        with pytest.raises(ValueError, match="Unknown key BookmarkUnknownKey in metadata"):
             _handle_key_value(key, value, pdf_data_struct, clean_state, TEST_DECODER)
 
         # Also directly test _parse_field to ensure line 173 is hit
-        with pytest.raises(
-            ValueError, match="Unknown key BookmarkUnknownKey in metadata"
-        ):
+        with pytest.raises(ValueError, match="Unknown key BookmarkUnknownKey in metadata"):
             _parse_field(
                 key,
                 value,
@@ -169,9 +156,7 @@ class TestParseDumpCoverage:
                 mock_lookups.return_value["Bookmark"],
             )
 
-    def test_parse_info_field_unknown_key_raises_value_error(
-        self, pdf_data_struct, clean_state
-    ):
+    def test_parse_info_field_unknown_key_raises_value_error(self, pdf_data_struct, clean_state):
         """Covers line 188: raise ValueError in _parse_info_field for key not InfoKey/InfoValue."""
         # _parse_info_field is called only if the key is 'InfoKey' or 'InfoValue'.
         # We must call _parse_info_field directly with an invalid key to hit line 188.
@@ -182,9 +167,7 @@ class TestParseDumpCoverage:
             ValueError,
             match="Unknown Info field key 'BadKey' in metadata. This is a bug.",
         ):
-            _parse_info_field(
-                "BadKey", "some_value", info_dict, clean_state, TEST_DECODER
-            )
+            _parse_info_field("BadKey", "some_value", info_dict, clean_state, TEST_DECODER)
 
     def test_parse_top_level_field_unknown_key_raises_value_error(
         self, pdf_data_struct, clean_state
@@ -200,13 +183,9 @@ class TestParseDumpCoverage:
         value = "some_value"
 
         # Test the dispatch via _handle_key_value
-        with pytest.raises(
-            ValueError, match="Unknown key UnknownTopLevelKey in metadata"
-        ):
+        with pytest.raises(ValueError, match="Unknown key UnknownTopLevelKey in metadata"):
             _handle_key_value(key, value, pdf_data_struct, clean_state, TEST_DECODER)
 
         # Also directly test _parse_top_level_field to ensure line 198 is hit
         with pytest.raises(ValueError, match="Unknown key AnotherBadKey in metadata"):
-            _parse_top_level_field(
-                "AnotherBadKey", value, pdf_data_struct, TEST_DECODER
-            )
+            _parse_top_level_field("AnotherBadKey", value, pdf_data_struct, TEST_DECODER)

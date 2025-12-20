@@ -74,9 +74,9 @@ class LinkRemapper:
     def __init__(self, context: RemapperContext):
         self.context = context
         # Initialize Per-Call Context
-        self.pdf: Union["Pdf", None] = None
-        self.source_pdf: Union["Pdf", None] = None
-        self.instance_num: Union[int, None] = None
+        self.pdf: Pdf | None = None
+        self.source_pdf: Pdf | None = None
+        self.instance_num: int | None = None
 
     def set_call_context(self, pdf: "Pdf", source_pdf: "Pdf", instance_num: int):
         """Set per-call remapper context variables.
@@ -257,9 +257,7 @@ class LinkRemapper:
 
         dest_obj = source_dests[original_name]
         dest_array = (
-            dest_obj.D
-            if isinstance(dest_obj, Dictionary) and Name.D in dest_obj
-            else dest_obj
+            dest_obj.D if isinstance(dest_obj, Dictionary) and Name.D in dest_obj else dest_obj
         )
 
         target_page = self._find_remapped_page(dest_array)
@@ -300,13 +298,9 @@ class LinkRemapper:
 
         # Dispatch based on destination type
         if isinstance(resolved, (String, Name)):
-            new_action_dest, new_named_dest = self._remap_named_destination_data(
-                resolved
-            )
+            new_action_dest, new_named_dest = self._remap_named_destination_data(resolved)
         elif isinstance(resolved, Array):
-            new_action_dest, new_named_dest = self._remap_explicit_destination_data(
-                resolved
-            )
+            new_action_dest, new_named_dest = self._remap_explicit_destination_data(resolved)
 
         if new_action_dest is None:
             return None, None
@@ -358,7 +352,7 @@ def _build_link_caches(source_pages_to_process, source_pdfs):
     Build caches for reverse page mapping and named destinations.
     (This function is copied from links.py)
     """
-    from pikepdf import Dictionary, Name, NameTree
+    from pikepdf import Name, NameTree
 
     source_rev_maps, source_named_dests_cache = {}, {}
     include_instance = any(inst > 0 for _, _, inst in source_pages_to_process)
@@ -367,9 +361,7 @@ def _build_link_caches(source_pages_to_process, source_pdfs):
     for source_pdf in source_pdfs:
         pdf_id = id(source_pdf)
         # Reverse mapping: page.obj.objgen → page index
-        source_rev_maps[pdf_id] = {
-            p.obj.objgen: i for i, p in enumerate(source_pdf.pages)
-        }
+        source_rev_maps[pdf_id] = {p.obj.objgen: i for i, p in enumerate(source_pdf.pages)}
 
         dests = {}
         if Name.Names in source_pdf.Root and Name.Dests in source_pdf.Root.Names:

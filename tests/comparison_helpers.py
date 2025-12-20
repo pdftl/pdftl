@@ -18,9 +18,7 @@ def compare_page_count(path_py: Path, path_tk: Path):
     with Pdf.open(path_py) as pdf_py, Pdf.open(path_tk) as pdf_tk:
         [pdf_py_len, pdf_tk_len] = [len(x.pages) for x in (pdf_py, pdf_tk)]
         # print(pdf_py_len, pdf_tk_len)
-        assert (
-            pdf_py_len == pdf_tk_len
-        ), f"Page counts do not match: {pdf_py_len} vs {pdf_tk_len}."
+        assert pdf_py_len == pdf_tk_len, f"Page counts do not match: {pdf_py_len} vs {pdf_tk_len}."
 
 
 def compare_visuals(path_py: Path, path_tk: Path, tolerance: float = 10.0):

@@ -109,9 +109,7 @@ def test_validate_topage_and_convert_to_ints_parser_error(mock_page_numbers):
 
 @patch("pdftl.output.attach.can_read_file", return_value=True)
 @patch("pdftl.output.attach._validate_topage_and_convert_to_ints", return_value=[1, 2])
-def test_resolve_attachments_happy_path(
-    mock_validate, mock_can_read, mock_input_context
-):
+def test_resolve_attachments_happy_path(mock_validate, mock_can_read, mock_input_context):
     parsed_items = [
         ParsedAttachment(path="a.pdf", page_spec="1-2"),
         ParsedAttachment(path="b.pdf", relationship="source"),
@@ -130,9 +128,7 @@ def test_resolve_attachments_happy_path(
     assert resolved[1].relationship == "Source"
 
 
-@patch(
-    "pdftl.output.attach.can_read_file", side_effect=[True, True]
-)  # Needs two True values now
+@patch("pdftl.output.attach.can_read_file", side_effect=[True, True])  # Needs two True values now
 def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
     """
     Tests that a 'PROMPT' path triggers the interactive prompter.
@@ -168,9 +164,7 @@ def test_resolve_attachments_invalid_relation(mock_can_read, mock_input_context)
 
 @patch("pdftl.output.attach._resolve_attachments")
 @patch("pdftl.output.attach._parse_attach_specs_to_intent")
-def test_get_attachments_from_options_pipeline(
-    mock_parse, mock_resolve, mock_input_context
-):
+def test_get_attachments_from_options_pipeline(mock_parse, mock_resolve, mock_input_context):
     options = {"attach_files": ["a.pdf", "to_page", "1"]}
     num_pages = 5
 
@@ -183,9 +177,7 @@ def test_get_attachments_from_options_pipeline(
     result = _get_attachments_from_options(options, num_pages, mock_input_context)
 
     mock_parse.assert_called_once_with(options["attach_files"])
-    mock_resolve.assert_called_once_with(
-        mock_parsed_items, num_pages, mock_input_context
-    )
+    mock_resolve.assert_called_once_with(mock_parsed_items, num_pages, mock_input_context)
     assert result == mock_resolved_items
 
 
@@ -247,9 +239,7 @@ def test_attach_attachment_to_page_existing_spec(mock_Dict, mock_Annotation, moc
 
 @patch("pdftl.output.attach._attach_attachment")
 @patch("pdftl.output.attach._get_attachments_from_options")
-def test_attach_files_orchestration(
-    mock_get_options, mock_attach, mock_input_context, mock_pdf
-):
+def test_attach_files_orchestration(mock_get_options, mock_attach, mock_input_context, mock_pdf):
     mock_pdf.pages = [MagicMock(), MagicMock(), MagicMock()]
     num_pages = len(mock_pdf.pages)
 

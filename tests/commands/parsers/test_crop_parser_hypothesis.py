@@ -19,9 +19,7 @@ st_margin_value_str = st.one_of(
 )
 
 # Strategy for known paper sizes from docs/parser
-st_paper_sizes = st.sampled_from(
-    ["a4", "a4_l", "a5", "a5_l", "letter", "letter_l", "4x6"]
-)
+st_paper_sizes = st.sampled_from(["a4", "a4_l", "a5", "a5_l", "letter", "letter_l", "4x6"])
 
 # ---------------------------
 # Tests for Public Functions
@@ -40,10 +38,7 @@ def test_parse_single_margin_value_property(value, dimension):
     # Test percentages
     percent_str = f"{value}%"
     expected_percent = (value / 100.0) * dimension
-    assert (
-        pytest.approx(cp._parse_single_margin_value(percent_str, dimension))
-        == expected_percent
-    )
+    assert pytest.approx(cp._parse_single_margin_value(percent_str, dimension)) == expected_percent
 
     # Test 'pt' (which is the default)
     pt_str = f"{value}"
@@ -51,21 +46,15 @@ def test_parse_single_margin_value_property(value, dimension):
 
     # Test 'in'
     in_str = f"{value}in"
-    assert (
-        pytest.approx(cp._parse_single_margin_value(in_str, dimension)) == value * 72.0
-    )
+    assert pytest.approx(cp._parse_single_margin_value(in_str, dimension)) == value * 72.0
 
     # Test 'cm'
     cm_str = f"{value}cm"
-    assert (
-        pytest.approx(cp._parse_single_margin_value(cm_str, dimension)) == value * 28.35
-    )
+    assert pytest.approx(cp._parse_single_margin_value(cm_str, dimension)) == value * 28.35
 
     # Test 'mm'
     mm_str = f"{value}mm"
-    assert (
-        pytest.approx(cp._parse_single_margin_value(mm_str, dimension)) == value * 2.835
-    )
+    assert pytest.approx(cp._parse_single_margin_value(mm_str, dimension)) == value * 2.835
 
 
 @given(paper_spec=st_paper_sizes)
@@ -133,9 +122,7 @@ def test_parse_crop_margins_shorthand_property(parts):
         expected_left = cp._parse_single_margin_value(parts[0], page_width)
         expected_top = cp._parse_single_margin_value(parts[1], page_width)
         expected_right = cp._parse_single_margin_value(parts[2], page_width)
-        expected_bottom = cp._parse_single_margin_value(
-            parts[3], page_height
-        )  # Uses page_height
+        expected_bottom = cp._parse_single_margin_value(parts[3], page_height)  # Uses page_height
         assert (left, top, right, bottom) == (
             expected_left,
             expected_top,
@@ -145,16 +132,12 @@ def test_parse_crop_margins_shorthand_property(parts):
 
 
 @given(
-    page_range=st.one_of(
-        st.just(""), st.just("1-3"), st.just("even"), st.just("2-8odd")
-    ),
+    page_range=st.one_of(st.just(""), st.just("1-3"), st.just("even"), st.just("2-8odd")),
     margin_spec=st.one_of(st.just("10pt,20pt"), st_paper_sizes),
     has_preview=st.booleans(),
     total_pages=st.integers(min_value=1, max_value=50),
 )
-def test_specs_to_page_rules_property(
-    page_range, margin_spec, has_preview, total_pages
-):
+def test_specs_to_page_rules_property(page_range, margin_spec, has_preview, total_pages):
     """
     Tests the main specs_to_page_rules function.
     """

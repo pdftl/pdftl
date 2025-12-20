@@ -156,7 +156,6 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str):
     Optimize images in the given PDF.
     """
     # pylint: disable=import-outside-toplevel
-    from pikepdf import Pdf
 
     try:
         from ocrmypdf.optimize import DEFAULT_EXECUTOR  # FLATE_JPEG_THRESHOLD,
@@ -238,9 +237,7 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str):
 
 
 def _raise_for_invalid_keyword(arg):
-    raise InvalidArgumentError(
-        f"Unrecognized keyword given for 'optimize' operation: '{arg}'"
-    )
+    raise InvalidArgumentError(f"Unrecognized keyword given for 'optimize' operation: '{arg}'")
 
 
 def _parse_args_to_options(operation_args):

@@ -59,9 +59,7 @@ def test_fill_form_recursion_kids(pdf, tmp_path):
     fdf = pikepdf.new()
     fdf_parent = pikepdf.Dictionary(
         T=pikepdf.String("Parent"),
-        Kids=[
-            pikepdf.Dictionary(T=pikepdf.String("Child"), V=pikepdf.String("NewValue"))
-        ],
+        Kids=[pikepdf.Dictionary(T=pikepdf.String("Child"), V=pikepdf.String("NewValue"))],
     )
     fdf.Root.FDF = pikepdf.Dictionary(Fields=[fdf_parent])
     fdf_path = tmp_path / "kids.fdf"
@@ -116,9 +114,7 @@ def test_fill_form_radio_button_index(pdf, tmp_path):
 
     fdf = pikepdf.new()
     fdf.Root.FDF = pikepdf.Dictionary(
-        Fields=[
-            pikepdf.Dictionary(T=pikepdf.String("MyRadio"), V=pikepdf.String("ChoiceB"))
-        ]
+        Fields=[pikepdf.Dictionary(T=pikepdf.String("MyRadio"), V=pikepdf.String("ChoiceB"))]
     )
     fdf_path = tmp_path / "radio.fdf"
     fdf.save(fdf_path)

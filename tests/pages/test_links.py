@@ -215,9 +215,7 @@ def test_rebuild_annotations_for_page(mocker, mock_remapper):
 
     mock_source_page = MagicMock(spec=pikepdf.Page)
     mock_source_page.Annots = [mock_annot1, mock_annot2]  # For the loop
-    mock_source_page.__contains__ = MagicMock(
-        side_effect=lambda key: key == Name.Annots
-    )
+    mock_source_page.__contains__ = MagicMock(side_effect=lambda key: key == Name.Annots)
 
     # --- Use a REAL PDF and REAL PAGE ---
     real_pdf = Pdf.new()
@@ -398,9 +396,7 @@ def test_process_annotation_uses_original_action(mock_remapper, mocker):
 
 @patch("pdftl.pages.links._process_annotation")
 @pytest.mark.parametrize("mock_real_page", [{"has_annots_array": False}], indirect=True)
-def test_rebuild_annots_page_with_no_annots_key(
-    mock_process, mock_remapper, mock_real_page
-):
+def test_rebuild_annots_page_with_no_annots_key(mock_process, mock_remapper, mock_real_page):
     """
     Hypothesis: If the source page has no /Annots key at all,
     the function should do nothing and return an empty list.
@@ -431,9 +427,7 @@ def test_rebuild_annots_page_with_no_annots_key(
     [{"has_annots_array": False}],  # Target page starts with no /Annots
     indirect=True,
 )
-def test_rebuild_annots_page_with_empty_annots_list(
-    mock_process, mock_remapper, mock_real_page
-):
+def test_rebuild_annots_page_with_empty_annots_list(mock_process, mock_remapper, mock_real_page):
     """
     Hypothesis: If the source page has an /Annots key with an
     empty list, the function should do nothing and return an empty list.

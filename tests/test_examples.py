@@ -9,14 +9,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import pikepdf
-import pikepdf.form
 import pytest
 
 # Import the CLI_DATA dictionary that contains all the examples
 from pdftl.core.registry import registry
 from pdftl.registry_init import initialize_registry
-from tests.create_pdf import create_custom_pdf
 
 initialize_registry()
 
@@ -157,9 +154,7 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
 
     # --- Step 3: Run the Command ---
     # CRITICAL: We run inside work_dir. The tool sees "a.pdf" and finds it locally.
-    result = subprocess.run(
-        command_to_run, capture_output=True, text=True, cwd=work_dir
-    )
+    result = subprocess.run(command_to_run, capture_output=True, text=True, cwd=work_dir)
 
     # --- Step 4: Assert Success ---
     assert result.returncode == 0, (
@@ -181,6 +176,4 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
         else:
             assert output_target.exists(), f"Output missing: {output_target}"
             if output_target.is_file():
-                assert (
-                    output_target.stat().st_size > 0
-                ), f"Output file is empty: {output_target}"
+                assert output_target.stat().st_size > 0, f"Output file is empty: {output_target}"

@@ -72,9 +72,7 @@ def test_to_help_example_helper_branches():
 
     assert registry.operations["op-existing"].examples[0] is existing_ex
 
-    with pytest.raises(
-        ValueError, match="Invalid example format in operation 'op-bad'"
-    ):
+    with pytest.raises(ValueError, match="Invalid example format in operation 'op-bad'"):
 
         @registry.register_operation("op-bad", examples=[None])
         def func4():

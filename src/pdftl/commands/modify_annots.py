@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import Name, Pdf
+    from pikepdf import Pdf
 
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
@@ -31,7 +31,7 @@ dictionaries, such as changing a link's border or a highlight's color.
 
 The syntax is `selector(Key=Value, ...)`, where:
   - `selector` is a page range (e.g., `1-5`, `odd`, see [[`page_specs`]]) and/or an
-    annotation type (e.g., `/Link`, `/Highlight`). 
+    annotation type (e.g., `/Link`, `/Highlight`).
   - `Key=Value` pairs define the PDF dictionary keys to set and
     their new values.
 
@@ -129,9 +129,7 @@ def _parse_value_to_python(val_str: str):
         return val_str
 
 
-def _apply_mods_to_annot(
-    annot, modifications: list[tuple[str, str]], page_num: int
-) -> int:
+def _apply_mods_to_annot(annot, modifications: list[tuple[str, str]], page_num: int) -> int:
     """
     Applies a list of (key, value) modifications to a single annotation.
     Returns the count of properties modified.

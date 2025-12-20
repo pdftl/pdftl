@@ -9,7 +9,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf
+    pass
 
 from pdftl.core.registry import register_operation
 from pdftl.pages.add_pages import add_pages

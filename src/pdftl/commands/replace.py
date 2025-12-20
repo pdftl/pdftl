@@ -78,21 +78,15 @@ def replace_in_content_streams(pdf, specs, normalize_input=True, normalize_outpu
     Replace in page content streams.
     """
     for spec in specs:
-        _apply_replace_spec_in_content_streams(
-            pdf, spec, normalize_input, normalize_output
-        )
+        _apply_replace_spec_in_content_streams(pdf, spec, normalize_input, normalize_output)
     return pdf
 
 
-def _apply_replace_spec_in_content_streams(
-    pdf, spec, normalize_input, normalize_output
-):
+def _apply_replace_spec_in_content_streams(pdf, spec, normalize_input, normalize_output):
     if not spec:
         return
     num_pages = len(pdf.pages)
-    page_spec, replacer = _parse_replace_spec(
-        pdf, spec, normalize_input, normalize_output
-    )
+    page_spec, replacer = _parse_replace_spec(pdf, spec, normalize_input, normalize_output)
     for page_num in page_numbers_matching_page_spec(page_spec, num_pages):
         replacer.apply(page_num)
 
@@ -111,9 +105,7 @@ def _parse_replace_spec(pdf, spec, normalize_input, normalize_output):
     from_re, to_re = (bytes(spec_parts[i], "utf-8") for i in (1, 2))
     return (
         spec_parts[0],
-        RegexReplaceContentStream(
-            pdf, from_re, to_re, count, normalize_input, normalize_output
-        ),
+        RegexReplaceContentStream(pdf, from_re, to_re, count, normalize_input, normalize_output),
     )
 
 
@@ -135,13 +127,9 @@ class RegexReplaceContentStream:
             content_stream = get_normalized_page_content_stream(page)
         else:
             content_stream = page.Contents.read_bytes()
-        logger.debug(
-            "from_re=%s, to_re=%s, count=%s", self.from_re, self.to_re, self.count
-        )
+        logger.debug("from_re=%s, to_re=%s, count=%s", self.from_re, self.to_re, self.count)
         if self.from_re:
-            new_content_stream = re.sub(
-                self.from_re, self.to_re, content_stream, self.count
-            )
+            new_content_stream = re.sub(self.from_re, self.to_re, content_stream, self.count)
         else:
             new_content_stream = content_stream
         page.Contents = self.pdf.make_stream(new_content_stream)

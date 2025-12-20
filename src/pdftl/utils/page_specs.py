@@ -112,9 +112,7 @@ def _handle_no_specs(inputs, opened_pdfs) -> [PageTransform]:
         pdf = opened_pdfs[input_idx]
         for i in range(len(pdf.pages)):
             # Append a 4-item tuple with default rotation and scale
-            page_tuples.append(
-                PageTransform(pdf=pdf, index=i, rotation=(0, False), scale=1.0)
-            )
+            page_tuples.append(PageTransform(pdf=pdf, index=i, rotation=(0, False), scale=1.0))
     return page_tuples
 
 
@@ -176,15 +174,11 @@ def _create_page_tuples_from_numbers(
                 f"there are only {total_pages} pages in {pdf_filename}"
             )
         # Convert 1-based page_num to 0-based index for pikepdf and append
-        new_tuples.append(
-            PageTransform(pdf=pdf, index=page_num - 1, rotation=rotate, scale=scale)
-        )
+        new_tuples.append(PageTransform(pdf=pdf, index=page_num - 1, rotation=rotate, scale=scale))
     return new_tuples
 
 
-def expand_specs_to_pages(
-    specs, aliases=None, inputs=None, opened_pdfs=None
-) -> [PageTransform]:
+def expand_specs_to_pages(specs, aliases=None, inputs=None, opened_pdfs=None) -> [PageTransform]:
     """
     Expand pdftk-style page specs into an array of PageTransform
     """
@@ -218,9 +212,7 @@ def expand_specs_to_pages(
     return page_tuples
 
 
-def _new_tuples_from_spec_str(
-    spec_str, opened_pdfs_by_alias, default_alias
-) -> [PageTransform]:
+def _new_tuples_from_spec_str(spec_str, opened_pdfs_by_alias, default_alias) -> [PageTransform]:
     # Step 1: Isolate the logic for determining the PDF and page spec.
     pdf, page_spec_full, alias = _resolve_alias_and_spec(
         spec_str, opened_pdfs_by_alias, default_alias
@@ -348,8 +340,7 @@ def _parse_omissions(modifier_str, total_pages):
         omit_match = omit_re.match(remaining_str)
         if not omit_match:
             raise InvalidArgumentError(
-                f"Invalid part '{remaining_str}' should start with ~ "
-                f"while parsing omissions."
+                f"Invalid part '{remaining_str}' should start with ~ " f"while parsing omissions."
             )
 
         omit_range_str = omit_match.group(2)
@@ -455,10 +446,7 @@ def page_numbers_matching_page_specs(specs, total_pages) -> [int]:
     return [
         n
         for n in range(1, total_pages + 1)
-        if any(
-            page_number_matches_page_spec(n, page_spec, total_pages)
-            for page_spec in specs
-        )
+        if any(page_number_matches_page_spec(n, page_spec, total_pages) for page_spec in specs)
     ]
 
 

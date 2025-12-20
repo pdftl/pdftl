@@ -64,12 +64,8 @@ def patch_environment(monkeypatch, tmp_path):
 
     monkeypatch.setattr(helpmod, "registry", FakeRegistry())
     # monkeypatch.setattr(helpmod, "CLI_DATA", fake_cli)
-    monkeypatch.setattr(
-        helpmod, "SPECIAL_HELP_TOPICS_MAP", {("input", "in"): "help input"}
-    )
-    monkeypatch.setattr(
-        helpmod, "SYNOPSIS_TEMPLATE", "Usage: {whoami} [{special_help_topics}]"
-    )
+    monkeypatch.setattr(helpmod, "SPECIAL_HELP_TOPICS_MAP", {("input", "in"): "help input"})
+    monkeypatch.setattr(helpmod, "SYNOPSIS_TEMPLATE", "Usage: {whoami} [{special_help_topics}]")
     monkeypatch.setattr(
         helpmod,
         "VERSION_TEMPLATE",
@@ -160,9 +156,7 @@ def test_print_version_to_file(monkeypatch):
     assert "1.0.0" in buf.getvalue()
 
 
-@pytest.mark.parametrize(
-    "cmd", [None, "combine", "output_options", "examples", "all", "nonsense"]
-)
+@pytest.mark.parametrize("cmd", [None, "combine", "output_options", "examples", "all", "nonsense"])
 def test_print_help_variants(monkeypatch, cmd):
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
     buf_out, buf_err = io.StringIO(), io.StringIO()
@@ -177,9 +171,7 @@ def test_print_version_to_console(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
-        type(
-            "FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"}
-        )(),
+        type("FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"})(),
     )
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
 
@@ -207,9 +199,7 @@ def test_print_version_to_file(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
-        type(
-            "FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"}
-        )(),
+        type("FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"})(),
     )
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
 

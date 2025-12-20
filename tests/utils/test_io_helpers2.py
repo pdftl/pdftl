@@ -1,8 +1,5 @@
 import sys
-from pathlib import Path
-from unittest.mock import mock_open, patch
-
-import pytest
+from unittest.mock import patch
 
 from pdftl.utils.io_helpers import can_read_file, smart_open_output
 

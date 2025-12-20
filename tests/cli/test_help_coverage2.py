@@ -1,11 +1,9 @@
-import importlib.metadata
 import io
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from pdftl.cli.help import get_project_version, print_help
+from pdftl.cli.help import print_help
 from pdftl.core.registry import registry
 
 

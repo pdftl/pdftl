@@ -62,9 +62,7 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
     stages_args = split_args_by_separator(args_for_parsing)
     logger.debug("stages_args=%s", stages_args)
     final_stage_args, global_options = parse_options_and_specs(stages_args[-1])
-    logger.debug(
-        "final_stage_args=%s, global_options=%s", final_stage_args, global_options
-    )
+    logger.debug("final_stage_args=%s, global_options=%s", final_stage_args, global_options)
     stages_args[-1] = final_stage_args
     parsed_stages = []
     for i, stage_args in enumerate(stages_args):
@@ -130,7 +128,6 @@ def _is_verbose_and_setup_logging(cli_args) -> tuple[bool, list[str]]:
 
     # Configure the root logger and the pdftl-specific loggers
     if debug:
-        import rich
         from rich.logging import RichHandler
 
         logging.basicConfig(format=log_format, handlers=[RichHandler()])

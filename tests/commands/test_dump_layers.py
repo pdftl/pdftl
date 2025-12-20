@@ -1,7 +1,6 @@
 import json
 
 import pikepdf
-import pytest
 
 from pdftl.commands.dump_layers import dump_layers
 
@@ -13,7 +12,7 @@ def test_dump_layers_no_ocg(tmp_path):
 
     dump_layers(pdf, output_file=str(output_file))
 
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         res = json.load(f)
 
     assert res["has_layers"] is False
@@ -41,7 +40,7 @@ def test_dump_layers_basic_hierarchy(tmp_path):
 
     dump_layers(pdf, output_file=str(output_file))
 
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         res = json.load(f)
 
     assert res["has_layers"] is True
@@ -63,16 +62,14 @@ def test_dump_layers_usage_cleaning(tmp_path):
         pikepdf.Dictionary(
             Type=pikepdf.Name.OCG,
             Name="Layer",
-            Usage=pikepdf.Dictionary(
-                Print=pikepdf.Dictionary(PrintState=pikepdf.Name.OFF)
-            ),
+            Usage=pikepdf.Dictionary(Print=pikepdf.Dictionary(PrintState=pikepdf.Name.OFF)),
         )
     )
     pdf.Root.OCProperties = pikepdf.Dictionary(OCGs=[ocg], D=pikepdf.Dictionary())
 
     dump_layers(pdf, output_file=str(output_file))
 
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         res = json.load(f)
 
     usage = res["layers"][0]["usage"]
@@ -104,20 +101,16 @@ def test_dump_layers_complex_features(tmp_path):
     ocprops = pikepdf.Dictionary(
         OCGs=[ocg1],
         # Line 145: Top-level Order
-        Order=pikepdf.Array(
-            [pikepdf.String("Section Label"), ocg1]
-        ),  # Line 92-93: Label
+        Order=pikepdf.Array([pikepdf.String("Section Label"), ocg1]),  # Line 92-93: Label
         D=pikepdf.Dictionary(BaseState=pikepdf.Name.ON),
         # Line 156: Alternate Configs
-        Configs=pikepdf.Array(
-            [pikepdf.Dictionary(Name="AltView", BaseState=pikepdf.Name.OFF)]
-        ),
+        Configs=pikepdf.Array([pikepdf.Dictionary(Name="AltView", BaseState=pikepdf.Name.OFF)]),
     )
     pdf.Root.OCProperties = ocprops
 
     dump_layers(pdf, output_file=str(output_file))
 
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         res = json.load(f)
 
     # Verification
@@ -142,7 +135,7 @@ def test_dump_layers_legacy_fallback(tmp_path):
 
     dump_layers(pdf, output_file=str(output_file))
 
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         res = json.load(f)
 
     assert "ui_hierarchy" in res
@@ -170,7 +163,7 @@ def test_dump_layers_extreme_edge_cases(tmp_path):
 
     dump_layers(pdf, output_file=str(output_file))
 
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         res = json.load(f)
 
     # Verify Line 95: The integer 42 should be stringified

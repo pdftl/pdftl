@@ -59,8 +59,7 @@ def _parse_multiple_arguments(option, args, i, argument_q, hint=None):
         raise MissingArgumentError(f"Missing value for option '{option}': {args[i]}")
     if not argument_q(args[i + 1]):
         raise InvalidArgumentError(
-            f"Invalid argument '{args[i + 1]}' following '{option}' keyword."
-            + (" " + hint)
+            f"Invalid argument '{args[i + 1]}' following '{option}' keyword." + (" " + hint)
             if hint
             else ""
         )
@@ -112,9 +111,7 @@ def _parse_attach_files(args, i, options):
         not an options keyword?"""
         return not (x in VALUE_KEYWORDS or x in FLAG_KEYWORDS)
 
-    consumed_count, current_pos = _parse_multiple_arguments(
-        "attach_files", args, i, filename_q
-    )
+    consumed_count, current_pos = _parse_multiple_arguments("attach_files", args, i, filename_q)
     files = options.setdefault(keyword, [])
     for j in range(1, consumed_count):
         files.append(args[i + j])

@@ -31,9 +31,7 @@ PRESET_POSITIONS = {
 }
 
 # Regex to split by commas, but not inside single or double quotes
-COMMA_SPLIT_REGEX = re.compile(
-    r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)"
-)
+COMMA_SPLIT_REGEX = re.compile(r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
 
 # Regex to capture either an escaped block {{...}} OR a variable block {...}
 TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
@@ -78,9 +76,7 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
     for spec_str, keyword_qualifiers in grouped_specs:
         # 2. Parse this single spec into its rules and page numbers
         try:
-            rules_for_spec = _parse_one_spec_to_rules(
-                spec_str, keyword_qualifiers, total_pages
-            )
+            rules_for_spec = _parse_one_spec_to_rules(spec_str, keyword_qualifiers, total_pages)
             # 3. Merge these rules into the main dictionary
             for page_index, rule in rules_for_spec:
                 page_rules[page_index].append(rule)
@@ -90,9 +86,7 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
     return dict(page_rules)
 
 
-def _parse_one_spec_to_rules(
-    spec_str: str, keyword_qualifiers: str | None, total_pages: int
-):
+def _parse_one_spec_to_rules(spec_str: str, keyword_qualifiers: str | None, total_pages: int):
     """
     Parses a single spec string and returns a list of (page_index, rule) tuples.
     This helper function exists to reduce the number of local variables in
@@ -310,9 +304,7 @@ def _normalize_positioning(options: dict, normalized: dict):
     if position:
         pos_lower = position.lower()
         if pos_lower not in PRESET_POSITIONS:
-            raise ValueError(
-                f"Unknown position '{position}'. Must be one of {PRESET_POSITIONS}"
-            )
+            raise ValueError(f"Unknown position '{position}'. Must be one of {PRESET_POSITIONS}")
         normalized["position"] = pos_lower
 
     if x:
@@ -382,9 +374,7 @@ def _parse_dimension(size_str: str):
         try:
             return {"type": "pt", "value": float(size_str)}
         except ValueError as exc:
-            raise ValueError(
-                f"Invalid size or unit in dimension: '{size_str}'"
-            ) from exc
+            raise ValueError(f"Invalid size or unit in dimension: '{size_str}'") from exc
 
 
 # In add_text_parser.py, replace the _parse_color function

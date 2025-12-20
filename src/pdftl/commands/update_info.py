@@ -134,9 +134,7 @@ def update_info(pdf, op_args, get_input, xml_strings=True):
         )
     string_decoder = xml_decode_for_info if xml_strings else lambda x: x
     try:
-        with (
-            sys.stdin if meta_filename == "-" else open(meta_filename, "rb")
-        ) as meta_file:
+        with sys.stdin if meta_filename == "-" else open(meta_filename, "rb") as meta_file:
             meta_dict = parse_dump_data(meta_file.readlines(), string_decoder)
     except OSError as exc:
         raise UserCommandLineError(exc) from exc

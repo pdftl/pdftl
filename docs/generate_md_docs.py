@@ -31,18 +31,10 @@ def write_help_topic_to_file(topic, filepath):
 def generate_md_docs(app_data, topics, output_dir="source"):
     """Generates all necessary .md files."""
     print(f"--- [md_gen] Starting md source generation in '{output_dir}'...")
-    operations = sorted(
-        [item for item in topics.items() if isinstance(item[1], Operation)]
-    )
-    general_topics = sorted(
-        [item for item in topics.items() if isinstance(item[1], HelpTopic)]
-    )
+    operations = sorted([item for item in topics.items() if isinstance(item[1], Operation)])
+    general_topics = sorted([item for item in topics.items() if isinstance(item[1], HelpTopic)])
     misc = sorted(
-        [
-            item
-            for item in topics.items()
-            if item not in operations and item not in general_topics
-        ]
+        [item for item in topics.items() if item not in operations and item not in general_topics]
     )
 
     print(f"--- [md_gen] Found {len(operations)} operations.")

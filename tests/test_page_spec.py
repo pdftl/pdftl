@@ -141,7 +141,5 @@ def test_parse_page_spec(spec, total_pages, expected_fields):
     assert result.end == expected_fields.get("end", default_spec.end)
     assert result.rotate == expected_fields.get("rotate", default_spec.rotate)
     assert result.scale == expected_fields.get("scale", default_spec.scale)
-    assert result.qualifiers == expected_fields.get(
-        "qualifiers", default_spec.qualifiers
-    )
+    assert result.qualifiers == expected_fields.get("qualifiers", default_spec.qualifiers)
     assert result.omissions == expected_fields.get("omissions", default_spec.omissions)

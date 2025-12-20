@@ -29,10 +29,7 @@ def test_normalize_pdf_90_degrees(test_pdf):
     assert result.pages[2].Contents.read_bytes() == b"\n".join(
         [b"10 w", b"306 396 m", b"306 594 l", b"S", b"(Hello) Tj"]
     )
-    assert (
-        result.pages[3].Contents.read_bytes()
-        == b"10 w 306 396\n m 306 594 l S (Hello) Tj"
-    )
+    assert result.pages[3].Contents.read_bytes() == b"10 w 306 396\n m 306 594 l S (Hello) Tj"
 
 
 def test_rotate_pdf_invalid_spec(test_pdf):

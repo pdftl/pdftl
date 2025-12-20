@@ -103,9 +103,7 @@ def test_optimize_images_success(two_page_pdf):
     mock_lib.DEFAULT_PNG_QUALITY = 0
     mock_lib.extract_images_generic.return_value = ([], [])
 
-    with patch.dict(
-        sys.modules, {"ocrmypdf": MagicMock(), "ocrmypdf.optimize": mock_lib}
-    ):
+    with patch.dict(sys.modules, {"ocrmypdf": MagicMock(), "ocrmypdf.optimize": mock_lib}):
         # Reload to hit the 'try' block successfully
         import pdftl.commands.optimize_images
 
@@ -115,9 +113,7 @@ def test_optimize_images_success(two_page_pdf):
 
         with pikepdf.open(two_page_pdf) as pdf:
             # Call the function (args: pdf, operation_args, output_filename)
-            pdftl.commands.optimize_images.optimize_images_pdf(
-                pdf, ["medium"], "out.pdf"
-            )
+            pdftl.commands.optimize_images.optimize_images_pdf(pdf, ["medium"], "out.pdf")
 
             # Check that it called the library functions
             mock_lib.extract_images_generic.assert_called()

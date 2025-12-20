@@ -17,9 +17,7 @@ def test_dump_text_missing_dependency():
         # We must invoke the helper that checks the flag
         from pdftl.commands.dump_text import dump_text
 
-        with pytest.raises(
-            InvalidArgumentError, match="requires the 'pypdfium2' library"
-        ):
+        with pytest.raises(InvalidArgumentError, match="requires the 'pypdfium2' library"):
             dump_text("dummy.pdf", "passwd123")
 
 

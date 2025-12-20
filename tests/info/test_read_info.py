@@ -195,9 +195,7 @@ class TestResolvePageNumber:
     # new=lambda... does NOT inject an argument.
     # The signature must not include 'mock_is_page'.
     @patch("pdftl.info.read_info.is_page", new=lambda x: True)
-    def test_resolves_correct_page(
-        self, mock_get_dest_array, mock_pdf_pages, mock_named_dests
-    ):
+    def test_resolves_correct_page(self, mock_get_dest_array, mock_pdf_pages, mock_named_dests):
         # We want to find the 2nd page
         target_page = mock_pdf_pages[1]  # This mock has .objgen == (2, 0)
 
@@ -216,9 +214,7 @@ class TestResolvePageNumber:
     # new=lambda... does NOT inject an argument.
     # The signature must not include 'mock_is_page'.
     @patch("pdftl.info.read_info.is_page", new=lambda x: True)
-    def test_page_not_in_list(
-        self, mock_get_dest_array, mock_pdf_pages, mock_named_dests
-    ):
+    def test_page_not_in_list(self, mock_get_dest_array, mock_pdf_pages, mock_named_dests):
         other_page = MagicMock(spec=pikepdf.Page)
         other_page.objgen = (99, 0)  # This objgen is not in mock_pdf_pages
 

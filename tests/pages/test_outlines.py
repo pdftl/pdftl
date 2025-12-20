@@ -45,11 +45,7 @@ def build_page_to_chunk_map(chunks, total_pages):
     page_to_chunk_map = {}
     for i, chunk in enumerate(chunks):
         # Determine the end page for this chunk
-        next_start = (
-            chunks[i + 1].output_start_page
-            if (i + 1) < len(chunks)
-            else total_pages + 1
-        )
+        next_start = chunks[i + 1].output_start_page if (i + 1) < len(chunks) else total_pages + 1
 
         # Assign all pages in this range to this chunk
         for page_num in range(chunk.output_start_page, next_start):

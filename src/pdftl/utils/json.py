@@ -125,14 +125,11 @@ class PdfToJsonConverter:
     def _handle_dictionary(self, obj, depth, ancestors):
         new_ancestors = [obj] + ancestors
         json_dict = {
-            str(k): self.to_json_recursive(v, depth + 1, new_ancestors)
-            for k, v in obj.items()
+            str(k): self.to_json_recursive(v, depth + 1, new_ancestors) for k, v in obj.items()
         }
 
         # Post-process the dictionary for special cases like GoTo actions
-        _add_resolved_destination_if_goto(
-            json_dict, self.page_object_to_num_map, self.named_dests
-        )
+        _add_resolved_destination_if_goto(json_dict, self.page_object_to_num_map, self.named_dests)
         return json_dict
 
     def _handle_indirect_object(self, obj, _depth, _ancestors):
@@ -186,7 +183,7 @@ def _add_resolved_destination_if_goto(
                          to its page number (integer).
         named_dests: A dictionary of all named destinations in the PDF.
     """
-    from pikepdf import Array, Dictionary, Name, Object, String
+    from pikepdf import Array, Dictionary
 
     dest_obj = _dest_obj_if_resolvable_goto_action(action_dict, named_dests)
 

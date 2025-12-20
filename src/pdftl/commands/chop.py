@@ -180,9 +180,7 @@ def chop_pages(source_pdf: "Pdf", specs: list):
         if not chop_spec_to_use:
             final_pages.append(source_page)
         else:
-            chopped_pages = _apply_chop_to_page(
-                source_pdf, source_page, chop_spec_to_use
-            )
+            chopped_pages = _apply_chop_to_page(source_pdf, source_page, chop_spec_to_use)
             final_pages.extend(chopped_pages)
 
     # 3. Completely replace the old pages with the new list in the correct order.

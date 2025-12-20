@@ -177,12 +177,9 @@ def test_parse_chop_specs_to_rules_property(specs, total_pages):
         result = cp.parse_chop_specs_to_rules(specs, total_pages)
     except ValueError:
         return
+    assert all(isinstance(page_index, int) and page_index >= 0 for page_index in result.keys())
     assert all(
-        isinstance(page_index, int) and page_index >= 0 for page_index in result.keys()
-    )
-    assert all(
-        isinstance(rule, str) and re.search(r"^(cols|rows)", rule)
-        for rule in result.values()
+        isinstance(rule, str) and re.search(r"^(cols|rows)", rule) for rule in result.values()
     )
 
 

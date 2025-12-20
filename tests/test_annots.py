@@ -48,9 +48,7 @@ def _compare_annotations(original_dump: str, processed_dump: str) -> list[str]:
         original_data = json.loads(original_dump) if original_dump else []
         processed_data = json.loads(processed_dump) if processed_dump else []
     except json.JSONDecodeError as e:
-        return [
-            f"Failed to parse annotation JSON: {e}\nOriginal dump:\n{original_dump}"
-        ]
+        return [f"Failed to parse annotation JSON: {e}\nOriginal dump:\n{original_dump}"]
 
     if len(original_data) != len(processed_data):
         errors.append(
@@ -59,9 +57,7 @@ def _compare_annotations(original_dump: str, processed_dump: str) -> list[str]:
         )
         return errors
 
-    for i, (original_annot, processed_annot) in enumerate(
-        zip(original_data, processed_data)
-    ):
+    for i, (original_annot, processed_annot) in enumerate(zip(original_data, processed_data)):
         original_props = original_annot.get("Properties", {}).copy()
         processed_props = processed_annot.get("Properties", {}).copy()
         original_p = original_props.get("/P")
@@ -90,16 +86,10 @@ def _compare_named_dests(original_dump: str, processed_dump: str) -> list[str]:
     """
     errors = []
     try:
-        original_list = (
-            (json.loads(original_dump).get("dests", [])) if original_dump else []
-        )
-        processed_list = (
-            (json.loads(processed_dump).get("dests", [])) if processed_dump else []
-        )
+        original_list = (json.loads(original_dump).get("dests", [])) if original_dump else []
+        processed_list = (json.loads(processed_dump).get("dests", [])) if processed_dump else []
     except json.JSONDecodeError as e:
-        return [
-            f"Failed to parse destination JSON: {e}\nOriginal dump:\n{original_dump}"
-        ]
+        return [f"Failed to parse destination JSON: {e}\nOriginal dump:\n{original_dump}"]
 
     original_dests = {d["name"]: d for d in original_list}
     processed_dests = {d["name"]: d for d in processed_list}

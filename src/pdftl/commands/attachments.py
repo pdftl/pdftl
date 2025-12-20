@@ -133,9 +133,7 @@ def _get_output_path(output_dir_str, operation, get_input):
 
         output_path = Path(path_str)
         if not output_path.is_dir():
-            raise ValueError(
-                f"\n  Output directory {output_path} does not seem to be a directory"
-            )
+            raise ValueError(f"\n  Output directory {output_path} does not seem to be a directory")
         return output_path
 
     # For any other operation, just return the Path object without validation
@@ -150,9 +148,7 @@ def _get_operation_action(operation):
     }
     action_func = actions.get(operation)
     if not action_func:
-        logger.warning(
-            "No valid operation '%s' specified to process attachments.", operation
-        )
+        logger.warning("No valid operation '%s' specified to process attachments.", operation)
     return action_func
 
 

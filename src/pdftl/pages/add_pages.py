@@ -68,9 +68,7 @@ def add_pages(new_pdf, opened_pdfs, source_pages_to_process: [PageTransform]):
     all_dests = rebuild_links(new_pdf, rebuild_context.processed_page_info, remapper)
 
     # Pass 2b: Get all destinations from outlines
-    outline_dests = rebuild_outlines(
-        new_pdf, source_pages_to_process, rebuild_context, remapper
-    )
+    outline_dests = rebuild_outlines(new_pdf, source_pages_to_process, rebuild_context, remapper)
     all_dests.extend(outline_dests)
 
     # Pass 2c: Write all collected destinations to the NameTree
@@ -144,7 +142,7 @@ def process_source_pages(
             # we get the handle without an expensive lookup.
             new_page_obj = new_pdf_copy_foreign(source_page.obj)
             new_page = pikepdf.Page(new_page_obj)
-            new_pdf.pages.append(new_page)
+            new_pdf_pages_append(new_page)
             seen_pages.add(page_identity)
 
         else:

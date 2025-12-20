@@ -1,8 +1,6 @@
-import importlib  # We need importlib to reload/re-import
 import io
 import sys
 import unittest
-from collections import namedtuple
 from unittest import mock
 
 # --- Module Name for explicit reloads ---
@@ -298,9 +296,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
                 # Get the dummy class that was defined in the except block
                 DummyTextDrawer = _td_mod.TextDrawer
         except Exception as e:
-            self.fail(
-                f"Fresh import failed unexpectedly when forcing ImportError path: {e}"
-            )
+            self.fail(f"Fresh import failed unexpectedly when forcing ImportError path: {e}")
         finally:
             # Clean up the module from sys.modules again to avoid polluting subsequent tests
             sys.modules.pop(module_name, None)

@@ -19,22 +19,16 @@ from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 # Regex to split by commas, but not inside single or double quotes
 # This regex should correctly handle balanced, unescaped quotes.
-COMMA_SPLIT_REGEX = re.compile(
-    r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)"
-)
+COMMA_SPLIT_REGEX = re.compile(r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
 
 # Regex to find the first unquoted/unescaped '='
 # This regex should correctly handle balanced, unescaped quotes.
-EQUALS_SPLIT_REGEX = re.compile(
-    r"=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)"
-)
+EQUALS_SPLIT_REGEX = re.compile(r"=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
 
 
 def _unquote_string(val: str) -> str:
     """Helper to remove one layer of quotes from a string."""
-    if (val.startswith("'") and val.endswith("'")) or (
-        val.startswith('"') and val.endswith('"')
-    ):
+    if (val.startswith("'") and val.endswith("'")) or (val.startswith('"') and val.endswith('"')):
         return val[1:-1]
     return val
 
@@ -46,9 +40,7 @@ def _parse_kv_pair(part: str) -> tuple[str, str]:
     """
     parts = EQUALS_SPLIT_REGEX.split(part, 1)
     if len(parts) != 2:
-        raise ValueError(
-            f"Invalid modification: '{part}'. Expected format 'Key=Value'."
-        )
+        raise ValueError(f"Invalid modification: '{part}'. Expected format 'Key=Value'.")
 
     key = parts[0].strip()
     if not key:
@@ -120,9 +112,7 @@ def _parse_selector_string(selector_str: str) -> tuple[str, str | None]:
     return page_spec, type_spec
 
 
-def specs_to_modification_rules(
-    specs: list[str], total_pages: int
-) -> list[ModificationRule]:
+def specs_to_modification_rules(specs: list[str], total_pages: int) -> list[ModificationRule]:
     """
     Main parser for the modify_annots operation.
     Converts a list of spec strings into a list of ModificationRule objects.

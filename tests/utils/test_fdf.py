@@ -25,7 +25,9 @@ FDF_DICT_SIMPLE_CORE = b" << /FDF << /Fields [ <</T(name)/V(John)>> ] >> >>"
 FDF_DICT_SIMPLE = FDF_HEADER + FDF_DICT_SIMPLE_CORE + b"\nendobj\n"
 
 # A more complex FDF with nested dictionaries
-FDF_DICT_NESTED_CORE = b" << /FDF << /Fields [ <</T(name)/V(John)>> /Kids [ << /T(addr) /V(123 Main) >> ] ] >> >>"
+FDF_DICT_NESTED_CORE = (
+    b" << /FDF << /Fields [ <</T(name)/V(John)>> /Kids [ << /T(addr) /V(123 Main) >> ] ] >> >>"
+)
 FDF_DICT_NESTED = FDF_HEADER + FDF_DICT_NESTED_CORE + b"\nendobj\n"
 
 FDF_FOOTER = b"""
@@ -126,9 +128,7 @@ def test_add_fdf_to_catalog_idempotent():
     """Tests that a /FDF reference is not added if one already exists."""
     fdf_obj_num = 99
     # Create a PDF that already has an FDF reference
-    pdf_with_fdf = PDF_SKELETON_BYTES.replace(
-        b"/Pages 2 0 R >>", b"/Pages 2 0 R /FDF 1 0 R >>"
-    )
+    pdf_with_fdf = PDF_SKELETON_BYTES.replace(b"/Pages 2 0 R >>", b"/Pages 2 0 R /FDF 1 0 R >>")
 
     result_bytes = add_fdf_to_catalog(pdf_with_fdf, fdf_obj_num)
 
@@ -188,17 +188,13 @@ def test_wrap_fdf_data_in_pdf_bytes_no_xref(mocker):
     bytes do not contain an xref table.
     """
     # 1. Mock the first helper function so it doesn't fail
-    mocker.patch(
-        "pdftl.utils.fdf.extract_main_fdf_dict", return_value=b"<< /Fields [] >>"
-    )
+    mocker.patch("pdftl.utils.fdf.extract_main_fdf_dict", return_value=b"<< /Fields [] >>")
 
     # 2. Mock the BytesIO object that pdf.save() writes to.
     # We will make its .getvalue() method return corrupted PDF bytes
     # that are missing the "\nxref" string.
     mock_buffer = MagicMock(spec=io.BytesIO)
-    mock_buffer.getvalue.return_value = (
-        b"%PDF-1.7\n%corrupted file\n%no xref here\n%%EOF"
-    )
+    mock_buffer.getvalue.return_value = b"%PDF-1.7\n%corrupted file\n%no xref here\n%%EOF"
 
     # Patch the io.BytesIO constructor to return our mock buffer
     mocker.patch("io.BytesIO", return_value=mock_buffer)

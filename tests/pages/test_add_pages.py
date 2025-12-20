@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, PropertyMock, call, patch
+from unittest.mock import MagicMock, call, patch
 
 import pikepdf
 import pytest
@@ -279,9 +279,7 @@ def test_add_pages_orchestration(
     # 3. Assert
 
     # Check PASS 1
-    mock_process_source_pages.assert_called_once_with(
-        mock_new_pdf, source_pages_to_process
-    )
+    mock_process_source_pages.assert_called_once_with(mock_new_pdf, source_pages_to_process)
 
     # Check that the remapper factory was called correctly
     expected_pdf_map = {id(pdf_a): 0, id(pdf_b): 1}

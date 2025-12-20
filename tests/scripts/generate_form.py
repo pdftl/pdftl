@@ -28,9 +28,7 @@ def generate():
     # Note: maxLen is required for Comb to work visually in Acrobat,
     # but the flag is what your parser checks.
     c.drawString(50, 660, "ID (Comb):")
-    form.textfield(
-        name="ID", x=150, y=650, width=200, height=20, fieldFlags=FF_Comb, maxlen=10
-    )
+    form.textfield(name="ID", x=150, y=650, width=200, height=20, fieldFlags=FF_Comb, maxlen=10)
 
     # 3. Checkbox: Married
     c.drawString(50, 620, "Married:")
@@ -73,9 +71,7 @@ def generate():
 
     # 6. Text: Notes (Multiline = 4096)
     c.drawString(50, 440, "Notes:")
-    form.textfield(
-        name="Notes", x=150, y=380, width=200, height=50, fieldFlags=FF_Multiline
-    )
+    form.textfield(name="Notes", x=150, y=380, width=200, height=50, fieldFlags=FF_Multiline)
 
     # 7. Button: ResetButton (Pushbutton = 65536)
     c.drawString(50, 340, "Reset:")

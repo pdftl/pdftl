@@ -26,9 +26,6 @@ ASSETS_DIR = TESTS_DIR / "assets"
 FORM_PDF = ASSETS_DIR / "Form.pdf"
 
 import copy
-import sys
-
-import pytest
 
 from pdftl.core.registry import registry  # Import the REAL object
 
@@ -195,9 +192,7 @@ class Runner:
 
     def __init__(self, temp_dir: Path):
         self.temp_dir = temp_dir
-        self.pdftk_path = (
-            os.environ["PDFTK"] if "PDFTK" in os.environ else shutil.which("pdftk")
-        )
+        self.pdftk_path = os.environ["PDFTK"] if "PDFTK" in os.environ else shutil.which("pdftk")
         self.durations = {}
         self.stdout = None
         self.stderr = None
@@ -231,9 +226,7 @@ class Runner:
         env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
         time_start = time.time()
         # Pass the modified environment to the subprocess
-        result = subprocess.run(
-            command_str, capture_output=True, text=True, check=False, env=env
-        )
+        result = subprocess.run(command_str, capture_output=True, text=True, check=False, env=env)
         self.durations[tool] = round(time.time() - time_start, 2)
         self.stdout = result.stdout
         self.stderr = result.stderr
@@ -260,9 +253,7 @@ def pytest_addoption(parser):
 
 def pytest_addoption(parser):
     """Add command-line options to pytest."""
-    parser.addoption(
-        "--skip-slow", action="store_true", default=False, help="skip slow tests"
-    )
+    parser.addoption("--skip-slow", action="store_true", default=False, help="skip slow tests")
 
 
 def pytest_configure(config):

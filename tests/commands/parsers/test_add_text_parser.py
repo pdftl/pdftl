@@ -7,7 +7,6 @@ Unit tests for the add_text_parser module.
 Requires 'pytest' and 'hypothesis' to run.
 """
 
-import logging
 import re
 import unittest
 from collections import namedtuple
@@ -193,9 +192,7 @@ class TestAddTextParser(unittest.TestCase):
             _parse_options_string("(foo=bar)")
 
     def test_parse_options_fail_position_and_xy(self):
-        with self.assertRaisesRegex(
-            ValueError, "Cannot specify both 'position' and 'x'"
-        ):
+        with self.assertRaisesRegex(ValueError, "Cannot specify both 'position' and 'x'"):
             _parse_options_string("(position=top-left, x=10)")
 
     def test_parse_options_fail_unmatched_parens(self):
@@ -228,7 +225,9 @@ class TestAddTextParser(unittest.TestCase):
             _parse_options_string("(size=10, =bar)")
 
     def test_variable_parsing_and_rendering(self):
-        text_str = "Page {page-1} of {total}. Report: {meta:Title}. File: {filename_base}. {{Literal}}"
+        text_str = (
+            "Page {page-1} of {total}. Report: {meta:Title}. File: {filename_base}. {{Literal}}"
+        )
         render_fn = _compile_text_renderer(text_str)
 
         self.assertTrue(callable(render_fn))
@@ -426,19 +425,13 @@ st_pos_preset = st.just(
     f"position={st.one_of(st.sampled_from(pdftl.commands.parsers.add_text_parser.PRESET_POSITIONS))}"
 )
 
-st_dim_floats = st.floats(
-    min_value=0, max_value=1000, allow_nan=False, allow_infinity=False
-)
-st_unit = st.one_of(
-    st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just("")
-)
+st_dim_floats = st.floats(min_value=0, max_value=1000, allow_nan=False, allow_infinity=False)
+st_unit = st.one_of(st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just(""))
 st_dim_str = st.builds(lambda v, u: f"{v}{u}", st_dim_floats, st_unit)
 
 st_pos_xy = st.builds(lambda x, y: f"x={x}, y={y}", st_dim_str, st_dim_str)
 
-st_offsets = st.builds(
-    lambda x, y: f"offset-x={x}, offset-y={y}", st_dim_str, st_dim_str
-)
+st_offsets = st.builds(lambda x, y: f"offset-x={x}, offset-y={y}", st_dim_str, st_dim_str)
 
 # st_color_named = st.builds(
 #     lambda v: f"color={v}",

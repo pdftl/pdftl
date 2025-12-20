@@ -56,7 +56,7 @@ def _get_destination_array(item: "OutlineItem", named_destinations: "NameTree"):
     # if not isinstance(item, (Dictionary, dict, OutlineItem)) or not hasattr(item, "destination"):
     #     logger.debug("returning early: item is not a valid container")
     #     return None
-    from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, String
+    from pikepdf import Array, Dictionary, Name, OutlineItem, String
 
     if not isinstance(item, OutlineItem):
         logger.warning("Invalid item passed, returning None")
@@ -117,9 +117,7 @@ def resolve_page_number(item: "OutlineItem", pdf_pages, named_destinations):
     for i, page in enumerate(pdf_pages):
         assert hasattr(page, "objgen")
         logger.debug("page.objgen = %s, type = %s", page.objgen, type(page.objgen))
-        logger.debug(
-            "page_obj.objgen = %s, type = %s", page_obj.objgen, type(page_obj.objgen)
-        )
+        logger.debug("page_obj.objgen = %s, type = %s", page_obj.objgen, type(page_obj.objgen))
         if page.objgen == page_obj.objgen:
             return i + 1  # Page numbers are 1-indexed
 

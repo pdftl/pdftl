@@ -205,9 +205,7 @@ def test_parser_success_multiple_specs(mock_page_spec_parser):
 
 # Strategy for a valid Key
 st_key = st.text(
-    alphabet=st.characters(
-        min_codepoint=65, max_codepoint=122, whitelist_categories=("L", "N")
-    ),
+    alphabet=st.characters(min_codepoint=65, max_codepoint=122, whitelist_categories=("L", "N")),
     min_size=1,
     max_size=10,
 ).filter(lambda s: not s.startswith("=") and not s.startswith("/"))
@@ -257,9 +255,7 @@ def test_parser_hypothesis_valid_specs(selector, kv_list, mock_page_spec_parser)
 
 
 @given(
-    spec=st.text().filter(
-        lambda s: not map.spec_pattern.match(s)  # Test strings that DON'T match
-    )
+    spec=st.text().filter(lambda s: not map.spec_pattern.match(s))  # Test strings that DON'T match
 )
 def test_parser_hypothesis_invalid_specs(spec):
     """

@@ -53,9 +53,7 @@ def test_filter_basic():
     assert result == {"op1", "op3"}
 
     # With transform
-    result2 = r.filter(
-        "operations", "category", lambda x: x == "A", transform=str.upper
-    )
+    result2 = r.filter("operations", "category", lambda x: x == "A", transform=str.upper)
     assert result2 == {"OP1", "OP3"}
 
 

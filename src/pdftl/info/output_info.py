@@ -61,9 +61,7 @@ def _write_pages_info(writer, pdf):
     writer(f"NumberOfPages: {len(pdf.pages)}")
 
 
-def _write_bookmarks_recursive(
-    writer, context: BookmarkWriterContext, level=1, escape_xml=True
-):
+def _write_bookmarks_recursive(writer, context: BookmarkWriterContext, level=1, escape_xml=True):
     """
     Recursively writes PDF bookmarks to a writer function.
 
@@ -73,9 +71,7 @@ def _write_bookmarks_recursive(
     for item in context.outline_items:
         page_num = None
         try:
-            page_num = resolve_page_number(
-                item, context.pages, context.named_destinations
-            )
+            page_num = resolve_page_number(item, context.pages, context.named_destinations)
         except AssertionError as exc:
             logger.warning(
                 "Could not resolve page number for bookmark '%s': %s.\n  Using page number 0.",

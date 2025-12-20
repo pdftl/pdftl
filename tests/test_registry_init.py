@@ -30,12 +30,8 @@ def test_discover_modules_imports_all(monkeypatch):
     """_discover_modules() should import all submodules under fake packages."""
 
     # Create fake packages
-    fake_commands = make_fake_module(
-        "pdftl.commands", is_pkg=True, submodules=["mod_a", "mod_b"]
-    )
-    fake_core = make_fake_module(
-        "pdftl.core", is_pkg=True, submodules=["mod_a", "mod_b"]
-    )
+    fake_commands = make_fake_module("pdftl.commands", is_pkg=True, submodules=["mod_a", "mod_b"])
+    fake_core = make_fake_module("pdftl.core", is_pkg=True, submodules=["mod_a", "mod_b"])
 
     # Patch iter_modules to yield submodules
     def fake_iter_modules(path):
@@ -110,9 +106,7 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
         "iter_modules",
         lambda path: [(None, "alpha", False), (None, "beta", False)],
     )
-    monkeypatch.setattr(
-        reg_init.importlib, "import_module", lambda name: types.ModuleType(name)
-    )
+    monkeypatch.setattr(reg_init.importlib, "import_module", lambda name: types.ModuleType(name))
 
     caplog.set_level(logging.DEBUG, logger="pdftl.registry_init")
     loaded = reg_init._discover_modules([fake_pkg], "operation")

@@ -61,8 +61,7 @@ _CROP_EXAMPLES = [
     {
         "cmd": "in.pdf crop '1-end(1cm,2cm)' output out.pdf",
         "desc": (
-            "Remove a 1cm margin from the sides\n"
-            "and 2cm from the top and bottom of all pages:"
+            "Remove a 1cm margin from the sides\n" "and 2cm from the top and bottom of all pages:"
         ),
     },
     {
@@ -72,8 +71,7 @@ _CROP_EXAMPLES = [
     {
         "cmd": "in.pdf crop '2-8even(a5)' preview output out.pdf",
         "desc": (
-            "Preview effect of cropping the even-numbered pages\n"
-            "between pages 2 and 8 to A5"
+            "Preview effect of cropping the even-numbered pages\n" "between pages 2 and 8 to A5"
         ),
     },
 ]
@@ -101,9 +99,7 @@ def crop_pages(pdf: "Pdf", specs: list):
     for i in range(len(pdf.pages)):
         if i in page_rules:
             # We pass fit_ctx and all_rules to handle 'fit-group' logic
-            _apply_crop_rule_to_page(
-                page_rules[i], i, pdf, preview, fit_ctx, page_rules
-            )
+            _apply_crop_rule_to_page(page_rules[i], i, pdf, preview, fit_ctx, page_rules)
 
     return pdf
 
@@ -153,9 +149,7 @@ def _calculate_new_box(page_dims, spec_str, page_idx, fit_ctx, all_rules):
         return fit_ctx.calculate_rect(page_idx, parsed, spec_str, all_rules)
 
     elif parsed["type"] == "paper":
-        left, top, right, bottom = _crop_margins_from_paper_size(
-            width, height, *parsed["size"]
-        )
+        left, top, right, bottom = _crop_margins_from_paper_size(width, height, *parsed["size"])
     else:  # type == 'margin'
         left, top, right, bottom = parsed["values"]
 

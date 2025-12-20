@@ -78,9 +78,7 @@ def test_dump_annots_filters_and_errors(annot_pdf, capsys, caplog):
         Type=pikepdf.Name.Annot,
         Subtype=pikepdf.Name.Link,
         Rect=[0, 0, 10, 10],
-        A=pikepdf.Dictionary(
-            S=pikepdf.Name.JavaScript, JS=pikepdf.String("alert('hi')")
-        ),
+        A=pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String("alert('hi')")),
     )
 
     # 3. Ignored Keys /Border (Lines 192-194 coverage)
@@ -95,9 +93,7 @@ def test_dump_annots_filters_and_errors(annot_pdf, capsys, caplog):
     )
 
     annot_pdf.add_blank_page()
-    annot_pdf.pages[1].Annots = annot_pdf.make_indirect(
-        [no_subtype, js_action, border_annot]
-    )
+    annot_pdf.pages[1].Annots = annot_pdf.make_indirect([no_subtype, js_action, border_annot])
 
     # Define a side effect that ONLY raises for our specific trigger key.
     # This prevents crashing valid calls (like those for Action dictionaries).

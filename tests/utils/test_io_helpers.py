@@ -1,8 +1,4 @@
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pikepdf
-import pytest
+from unittest.mock import patch
 
 from pdftl.utils.io_helpers import can_read_file
 

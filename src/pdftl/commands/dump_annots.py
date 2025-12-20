@@ -87,9 +87,7 @@ def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info):
     """
     Dumps annotation data from a PDF in pdftk style
     """
-    logger.debug(
-        "Dumping pdftk-style annotations data for PDF with %s pages.", len(pdf.pages)
-    )
+    logger.debug("Dumping pdftk-style annotations data for PDF with %s pages.", len(pdf.pages))
     all_annots_data = _get_all_annots_data(pdf)
     data_strings = _data_to_strings(all_annots_data, string_convert)
     uri_line = ""
@@ -171,9 +169,7 @@ def _lines_from_datum(datum, string_convert):
         new_lines.extend(_key_value_lines(key, value, prefix, string_convert))
     new_lines.extend(
         [
-            _data_item_to_string_helper(
-                "PageNumber", datum["Page"], prefix, string_convert
-            ),
+            _data_item_to_string_helper("PageNumber", datum["Page"], prefix, string_convert),
             _data_item_to_string_helper(
                 "IndexInPage", datum["AnnotationIndex"], prefix, string_convert
             ),

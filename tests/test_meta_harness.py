@@ -66,9 +66,7 @@ def test_crop_operation_harness(runner, temp_dir):
             assert len(doc) == 3, "Cropped PDF should still have 3 pages"
             for page in doc:
                 expected_width = 595 - 200  # 100 from each side
-                assert math.isclose(
-                    page.rect.width, expected_width
-                ), "Page width is incorrect"
+                assert math.isclose(page.rect.width, expected_width), "Page width is incorrect"
 
     run_test_case(
         runner,

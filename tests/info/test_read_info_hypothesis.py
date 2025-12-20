@@ -86,9 +86,9 @@ def mock_item_strategy(draw, named_dests_map):
     if dest_type == 1:
         # 1. Direct Array destination
         expected_dest = draw(
-            st.lists(
-                st.integers(min_value=-10000, max_value=10000), min_size=1, max_size=5
-            ).map(Array)
+            st.lists(st.integers(min_value=-10000, max_value=10000), min_size=1, max_size=5).map(
+                Array
+            )
         )
         mock_item.destination = expected_dest
         mock_item.action = None
@@ -96,9 +96,9 @@ def mock_item_strategy(draw, named_dests_map):
     elif dest_type == 2:
         # 2. Action with /D destination
         expected_dest = draw(
-            st.lists(
-                st.integers(min_value=-10000, max_value=10000), min_size=1, max_size=5
-            ).map(Array)
+            st.lists(st.integers(min_value=-10000, max_value=10000), min_size=1, max_size=5).map(
+                Array
+            )
         )
         mock_item.destination = None
         mock_item.action = MagicMock()

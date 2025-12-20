@@ -19,9 +19,7 @@ def test_pki(tmp_path):
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-    subject = issuer = x509.Name(
-        [x509.NameAttribute(NameOID.COMMON_NAME, "PDTFL Test")]
-    )
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "PDTFL Test")])
 
     # Use timezone.utc for compatibility with Python 3.10
     now = datetime.now(timezone.utc)
@@ -93,9 +91,7 @@ def test_sign_pipeline_integrity(tmp_path, test_pki):
 
         # Verify the algorithm used
         # This ensures pyHanko didn't default to an older algorithm like SHA1
-        assert (
-            status.md_algorithm == "sha256"
-        ), f"Expected SHA256, got {status.md_algorithm}"
+        assert status.md_algorithm == "sha256", f"Expected SHA256, got {status.md_algorithm}"
 
         # Verify the signer identity using asn1crypto's native dictionary access
         signer_info = status.signing_cert.subject.native

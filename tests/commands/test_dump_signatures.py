@@ -1,5 +1,4 @@
 import io
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -144,7 +143,4 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
         with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
             mock_open.return_value.__enter__.return_value = output
             dump_signatures(signed_pdf_path, None, None)
-            assert (
-                "SignatureModificationLevel: SUSPICIOUS (Exception)"
-                in output.getvalue()
-            )
+            assert "SignatureModificationLevel: SUSPICIOUS (Exception)" in output.getvalue()

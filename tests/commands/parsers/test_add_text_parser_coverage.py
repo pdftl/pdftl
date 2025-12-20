@@ -1,6 +1,5 @@
-import re
 from collections import namedtuple
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -88,9 +87,7 @@ class TestAddTextParser:
             "pdftl.commands.parsers.add_text_parser"
         ).commands.parsers.add_text_parser._parse_options_string,
     )
-    def test_parse_options_string_empty_part_after_comma(
-        self, mock_parse, mock_normalize
-    ):
+    def test_parse_options_string_empty_part_after_comma(self, mock_parse, mock_normalize):
         """Covers line 248: continue (Skip empty parts, e.g., from "foo=bar,,baz=qux")"""
         # Input has an empty part: (key1=value1,,key2=value2) or (key1=value1, ,key2=value2).
         # We use non-conflicting options ('font' and 'size') to avoid internal validation errors.
@@ -148,9 +145,7 @@ class TestAddTextParser:
     def test_parse_dimension_invalid_default_value(self, mock_parse):
         """Covers lines 374-375: try/except for default 'pt' float conversion"""
         # No unit found, tries to convert whole string to float (default 'pt')
-        with pytest.raises(
-            ValueError, match="Invalid size or unit in dimension: 'ten'"
-        ):
+        with pytest.raises(ValueError, match="Invalid size or unit in dimension: 'ten'"):
             mock_parse("ten")
 
     # =========================================================================
@@ -166,9 +161,7 @@ class TestAddTextParser:
     def test_parse_color_invalid_characters(self, mock_parse):
         """Covers lines 395-397: try/except for float conversion of parts"""
         # Contains non-numeric characters: 'a'
-        with pytest.raises(
-            ValueError, match="Invalid characters in color string: '1 0 a'"
-        ):
+        with pytest.raises(ValueError, match="Invalid characters in color string: '1 0 a'"):
             mock_parse("1 0 a")
 
     @patch(
@@ -185,9 +178,7 @@ class TestAddTextParser:
 
         """Covers line 416: raise ValueError for incorrect number of parts (5)"""
         # Too many parts (5)
-        with pytest.raises(
-            ValueError, match="Color string '1 0 0 0 0' must have 1.*Got 5."
-        ):
+        with pytest.raises(ValueError, match="Color string '1 0 0 0 0' must have 1.*Got 5."):
             mock_parse("1 0 0 0 0")
 
     # =========================================================================
@@ -205,9 +196,7 @@ class TestAddTextParser:
         # Token for '{filename+1}' would be ('filename', '+', 1)
         token = ("filename", "+", 1)
         context = {"filename": "MyDoc.pdf"}  # Non-numeric value
-        with pytest.raises(
-            ValueError, match="Cannot apply arithmetic to variable: filename"
-        ):
+        with pytest.raises(ValueError, match="Cannot apply arithmetic to variable: filename"):
             mock_evaluate(token, context)
 
     @patch(

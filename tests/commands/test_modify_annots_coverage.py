@@ -58,9 +58,7 @@ def test_modify_annots_empty_rules_warning(pdf, caplog):
     # Ensure we capture WARNING logs
     caplog.set_level(logging.WARNING)
 
-    with patch(
-        "pdftl.commands.modify_annots.specs_to_modification_rules", return_value=[]
-    ):
+    with patch("pdftl.commands.modify_annots.specs_to_modification_rules", return_value=[]):
         modify_annots(pdf, ["1/Link(A=B)"])
 
     assert "No modification rules parsed" in caplog.text

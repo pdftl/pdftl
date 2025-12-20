@@ -87,10 +87,7 @@ def test_overlay_missing_file_error(two_page_pdf):
 def metadata_file(tmp_path):
     """Creates a dummy dump_data formatted text file."""
     content = (
-        "InfoKey: Title\n"
-        "InfoValue: New Title\n"
-        "InfoKey: Author\n"
-        "InfoValue: Test Author\n"
+        "InfoKey: Title\n" "InfoValue: New Title\n" "InfoKey: Author\n" "InfoValue: Test Author\n"
     )
     # update_info opens in 'rb' mode, so we write bytes
     f = tmp_path / "meta.txt"

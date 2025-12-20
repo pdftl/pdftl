@@ -35,18 +35,14 @@ registry.operations["multi_op"] = {
 # -----------------------------
 def test_validate_stage_args_missing_first_input():
     stage = CliStage(operation=None, inputs=[])
-    manager = PipelineManager(
-        stages=[stage], global_options={}, input_context=MagicMock()
-    )
+    manager = PipelineManager(stages=[stage], global_options={}, input_context=MagicMock())
     with pytest.raises(MissingArgumentError):
         manager._validate_stage_args(stage, is_first=True, is_last=False)
 
 
 def test_validate_stage_args_requires_output():
     stage = CliStage(operation="filter", inputs=["file1.pdf"])
-    manager = PipelineManager(
-        stages=[stage], global_options={}, input_context=MagicMock()
-    )
+    manager = PipelineManager(stages=[stage], global_options={}, input_context=MagicMock())
     with pytest.raises(MissingArgumentError):
         manager._validate_stage_args(stage, is_first=False, is_last=True)
 
@@ -215,9 +211,7 @@ def test_resolve_stage_io_prompts_prompts_user(monkeypatch):
 # _save_kw_options simple branch
 # -----------------------------
 def test_save_kw_options_returns_expected_dict():
-    manager = PipelineManager(
-        stages=[], global_options={"foo": "bar"}, input_context=MagicMock()
-    )
+    manager = PipelineManager(stages=[], global_options={"foo": "bar"}, input_context=MagicMock())
     manager.kept_id = ["id1", "id2"]
     result = manager._save_kw_options()
     assert result == {"options": {"foo": "bar"}, "set_pdf_id": ["id1", "id2"]}
@@ -228,9 +222,7 @@ def test_save_kw_options_returns_expected_dict():
 # -----------------------------
 def test_validate_and_execute_numbered_stage_final_empty(monkeypatch):
     stage = CliStage(operation=None)
-    manager = PipelineManager(
-        stages=[stage], global_options={}, input_context=MagicMock()
-    )
+    manager = PipelineManager(stages=[stage], global_options={}, input_context=MagicMock())
     manager._validate_and_execute_numbered_stage(0, stage)  # Should not raise
 
 
@@ -245,13 +237,9 @@ class DummyPdf:
 
 
 def test_pipeline_run_dummy_op(monkeypatch):
-    stage = CliStage(
-        operation="single_op", inputs=["dummy.pdf"], input_passwords=[None]
-    )
+    stage = CliStage(operation="single_op", inputs=["dummy.pdf"], input_passwords=[None])
     input_context = MagicMock()
-    manager = PipelineManager(
-        stages=[stage], global_options={}, input_context=input_context
-    )
+    manager = PipelineManager(stages=[stage], global_options={}, input_context=input_context)
 
     monkeypatch.setattr(
         PipelineManager, "_open_pdf_from_file", lambda self, filename, pw: DummyPdf()

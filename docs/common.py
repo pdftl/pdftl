@@ -64,9 +64,7 @@ def get_docs_data():
 
     # build complete options topic **
     if app_info["options"]:
-        print(
-            "--- [common.py] Found output options. Constructing 'output_options' topic..."
-        )
+        print("--- [common.py] Found output options. Constructing 'output_options' topic...")
         details_lines = []
         # Sort options alphabetically for consistent output
         sorted_options = sorted(app_info["options"].items())
@@ -101,7 +99,5 @@ def get_docs_data():
     #     if desc_key:
     #         data["details"] = data.pop(desc_key)
 
-    print(
-        f"--- [common.py] Finished data prep. Returning {len(all_topics)} total topics."
-    )
+    print(f"--- [common.py] Finished data prep. Returning {len(all_topics)} total topics.")
     return app_info, all_topics

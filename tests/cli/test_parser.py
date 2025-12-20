@@ -35,9 +35,7 @@ def mock_registry(mocker):
     """Mocks the global operations registry."""
     mock_reg = MagicMock()
     mock_reg.operations = {"cat", "burst", "dump_data"}
-    mocker.patch.dict(
-        parser_module.registry.__dict__, {"operations": mock_reg.operations}
-    )
+    mocker.patch.dict(parser_module.registry.__dict__, {"operations": mock_reg.operations})
     return mock_reg
 
 
@@ -89,9 +87,7 @@ class TestPublicFunctions:
 
     @patch("pdftl.cli.parser._parse_pre_operation_args")
     @patch("pdftl.cli.parser.parse_options_and_specs")
-    def test_parse_cli_stage_explicit_op(
-        self, mock_parse_options, mock_parse_pre, mock_registry
-    ):
+    def test_parse_cli_stage_explicit_op(self, mock_parse_options, mock_parse_pre, mock_registry):
         """Tests parsing a stage with an explicit operation 'cat'."""
         args = ["in.pdf", "A=in2.pdf", "cat", "1-end", "output", "out.pdf"]
 
@@ -141,9 +137,7 @@ class TestPublicFunctions:
 
     @patch("pdftl.cli.parser._parse_pre_operation_args")
     @patch("pdftl.cli.parser.parse_options_and_specs")
-    def test_parse_cli_stage_empty_filter(
-        self, mock_parse_options, mock_parse_pre, mock_registry
-    ):
+    def test_parse_cli_stage_empty_filter(self, mock_parse_options, mock_parse_pre, mock_registry):
         """Tests that empty args defaults to a filter operation."""
         mock_parse_pre.return_value = ([], {}, [])
         mock_parse_options.return_value = ([], {})
@@ -461,16 +455,12 @@ class TestParserIntegration:
         with pytest.raises(InvalidArgumentError, match="argument.*BadPermission"):
             parse_cli_stage(args, is_first_stage=True)
 
-    def test_parse_cli_stage_allow_followed_by_keyword(
-        self, mock_registry, mock_constants
-    ):
+    def test_parse_cli_stage_allow_followed_by_keyword(self, mock_registry, mock_constants):
         args = ["in.pdf", "cat", "allow", "output", "out.pdf"]
         with pytest.raises(InvalidArgumentError, match="Invalid argument 'output'"):
             parse_cli_stage(args, is_first_stage=True)
 
-    def test_parse_cli_stage_attach_files_stops_at_keyword(
-        self, mock_registry, mock_constants
-    ):
+    def test_parse_cli_stage_attach_files_stops_at_keyword(self, mock_registry, mock_constants):
         args = [
             "in.pdf",
             "cat",
@@ -490,9 +480,7 @@ class TestParserIntegration:
         assert stage.options["uncompress"] is True
         assert stage.options["output"] == "out.pdf"
 
-    def test_parse_cli_stage_unknown_arg_after_allow_hint(
-        self, mock_registry, mock_constants
-    ):
+    def test_parse_cli_stage_unknown_arg_after_allow_hint(self, mock_registry, mock_constants):
         args = [
             "in.pdf",
             "cat",

@@ -7,8 +7,6 @@ from hypothesis import strategies as st
 
 from pdftl.commands.helpers.text_drawer import _PageBox  # Import the helper tuple
 from pdftl.commands.helpers.text_drawer import (
-    DEFAULT_FONT_NAME,
-    TextDrawer,
     _get_base_coordinates,
     _resolve_dimension,
 )
@@ -24,15 +22,11 @@ MockPageBox = _PageBox
 
 # --- Strategies for generating valid inputs ---
 
-st_floats = st.floats(
-    min_value=0, max_value=10000, allow_nan=False, allow_infinity=False
-)
+st_floats = st.floats(min_value=0, max_value=10000, allow_nan=False, allow_infinity=False)
 
 st_dim_rule = st.one_of(
     st.builds(lambda v: {"type": "pt", "value": v}, st_floats),
-    st.builds(
-        lambda v: {"type": "%", "value": v}, st.floats(min_value=0, max_value=100)
-    ),
+    st.builds(lambda v: {"type": "%", "value": v}, st.floats(min_value=0, max_value=100)),
     st_floats,  # Test raw floats
     st.just(None),
 )
@@ -43,9 +37,7 @@ st_page_box_hypothesis = st.builds(
     height=st.floats(min_value=1, max_value=2000),
 )
 
-st_align = st.one_of(
-    st.just("left"), st.just("center"), st.just("right"), st.just(None)
-)
+st_align = st.one_of(st.just("left"), st.just("center"), st.just("right"), st.just(None))
 
 st_position_preset = st.sampled_from(
     [

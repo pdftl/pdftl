@@ -1,5 +1,3 @@
-import io
-import os
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -11,9 +9,7 @@ from pdftl.output.sign import parse_sign_options, save_and_sign
 
 
 def test_parse_sign_options_missing_args():
-    with pytest.raises(
-        UserCommandLineError, match="requires both 'sign_key' and 'sign_cert'"
-    ):
+    with pytest.raises(UserCommandLineError, match="requires both 'sign_key' and 'sign_cert'"):
         parse_sign_options({"sign_key": "key.pem"}, None)
 
 
@@ -35,9 +31,7 @@ def test_parse_sign_options_env_missing(monkeypatch):
         "sign_pass_env": "MISSING_VAR",
     }
     monkeypatch.delenv("MISSING_VAR", raising=False)
-    with pytest.raises(
-        UserCommandLineError, match="Environment variable MISSING_VAR not found"
-    ):
+    with pytest.raises(UserCommandLineError, match="Environment variable MISSING_VAR not found"):
         parse_sign_options(options, None)
 
 
@@ -55,9 +49,7 @@ def test_parse_sign_options_prompt():
 @patch("pyhanko.sign.signers.sign_pdf")
 @patch("pyhanko.sign.signers.SimpleSigner.load")
 @patch("pyhanko.pdf_utils.incremental_writer.IncrementalPdfFileWriter")
-def test_save_and_sign_with_encryption(
-    mock_writer_cls, mock_signer_load, mock_sign_pdf
-):
+def test_save_and_sign_with_encryption(mock_writer_cls, mock_signer_load, mock_sign_pdf):
     # Use a Mock object that simulates pikepdf.Pdf
     mock_pdf = MagicMock()
     mock_enc = MagicMock()

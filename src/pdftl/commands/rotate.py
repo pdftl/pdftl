@@ -20,13 +20,22 @@ Rotates pages by 90, 180, or 270 degrees. Each '<spec>' consists of a
 page range followed by a rotation direction. A rotation direction is
 either a cardinal direction or a relative direction.
 
-The cardinal directions `north`, `east`, `south`, `west` are absolute rotations, relative to the page's "natural" orientation which is `north`. (You get to find out what this natural orientation is by setting this to `north` and inspecting the file. Often it is `north` already but not always.)
+The cardinal directions `north`, `east`, `south`, `west` are absolute
+rotations, relative to the page's "natural" orientation which is
+`north`. (You get to find out what this natural orientation is by
+setting this to `north` and inspecting the file. Often it is `north`
+already but not always.)
 
-The relative directions `left`, `right`, `down` are relative to the page's current rotation, viewed from the topside of the page. For example, `down` will turn pages upside-down. And `right` rotates 90 degrees clockwise.
+The relative directions `left`, `right`, `down` are relative to the
+page's current rotation, viewed from the topside of the page. For
+example, `down` will turn pages upside-down. And `right` rotates 90
+degrees clockwise.
 
-For example, '1-endeast' orients all pages 90 degrees clockwise compared to their natural rotation.
+For example, '1-endeast' orients all pages 90 degrees clockwise
+compared to their natural rotation.
 
-And '2-3left 4south' rotates pages 2-3 leftwards and makes page 4 Australian.
+And '2-3left 4south' rotates pages 2-3 leftwards and makes page 4
+Australian.
 
 """
 

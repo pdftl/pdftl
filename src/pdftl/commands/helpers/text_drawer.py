@@ -232,9 +232,7 @@ try:
 
                 # 3. Get user-defined offsets
                 offset_x = _resolve_dimension(rule.get("offset-x"), self.page_box.width)
-                offset_y = _resolve_dimension(
-                    rule.get("offset-y"), self.page_box.height
-                )
+                offset_y = _resolve_dimension(rule.get("offset-y"), self.page_box.height)
 
                 # 4. Calculate final anchor point for translation
                 final_anchor_x = anchor_x + offset_x

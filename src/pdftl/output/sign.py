@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
-    import io
 
-    import pikepdf
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     from pyhanko.sign import signers
 
@@ -44,9 +42,7 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
     if b"/Encrypt" in buffer.getvalue():
         print("[DEBUG] SUCCESS: Buffer is now encrypted.")
     else:
-        print(
-            "[DEBUG] ERROR: Buffer still missing /Encrypt. Check if pdf object is modified."
-        )
+        print("[DEBUG] ERROR: Buffer still missing /Encrypt. Check if pdf object is modified.")
 
     # 3. Setup pyHanko writer
     w = IncrementalPdfFileWriter(buffer)
@@ -87,9 +83,7 @@ def parse_sign_options(options, input_context):
     }
 
     if not sign_cfg["key"] or not sign_cfg["cert"]:
-        raise UserCommandLineError(
-            "Digital signing requires both 'sign_key' and 'sign_cert'."
-        )
+        raise UserCommandLineError("Digital signing requires both 'sign_key' and 'sign_cert'.")
 
     if "sign_pass_env" in options:
         sign_cfg["passphrase"] = os.environ.get(options["sign_pass_env"])
@@ -99,9 +93,7 @@ def parse_sign_options(options, input_context):
             )
     elif options.get("sign_pass_prompt"):
         # Uses the context helper to securely get the password
-        sign_cfg["passphrase"] = input_context.get_pass(
-            "Enter private key passphrase: "
-        )
+        sign_cfg["passphrase"] = input_context.get_pass("Enter private key passphrase: ")
 
     return sign_cfg
 
@@ -110,7 +102,9 @@ def parse_sign_options(options, input_context):
     "sign_key <file>",
     desc="Path to private key PEM",
     type="one mandatory argument",
-    long_desc="""The path to your private key file (`.pem`). This is required for signing. See also `sign_cert`.""",
+    long_desc="""
+    The path to your private key file (`.pem`). This is required for signing. See also `sign_cert`.
+    """,
     tags=["security", "signatures"],
 )
 def _sign_key_option():
@@ -121,7 +115,8 @@ def _sign_key_option():
     "sign_cert <file>",
     desc="Path to certificate PEM",
     type="one mandatory argument",
-    long_desc="""The path to your certificate file (`.pem`), also known as the public key. This is required for signing.""",
+    long_desc=""" The path to your certificate file (`.pem`), also
+    known as the public key. This is required for signing.  """,
     tags=["security", "signatures"],
 )
 def _sign_cert_option():
@@ -141,7 +136,9 @@ def _sign_field_option():
 @register_option(
     "sign_pass_env <var>",
     desc="Environment variable with `sign_cert` passphrase",
-    long_desc="""The name of an environment variable containing the passphrase for your public signing certificate, as specificed by `sign_cert`.""",
+    long_desc=""" The name of an environment variable containing the
+    passphrase for your public signing certificate, as specificed by
+    `sign_cert`.  """,
     type="one mandatory argument",
     tags=["security", "signatures"],
 )
@@ -165,8 +162,10 @@ def _sign_pass_prompt_option():
     desc="Adding crytographic signatures to PDF files",
 )
 def _help_topic_signing():
-    """
-    `pdftl` supports high-integrity digital signing of PDF documents. These signatures are applied using **Incremental Updates**, ensuring that the original document structure is preserved and the signature remains cryptographically valid.
+    """`pdftl` supports high-integrity digital signing of PDF
+    documents. These signatures are applied using **Incremental
+    Updates**, ensuring that the original document structure is
+    preserved and the signature remains cryptographically valid.
 
     ### Key Concepts
 
@@ -185,7 +184,8 @@ def _help_topic_signing():
 
     ### Command Line Usage
 
-    To sign a document, you must provide both a private key and a matching certificate in PEM format.
+    To sign a document, you must provide both a private key and a
+    matching certificate in PEM format.
 
     #### Basic Signing
     ```bash
@@ -200,7 +200,7 @@ def _help_topic_signing():
     | --- | --- | --- |
     | `sign_key` | Path to your private key file (`.pem`). | Yes (for signing) |
     | `sign_cert` | Path to your certificate file (`.pem`). | Yes (for signing) |
-    |`sign_pass_env` <`var`>| An environment variable with your public certificate passphrase | No |
+    |`sign_pass_env` <`var`>|An environment variable with your public certificate passphrase |No|
     |`sign_pass_prompt` | Ask to be prompted for your public certificate passphrase | No |
     |`sign_field` <`name`> | The name of a signature field to use (default: `Signature1`)| No |
 
@@ -323,7 +323,7 @@ def _help_topic_signing():
     ### Summary of Files
 
     * **`test_key.pem`**: Your private key. Keep this secret.
-    
+
     * **`test_cert.pem`**: Your public certificate. This is what gets
         embedded in the PDF so others can verify your signature.
 

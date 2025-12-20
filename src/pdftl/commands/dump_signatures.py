@@ -96,9 +96,7 @@ def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None):
                 print(f"SignatureFieldName: {sig.field_name}", file=out)
 
                 # Safe extraction of signer name
-                signer_name = status.signing_cert.subject.native.get(
-                    "common_name", "Unknown"
-                )
+                signer_name = status.signing_cert.subject.native.get("common_name", "Unknown")
                 print(f"SignatureSigner: {signer_name}", file=out)
                 print(f"SignatureHashAlgorithm: {status.md_algorithm}", file=out)
 

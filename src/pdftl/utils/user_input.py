@@ -59,8 +59,7 @@ def _get_all_filename_matches(text, glob_suffix="*"):
 
     # Get all matches and add trailing slashes to dirs
     matches = [
-        f + (os.path.sep if os.path.isdir(f) else "")
-        for f in glob.glob(text + glob_suffix)
+        f + (os.path.sep if os.path.isdir(f) else "") for f in glob.glob(text + glob_suffix)
     ]
     logger.debug(glob.glob(text + glob_suffix))
     return matches

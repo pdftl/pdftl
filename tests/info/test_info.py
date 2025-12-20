@@ -12,7 +12,6 @@ from pikepdf import (
 )
 
 # --- Import Modules to Test ---
-from pdftl.info import parse_dump as parse_dump_module
 from pdftl.info import set_info as set_info_module
 
 # --- Import Functions to Test ---
@@ -230,12 +229,8 @@ class TestOutputInfo:
         "pdftl.info.output_info.resolve_page_number",
         side_effect=[1, AssertionError("Test"), 3],
     )
-    @patch(
-        "pdftl.info.output_info.xml_encode_for_info", side_effect=lambda x: f"XML({x})"
-    )
-    def test_write_bookmarks_recursive(
-        self, mock_xml_encode, mock_resolve, mock_writer
-    ):
+    @patch("pdftl.info.output_info.xml_encode_for_info", side_effect=lambda x: f"XML({x})")
+    def test_write_bookmarks_recursive(self, mock_xml_encode, mock_resolve, mock_writer):
         """Tests the recursive bookmark writing logic."""
         # Setup mock items
         mock_child = MagicMock(title="Child <&>", children=[])
@@ -260,9 +255,7 @@ class TestOutputInfo:
         )
 
         # Check XML encoding calls
-        mock_xml_encode.assert_has_calls(
-            [call("Item 1"), call("Item 2"), call("Child <&>")]
-        )
+        mock_xml_encode.assert_has_calls([call("Item 1"), call("Item 2"), call("Child <&>")])
 
         # Check output
         expected_output = [
@@ -281,9 +274,7 @@ class TestOutputInfo:
 
     @patch("pdftl.info.output_info.pdf_num_to_string", side_effect=lambda x: f"{x:.1f}")
     @patch("pdftl.info.output_info.pdf_rect_to_string", side_effect=lambda r: str(r))
-    def test_write_page_media_info(
-        self, mock_rect_str, mock_num_str, mock_writer, mock_pdf
-    ):
+    def test_write_page_media_info(self, mock_rect_str, mock_num_str, mock_writer, mock_pdf):
         """Tests writing page media, including mismatching cropbox."""
         _write_page_media_info(mock_writer, mock_pdf)
 
@@ -382,10 +373,7 @@ class TestParseDump:
 
         assert info_dict == {"Title": "My Doc"}
         assert len(caplog.records) == 1
-        assert (
-            caplog.records[0].message
-            == "Got InfoValue without a preceding InfoKey. Ignoring"
-        )
+        assert caplog.records[0].message == "Got InfoValue without a preceding InfoKey. Ignoring"
 
     def test_parse_dump_data_integration(self):
         """Full integration test for parse_dump_data."""
@@ -529,10 +517,7 @@ class TestSetInfo:
             _set_page_media_entry(mock_pdf, {"Number": 99})
         assert len(caplog.records) == 1
         record = caplog.records[0]
-        assert (
-            record.message
-            == "Nonexistent page 99 requested for PageMedia metadata. Skipping."
-        )
+        assert record.message == "Nonexistent page 99 requested for PageMedia metadata. Skipping."
 
     @patch("pikepdf.OutlineItem")
     def test_add_bookmark_logic(self, mock_OutlineItem, mock_pdf):
@@ -590,8 +575,7 @@ class TestSetInfo:
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert (
-            "Skipping incomplete bookmark, we need Level, PageNumber and Title."
-            in record.message
+            "Skipping incomplete bookmark, we need Level, PageNumber and Title." in record.message
         )
 
         # 2. Bad page number
@@ -642,9 +626,7 @@ class TestSetInfo:
             ),
         ],
     )
-    def test_make_page_label(
-        self, label_data, expected_dict, expected_index, mock_pdf, mocker
-    ):
+    def test_make_page_label(self, label_data, expected_dict, expected_index, mock_pdf, mocker):
         mock_map = {
             "UppercaseRoman": "/R",
             "LowercaseRoman": "/r",
@@ -686,9 +668,7 @@ class TestSetInfo:
         # If you fix the bug to meta_dict["PdfID1"], update this test.
         try:
             mock_id.assert_called_with(mock_pdf, 1, meta_dict["PdfID0"])
-            set_info_module.logging.warning(
-                "BUG: set_metadata_in_pdf uses PdfID0 for PdfID1"
-            )
+            set_info_module.logging.warning("BUG: set_metadata_in_pdf uses PdfID0 for PdfID1")
         except KeyError:
             # This will happen if you fix the bug
             mock_id.assert_called_with(mock_pdf, 1, meta_dict["PdfID1"])
@@ -751,9 +731,7 @@ class TestSetInfo:
         original_list_content = [MagicMock()]
         mock_outline.root = original_list_content
 
-        set_info_module._set_bookmarks(
-            mock_pdf, bookmark_list, delete_existing_bookmarks=False
-        )
+        set_info_module._set_bookmarks(mock_pdf, bookmark_list, delete_existing_bookmarks=False)
 
         # Check that outline.root was *not* changed
         assert mock_outline.root is original_list_content
@@ -780,10 +758,7 @@ class TestSetInfo:
             result = _add_bookmark(mock_pdf, b, MagicMock(), ancestors)
 
         # Check that a warning was logged
-        expected = (
-            "Skipping invalid bookmark with level %s. Levels should be 1 or greater."
-            % 0
-        )
+        expected = "Skipping invalid bookmark with level %s. Levels should be 1 or greater." % 0
         assert expected in [rec.message for rec in caplog.records]
 
         # Check that ancestors list was returned unchanged

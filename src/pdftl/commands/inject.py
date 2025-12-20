@@ -30,7 +30,8 @@ where `<spec>` is a page specification (default: all pages),
 and `<code>` is a PDF content stream fragment to instead at
 either the head or tail of those pages' streams.
 
-**Warning:** This can easily break content streams. The resulting PDF files will not render as expected.
+**Warning:** This can easily break content streams.
+The resulting PDF files will not render as expected.
 
 """
 

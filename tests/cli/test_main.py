@@ -70,9 +70,7 @@ def test_find_help_command_order():
 def test_is_verbose_and_setup_logging():
     verbose_flag = next(iter(VERBOSE_FLAGS))
     debug_flag = next(iter(DEBUG_FLAGS))
-    verbose, remaining = mainmod._is_verbose_and_setup_logging(
-        [verbose_flag, debug_flag, "foo"]
-    )
+    verbose, remaining = mainmod._is_verbose_and_setup_logging([verbose_flag, debug_flag, "foo"])
     assert verbose
     assert "foo" in remaining
     assert verbose_flag not in remaining
@@ -108,13 +106,9 @@ def test_main_no_stages_raises(monkeypatch):
     # Patch parsing to simulate no stages
     monkeypatch.setattr(mainmod, "split_args_by_separator", lambda x: [[]])
     monkeypatch.setattr(mainmod, "parse_options_and_specs", lambda x: ([], {}))
-    monkeypatch.setattr(
-        mainmod, "parse_cli_stage", lambda x, is_first_stage=False: None
-    )
+    monkeypatch.setattr(mainmod, "parse_cli_stage", lambda x, is_first_stage=False: None)
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
-    monkeypatch.setattr(
-        mainmod, "UserInputContext", lambda *args, **kwargs: MagicMock()
-    )
+    monkeypatch.setattr(mainmod, "UserInputContext", lambda *args, **kwargs: MagicMock())
     monkeypatch.setattr(
         mainmod, "PipelineManager", lambda *args, **kwargs: MagicMock(run=lambda: None)
     )
@@ -196,9 +190,7 @@ def test_main_handles_pipeline_user_error(monkeypatch):
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
     # 2. Patch setup to return some generic arguments.
-    monkeypatch.setattr(
-        mainmod, "_is_verbose_and_setup_logging", lambda x: (False, ["some_arg"])
-    )
+    monkeypatch.setattr(mainmod, "_is_verbose_and_setup_logging", lambda x: (False, ["some_arg"]))
 
     # 3. Patch registry initialization
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)

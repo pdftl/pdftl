@@ -144,9 +144,7 @@ def test_copy_action_fail(remapper_setup, caplog, mocker):
         (False, True, "0-1-TestName"),
     ],
 )
-def test_get_new_destination_name(
-    remapper_setup, include_instance, include_pdf_id, expected_name
-):
+def test_get_new_destination_name(remapper_setup, include_instance, include_pdf_id, expected_name):
     """Tests the logic for generating new unique destination names."""
     remapper = remapper_setup["remapper"]
     remapper.context.include_instance = include_instance
@@ -202,9 +200,7 @@ def test_transform_destination_array_xyz(remapper_setup):
     new_array = remapper._transform_destination_array(source_dest_array, target_page)
 
     expected_page_box = target_page.get(Name.CropBox, target_page.MediaBox)
-    mock_transform_coords.assert_called_once_with(
-        [0, 800, 1], expected_page_box, 90, 2.0
-    )
+    mock_transform_coords.assert_called_once_with([0, 800, 1], expected_page_box, 90, 2.0)
 
     assert new_array[0] == target_page.obj
     assert new_array[1] == Name.XYZ
@@ -231,9 +227,7 @@ def test_remap_explicit_destination_data(remapper_setup):
     remapper = remapper_setup["remapper"]
     source_dest_array = remapper_setup["source_dest_array"]
 
-    new_action_dest, new_named_dest = remapper._remap_explicit_destination_data(
-        source_dest_array
-    )
+    new_action_dest, new_named_dest = remapper._remap_explicit_destination_data(source_dest_array)
 
     assert new_named_dest is None
     assert isinstance(new_action_dest, Array)
@@ -244,9 +238,7 @@ def test_remap_named_destination_data_success(remapper_setup):
     """Tests the orchestrator for named destinations."""
     remapper = remapper_setup["remapper"]
 
-    new_action_dest, new_named_dest = remapper._remap_named_destination_data(
-        String("MyDest")
-    )
+    new_action_dest, new_named_dest = remapper._remap_named_destination_data(String("MyDest"))
 
     assert new_action_dest == String("0-1-MyDest")
     assert new_named_dest is not None
@@ -267,9 +259,7 @@ def test_remap_named_destination_data_fail_not_found(remapper_setup, caplog):
     caplog.set_level(logging.WARNING)
     remapper = remapper_setup["remapper"]
 
-    new_action_dest, new_named_dest = remapper._remap_named_destination_data(
-        String("BadDest")
-    )
+    new_action_dest, new_named_dest = remapper._remap_named_destination_data(String("BadDest"))
 
     assert new_action_dest is None
     assert new_named_dest is None
@@ -377,9 +367,7 @@ def test_remap_explicit_destination_data_page_not_found(remapper_setup):
     new_page = remapper.source_pdf.add_blank_page()
     unmapped_array = Array([new_page.obj, Name.XYZ, 10, 20, 1])
 
-    new_action_dest, new_named_dest = remapper._remap_explicit_destination_data(
-        unmapped_array
-    )
+    new_action_dest, new_named_dest = remapper._remap_explicit_destination_data(unmapped_array)
 
     assert new_action_dest is None
     assert new_named_dest is None
@@ -392,9 +380,7 @@ def test_remap_named_destination_data_page_not_found(remapper_setup):
     # Temporarily remove the mapping so the lookup fails
     remapper.context.page_map.clear()
 
-    new_action_dest, new_named_dest = remapper._remap_named_destination_data(
-        String("MyDest")
-    )
+    new_action_dest, new_named_dest = remapper._remap_named_destination_data(String("MyDest"))
 
     assert new_action_dest is None
     assert new_named_dest is None

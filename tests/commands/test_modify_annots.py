@@ -49,9 +49,7 @@ def mock_pdf():
     annot2_highlight = pikepdf.Dictionary(
         Subtype=pikepdf.Name("/Highlight"), C=pikepdf.Array([1, 1, 0])
     )
-    annot3_link = pikepdf.Dictionary(
-        Subtype=pikepdf.Name("/Link"), T=pikepdf.String("Old Title")
-    )
+    annot3_link = pikepdf.Dictionary(Subtype=pikepdf.Name("/Link"), T=pikepdf.String("Old Title"))
 
     # --- Create Pages and Add to Document ---
     page1 = pdf.add_blank_page()

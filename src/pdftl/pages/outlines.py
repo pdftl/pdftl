@@ -132,9 +132,7 @@ def rebuild_outlines(
     Returns:
         list: a flat list of [name, dest, ...] for all new dests.
     """
-    logger.debug(
-        "rebuild_outlines called. Processing %s pages.", len(source_pages_to_process)
-    )
+    logger.debug("rebuild_outlines called. Processing %s pages.", len(source_pages_to_process))
     chunks = _build_outline_chunks(call_context.processed_page_info)
     logger.debug("_build_outline_chunks created %s chunks.", len(chunks))
 
@@ -224,9 +222,7 @@ def _build_outline_chunks(processed_page_info: list) -> [ChunkData]:
 
 def _append_to_chunk_data(state: _OutlineChunkState):
     state.chunks.append(
-        ChunkData(
-            state.pdf, state.chunk_map, state.output_start_page, state.instance_num
-        )
+        ChunkData(state.pdf, state.chunk_map, state.output_start_page, state.instance_num)
     )
 
 
@@ -238,9 +234,7 @@ def _build_outline_chunks_helper(
     pdf, src_idx, inst_num = data
 
     is_new_chunk = (
-        pdf is not state.pdf
-        or inst_num != state.instance_num
-        or src_idx != state.last_src_idx + 1
+        pdf is not state.pdf or inst_num != state.instance_num or src_idx != state.last_src_idx + 1
     )
 
     if is_new_chunk:

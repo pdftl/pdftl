@@ -112,9 +112,7 @@ def _parse_usage(ocg):
     for key, val in ocg.Usage.items():
         clean_key = _clean_val(key)
         if isinstance(val, pikepdf.Dictionary):
-            usage_dict[clean_key] = {
-                _clean_val(k): _clean_val(v) for k, v in val.items()
-            }
+            usage_dict[clean_key] = {_clean_val(k): _clean_val(v) for k, v in val.items()}
         else:
             usage_dict[clean_key] = _clean_val(val)
     return usage_dict
@@ -153,9 +151,7 @@ def dump_layers(pdf, output_file=None):
 
         # 3. NOW check legacy top-level Order ONLY if D didn't provide one
         if "/Order" in ocprops and "ui_hierarchy" not in results:
-            results["ui_hierarchy"] = _parse_order(
-                ocprops.Order
-            )  # <--- LINE 162 HITS HERE
+            results["ui_hierarchy"] = _parse_order(ocprops.Order)  # <--- LINE 162 HITS HERE
 
         # Iterate OCGs
         if "/OCGs" in ocprops:

@@ -137,9 +137,7 @@ def test_write_json_output_compaction_skips_complex_lists(complex_list):
 
         # Assert that the list *does* contain newlines
         list_str = list_str_match.group(1)
-        assert (
-            "\n" in list_str
-        ), f"Complex list was incorrectly compacted:\n{output_string}"
+        assert "\n" in list_str, f"Complex list was incorrectly compacted:\n{output_string}"
 
 
 # --- Mocks for pikepdf objects ---
@@ -219,11 +217,11 @@ class MockStream(MockString):
 MODULE_PATH = "pdftl.commands.dump_dests"
 
 
-@patch(f"pikepdf.Dictionary", new=MockDictionary)
-@patch(f"pikepdf.Array", new=MockArray)
-@patch(f"pikepdf.Name", new=MockName)
-@patch(f"pikepdf.String", new=MockString)
-@patch(f"pikepdf.Stream", new=MockStream)
+@patch("pikepdf.Dictionary", new=MockDictionary)
+@patch("pikepdf.Array", new=MockArray)
+@patch("pikepdf.Name", new=MockName)
+@patch("pikepdf.String", new=MockString)
+@patch("pikepdf.Stream", new=MockStream)
 def _run_patched_test(test_function, *args):
     """
     A helper to run a test function with all patches active.

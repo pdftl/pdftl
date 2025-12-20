@@ -7,14 +7,13 @@
 """Methods for saving PDF files, with options registered for CLI."""
 
 import inspect
-import io
 import logging
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 from pdftl.core.constants import ALLOW_PERMISSIONS_MAP
 from pdftl.core.registry import register_option
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError, PackageError
+from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.output.attach import attach_files
 from pdftl.output.sign import parse_sign_options, save_and_sign
 
@@ -143,12 +142,8 @@ def _flatten_option():
     pass
 
 
-@register_option(
-    "keep_first_id", desc="Copy first input PDF's ID metadata to output", type="flag"
-)
-@register_option(
-    "keep_final_id", desc="Copy final input PDF's ID metadata to output", type="flag"
-)
+@register_option("keep_first_id", desc="Copy first input PDF's ID metadata to output", type="flag")
+@register_option("keep_final_id", desc="Copy final input PDF's ID metadata to output", type="flag")
 def _keep_id_options():
     pass
 
@@ -190,9 +185,7 @@ def _default_permissions_object():
 
     return {
         flag: False
-        for flag, _ in inspect.getmembers(
-            pikepdf.Permissions(), lambda x: isinstance(x, bool)
-        )
+        for flag, _ in inspect.getmembers(pikepdf.Permissions(), lambda x: isinstance(x, bool))
     }
 
 
@@ -203,9 +196,7 @@ def _set_permission_or_raise_error(perm, permissions_dict):
         if flag_name in permissions_dict:
             permissions_dict[flag_name] = True
         else:
-            raise ValueError(
-                f"Permission '{perm}' maps to an unknown flag '{flag_name}'."
-            )
+            raise ValueError(f"Permission '{perm}' maps to an unknown flag '{flag_name}'.")
 
 
 def _build_permissions_object(allow_options: list):
@@ -274,9 +265,7 @@ def _build_save_options(options, input_context):
 
     encryption_object = _build_encryption_object(options, input_context)
     if options.get("allow") and not encryption_object:
-        logger.warning(
-            "Encryption not requested, so 'allow' permissions will be ignored."
-        )
+        logger.warning("Encryption not requested, so 'allow' permissions will be ignored.")
 
     use_uncompress = options.get("uncompress", False)
     return {
@@ -303,9 +292,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     if options is None:
         options = {}
     if not output_filename:
-        raise MissingArgumentError(
-            "An output file must be specified with the 'output' keyword."
-        )
+        raise MissingArgumentError("An output file must be specified with the 'output' keyword.")
 
     logger.debug("Preparing to save to '%s' with options %s", output_filename, options)
 
@@ -320,9 +307,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         try:
             pdf.Root.AcroForm[pikepdf.Name.NeedAppearances] = True
         except AttributeError as e:
-            logger.warning(
-                "Problem setting need_appearances: %s %s", e.__class__.__name__, e
-            )
+            logger.warning("Problem setting need_appearances: %s %s", e.__class__.__name__, e)
 
     save_opts = _build_save_options(options, input_context)
 

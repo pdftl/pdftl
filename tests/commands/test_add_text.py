@@ -10,9 +10,7 @@ from pikepdf import Array, Name, Pdf, Rectangle
 
 # --- Local Imports ---
 # We import the module to reload it during cleanup
-import pdftl.commands.add_text
 from pdftl.commands.add_text import _build_static_context, add_text_pdf
-from pdftl.commands.helpers import text_drawer
 
 # Handle optional exception import
 try:
@@ -185,7 +183,7 @@ class TestAddTextMissingDependency(unittest.TestCase):
                 importlib.reload(module_obj)
             else:
                 # It was wiped? Just import it (it will hit the poison naturally)
-                import pdftl.commands.add_text
+                pass
 
             # 5. Run Command
             from pdftl.exceptions import InvalidArgumentError as CurrentError

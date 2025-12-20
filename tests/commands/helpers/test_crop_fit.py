@@ -1,12 +1,9 @@
-import io
 import sys
-from typing import NamedTuple
 from unittest import mock
 
 import pytest
 
 # Import the module under test
-from pdftl.commands.helpers import crop_fit
 from pdftl.commands.helpers.crop_fit import FitCropContext, get_visible_bbox
 
 # --- Mocks for Dependencies ---
@@ -107,9 +104,7 @@ class TestFitCropContext:
         parsed = {"mode": "fit", "padding": (10, 20, 30, 40)}  # L, T, R, B
 
         # Mock the helper function
-        with mock.patch(
-            "pdftl.commands.helpers.crop_fit.get_visible_bbox"
-        ) as mock_get_bbox:
+        with mock.patch("pdftl.commands.helpers.crop_fit.get_visible_bbox") as mock_get_bbox:
             # Helper returns (0, 0, 100, 100) (Left, Bottom, Right, Top)
             mock_get_bbox.return_value = (0, 0, 100, 100)
 
@@ -138,9 +133,7 @@ class TestFitCropContext:
         parsed = {"mode": "fit-group", "source": "1-2", "padding": (0, 0, 0, 0)}
 
         # Mock get_visible_bbox to return different boxes for pages 1 and 2 (indices 0 and 1)
-        with mock.patch(
-            "pdftl.commands.helpers.crop_fit.get_visible_bbox"
-        ) as mock_get_bbox:
+        with mock.patch("pdftl.commands.helpers.crop_fit.get_visible_bbox") as mock_get_bbox:
             mock_get_bbox.side_effect = [
                 (10, 10, 20, 20),  # Page 1 (tiny box)
                 (0, 0, 100, 100),  # Page 2 (large box)
@@ -164,9 +157,7 @@ class TestFitCropContext:
         # Pre-seed cache
         ctx._group_cache["1"] = (55, 55, 66, 66)
 
-        with mock.patch(
-            "pdftl.commands.helpers.crop_fit.get_visible_bbox"
-        ) as mock_get_bbox:
+        with mock.patch("pdftl.commands.helpers.crop_fit.get_visible_bbox") as mock_get_bbox:
             result = ctx.calculate_rect(0, parsed, "rule", {})
             assert result == (55, 55, 66, 66)
             mock_get_bbox.assert_not_called()
@@ -189,9 +180,7 @@ class TestFitCropContext:
         # Setup: Page 0 and 2 share the same rule string. Page 1 is different.
         all_rules = {0: "fit-group", 1: "other", 2: "fit-group"}
 
-        with mock.patch(
-            "pdftl.commands.helpers.crop_fit.get_visible_bbox"
-        ) as mock_get_bbox:
+        with mock.patch("pdftl.commands.helpers.crop_fit.get_visible_bbox") as mock_get_bbox:
             mock_get_bbox.side_effect = [
                 (10, 10, 20, 20),  # Page 0
                 (30, 30, 40, 40),  # Page 2

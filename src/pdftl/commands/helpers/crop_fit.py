@@ -6,7 +6,7 @@
 
 import io
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pikepdf
@@ -25,8 +25,8 @@ class FitCropContext:
 
     def __init__(self, pdf: "pikepdf.Pdf"):
         self.pikepdf_doc = pdf
-        self._pdfium_doc: Optional["pdfium.PdfDocument"] = None
-        self._group_cache: Dict[str, Any] = {}
+        self._pdfium_doc: pdfium.PdfDocument | None = None
+        self._group_cache: dict[str, Any] = {}
 
     @property
     def doc(self) -> "pdfium.PdfDocument":
@@ -54,7 +54,7 @@ class FitCropContext:
 
     def calculate_rect(
         self, page_idx: int, parsed: dict, rule_str: str, all_rules: dict
-    ) -> Tuple[float, float, float, float]:
+    ) -> tuple[float, float, float, float]:
         """
         Calculates the new CropBox based on 'fit' or 'fit-group' logic.
         Returns (llx, lly, urx, ury) in absolute PDF coordinates.
@@ -78,9 +78,7 @@ class FitCropContext:
             if cache_key in self._group_cache:
                 final_bbox = self._group_cache[cache_key]
             else:
-                final_bbox = self._calculate_group_union(
-                    source_spec, rule_str, all_rules
-                )
+                final_bbox = self._calculate_group_union(source_spec, rule_str, all_rules)
                 self._group_cache[cache_key] = final_bbox
 
         # Apply Padding (Left, Top, Right, Bottom)
@@ -94,18 +92,14 @@ class FitCropContext:
             final_bbox[3] + pad_t,  # Top: add to move up
         )
 
-    def _calculate_group_union(
-        self, source_spec: Optional[str], rule_str: str, all_rules: dict
-    ):
+    def _calculate_group_union(self, source_spec: str | None, rule_str: str, all_rules: dict):
         """Calculates the union of visible bboxes for a group of pages."""
         # Determine which pages to scan
         if source_spec:
             # Explicit source: "fit-group=1-5"
             indices = [
                 x - 1
-                for x in page_numbers_matching_page_spec(
-                    source_spec, len(self.pikepdf_doc.pages)
-                )
+                for x in page_numbers_matching_page_spec(source_spec, len(self.pikepdf_doc.pages))
             ]
         else:
             # Implicit source: All pages sharing this exact rule string

@@ -19,7 +19,10 @@ if TYPE_CHECKING:
 
 from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
 
-CANNOT_SET_PDFID1 = "Cannot set PdfID1. This is a limitation of pikepdf. See also PDF 32000-1:2008 section 14.4."
+CANNOT_SET_PDFID1 = (
+    "Cannot set PdfID1. This is a limitation of pikepdf."
+    " See also PDF 32000-1:2008 section 14.4."
+)
 
 
 def set_metadata_in_pdf(pdf, meta_dict):
@@ -87,9 +90,7 @@ def _set_bookmarks(pdf, bookmark_list, delete_existing_bookmarks=True):
             outline.root = []
         bookmark_oi_ancestors = []
         for bookmark in bookmark_list:
-            bookmark_oi_ancestors = _add_bookmark(
-                pdf, bookmark, outline, bookmark_oi_ancestors
-            )
+            bookmark_oi_ancestors = _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors)
 
 
 def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: list["OutlineItem"]):
@@ -113,11 +114,7 @@ def _add_bookmark(pdf, bookmark, outline, bookmark_oi_ancestors: list["OutlineIt
         )
         return bookmark_oi_ancestors
 
-    assert (
-        isinstance(level, int)
-        and isinstance(title, str)
-        and isinstance(pagenumber, int)
-    )
+    assert isinstance(level, int) and isinstance(title, str) and isinstance(pagenumber, int)
 
     if pagenumber > len(pdf.pages):
         logger.warning(

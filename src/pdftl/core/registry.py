@@ -105,9 +105,7 @@ class Registry:
         def decorator(func):
 
             if "examples" in metadata:
-                safe_examples = [
-                    _to_help_example_helper(ex, name) for ex in metadata["examples"]
-                ]
+                safe_examples = [_to_help_example_helper(ex, name) for ex in metadata["examples"]]
 
                 metadata["examples"] = safe_examples
 

@@ -185,9 +185,7 @@ def test_json_goto_action_resolved_simple(pdf_mocks):
         }
     )
 
-    result = pdf_obj_to_json(
-        action_dict, pdf_mocks["page_map"], pdf_mocks["named_dests"]
-    )
+    result = pdf_obj_to_json(action_dict, pdf_mocks["page_map"], pdf_mocks["named_dests"])
 
     # Check that the original keys are preserved
     assert result["/S"] == "/GoTo"
@@ -214,9 +212,7 @@ def test_json_goto_action_resolved_in_dict(pdf_mocks):
         }
     )
 
-    result = pdf_obj_to_json(
-        action_dict, pdf_mocks["page_map"], pdf_mocks["named_dests"]
-    )
+    result = pdf_obj_to_json(action_dict, pdf_mocks["page_map"], pdf_mocks["named_dests"])
 
     assert KEY_RESOLVED_DESTINATION in result
     expected_resolved = {

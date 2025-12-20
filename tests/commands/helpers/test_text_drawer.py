@@ -12,9 +12,7 @@ This file contains:
 3.  TestTextDrawerHypothesis: Property-based tests for coordinate logic.
 """
 
-import math
 import unittest
-from importlib import reload
 from unittest.mock import ANY, MagicMock, call, patch
 
 import pytest
@@ -199,9 +197,7 @@ class TestTextDrawerClass(TextDrawerTestMixin):
             assert "I am a bad rule!" in str(record.args[0])
 
     # This helper method is now part of the pytest-style class
-    def _run_draw_test(
-        self, mock_canvas_instance, rule, expected_draw_x, expected_draw_y
-    ):
+    def _run_draw_test(self, mock_canvas_instance, rule, expected_draw_x, expected_draw_y):
         """Helper to run a parameterized draw test."""
 
         mock_page_box = self.MockPageBox(width=600, height=800)  # Define box
@@ -261,9 +257,7 @@ class TestTextDrawerClass(TextDrawerTestMixin):
             ("bottom-right", "right", -100.0, 0.0),
         ],
     )
-    def test_draw_rule_geometry(
-        self, position, align, expected_draw_x, expected_draw_y
-    ):
+    def test_draw_rule_geometry(self, position, align, expected_draw_x, expected_draw_y):
         """
         Tests all 9 combinations of position/alignment geometry.
         Assumes text_width=100.0 and font_size=12.0.
@@ -278,9 +272,7 @@ class TestTextDrawerClass(TextDrawerTestMixin):
                 rule = {"position": position, "align": align, "size": 12.0}
 
                 # Call the helper method using self
-                self._run_draw_test(
-                    mock_canvas_instance, rule, expected_draw_x, expected_draw_y
-                )
+                self._run_draw_test(mock_canvas_instance, rule, expected_draw_x, expected_draw_y)
 
 
 import subprocess
@@ -332,9 +324,7 @@ sys.exit(1)
         """
 
         # Run the subprocess
-        result = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True
-        )
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
 
         # Assertions
         assert result.returncode == 0, f"Subprocess crashed: {result.stderr}"

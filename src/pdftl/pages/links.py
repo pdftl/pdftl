@@ -70,12 +70,10 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
             - new_annotation (Dictionary | None): The copied annotation.
             - new_named_dest_data (list | None): A flat list of (name, dest) pairs.
     """
-    from pikepdf import Array, Dictionary, ForeignObjectError, Name, NameTree
+    from pikepdf import ForeignObjectError, Name
 
     try:
-        new_annot = remapper.pdf.copy_foreign(
-            remapper.source_pdf.make_indirect(original_annot)
-        )
+        new_annot = remapper.pdf.copy_foreign(remapper.source_pdf.make_indirect(original_annot))
     except (ForeignObjectError, ValueError, RuntimeError) as e:
         logger.warning(
             "Skipping potentially corrupt annotation from source page %s. "
@@ -160,14 +158,12 @@ def write_named_dests(pdf, all_named_dests):
         pdf: The destination PDF.
         all_named_dests (list): A list of (name_str, dest_array) tuples.
     """
-    from pikepdf import Array, Dictionary, Name, NameTree
+    from pikepdf import Dictionary, Name, NameTree
 
     if not all_named_dests:
         return
 
-    logger.debug(
-        "Building/updating NameTree with %s destinations.", len(all_named_dests)
-    )
+    logger.debug("Building/updating NameTree with %s destinations.", len(all_named_dests))
 
     # Revert to handling the flat list that rebuild_links currently produces.
     # We will refactor this to tuples in a later step.
@@ -222,9 +218,7 @@ def rebuild_links(pdf, processed_page_info: list, remapper: LinkRemapper) -> lis
     annots_key = pikepdf.Name("/Annots")
 
     # --- 2. LOOP ---
-    for target_page, (src_pdf, page_idx, instance_num) in zip(
-        pdf.pages, processed_page_info
-    ):
+    for target_page, (src_pdf, page_idx, instance_num) in zip(pdf.pages, processed_page_info):
         source_page_obj = source_pages_cache[id(src_pdf)][page_idx]
         if annots_key not in source_page_obj:
             continue
@@ -240,7 +234,5 @@ def rebuild_links(pdf, processed_page_info: list, remapper: LinkRemapper) -> lis
         )
         all_named_dests.extend(new_page_dests)
 
-    logger.debug(
-        "--- Finished remapping links (returning %s dests) ---", len(all_named_dests)
-    )
+    logger.debug("--- Finished remapping links (returning %s dests) ---", len(all_named_dests))
     return all_named_dests

@@ -49,9 +49,7 @@ def generate_fdf(pdf, get_input, output_file):
         os.path.exists(output_file)
         and get_input(f"File '{output_file}' exists. Overwrite? [y/N]: ").lower() != "y"
     ):
-        output_file = get_input(
-            "Enter a filename for FDF output: ", completer=filename_completer
-        )
+        output_file = get_input("Enter a filename for FDF output: ", completer=filename_completer)
 
     with smart_open_output(output_file, mode="wb") as file:
         file.write(FDF_START)
@@ -67,7 +65,7 @@ def _write_field_as_fdf_to_file(field_name, field, file):
     """Write FDF data for a single field to a file"""
 
     from pikepdf import Name, String
-    from pikepdf.form import ChoiceField, Form, RadioButtonGroup
+    from pikepdf.form import ChoiceField, RadioButtonGroup
 
     def _write(x):
         _write_string_to_binary_file(x, file)

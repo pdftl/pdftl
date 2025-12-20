@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 
-_ADD_TEXT_LONG_DESC = """
+_ADD_TEXT_LONG_DESC = r"""
 Add user-specified text strings to PDF pages.
 
 Note: This operation requires the 'reportlab' library. If not

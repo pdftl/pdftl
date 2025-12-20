@@ -50,9 +50,7 @@ def test_cat_operation(runner, pdf_factory, temp_dir, num_pages):
     with Pdf.open(output_py) as pdf_py, Pdf.open(output_tk) as pdf_tk:
         # 1. Compare Page Count
         assert len(pdf_py.pages) == len(pdf_tk.pages), "Page counts should match"
-        assert (
-            len(pdf_py.pages) == expected_pages
-        ), f"Output should have {expected_pages} pages"
+        assert len(pdf_py.pages) == expected_pages, f"Output should have {expected_pages} pages"
 
         # 2. Compare Metadata
         assert pdf_py.docinfo.get("/Author") == pdf_tk.docinfo.get("/Author")
@@ -122,9 +120,7 @@ def test_rotate_operation_visual(runner, pdf_factory, temp_dir, num_pages):
         page_tk.get_pixmap().save(img_tk_path)
 
         diff_percent = get_image_diff(img_py_path, img_tk_path)
-        assert (
-            diff_percent < 1.0
-        ), f"Page {i+1} is visually different by {diff_percent:.2f}%"
+        assert diff_percent < 1.0, f"Page {i+1} is visually different by {diff_percent:.2f}%"
 
 
 # --- Test Case 3: Testing `pdftl`-exclusive Functionality ---
@@ -149,9 +145,7 @@ def test_crop_operation(runner, pdf_factory, temp_dir, num_pages):
 
     with Pdf.open(output_pdf) as pdf:
         # This assertion is now dynamic based on the input PDF's page count.
-        assert (
-            len(pdf.pages) == num_pages
-        ), f"Cropped PDF should still have {num_pages} pages"
+        assert len(pdf.pages) == num_pages, f"Cropped PDF should still have {num_pages} pages"
 
     with fitz.open(output_pdf) as doc:
         for page in doc.pages():

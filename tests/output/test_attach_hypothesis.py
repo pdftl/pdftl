@@ -13,9 +13,7 @@ from pdftl.output.attach import _parse_attach_specs_to_intent
 # ---------------------------
 
 # Strategy for filenames
-st_filename = st.text(alphabet="abc._-", min_size=1, max_size=10).map(
-    lambda s: f"{s}.pdf"
-)
+st_filename = st.text(alphabet="abc._-", min_size=1, max_size=10).map(lambda s: f"{s}.pdf")
 
 st_file_list = st.lists(st_filename, min_size=1, max_size=5)
 
@@ -128,9 +126,7 @@ def test_parser_raises_missing_file_to_page(page_spec):
 def test_parser_raises_missing_file_relation(relation):
     """Tests 'relation' <type> -> Error"""
     args = ["relation", relation]
-    with pytest.raises(
-        MissingArgumentError, match="Missing filename before 'relation'"
-    ):
+    with pytest.raises(MissingArgumentError, match="Missing filename before 'relation'"):
         _parse_attach_specs_to_intent(args)
 
 

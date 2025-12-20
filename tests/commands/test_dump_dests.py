@@ -102,12 +102,12 @@ def patch_pikepdf_types():
     # We use MagicMock for NameTree as we just need to mock its
     # instantiation and .items() method.
     with (
-        patch(f"pikepdf.Dictionary", new=MockDictionary),
-        patch(f"pikepdf.Array", new=MockArray),
-        patch(f"pikepdf.Name", new=MockName),
-        patch(f"pikepdf.String", new=MockString),
-        patch(f"pikepdf.Stream", new=MockStream),
-        patch(f"pikepdf.NameTree", new=MagicMock()) as mock_name_tree,
+        patch("pikepdf.Dictionary", new=MockDictionary),
+        patch("pikepdf.Array", new=MockArray),
+        patch("pikepdf.Name", new=MockName),
+        patch("pikepdf.String", new=MockString),
+        patch("pikepdf.Stream", new=MockStream),
+        patch("pikepdf.NameTree", new=MagicMock()) as mock_name_tree,
     ):
 
         # Configure the mock NameTree to be iterable by default

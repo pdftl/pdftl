@@ -154,9 +154,7 @@ def _get_field_type_strings(field):
     return type_string_in, type_string_out
 
 
-def _write_field_types_and_name(
-    writer, field, type_string_in, type_string_out, extra_info
-):
+def _write_field_types_and_name(writer, field, type_string_in, type_string_out, extra_info):
     """Write field types and name for dump_data_fields"""
     writer(f"FieldType: {type_string_out}")
     if extra_info:

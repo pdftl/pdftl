@@ -143,10 +143,7 @@ def test_get_passwords_from_options_prompt(mock_input_context):
     passwords = _get_passwords_from_options(options, mock_input_context)
 
     mock_input_context.get_pass.assert_called_once()
-    assert (
-        "Please enter the user password"
-        in mock_input_context.get_pass.call_args[1]["prompt"]
-    )
+    assert "Please enter the user password" in mock_input_context.get_pass.call_args[1]["prompt"]
     assert passwords == {"user": "from_prompt"}
 
 
@@ -363,9 +360,7 @@ def test_build_encryption_object_by_password_only(
 
 @patch("pdftl.output.save._get_passwords_from_options", return_value={"user": "123"})
 @patch("pdftl.output.save._build_permissions_object")
-def test_build_encryption_object_full(
-    mock_build_perms, mock_get_pass, mock_input_context, mocker
-):
+def test_build_encryption_object_full(mock_build_perms, mock_get_pass, mock_input_context, mocker):
     """Tests a full encryption call with method, passwords, and perms."""
     mock_encryption_cls = mocker.patch("pikepdf.Encryption")
     options = {
@@ -439,10 +434,7 @@ def test_build_save_options_allow_warning(mock_build_enc, mock_input_context, ca
 
     assert len(caplog.records) == 1
     record = caplog.records[0]
-    assert (
-        record.message
-        == "Encryption not requested, so 'allow' permissions will be ignored."
-    )
+    assert record.message == "Encryption not requested, so 'allow' permissions will be ignored."
 
 
 @patch("pdftl.output.save._build_encryption_object")
@@ -462,9 +454,7 @@ def test_build_save_options_with_encryption(mock_build_enc, mock_input_context):
 
 @patch("pdftl.output.save.attach_files")
 @patch("pdftl.output.save._build_save_options")
-def test_save_pdf_orchestration(
-    mock_build_save, mock_attach, mock_pdf, mock_input_context
-):
+def test_save_pdf_orchestration(mock_build_save, mock_attach, mock_pdf, mock_input_context):
     """Tests the main orchestration of the save_pdf function."""
     output_file = "out.pdf"
     options = {"flatten": True, "need_appearances": True}
@@ -478,9 +468,7 @@ def test_save_pdf_orchestration(
     mock_attach.assert_called_once_with(mock_pdf, options, mock_input_context)
 
     # Assert that __setitem__ was called, don't read the value back.
-    mock_pdf.Root.AcroForm.__setitem__.assert_called_once_with(
-        pikepdf.Name.NeedAppearances, True
-    )
+    mock_pdf.Root.AcroForm.__setitem__.assert_called_once_with(pikepdf.Name.NeedAppearances, True)
 
     # Check save options are built and used
     mock_build_save.assert_called_once_with(options, mock_input_context)
@@ -497,9 +485,7 @@ def test_save_pdf_no_output_file(mock_pdf, mock_input_context):
 
 @patch("pdftl.output.save.attach_files")
 @patch("pdftl.output.save._build_save_options")
-def test_save_pdf_set_pdf_id(
-    mock_build_save, mock_attach, mock_pdf, mock_input_context
-):
+def test_save_pdf_set_pdf_id(mock_build_save, mock_attach, mock_pdf, mock_input_context):
     """Tests the 'set_pdf_id' option."""
     pdf_id_val = b"some_id"
     save_pdf(mock_pdf, "out.pdf", mock_input_context, set_pdf_id=pdf_id_val)
@@ -524,8 +510,6 @@ def test_save_pdf_need_appearances_fails(
     # Check that a warning was logged and save was still called
     assert len(caplog.records) == 1
     record = caplog.records[0]
-    assert (
-        record.message == "Problem setting need_appearances: AttributeError Test error"
-    )
+    assert record.message == "Problem setting need_appearances: AttributeError Test error"
 
     mock_pdf.save.assert_called_once()

@@ -85,9 +85,7 @@ def _fill_form_from_data(pdf, data):
         _fill_form_from_fdf_data(form, data)
     except (PdfError, AttributeError, ValueError) as exc:
         try:
-            logger.debug(
-                "Got %s while trying to read data as FDF: %s", type(exc).__name__, exc
-            )
+            logger.debug("Got %s while trying to read data as FDF: %s", type(exc).__name__, exc)
             _fill_form_from_xfdf_data(form, data)
         finally:
             raise UserCommandLineError(
@@ -134,9 +132,7 @@ def _fill_form_value_from_fdf_field(form, fdf_field, ancestors):
 
     fully_qualified_fdf_name = fully_qualified_name(fdf_field, ancestors)
     logger.debug(fully_qualified_fdf_name)
-    field = next(
-        (x for x in form if x.fully_qualified_name == fully_qualified_fdf_name), None
-    )
+    field = next((x for x in form if x.fully_qualified_name == fully_qualified_fdf_name), None)
     if field is not None:
         logger.debug("Got a hit")
         if isinstance(field, RadioButtonGroup):
