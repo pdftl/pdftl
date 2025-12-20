@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.3.1] - 2025-12-20
+
+### Fixed
+
+- `README.md` corrected, and "platform" badge added
+
 ## [0.3.0] - 2025-12-20
 
 ### Added

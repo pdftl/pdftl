@@ -6,6 +6,7 @@
 [![codecov](https://codecov.io/gh/pdftl/pdftl/graph/badge.svg)](https://codecov.io/gh/pdftl/pdftl)
 [![Documentation Status](https://readthedocs.org/projects/pdftl/badge/?version=latest)](https://pdftl.readthedocs.io/en/latest/?badge=latest)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pdftl)](https://pypi.org/project/pdftl/)
+![Static Badge](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-lightgrey)
 
 **pdftl** ("PDF tackle") is a CLI tool for PDF manipulation written in Python. It is intended to be a command-line compatible extension of the venerable `pdftk`.
 
@@ -32,16 +33,6 @@ Leveraging the power of [`pikepdf`](https://github.com/pikepdf/pikepdf) ([qpdf](
 | **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
 | **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
 | **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
-
-### Comparison Examples
-
-#### 1. The Power of Pipelining (`---`)
-In `pdftk`, performing a rotation and then a watermark requires two commands and a temporary file. In `pdftl`, it is a single continuous operation:
-
-**Standard pdftk:**
-```bash
-pdftk in.pdf rotate 1-endsouth output temp.pdf
-pdftk temp.pdf stamp mark.pdf output final.pdf
 
 ## Installation
 
