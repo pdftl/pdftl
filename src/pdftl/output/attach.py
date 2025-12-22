@@ -9,7 +9,10 @@ PDF files"""
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 from pdftl.core.registry import register_option
@@ -115,7 +118,7 @@ def _attach_files_option():
 class Attachment:
     """Simple data class for PDF file attachments"""
 
-    path: Path
+    path: "Path"
     pages: list | None = None
     relationship: str | None = None
 
@@ -204,6 +207,8 @@ def _resolve_attachments(
     num_pages: int,
     input_context: UserInputContext,
 ) -> list[Attachment]:
+    from pathlib import Path
+
     resolved_list = []
     for parsed in parsed_items:
         final_filename = parsed.path

@@ -4,14 +4,18 @@
 
 # src/pdftl/exceptions.py
 
-"""Exceptions for this project"""
+"""Exceptions for the pdftl project"""
 
 
-class PackageError(Exception):
+class PdftlError(Exception):
+    """Base exception for all pdftl errors"""
+
+
+class PackageError(PdftlError):
     """Exception raised by a feature with a missing required package"""
 
 
-class UserCommandLineError(Exception):
+class UserCommandLineError(PdftlError):
     """Generic exception for a user passing an invalid command line"""
 
 
@@ -25,3 +29,11 @@ class InvalidArgumentError(UserCommandLineError):
 
 class InvalidCommandError(UserCommandLineError):
     """Exception for an invalid command"""
+
+
+class OperationError(PdftlError):
+    """Raised when a PDF operation fails during execution"""
+
+
+class SignatureError(PdftlError):
+    """Raised when an operation returns an unexpected type (e.g. chaining on None)"""

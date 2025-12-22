@@ -6,7 +6,9 @@
 
 """Delete annotations"""
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 _DELETE_ANNOTS_LONG_DESC = """
@@ -33,9 +35,9 @@ _DELETE_ANNOTS_EXAMPLES = [
     long_desc=_DELETE_ANNOTS_LONG_DESC,
     usage="<input> delete_annots [<spec>...] output <output>",
     examples=_DELETE_ANNOTS_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def delete_annots(pdf, specs):
+def delete_annots(pdf, specs) -> OpResult:
     """
     Delete annotations from a PDF.
     """
@@ -50,4 +52,4 @@ def delete_annots(pdf, specs):
             page = pdf.pages[page_num - 1]
             if hasattr(page, "Annots"):
                 page.Annots = pikepdf.Array([])
-    return pdf
+    return OpResult(success=True, pdf=pdf)

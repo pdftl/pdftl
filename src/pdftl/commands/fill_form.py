@@ -16,7 +16,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import UserCommandLineError
 from pdftl.utils.fdf import wrap_fdf_data_in_pdf_bytes
 from pdftl.utils.user_input import filename_completer
@@ -47,9 +49,9 @@ _FILL_FORM_EXAMPLES = [
     long_desc=_FILL_FORM_LONG_DESC,
     usage="<input> fill_form <form_data> output <file> [<option>...]",
     examples=_FILL_FORM_EXAMPLES,
-    args=(["input_pdf", "operation_args", "get_input"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS, c.GET_INPUT], {}),
 )
-def fill_form(pdf: "Pdf", args: [str], get_input: callable):
+def fill_form(pdf: "Pdf", args: [str], get_input: callable) -> OpResult:
     """
     Fill in a form, treating the first argument as a filename (or similar) for data
     """
@@ -69,7 +71,7 @@ def fill_form(pdf: "Pdf", args: [str], get_input: callable):
     except OSError as exc:
         raise UserCommandLineError(exc) from exc
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _fill_form_from_data(pdf, data):

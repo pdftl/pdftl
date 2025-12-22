@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 
 _BURST_LONG_DESC = """
 
@@ -40,13 +42,13 @@ _BURST_EXAMPLES = [
     examples=_BURST_EXAMPLES,
     usage="<input> burst [output <template>]",
     args=(
-        ["opened_pdfs"],
+        [c.OPENED_PDFS],
         {
-            "output_pattern": "output_pattern",
+            c.OUTPUT_PATTERN: c.OUTPUT_PATTERN,
         },
     ),
 )
-def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf"):
+def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
     """Split one or more PDFs into single-page files.
 
     Args:
@@ -64,29 +66,35 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf"):
       relevant to single-page files, e.g., internal links
 
     """
-    import pikepdf
 
-    logger.debug("%s: opened_pdfs=%s", __name__, opened_pdfs)
-    logger.debug("%s: output_pattern=%s", __name__, output_pattern)
-    if output_pattern is None:
-        output_pattern = "pg_%04d.pdf"
+    def _burst_generator():
+        import pikepdf
 
-    page_counter = 0
+        logger.debug("%s: opened_pdfs=%s", __name__, opened_pdfs)
+        logger.debug("%s: output_pattern=%s", __name__, output_pattern)
 
-    if "%" not in output_pattern:
-        raise ValueError("Output pattern must include a format specifier (e.g., %d)")
+        pattern = output_pattern
+        if pattern is None:
+            pattern = "pg_%04d.pdf"
 
-    for source_pdf in opened_pdfs:
-        logger.debug("source_pdf=%s", source_pdf)
-        for page in source_pdf.pages:
-            page_counter += 1
-            page_file = output_pattern % page_counter
-            new_pdf = pikepdf.Pdf.new()
-            new_pdf.pages.append(page)
-            logger.debug(
-                "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",
-                page_file,
-                source_pdf,
-                page.objgen,
-            )
-            yield (page_file, new_pdf)
+        page_counter = 0
+
+        if "%" not in pattern:
+            raise ValueError("Output pattern must include a format specifier (e.g., %d)")
+
+        for source_pdf in opened_pdfs:
+            logger.debug("source_pdf=%s", source_pdf)
+            for page in source_pdf.pages:
+                page_counter += 1
+                page_file = pattern % page_counter
+                new_pdf = pikepdf.Pdf.new()
+                new_pdf.pages.append(page)
+                logger.debug(
+                    "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",
+                    page_file,
+                    source_pdf,
+                    page.objgen,
+                )
+                yield (page_file, new_pdf)
+
+    return OpResult(success=True, pdf=_burst_generator())

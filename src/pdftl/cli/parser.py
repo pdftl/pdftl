@@ -9,6 +9,9 @@
 import logging
 
 logger = logging.getLogger(__name__)
+from typing import List
+
+import pdftl.core.constants as c
 from pdftl.cli.pipeline import CliStage
 from pdftl.core.constants import ALLOW_PERMISSIONS, ALLOW_PERMISSIONS_L
 from pdftl.core.registry import registry
@@ -119,9 +122,13 @@ def _parse_attach_files(args, i, options):
 
 
 def parse_options_and_specs(args):
-    """Parses arguments into specifications and keyword options."""
+    """
+    Parses arguments into specifications and keyword options.
+    Returns (specs, options).
+    """
     logger.debug("args=%s", args)
     options, specs = ({}, [])
+
     i = 0
     just_slurped_allow_index = None
     while i < len(args):
@@ -136,6 +143,13 @@ def parse_options_and_specs(args):
 
         if arg_lower == "attach_files":
             i += _parse_attach_files(args, i, options)[0]
+        elif arg_lower == c.OUTPUT:
+            # Handle 'output' as a local option
+            if i + 1 >= len(args):
+                raise MissingArgumentError(f"Missing value for keyword: {arg}")
+            val = args[i + 1]
+            options[arg_lower] = val
+            i += 2
         elif arg_lower in VALUE_KEYWORDS:
             i += _parse_value_keyword(arg, args, i, options)
         elif arg_lower in FLAG_KEYWORDS:
@@ -273,7 +287,7 @@ def parse_cli_stage(stage_args, is_first_stage):
         specs,
         options,
     )
-    return CliStage(
+    stage = CliStage(
         operation=operation,
         inputs=inputs,
         input_passwords=passwords,
@@ -281,6 +295,7 @@ def parse_cli_stage(stage_args, is_first_stage):
         operation_args=specs,
         options=options,
     )
+    return stage
 
 
 def split_args_by_separator(argv, separator="---"):
@@ -294,3 +309,56 @@ def split_args_by_separator(argv, separator="---"):
             current_stage.append(arg)
     stages.append(current_stage)
     return stages
+
+
+def parse_cli_stages(args: List[str]) -> tuple[List[CliStage], dict]:
+    """
+    Parses a list of command-line arguments into a list of CliStage objects
+    and a dictionary of global options.
+    """
+    logger.debug("Parsing CLI stages from args: %s", args)
+
+    raw_stages = split_args_by_separator(args)
+    logger.debug("Split into %d raw stages: %s", len(raw_stages), raw_stages)
+
+    parsed_stages = []
+    global_options = {}
+
+    for i, stage_args in enumerate(raw_stages):
+        is_first = i == 0
+
+        stage = parse_cli_stage(stage_args, is_first_stage=is_first)
+        parsed_stages.append(stage)
+
+        # Aggregate global-like options for backward compatibility
+        # If this is the last stage, 'output' counts as global.
+        is_last = i == len(raw_stages) - 1
+        if is_last and c.OUTPUT in stage.options:
+            global_options[c.OUTPUT] = stage.options[c.OUTPUT]
+
+        # Other globals (verbose, etc.) might be in options too if parsed there
+        for key in [
+            "verbose",
+            "compress",
+            "uncompress",
+            "linearize",
+            "encrypt_128bit",
+            "encrypt_40bit",
+            "encrypt_aes128",
+            "encrypt_aes256",
+            "owner_pw",
+            "user_pw",
+            "drop_info",
+            "drop_xmp",
+            "need_appearances",
+            "flatten",
+            "keep_first_id",
+            "keep_final_id",
+        ]:
+            if key in stage.options:
+                global_options[key] = stage.options[key]
+
+        if "allow" in stage.options:
+            global_options.setdefault("allow", set()).update(stage.options["allow"])
+
+    return parsed_stages, global_options

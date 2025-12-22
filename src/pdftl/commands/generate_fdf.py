@@ -8,8 +8,10 @@
 
 import os
 
+import pdftl.core.constants as c
 from pdftl.core.constants import FDF_END, FDF_START
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_output
 from pdftl.utils.user_input import filename_completer
 
@@ -29,17 +31,36 @@ _GENERATE_FDF_EXAMPLES = [
 ]
 
 
+def generate_fdf_cli_hook(result: OpResult, _stage):
+    """
+    CLI Hook for generate_fdf.
+    Writes the FDF data bytes to the output file.
+    """
+    if not result.success:
+        return
+
+    output_file = result.meta.get(c.META_OUTPUT_FILE)
+
+    # Open in binary mode ('wb') to write the raw bytes directly
+    with smart_open_output(output_file, mode="wb") as f:
+        import shutil
+
+        # result.data is an io.BytesIO object. getvalue() retrieves bytes without consuming the stream.
+        shutil.copyfileobj(result.data, f)
+
+
 @register_operation(
     "generate_fdf",
     tags=["info", "forms"],
+    cli_hook=generate_fdf_cli_hook,
     type="single input operation",
     desc="Generate an FDF file containing PDF form data",
     long_desc=_GENERATE_FDF_LONG_DESC,
     usage="<input> generate_fdf [output <output>]",
     examples=_GENERATE_FDF_EXAMPLES,
-    args=(["input_pdf", "get_input"], {"output_file": "output"}),
+    args=([c.INPUT_PDF, c.GET_INPUT], {"output_file": c.OUTPUT}),
 )
-def generate_fdf(pdf, get_input, output_file):
+def generate_fdf(pdf, get_input, output_file) -> OpResult:
     """Output FDF data for the given PDF"""
     from pikepdf.form import Form
 
@@ -51,14 +72,17 @@ def generate_fdf(pdf, get_input, output_file):
     ):
         output_file = get_input("Enter a filename for FDF output: ", completer=filename_completer)
 
-    with smart_open_output(output_file, mode="wb") as file:
-        file.write(FDF_START)
+    import io
 
-        form = Form(pdf)
-        for field_name, field in form.items():
-            _write_field_as_fdf_to_file(field_name, field, file)
+    buffer = io.BytesIO()
+    buffer.write(FDF_START)  # FDF_START is bytes
+    form = Form(pdf)
+    for field_name, field in form.items():
+        _write_field_as_fdf_to_file(field_name, field, buffer)
+    buffer.write(FDF_END)
+    buffer.seek(0)
 
-        file.write(FDF_END)
+    return OpResult(success=True, data=buffer, meta={c.META_OUTPUT_FILE: output_file})
 
 
 def _write_field_as_fdf_to_file(field_name, field, file):

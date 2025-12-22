@@ -16,8 +16,10 @@ pdf_info
 import logging
 
 logger = logging.getLogger(__name__)
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
-from pdftl.info.output_info import write_info
+from pdftl.core.types import OpResult
+from pdftl.info.output_info import get_info, write_info
 from pdftl.utils.io_helpers import smart_open_output
 
 # BUG: 000301.pdf: rounding errors. Does pdftk just always round? Or
@@ -163,17 +165,35 @@ _DUMP_DATA_EXAMPLES = [
 _SHORT_DUMP_DATA_DESC_PREFIX = "Metadata, page and bookmark info"
 
 
+def dump_data_cli_hook(result: OpResult, _stage):
+    """
+    CLI-specific side effect: Writes the snapshot to stdout or a file.
+    This function is only called by the CLI pipeline.
+    """
+    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    escape_xml = result.meta.get(c.META_ESCAPE_XML, True)
+    extra_info = result.meta.get(c.META_EXTRA_INFO, False)
+
+    with smart_open_output(output_file) as file:
+
+        def writer(text):
+            print(text, file=file)
+
+        write_info(writer, result.data, escape_xml=escape_xml, extra_info=extra_info)
+
+
 @register_operation(
     "dump_data_utf8",
     tags=["info", "metadata"],
     type="single input operation",
     desc=_SHORT_DUMP_DATA_DESC_PREFIX + " (in UTF-8)",
     long_desc=_DUMP_DATA_UTF8_LONG_DESC,
+    cli_hook=dump_data_cli_hook,
     usage="<input> dump_data_utf8 [output <output>]",
     examples=_DUMP_DATA_UTF8_EXAMPLES,
     args=(
-        ["input_pdf", "input_filename"],
-        {"output_file": "output"},
+        [c.INPUT_PDF, c.INPUT_FILENAME],
+        {"output_file": c.OUTPUT},
         {"escape_xml": False},
     ),
 )
@@ -183,9 +203,10 @@ _SHORT_DUMP_DATA_DESC_PREFIX = "Metadata, page and bookmark info"
     type="single input operation",
     desc=_SHORT_DUMP_DATA_DESC_PREFIX + " (XML-escaped)",
     long_desc=_DUMP_DATA_LONG_DESC,
+    cli_hook=dump_data_cli_hook,
     usage="<input> dump_data [output <output>]",
     examples=_DUMP_DATA_EXAMPLES,
-    args=(["input_pdf", "input_filename"], {"output_file": "output"}),
+    args=([c.INPUT_PDF, c.INPUT_FILENAME], {"output_file": c.OUTPUT}),
 )
 def pdf_info(
     pdf,
@@ -193,15 +214,21 @@ def pdf_info(
     output_file=None,
     escape_xml=True,
     extra_info=False,
-):
+) -> OpResult:
     """
     Imitate pdftk's dump_data output, writing to a file or stdout.
     """
-    logger.debug("escape_xml=%s", escape_xml)
 
-    with smart_open_output(output_file) as file:
+    info = get_info(pdf, input_filename, extra_info=extra_info)
 
-        def writer(text):
-            print(text, file=file)
-
-        write_info(writer, pdf, input_filename, escape_xml, extra_info=extra_info)
+    return OpResult(
+        success=True,
+        pdf=pdf,
+        data=info,
+        is_discardable=True,
+        meta={
+            c.META_OUTPUT_FILE: output_file,
+            c.META_ESCAPE_XML: escape_xml,
+            c.META_EXTRA_INFO: extra_info,
+        },
+    )

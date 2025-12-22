@@ -77,7 +77,7 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
         # This calls add_text_pdf, which runs:
         # "from pdftl.commands.helpers.text_drawer import TextDrawer"
         # Since we patched that source path in setUp, it imports our Mock.
-        result = add_text_pdf(self.pdf, ["spec"])
+        result = add_text_pdf(self.pdf, ["spec"]).pdf
 
         self.assertIs(result, self.pdf)
 

@@ -87,17 +87,17 @@ QUALIFIER_MAP = {"even", "odd"}
 # generate test cases
 SPEC_REGEX = re.compile(
     r"""
-    ^               # Anchor to the start of the string
-    (?:             # Start optional non-capturing group for whole range
-        (r)?        # CAPTURE GROUP 1: Optional 'r', reverse start page
-        (end|\d+)?  # CAPTURE GROUP 2: The start page number or 'end'
-        (?:         # Start optional non-capturing group for end of range
-            -       # literal hyphen separator
-            (r)?    # CAPTURE GROUP 3: Optional 'r' for reverse end page
-            (end|\d+)?# CAPTURE GROUP 4: end page number or 'end'
-        )?          # End of optional end-of-range group
-    )?              # End of optional page-range group
-    (.*)            # CAPTURE GROUP 5: Greedily capture rest as modifiers
+    ^                     # Anchor to the start of the string
+    (?:                   # Start optional non-capturing group for whole range
+        (r(?!ight))?      # CAPTURE GROUP 1: Optional 'r', reverse start page
+        (end|\d+)?        # CAPTURE GROUP 2: The start page number or 'end'
+        (?:               # Start optional non-capturing group for end of range
+            -             # literal hyphen separator
+            (r(?!ight))?  # CAPTURE GROUP 3: Optional 'r' for reverse end page
+            (end|\d+)?    # CAPTURE GROUP 4: end page number or 'end'
+        )?                # End of optional end-of-range group
+    )?                    # End of optional page-range group
+    (.*)                  # CAPTURE GROUP 5: Greedily capture rest as modifiers
     """,
     re.IGNORECASE | re.VERBOSE,
 )

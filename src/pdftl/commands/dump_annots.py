@@ -6,7 +6,6 @@
 
 """Dump annotations info, in JSON"""
 
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +14,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_output
 from pdftl.utils.json import pdf_obj_to_json
 from pdftl.utils.string import compact_json_string, xml_encode_for_info
@@ -35,26 +36,47 @@ _DUMP_ANNOTS_EXAMPLES = [
 ]
 
 
+def dump_annots_cli_hook(result: OpResult, _stage):
+    """
+    CLI Hook for dump_annots.
+    Serializes the raw annotation data to a compacted JSON string and outputs it.
+    """
+    import json
+
+    output_file = result.meta.get(c.META_OUTPUT_FILE)
+
+    # Serialize to JSON string
+    json_string = json.dumps(result.data, indent=2)
+    # Apply custom compaction
+    compacted_string = compact_json_string(json_string)
+
+    with smart_open_output(output_file) as f:
+        f.write(compacted_string)
+        # Ensure a trailing newline for console output
+        f.write("\n")
+
+
 @register_operation(
     "dump_annots",
     tags=["in_place", "annotations", "info"],
+    cli_hook=dump_annots_cli_hook,
     type="single input operation",
     desc="Dump annotation info",
     long_desc=_DUMP_ANNOTS_LONG_DESC,
     usage="<input> dump_annots [output <output>]",
     examples=_DUMP_ANNOTS_EXAMPLES,
-    args=(["input_pdf"], {"output_file": "output"}),
+    args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
 )
-def dump_annots(pdf, output_file=None):
+def dump_annots(pdf, output_file=None) -> OpResult:
     """
     Dumps all annotations from a PDF in JSON format, with compact arrays.
     """
+    import json
+
     logger.debug("Dumping annotations for PDF with %s pages.", len(pdf.pages))
     all_annots_data = _get_all_annots_data(pdf)
-    json_string = json.dumps(all_annots_data, indent=2)
 
-    with smart_open_output(output_file) as file:
-        print(compact_json_string(json_string), file=file)
+    return OpResult(success=True, data=all_annots_data, meta={c.META_OUTPUT_FILE: output_file})
 
 
 _DUMP_DATA_ANNOTS_LONG_DESC = """
@@ -73,30 +95,63 @@ _DUMP_DATA_ANNOTS_EXAMPLES = [
 ]
 
 
+def _generate_pdftk_annots_report(data, string_convert=xml_encode_for_info):
+    """Helper to generate the text report from the structured data dict"""
+    annots = data.get("Annotations", [])
+    data_strings = _data_to_strings(annots, string_convert)
+
+    uri_line = ""
+    if "PdfUriBase" in data:
+        uri_line = f"\nPdfUriBase: {string_convert(data['PdfUriBase'])}"
+
+    # The first block contains global metadata
+    first_block = f"NumberOfPages: {data['NumberOfPages']}" + uri_line
+
+    data_strings = [first_block] + data_strings
+
+    return "\n---\n".join(data_strings)
+
+
+def dump_data_annots_cli_hook(result: OpResult, _stage):
+    """
+    CLI Hook for dump_data_annots.
+    Formats the raw structured data into the pdftk style report.
+    """
+    output_file = result.meta.get(c.META_OUTPUT_FILE)
+
+    if not result.data:
+        logger.warning("No data available to generate full dump_data_annots report.")
+        return
+
+    text_report = _generate_pdftk_annots_report(result.data)
+
+    with smart_open_output(output_file) as f:
+        f.write(text_report)
+        f.write("\n")
+
+
 @register_operation(
     "dump_data_annots",
     tags=["in_place", "annotations", "info"],
+    cli_hook=dump_data_annots_cli_hook,
     type="single input operation",
     desc="Dump annotation info in pdftk style",
     long_desc=_DUMP_DATA_ANNOTS_LONG_DESC,
     usage="<input> dump_data_annots [output <output>]",
     examples=_DUMP_DATA_ANNOTS_EXAMPLES,
-    args=(["input_pdf"], {"output_file": "output"}),
+    args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
 )
-def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info):
+def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info) -> OpResult:
     """
     Dumps annotation data from a PDF in pdftk style
     """
     logger.debug("Dumping pdftk-style annotations data for PDF with %s pages.", len(pdf.pages))
     all_annots_data = _get_all_annots_data(pdf)
-    data_strings = _data_to_strings(all_annots_data, string_convert)
-    uri_line = ""
-    if base := getattr(getattr(getattr(pdf, "Root", {}), "URI", {}), "Base", None):
-        uri_line = f"\nPdfUriBase: {string_convert(str(base))}"
-    data_strings = [f"NumberOfPages: {len(pdf.pages)}" + uri_line] + data_strings
-
-    with smart_open_output(output_file) as file:
-        print("\n---\n".join(data_strings), file=file)
+    data = {"NumberOfPages": len(pdf.pages), "Annotations": all_annots_data}
+    # Extract URI Base if present in the PDF Root
+    if hasattr(pdf.Root, "URI") and hasattr(pdf.Root.URI, "Base"):
+        data["PdfUriBase"] = str(pdf.Root.URI.Base)
+    return OpResult(success=True, data=data, pdf=pdf, meta={c.META_OUTPUT_FILE: output_file})
 
 
 ##################################################

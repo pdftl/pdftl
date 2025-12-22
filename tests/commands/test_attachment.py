@@ -3,7 +3,7 @@ from pathlib import Path
 import pikepdf
 import pytest
 
-from pdftl.commands.attachments import unpack_files
+from pdftl.commands.attachments import unpack_files, unpack_files_cli_hook
 
 
 @pytest.fixture
@@ -33,13 +33,12 @@ def test_unpack_files(pdf_with_attachment, tmp_path):
         mock_get_input = lambda: None
 
         # Run the command
-        unpack_files(
-            input_filename,
+        result = unpack_files(
             pdf,
             get_input=mock_get_input,
             output_dir=str(tmp_path),
-            operation="unpack_files",  # Explicitly setting operation if needed
         )
+        unpack_files_cli_hook(result, None)
 
         # Assertion: Check if file exists in output dir
         expected_file = tmp_path / "hello.txt"

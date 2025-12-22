@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,7 +28,7 @@ FORM_PDF = ASSETS_DIR / "Form.pdf"
 
 import copy
 
-from pdftl.core.registry import registry  # Import the REAL object
+from pdftl.core.registry import registry
 
 
 @pytest.fixture
@@ -353,3 +354,113 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
     # 2. Ensure Form.pdf is copied to the test working directory
     shutil.copy(assets_dir / "Form.pdf", tmp_path / "Form.pdf")
     return paths
+
+
+@pytest.fixture
+def assert_dump_output(capsys):
+    """
+    Fixture that returns a helper function to run an operation,
+    trigger its CLI hook, and assert text is present in stdout.
+    """
+
+    def _check(op_func, pdf, expected_text_or_list, **kwargs):
+        # 1. Lookup the operation metadata in the central registry
+        # We use the function name (e.g., 'dump_data_fields') as the key
+        op_name = op_func.__name__
+        op_meta = registry.operations.get(op_name)
+
+        if not op_meta:
+            pytest.fail(f"Operation '{op_name}' is not registered. (Is the module imported?)")
+
+        # 2. Get the hook from the metadata object
+        hook = getattr(op_meta, "cli_hook", None)
+        if not hook:
+            pytest.fail(
+                f"Operation '{op_name}' has no cli_hook registered! (Check your @register_operation arguments)"
+            )
+
+        # 3. Run the operation (getting the OpResult)
+        # We pass output_file=None to ensure it returns data, not writes to file
+        result = op_func(pdf, output_file=None, **kwargs)
+
+        # 4. Manually trigger the CLI hook
+        # We strip 'output_file' from kwargs to avoid duplicates in options
+        opts = {"output_file": None, **kwargs}
+        hook(result, SimpleNamespace(options=opts))
+
+        # 5. Assert
+        out = capsys.readouterr().out
+
+        if isinstance(expected_text_or_list, list):
+            for text in expected_text_or_list:
+                assert text in out, f"Expected '{text}' in output.\nGot:\n{out[:200]}..."
+        else:
+            assert (
+                expected_text_or_list in out
+            ), f"Expected '{expected_text_or_list}' in output.\nGot:\n{out[:200]}..."
+
+        return out
+
+    return _check
+
+
+import importlib
+import pkgutil
+import sys
+
+import pytest
+
+import pdftl.commands
+from pdftl.core.registry import registry
+
+
+@pytest.fixture
+def clean_registry():
+    """
+    Fixture that forces a complete reset of the operation registry.
+    """
+    # 1. Clear the existing registry entries IN PLACE.
+    # We do NOT replace the 'registry' object, just clear its dicts.
+    # This ensures that any module holding a reference to 'registry'
+    # (like api.py) sees the empty state and then the refill.
+    if hasattr(registry, "operations"):
+        registry.operations.clear()
+    if hasattr(registry, "options"):
+        registry.options.clear()
+    if hasattr(registry, "help_topics"):
+        registry.help_topics.clear()
+
+    # 2. Force-reload the command modules.
+    # Instead of walking packages manually, we trust the logic in
+    # 'initialize_registry' but we must ensure it actually runs.
+    # Since 'initialize_registry' usually has a "has_run" check,
+    # we might need to bypass it or force re-execution.
+
+    # Check if initialize_registry is idempotent or flagged.
+    # If it has a flag like '_initialized = True', reset it here.
+    import pdftl.registry_init
+
+    if hasattr(pdftl.registry_init, "_initialized"):
+        pdftl.registry_init._initialized = False
+
+    # 3. Re-run the standard initialization logic.
+    # This mimics exactly what 'main()' does at startup.
+    # Note: If initialize_registry imports modules, and they are already
+    # in sys.modules, Python won't re-run the file (and thus won't re-run decorators).
+    # SO we DO need to force reload, but we can do it smarter.
+
+    # Helper to force-reload all 'pdftl.commands' submodules
+    for mod_name in list(sys.modules.keys()):
+        if mod_name.startswith("pdftl.commands."):
+            try:
+                importlib.reload(sys.modules[mod_name])
+            except ImportError:
+                # If reload fails (e.g. module was deleted), just ignore
+                pass
+
+    from pdftl.registry_init import initialize_registry
+
+    # Now run the official init to catch anything else
+    initialize_registry()
+
+    return registry

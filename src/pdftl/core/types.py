@@ -14,7 +14,12 @@ Contains dataclasses and structural schemas used by the registry.
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from types import GeneratorType
+
+    import pikepdf
 
 
 class FeatureType(str, Enum):
@@ -146,3 +151,25 @@ class Option(LegacyDictAccess):
     long_desc: str = ""
     type: Any = None  # usage hint (str) or python type (type)
     compatibility: Compatibility | None = None
+
+
+@dataclass
+class OpResult:
+    success: bool = True
+    pdf: Union["pikepdf.Pdf", "GeneratorType", None] = None  # pipeline output
+    data: Any = None  # The structured payload (dict, list, etc.)
+    error: str | None = None
+    is_discardable: bool = False
+    summary: str = ""  # human-readable summary
+    operation: str | None = None  # producing operation name
+    meta: dict | None = None  # internal metadata
+
+    def __repr__(self) -> str:
+        return (
+            "<OpResult("
+            f"data:{type(self.data).__name__}={self.data}, "
+            f"pdf={self.pdf}, summary={self.summary}, "
+            f"operation={self.operation}, success={self.success}, meta={self.meta}, "
+            f"is_discardable={self.is_discardable}, error={self.error}"
+            ")>"
+        )

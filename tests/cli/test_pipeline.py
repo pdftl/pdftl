@@ -35,20 +35,20 @@ registry.operations["multi_op"] = {
 # -----------------------------
 def test_validate_stage_args_missing_first_input():
     stage = CliStage(operation=None, inputs=[])
-    manager = PipelineManager(stages=[stage], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
     with pytest.raises(MissingArgumentError):
         manager._validate_stage_args(stage, is_first=True, is_last=False)
 
 
 def test_validate_stage_args_requires_output():
     stage = CliStage(operation="filter", inputs=["file1.pdf"])
-    manager = PipelineManager(stages=[stage], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
     with pytest.raises(MissingArgumentError):
         manager._validate_stage_args(stage, is_first=False, is_last=True)
 
 
 def test_validate_number_of_effective_inputs_single_multi():
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     with pytest.raises(UserCommandLineError):
         manager._validate_number_of_effective_inputs("single_op", 2)
     with pytest.raises(MissingArgumentError):
@@ -59,7 +59,7 @@ def test_validate_number_of_effective_inputs_single_multi():
 # _open_pdf_from_special_input
 # -----------------------------
 def test_open_pdf_from_special_input(monkeypatch):
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
 
     # stdin is a TTY -> should raise error
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -76,7 +76,7 @@ def test_open_pdf_from_special_input(monkeypatch):
 # _open_pdf_from_file errors
 # -----------------------------
 def test_open_pdf_from_file(monkeypatch):
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
 
     # FileNotFoundError -> UserCommandLineError
     def fake_fnf(filename, **kwargs):
@@ -98,7 +98,7 @@ def test_open_pdf_from_file(monkeypatch):
 def test_open_pdf_from_file_with_password(monkeypatch):
     dummy_pdf = MagicMock(spec=pikepdf.Pdf)
     monkeypatch.setattr("pikepdf.open", lambda filename, **kw: dummy_pdf)
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     result = manager._open_pdf_from_file("file.pdf", "secret")
     assert result == dummy_pdf
 
@@ -109,14 +109,14 @@ def test_open_pdf_from_file_with_password(monkeypatch):
 def test_run_operation_missing_function_or_args():
     registry.operations["bad_op"] = {"args": ([], {})}
     stage = CliStage(operation="bad_op", inputs=["file.pdf"])
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     with pytest.raises(ValueError):
         manager._run_operation(stage, [])
 
 
 def test_run_operation_success(monkeypatch):
     stage = CliStage(operation="single_op", inputs=["file.pdf"])
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     registry.operations["single_op"]["args"] = ([], {}, {})
     registry.operations["single_op"]["function"] = lambda *a, **kw: "OK"
     result = manager._run_operation(stage, [])
@@ -130,7 +130,7 @@ def test_execute_stage_non_generator(monkeypatch):
     dummy_pdf1 = MagicMock(spec=pikepdf.Pdf)
     dummy_pdf2 = MagicMock(spec=pikepdf.Pdf)
     stage = CliStage(operation="single_op", inputs=["a.pdf"])
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
 
     manager._open_input_pdfs = MagicMock(return_value=[dummy_pdf1, dummy_pdf2])
     manager._run_operation = MagicMock(return_value=dummy_pdf1)
@@ -143,7 +143,7 @@ def test_execute_stage_non_generator(monkeypatch):
 def test_execute_stage_generator(monkeypatch):
     dummy_pdf = MagicMock(spec=pikepdf.Pdf)
     stage = CliStage(operation="single_op", inputs=["a.pdf"])
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
 
     def gen():
         yield ("out.pdf", dummy_pdf)
@@ -162,18 +162,28 @@ def test_open_input_pdfs_success(monkeypatch):
     dummy_pdf = MagicMock(spec=pikepdf.Pdf)
     dummy_pdf.trailer.ID = ["id1", "id2"]
     monkeypatch.setattr("pikepdf.open", lambda f, **kw: dummy_pdf)
+
+    # --- Case 1: keep_first_id ---
     stage = CliStage(inputs=["f1.pdf", "f2.pdf"], input_passwords=[None, None])
-    manager = PipelineManager(
-        stages=[], global_options={"keep_first_id": True}, input_context=MagicMock()
-    )
+
+    # Simulate the parser attaching the global flag to the stage options
+    stage.options["keep_first_id"] = True
+
+    # Initialize Manager with the stage (so it knows this is the last/only stage)
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
+
     pdfs = manager._open_input_pdfs(stage, is_first=True)
     assert pdfs == [dummy_pdf, dummy_pdf]
     assert manager.kept_id == ["id1", "id2"]
 
-    manager = PipelineManager(
-        stages=[], global_options={"keep_final_id": True}, input_context=MagicMock()
-    )
-    pdfs = manager._open_input_pdfs(stage, is_first=False)
+    # --- Case 2: keep_final_id ---
+    stage_final = CliStage(inputs=["f1.pdf", "f2.pdf"], input_passwords=[None, None])
+    stage_final.options["keep_final_id"] = True
+
+    manager = PipelineManager(stages=[stage_final], input_context=MagicMock())
+
+    # Even if is_first=False, keep_final_id should capture the ID of the opened PDFs
+    pdfs = manager._open_input_pdfs(stage_final, is_first=False)
     assert manager.kept_id == ["id1", "id2"]
 
 
@@ -181,7 +191,7 @@ def test_open_input_pdfs_success(monkeypatch):
 # _make_op_args tests
 # -----------------------------
 def test_make_op_args_with_kw_constants():
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     context = {"a": 1, "b": 2}
     arg_style = (["a"], {"x": "b"}, {"y": 3})
     pos_args, kw_args = manager._make_op_args(arg_style, context)
@@ -190,7 +200,7 @@ def test_make_op_args_with_kw_constants():
 
 
 def test_make_op_args_error(monkeypatch):
-    manager = PipelineManager(stages=[], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     with pytest.raises(KeyError):
         manager._make_op_args((["missing"], {}), {})
 
@@ -211,9 +221,13 @@ def test_resolve_stage_io_prompts_prompts_user(monkeypatch):
 # _save_kw_options simple branch
 # -----------------------------
 def test_save_kw_options_returns_expected_dict():
-    manager = PipelineManager(stages=[], global_options={"foo": "bar"}, input_context=MagicMock())
+    # PipelineManager no longer accepts global_options in __init__
+    manager = PipelineManager(stages=[], input_context=MagicMock())
     manager.kept_id = ["id1", "id2"]
-    result = manager._save_kw_options()
+
+    # We must explicitly pass options to _save_kw_options now to simulate a stage save
+    result = manager._save_kw_options(override_options={"foo": "bar"})
+
     assert result == {"options": {"foo": "bar"}, "set_pdf_id": ["id1", "id2"]}
 
 
@@ -222,7 +236,7 @@ def test_save_kw_options_returns_expected_dict():
 # -----------------------------
 def test_validate_and_execute_numbered_stage_final_empty(monkeypatch):
     stage = CliStage(operation=None)
-    manager = PipelineManager(stages=[stage], global_options={}, input_context=MagicMock())
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
     manager._validate_and_execute_numbered_stage(0, stage)  # Should not raise
 
 
@@ -237,9 +251,15 @@ class DummyPdf:
 
 
 def test_pipeline_run_dummy_op(monkeypatch):
-    stage = CliStage(operation="single_op", inputs=["dummy.pdf"], input_passwords=[None])
+    stage = CliStage(
+        operation="single_op",
+        inputs=["dummy.pdf"],
+        input_passwords=[None],
+        options={"output": "dummy_out.pdf"},
+    )
+
     input_context = MagicMock()
-    manager = PipelineManager(stages=[stage], global_options={}, input_context=input_context)
+    manager = PipelineManager(stages=[stage], input_context=input_context)
 
     monkeypatch.setattr(
         PipelineManager, "_open_pdf_from_file", lambda self, filename, pw: DummyPdf()

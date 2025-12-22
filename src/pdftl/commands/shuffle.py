@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
-from pdftl.core.types import Compatibility, FeatureType, Parity, Status
+from pdftl.core.types import Compatibility, FeatureType, OpResult, Parity, Status
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 
@@ -70,12 +71,12 @@ _SHUFFLE_COMPATABILITY = Compatibility(
     usage="<input>... shuffle [<spec>...] output <file> [<option...>]",
     examples=_SHUFFLE_EXAMPLES,
     args=(
-        ["inputs", "operation_args", "opened_pdfs"],
-        {"aliases": "aliases"},
+        [c.INPUTS, c.OPERATION_ARGS, c.OPENED_PDFS],
+        {c.ALIASES: c.ALIASES},
     ),
     compatibility=_SHUFFLE_COMPATABILITY,
 )
-def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None):
+def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     """
     Shuffles (interleaves) pages from multiple PDFs, applying
     transformations like rotation and scaling.
@@ -98,4 +99,4 @@ def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None):
             source_pages_to_process.append(page_tuples[i % len(page_tuples)])
     new_pdf = Pdf.new()
     add_pages(new_pdf, opened_pdfs, source_pages_to_process)
-    return new_pdf
+    return OpResult(success=True, pdf=new_pdf)

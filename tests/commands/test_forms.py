@@ -1,7 +1,9 @@
+from types import SimpleNamespace
+
 import pikepdf
 import pytest
 
-from pdftl.commands.dump_data_fields import dump_data_fields
+from pdftl.commands.dump_data_fields import dump_data_fields, dump_fields_cli_hook
 from pdftl.commands.fill_form import fill_form
 
 
@@ -61,7 +63,9 @@ def fdf_file(tmp_path):
 def test_dump_data_fields(pdf_with_form, tmp_path):
     """Test dumping form fields to a file."""
     output = tmp_path / "fields.txt"
-    dump_data_fields(pdf_with_form, output_file=str(output))
+    result = dump_data_fields(pdf_with_form, output_file=str(output))
+    mock_stage = SimpleNamespace(options={"output_file": str(output), "escape_xml": True})
+    dump_fields_cli_hook(result, mock_stage)
 
     content = output.read_text(encoding="utf-8")
     assert "FieldName: MyTextField" in content
@@ -74,7 +78,9 @@ def test_dump_data_fields_stdout(pdf_with_form):
     from unittest.mock import patch
 
     with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-        dump_data_fields(pdf_with_form, output_file=None)
+        result = dump_data_fields(pdf_with_form, output_file=None)
+        mock_stage = SimpleNamespace(options={"output_file": None, "escape_xml": True})
+        dump_fields_cli_hook(result, mock_stage)
         content = mock_stdout.getvalue()
 
     assert "FieldName: MyTextField" in content

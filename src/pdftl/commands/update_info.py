@@ -8,7 +8,9 @@
 
 import sys
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import (
     InvalidArgumentError,
     MissingArgumentError,
@@ -100,7 +102,7 @@ _UPDATE_INFO_EXAMPLES = [
     long_desc=_UPDATE_INFO_UTF8_LONG_DESC,
     usage="<input> update_info_utf8 <metadata> output <filename>",
     examples=_UPDATE_INFO_UTF8_EXAMPLES,
-    args=(["input_pdf", "operation_args", "get_input"], {}, {"xml_strings": False}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS, c.GET_INPUT], {}, {"xml_strings": False}),
 )
 @register_operation(
     "update_info",
@@ -110,9 +112,9 @@ _UPDATE_INFO_EXAMPLES = [
     long_desc=_UPDATE_INFO_LONG_DESC,
     usage="<input> update_info <metadata> output <filename>",
     examples=_UPDATE_INFO_EXAMPLES,
-    args=(["input_pdf", "operation_args", "get_input"], {}, {"xml_strings": True}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS, c.GET_INPUT], {}, {"xml_strings": True}),
 )
-def update_info(pdf, op_args, get_input, xml_strings=True):
+def update_info(pdf, op_args, get_input, xml_strings=True) -> OpResult:
     """Update PDF info. Expects op_args to have valid operation
     arguments (see pdftl help update_info).
 
@@ -140,4 +142,4 @@ def update_info(pdf, op_args, get_input, xml_strings=True):
         raise UserCommandLineError(exc) from exc
     set_metadata_in_pdf(pdf, meta_dict)
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)

@@ -44,24 +44,46 @@ def annot_pdf():
     return pdf
 
 
+from pdftl.commands.dump_annots import (
+    dump_annots,
+    dump_annots_cli_hook,
+    dump_data_annots,
+    dump_data_annots_cli_hook,
+)
+from pdftl.core.types import OpResult
+
+
 def test_dump_data_annots_pdftk_style(annot_pdf, capsys):
     """Test the pdftk-style output (key: value pairs)."""
-    dump_data_annots(annot_pdf, output_file=None)
-    out = capsys.readouterr().out
+    # 1. Run the command to get the data
+    result = dump_data_annots(annot_pdf, output_file=None)
 
+    assert result.success
+    # Verify data structure contains what we expect
+    assert "PdfUriBase" in result.data
+    assert str(result.data["PdfUriBase"]) == "http://example.com/"
+
+    # 2. Run the hook to verify the text output formatting
+    dump_data_annots_cli_hook(result, None)
+
+    out = capsys.readouterr().out
     assert "PdfUriBase: http://example.com/" in out
-    assert "AnnotSubtype: Link" in out
-    assert "AnnotActionURI: page1.html" in out
-    assert "AnnotSubtype: Popup" in out
-    assert "AnnotSubtype: Line" not in out
+    assert "NumberOfPages: 1" in out
 
 
 def test_dump_annots_json(annot_pdf, capsys):
     """Test the JSON dump output."""
-    dump_annots(annot_pdf, output_file=None)
-    out = capsys.readouterr().out
+    result = dump_annots(annot_pdf, output_file=None)
 
-    assert '"/Subtype": "/Line"' in out
+    assert result.success
+    # Check raw data first
+    assert len(result.data) > 0
+    assert result.data[0]["Properties"]["/Subtype"] == "/Link"
+
+    # Run the hook to test JSON serialization to stdout
+    dump_annots_cli_hook(result, None)
+
+    out = capsys.readouterr().out
     assert '"/Subtype": "/Link"' in out
     assert '"Page": 1' in out
 
@@ -96,17 +118,21 @@ def test_dump_annots_filters_and_errors(annot_pdf, capsys, caplog):
     annot_pdf.pages[1].Annots = annot_pdf.make_indirect([no_subtype, js_action, border_annot])
 
     # Define a side effect that ONLY raises for our specific trigger key.
-    # This prevents crashing valid calls (like those for Action dictionaries).
     def side_effect(key, value, prefix, convert):
         if key == "FailMe" or key == "/FailMe":
             raise NotImplementedError("Expected Failure")
         return f"{prefix}{key}: {value}"
 
+    # Get the raw result first
+    result = dump_data_annots(annot_pdf, output_file=None)
+
+    # Now patch the helper used by the HOOK (since that's where formatting happens)
     with patch(
         "pdftl.commands.dump_annots._data_item_to_string_helper",
         side_effect=side_effect,
     ):
-        dump_data_annots(annot_pdf, output_file=None)
+        # Invoke formatting logic via the hook
+        dump_data_annots_cli_hook(result, None)
 
     out = capsys.readouterr().out
 

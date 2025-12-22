@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _DELETE_LONG_DESC = """
@@ -46,9 +48,9 @@ _DELETE_EXAMPLES = [
     long_desc=_DELETE_LONG_DESC,
     usage="<input> delete <spec>... output <file> [<option...>]",
     examples=_DELETE_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def delete_pages(pdf: "Pdf", specs):
+def delete_pages(pdf: "Pdf", specs) -> OpResult:
     """
     Deletes pages from input PDF, and otherwise leaves the PDF
     structure essentially unchanged.
@@ -57,4 +59,4 @@ def delete_pages(pdf: "Pdf", specs):
     for page_num in sorted(pages_to_delete, reverse=True):
         del pdf.pages[page_num - 1]
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)

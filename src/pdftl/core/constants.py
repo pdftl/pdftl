@@ -4,15 +4,13 @@
 
 # src/pdftl/core/constants.py
 
-
-"""Core static project data"""
+"""Core static project data and API Contract Keys."""
 
 from collections import OrderedDict
 
 ##################################################
 # Permissions constants
 # fixme: co-locate permissions constants in output/ ?
-
 
 ALLOW_PERMISSIONS_MAP = OrderedDict(
     [
@@ -33,7 +31,6 @@ ALLOW_PERMISSIONS_L = OrderedDict([(x.lower(), x) for x in ALLOW_PERMISSIONS])
 #################################################
 # Paper sizes as seen in
 # https://web.mit.edu/PostScript/Adobe/Documents/5003.PPD_Spec_v4.3.pdf
-
 
 PAPER_SIZES = {
     "10x11": (720, 792),
@@ -199,7 +196,6 @@ PAPER_SIZES = {
 ##################################################
 # Named boxes in PDF files
 
-
 PAGE_BOXES = [
     "/MediaBox",
     "/CropBox",
@@ -212,7 +208,6 @@ PAGE_BOXES = [
 # Conversion data for units
 
 UNITS = {"pt": 1.0, "cm": 72 / 2.54, "mm": 72 / 25.4, "in": 72}
-
 
 ##################################################
 # Data for creating FDF files.
@@ -252,3 +247,61 @@ PAGE_LABEL_STYLE_MAP = {
     "LowercaseLetters": "/a",
     "NoNumber": None,
 }
+
+##################################################
+# API and Executor Contract Keys
+# Used to prevent magic string typos across the Pipeline and API.
+
+# Core context keys passed into run_operation
+INPUTS = "inputs"
+OPENED_PDFS = "opened_pdfs"
+OPERATION_ARGS = "operation_args"
+ALIASES = "aliases"
+OPTIONS = "options"
+OUTPUT = "output"
+
+# Internal/Resolved context keys for specific command logic
+INPUT_FILENAME = "input_filename"
+INPUT_PASSWORD = "input_password"
+INPUT_PDF = "input_pdf"
+OVERLAY_PDF = "overlay_pdf"
+ON_TOP = "on_top"
+MULTI = "multi"
+OUTPUT_PATTERN = "output_pattern"
+GET_INPUT = "get_input"
+
+# Metadata kys for OpResult
+META_OUTPUT_FILE = "output_file"
+META_ESCAPE_XML = "escape_xml"
+META_EXTRA_INFO = "extra_info"
+##################################################
+# __all__
+
+__all__ = [
+    "ALLOW_PERMISSIONS_MAP",
+    "ALLOW_PERMISSIONS",
+    "ALLOW_PERMISSIONS_L",
+    "PAPER_SIZES",
+    "PAGE_BOXES",
+    "UNITS",
+    "FDF_START",
+    "FDF_END",
+    "PAGE_LABEL_STYLE_MAP",
+    "INPUTS",
+    "OPENED_PDFS",
+    "OPERATION_ARGS",
+    "ALIASES",
+    "OPTIONS",
+    "OUTPUT",
+    "INPUT_FILENAME",
+    "INPUT_PASSWORD",
+    "INPUT_PDF",
+    "OVERLAY_PDF",
+    "ON_TOP",
+    "MULTI",
+    "OUTPUT_PATTERN",
+    "GET_INPUT",
+    "META_EXTRA_INFO",
+    "META_ESCAPE_XML",
+    "META_OUTPUT_FILE",
+]

@@ -14,7 +14,7 @@ def test_chop_basic(two_page_pdf):
         # "rows" defaults to 2 equal pieces per page
         # 2 input pages * 2 pieces = 4 output pages
         specs = ["rows"]
-        result = chop_pages(pdf, specs)
+        result = chop_pages(pdf, specs).pdf
 
         assert len(result.pages) == 4
         # Verify page size changed (height should be halved)
@@ -30,14 +30,14 @@ def test_chop_specific_spec(two_page_pdf):
         # "cols3" -> 3 vertical columns
         # 2 input pages * 3 pieces = 6 output pages
         specs = ["cols3"]
-        result = chop_pages(pdf, specs)
+        result = chop_pages(pdf, specs).pdf
         assert len(result.pages) == 6
 
 
 def test_chop_no_spec_defaults(two_page_pdf):
     """Test that empty specs default to 'cols' (2 columns)."""
     with pikepdf.open(two_page_pdf) as pdf:
-        result = chop_pages(pdf, [])
+        result = chop_pages(pdf, []).pdf
         # 2 pages * 2 cols = 4 pages
         assert len(result.pages) == 4
 

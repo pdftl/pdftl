@@ -23,13 +23,14 @@ def test_normalize_pdf_90_degrees(test_pdf):
     """Test that pages rotate correctly by 90 degrees."""
     specs = ["2-3"]  # Rotate all pages 90 degrees clockwise
     result = normalize_content_streams(test_pdf, specs)
+    pdf = result.pdf
     # breakpoint()
-    assert result.pages[0].Contents.read_bytes() == b""
-    assert result.pages[1].Contents.read_bytes() == b""
-    assert result.pages[2].Contents.read_bytes() == b"\n".join(
+    assert pdf.pages[0].Contents.read_bytes() == b""
+    assert pdf.pages[1].Contents.read_bytes() == b""
+    assert pdf.pages[2].Contents.read_bytes() == b"\n".join(
         [b"10 w", b"306 396 m", b"306 594 l", b"S", b"(Hello) Tj"]
     )
-    assert result.pages[3].Contents.read_bytes() == b"10 w 306 396\n m 306 594 l S (Hello) Tj"
+    assert pdf.pages[3].Contents.read_bytes() == b"10 w 306 396\n m 306 594 l S (Hello) Tj"
 
 
 def test_rotate_pdf_invalid_spec(test_pdf):

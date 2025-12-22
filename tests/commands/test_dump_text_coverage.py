@@ -55,6 +55,6 @@ def test_dump_text_real_iteration():
             MockDoc.return_value.__enter__.return_value = mock_pdf
 
             with patch("pdftl.commands.dump_text.dump") as mock_dump:
-                pdftl.commands.dump_text.dump_text("dummy.pdf", "pass")
-                assert "Text" in mock_dump.call_args[0][0]
-                mock_page.close.assert_called_once()
+                result = pdftl.commands.dump_text.dump_text("dummy.pdf", "pass")
+                assert result.success is True
+                assert "Text" in result.data

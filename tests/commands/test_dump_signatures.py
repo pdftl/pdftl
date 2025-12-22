@@ -7,7 +7,7 @@ import pytest
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
 
-from pdftl.commands.dump_signatures import dump_signatures
+from pdftl.commands.dump_signatures import dump_signatures, dump_signatures_cli_hook
 
 # --- Fixtures ---
 
@@ -88,7 +88,8 @@ def encrypted_signed_pdf_path(tmp_path, cert_and_key):
 def test_dump_signatures_no_signatures(tmp_path, out_pdf_with_no_sigs):
     """Tests logic for documents without signatures."""
     output_file = tmp_path / "sig_dump.txt"
-    dump_signatures("_", out_pdf_with_no_sigs, None, output_file=str(output_file))
+    result = dump_signatures("_", out_pdf_with_no_sigs, None, output_file=str(output_file))
+    dump_signatures_cli_hook(result, None)
     assert "No signatures found." in output_file.read_text()
 
 
@@ -97,7 +98,8 @@ def test_dump_signatures_from_file(signed_pdf_path):
     output = io.StringIO()
     with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
         mock_open.return_value.__enter__.return_value = output
-        dump_signatures(signed_pdf_path, None, None, output_file="dummy.txt")
+        result = dump_signatures(signed_pdf_path, None, None, output_file="dummy.txt")
+        dump_signatures_cli_hook(result, None)
 
         results = output.getvalue()
         assert "SignatureBegin" in results
@@ -111,7 +113,8 @@ def test_dump_signatures_from_memory(signed_pdf_path):
     with pikepdf.open(signed_pdf_path) as pdf:
         with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
             mock_open.return_value.__enter__.return_value = output
-            dump_signatures("_", pdf, None, output_file="dummy.txt")
+            result = dump_signatures("_", pdf, None, output_file="dummy.txt")
+            dump_signatures_cli_hook(result, None)
             assert "SignatureBegin" in output.getvalue()
 
 
@@ -120,7 +123,8 @@ def test_dump_signatures_encrypted(encrypted_signed_pdf_path):
     output = io.StringIO()
     with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
         mock_open.return_value.__enter__.return_value = output
-        dump_signatures(encrypted_signed_pdf_path, None, "bar", output_file="dummy.txt")
+        result = dump_signatures(encrypted_signed_pdf_path, None, "bar", output_file="dummy.txt")
+        dump_signatures_cli_hook(result, None)
         assert "SignatureBegin" in output.getvalue()
 
 
@@ -142,5 +146,6 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
     with patch(target, return_value=mock_status):
         with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
             mock_open.return_value.__enter__.return_value = output
-            dump_signatures(signed_pdf_path, None, None)
+            result = dump_signatures(signed_pdf_path, None, None)
+            dump_signatures_cli_hook(result, None)
             assert "SignatureModificationLevel: SUSPICIOUS (Exception)" in output.getvalue()

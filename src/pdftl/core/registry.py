@@ -11,6 +11,7 @@ import os
 from collections import OrderedDict
 from dataclasses import fields
 
+import pdftl.core.constants as c
 from pdftl.core.types import Compatibility, HelpExample, HelpTopic, Operation, Option
 
 
@@ -29,12 +30,12 @@ class Registry:
         self.help_topics = OrderedDict()
 
     def __getitem__(self, key):
-        if key in ("operations", "options", "help_topics"):
+        if key in ("operations", c.OPTIONS, "help_topics"):
             return getattr(self, key)
         raise KeyError(f"Unknown registry key: {key}")
 
     def __contains__(self, key):
-        return key in ("operations", "options", "help_topics")
+        return key in ("operations", c.OPTIONS, "help_topics")
 
     def filter(self, main_key, sub_key, test, transform=None):
         """

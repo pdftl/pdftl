@@ -137,6 +137,26 @@ pdftl in.pdf add_text 'odd/YOUR AD HERE/(position=mid-center, font=Helvetica-Bol
 pdftl in.pdf replace '/0 0 0 (RG|rg)/1 0 0 \1/' output redder.pdf
 ```
 
+## Python API
+
+While `pdftl` is primarily a CLI tool, it also exposes a robust Python API for integrating PDF workflows into your scripts.
+ It supports both a Functional interface (similar to the CLI) and a Fluent interface (for method chaining).
+
+```python
+from pdftl import pipeline
+
+# Chain operations fluently without saving intermediate files
+(
+    pipeline("input.pdf")
+    .rotate("right")
+    .stamp("watermark.pdf")
+    .save("output.pdf")
+)
+```
+
+See the **[API Tutorial][4]** for more details.
+
+
 ## Operations and options
 
 ```
@@ -235,3 +255,4 @@ Usage
 [1]: https://raw.githubusercontent.com/pdftl/pdftl/main/LICENSE
 [2]: https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md
 [3]: https://pdftl.readthedocs.io
+[4]: https://raw.githubusercontent.com/pdftl/pdftl/docs/api_tutorial.md

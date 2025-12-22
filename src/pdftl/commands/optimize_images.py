@@ -14,8 +14,9 @@
 
 import logging
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
-from pdftl.core.types import Compatibility, FeatureType, Status
+from pdftl.core.types import Compatibility, FeatureType, OpResult, Status
 from pdftl.exceptions import InvalidArgumentError, PackageError
 
 logger = logging.getLogger(__name__)
@@ -148,10 +149,10 @@ _COMPATIBILITY_INFO = Compatibility(
     long_desc=_OPTIMIZE_IMAGES_LONG_DESC_MD,
     usage="<input> optimize_images [<optimize_option>...] output <file> [<option...>]",
     examples=_OPTIMIZE_IMAGES_EXAMPLES,
-    args=(["input_pdf", "operation_args", "output"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS, c.OUTPUT], {}),
     compatibility=_COMPATIBILITY_INFO,
 )
-def optimize_images_pdf(pdf, operation_args: list, output_filename: str):
+def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpResult:
     """
     Optimize images in the given PDF.
     """
@@ -233,7 +234,7 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str):
     jbig2_groups = extract_images_jbig2(pdf, root, options)
     convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _raise_for_invalid_keyword(arg):

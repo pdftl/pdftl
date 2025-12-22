@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.transform import transform_pdf
 
 _ROTATE_LONG_DESC = """
@@ -55,10 +57,11 @@ _ROTATE_EXAMPLES = [
     long_desc=_ROTATE_LONG_DESC,
     usage="<input> rotate <spec>... output <file> [<option...>]",
     examples=_ROTATE_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def rotate_pdf(source_pdf: "Pdf", specs: list):
+def rotate_pdf(source_pdf: "Pdf", specs: list) -> OpResult:
     """
     Applies rotations and/or scaling to specified pages of a PDF.
     """
-    return transform_pdf(source_pdf, specs)
+    pdf = transform_pdf(source_pdf, specs)
+    return OpResult(success=True, pdf=pdf)

@@ -8,7 +8,6 @@
 
 import sys
 from contextlib import nullcontext
-from pathlib import Path
 
 
 def smart_open_output(filename: str, mode="w", encoding="utf-8"):
@@ -32,6 +31,8 @@ def smart_open_output(filename: str, mode="w", encoding="utf-8"):
 def can_read_file(filename: str) -> bool:
     """Test if we can read a file by attempting to open it."""
     try:
+        from pathlib import Path
+
         p = Path(filename)
 
         if not p.is_file():

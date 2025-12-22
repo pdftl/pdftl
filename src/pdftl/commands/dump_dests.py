@@ -16,7 +16,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.output.dump import dump
 
 # FIXME: compare this with json.py
@@ -93,17 +95,28 @@ _DUMP_DESTS_EXAMPLES = [
 ]
 
 
+def dump_dests_cli_hook(result: OpResult, _stage):
+    """
+    CLI Hook for dump_dests.
+    Serializes the raw destinations data to a compacted JSON string and outputs it.
+    """
+    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    output_data = result.data
+    _write_json_output(output_data, output_file)
+
+
 @register_operation(
     "dump_dests",
     tags=["info", "links"],
+    cli_hook=dump_dests_cli_hook,
     type="single input operation",
     desc="Print PDF named destinations data to the console",
     long_desc=_DUMP_DESTS_LONG_DESC,
     usage="<input> dump_dests",
     examples=_DUMP_DESTS_EXAMPLES,
-    args=(["input_pdf"], {"output_file": "output"}),
+    args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
 )
-def dump_dests(pdf, output_file=None):
+def dump_dests(pdf, output_file=None) -> OpResult:
     """
     Traverses the /Dests name tree of a PDF using pikepdf.NameTree.
     This provides a robust, iterable interface to the destinations.
@@ -160,7 +173,7 @@ def dump_dests(pdf, output_file=None):
     # Sort destinations alphabetically by name for consistent output
     output_data["dests"].sort(key=lambda x: x["name"])
 
-    _write_json_output(output_data, output_file)
+    return OpResult(success=True, data=output_data, meta={c.META_OUTPUT_FILE: output_file})
 
 
 def _write_json_output(output_data, output_file):

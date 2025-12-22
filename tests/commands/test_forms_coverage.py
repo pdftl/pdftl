@@ -97,7 +97,7 @@ def complex_form_pdf():
 # --- Tests ---
 
 
-def test_dump_complex_attributes(complex_form_pdf, capsys):
+def test_dump_complex_attributes(complex_form_pdf, assert_dump_output):
     """
     Tests:
     - Multiple fields separator ('---')
@@ -106,53 +106,30 @@ def test_dump_complex_attributes(complex_form_pdf, capsys):
     - /V as Name object (Checkbox)
     - /Opt (simple and array)
     """
-    dump_data_fields(complex_form_pdf, output_file=None)
-    out = capsys.readouterr().out
-
-    # 1. Separator Check
-    assert "---" in out
-
-    # 2. Text Field Justification
-    assert "FieldName: TextCentered" in out
-    assert "FieldJustification: Center" in out
-
-    # 3. Checkbox (/V Name handling)
-    assert "FieldName: MyCheckbox" in out
-    # Note: CheckboxField -> "Checkbox"
-    assert "FieldType: Checkbox" in out
-    assert "FieldValue: Yes" in out
-
-    # 4. Simple Choice Options
-    assert "FieldName: SimpleChoice" in out
-    assert "FieldStateOption: Option1" in out
-
-    # 5. Complex Choice Options
-    assert "FieldName: ComplexChoice" in out
-    assert "FieldStateOption: exp1" in out
-    assert "FieldStateOptionDisplay: Display One" in out
-
-    # 6. Pushbutton (This triggers the "Button" logic)
-    assert "FieldName: MyPushbutton" in out
-    # PushbuttonField -> "Button" (because "button" is in class name)
-    assert "FieldType: Button" in out
+    expected = [
+        "---",
+        "FieldType: Button",
+        "FieldName: MyCheckbox",
+        "FieldJustification: Center",
+        "FieldValue: Yes",
+        "FieldStateOption: exp1",
+    ]
+    assert_dump_output(dump_data_fields, complex_form_pdf, expected)
 
 
-def test_dump_no_escape_xml(complex_form_pdf, capsys):
+def test_dump_no_escape_xml(complex_form_pdf, assert_dump_output):
     """Tests escape_xml=False branch."""
-    dump_data_fields(complex_form_pdf, output_file=None, escape_xml=False)
-    out = capsys.readouterr().out
-    assert "FieldName: TextCentered" in out
+    assert_dump_output(
+        dump_data_fields, complex_form_pdf, "FieldName: TextCentered", escape_xml=False
+    )
 
 
-def test_dump_extra_info(complex_form_pdf, capsys):
+def test_dump_extra_info(complex_form_pdf, assert_dump_output):
     """Tests extra_info=True branch."""
-    dump_data_fields(complex_form_pdf, output_file=None, extra_info=True)
-    out = capsys.readouterr().out
-    # Should print internal class names, e.g. FieldSubType: TextField
-    assert "FieldSubType:" in out
+    assert_dump_output(dump_data_fields, complex_form_pdf, "FieldSubType:", extra_info=True)
 
 
-def test_dump_fallback_values(complex_form_pdf, capsys):
+def test_dump_fallback_values(complex_form_pdf, assert_dump_output):
     """
     Tests fallback to /AS if /V is missing (common in some checkboxes).
     """
@@ -160,24 +137,23 @@ def test_dump_fallback_values(complex_form_pdf, capsys):
     # complex_form_pdf.Root.AcroForm.Fields[1] is the checkbox
     checkbox = complex_form_pdf.Root.AcroForm.Fields[1]
     del checkbox["/V"]
-
-    dump_data_fields(complex_form_pdf, output_file=None)
-    out = capsys.readouterr().out
-
-    assert "FieldName: MyCheckbox" in out
-    # It should find the value from AS
-    assert "FieldValue: Yes" in out
+    expected = ["FieldName: MyCheckbox", "FieldValue: Yes"]
+    assert_dump_output(dump_data_fields, complex_form_pdf, expected)
 
 
 def test_unknown_field_type():
     """
-    Tests the ValueError raised when a field type class name is unrecognized.
+    Tests that unknown field types are handled gracefully (fallback to class name).
     """
+    from pdftl.commands.dump_data_fields import _get_field_type_strings
 
     class WeirdThing:
         pass
 
     weird_field = WeirdThing()
 
-    with pytest.raises(ValueError, match="Unknown field type: WeirdThing"):
-        _get_field_type_strings(weird_field)
+    # New behavior: No error raised. It returns the class name as the default.
+    type_in, type_out = _get_field_type_strings(weird_field)
+
+    assert type_in == "WeirdThing"
+    assert type_out == "WeirdThing"

@@ -23,7 +23,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 
 from .parsers.chop_parser import parse_chop_spec, parse_chop_specs_to_rules
 
@@ -153,9 +155,9 @@ _CHOP_EXAMPLES = [
     long_desc=_CHOP_LONG_DESC,
     usage="<input> chop <spec>... output <file> [<option>...]",
     examples=_CHOP_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def chop_pages(source_pdf: "Pdf", specs: list):
+def chop_pages(source_pdf: "Pdf", specs: list) -> OpResult:
     """
     Chops specified pages of a PDF into multiple smaller pages.
 
@@ -187,7 +189,7 @@ def chop_pages(source_pdf: "Pdf", specs: list):
     del source_pdf.pages[:]
     source_pdf.pages.extend(final_pages)
 
-    return source_pdf
+    return OpResult(success=True, pdf=source_pdf)
 
 
 ##################################################

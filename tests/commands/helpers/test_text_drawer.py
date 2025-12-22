@@ -3,335 +3,202 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """
-Test suite for the text_drawer helper module.
-
-This file contains:
-1.  TestTextDrawerLogic: Unit tests for pure helper functions (coordinates).
-2.  TestTextDrawerClass: Unit tests for the TextDrawer class,
-    mocking reportlab.
-3.  TestTextDrawerHypothesis: Property-based tests for coordinate logic.
+Final hardened test suite for text_drawer.
+Uses localized patching and explicit call verification to prevent pollution.
 """
-
-import unittest
-from unittest.mock import ANY, MagicMock, call, patch
-
-import pytest
-
-
-class TextDrawerTestMixin:
-    """
-    Mixin that provides fresh imports for every test run to avoid
-    'Zombie Module' conflicts with parallel execution or reloading.
-    """
-
-    @property
-    def module(self):
-        """Helper to get the main module dynamically."""
-        import pdftl.commands.helpers.text_drawer as m
-
-        return m
-
-    @property
-    def TextDrawer(self):
-        return self.module.TextDrawer
-
-    @property
-    def PageBox(self):
-        return self.module._PageBox
-
-    @property
-    def get_base_coordinates(self):
-        return self.module._get_base_coordinates
-
-    @property
-    def resolve_dimension(self):
-        return self.module._resolve_dimension
-
-    @property
-    def DEFAULT_FONT_NAME(self):
-        return self.module.DEFAULT_FONT_NAME
-
-    @property
-    def InvalidArgumentError(self):
-        # Crucial: Must match the version raised by the fresh code
-        try:
-            from pdftl.exceptions import InvalidArgumentError
-
-            return InvalidArgumentError
-        except ImportError:
-            return ValueError
-
-    @property
-    def MockPageBox(self):
-        return self.PageBox
-
-
-class TestTextDrawerLogic(TextDrawerTestMixin, unittest.TestCase):
-    """
-    Unit tests for the "pure" coordinate helper functions in text_drawer.py.
-    """
-
-    def setUp(self):
-        self.page_box = self.MockPageBox(width=600.0, height=800.0)
-        self.font_size = 10.0
-        # Give a real text width to test alignment!
-        self.text_width = 100.0
-
-    def test_resolve_dimension(self):
-        dim_rule_pt = {"type": "pt", "value": 50.0}
-        self.assertEqual(self.resolve_dimension(dim_rule_pt, 800.0), 50.0)
-        dim_rule_pct = {"type": "%", "value": 10.0}
-        self.assertEqual(self.resolve_dimension(dim_rule_pct, 800.0), 80.0)
-        self.assertEqual(self.resolve_dimension(20.0, 800.0), 20.0)
-        self.assertEqual(self.resolve_dimension(None, 800.0), 0.0)
-
-    def test_get_base_coordinates_presets(self):
-        """
-        Tests preset anchor coordinate calculations.
-        Assumes self.page_box is (width=600, height=800).
-        Note: _get_base_coordinates *only* reads 'position' and
-        correctly ignores 'align'.
-        """
-        # --- ALIGN LEFT (test 'top-left' anchor) ---
-        # 'align' is ignored by _get_base_coordinates
-        rule = {"position": "top-left", "align": "left"}
-        x, y = self.get_base_coordinates(rule, self.page_box)
-        self.assertEqual((x, y), (0.0, 800.0))  # Anchor: X=0, Y=800
-
-        # Test 'top-center' anchor
-        rule = {"position": "top-center", "align": "left"}
-        x, y = self.get_base_coordinates(rule, self.page_box)
-        # CORRECTED: The X anchor for "center" is 600 / 2 = 300.0
-        self.assertEqual((x, y), (300.0, 800.0))
-
-        # --- ALIGN CENTER (test 'top-left' anchor again) ---
-        # 'align' is ignored, so the anchor is the same as the first test
-        rule = {"position": "top-left", "align": "center"}
-        x, y = self.get_base_coordinates(rule, self.page_box)
-        # CORRECTED: The anchor is still (0.0, 800.0).
-        self.assertEqual((x, y), (0.0, 800.0))
-
-        # Test 'top-center' anchor again
-        rule = {"position": "top-center", "align": "center"}
-        x, y = self.get_base_coordinates(rule, self.page_box)
-        # CORRECTED: The X anchor for "center" is 600 / 2 = 300.0
-        self.assertEqual((x, y), (300.0, 800.0))
-
-        # --- ALIGN RIGHT (test 'top-right' anchor) ---
-        # This test was already correct
-        rule = {"position": "top-right", "align": "right"}
-        x, y = self.get_base_coordinates(rule, self.page_box)
-        self.assertEqual((x, y), (600.0, 800.0))  # Anchor: X=600, Y=800
-
-        # --- Test middle Y ---
-        # This test was already correct
-        rule = {"position": "mid-center"}
-        x, y = self.get_base_coordinates(rule, self.page_box)
-        # Anchor: X = 600 / 2 = 300.0, Y = 800 / 2 = 400.0
-        self.assertEqual((x, y), (300.0, 400.0))
-
-
-class TestTextDrawerClass(TextDrawerTestMixin):
-    """
-    Unit tests for the TextDrawer class. (pytest-style)
-    These tests mock the reportlab dependency.
-    """
-
-    # We no longer use setUp, we'll create the mock_page_box
-    # inside each test that needs it.
-
-    @patch("pdftl.commands.helpers.text_drawer.getFont")
-    @patch("pdftl.commands.helpers.text_drawer.reportlab_canvas")
-    def test_get_font_name_logic(self, mock_canvas, mock_getFont, caplog):
-        """Tests all logic paths for font validation and fallbacks."""
-        mock_page_box = self.MockPageBox(width=600, height=800)
-        drawer = self.TextDrawer(mock_page_box)
-
-        # 1. Test standard font: 'Helvetica'
-        font_name = drawer.get_font_name("Helvetica")
-        assert font_name == "Helvetica"
-        mock_getFont.assert_not_called()
-
-        # 2. Test another standard font, case-insensitive
-        font_name = drawer.get_font_name("times-bold")
-        assert font_name == "Times-Bold"
-        mock_getFont.assert_not_called()
-
-        from reportlab.pdfbase.pdfmetrics import FontNotFoundError
-
-        # 3. Test bad font: 'Fake-Font-Name'
-        mock_getFont.side_effect = FontNotFoundError("Font not found")
-        with caplog.at_level("WARNING"):
-            font_name = drawer.get_font_name("Fake-Font-Name")
-            assert font_name == self.DEFAULT_FONT_NAME
-            mock_getFont.assert_called_with("Fake-Font-Name")
-            assert len(caplog.records) == 1
-            # Corrected assertion
-            record = caplog.records[0]
-            assert record.args[0] == "Fake-Font-Name"
-
-        mock_getFont.reset_mock()
-
-        # 4. Test a *registered* custom font
-        mock_getFont.side_effect = None  # Clear the side effect
-        font_name = drawer.get_font_name("My-Custom-TTF-Font")
-        assert font_name == "My-Custom-TTF-Font"
-        mock_getFont.assert_called_with("My-Custom-TTF-Font")
-
-    @patch("pdftl.commands.helpers.text_drawer.getFont")
-    @patch("pdftl.commands.helpers.text_drawer.reportlab_canvas")
-    def test_draw_rule_skips_bad_rule(self, mock_canvas, mock_getFont, caplog):
-        """Tests that one bad rule doesn't stop others (via logging)."""
-        mock_page_box = self.MockPageBox(width=600, height=800)
-        drawer = self.TextDrawer(mock_page_box)
-
-        # Rule 1: Bad. The text lambda will fail.
-        bad_rule = {"text": MagicMock(side_effect=TypeError("I am a bad rule!"))}
-        context = {"page": 1}
-
-        with caplog.at_level("WARNING"):
-            drawer.draw_rule(bad_rule, context)
-            assert len(caplog.records) == 1
-            record = caplog.records[0]
-            assert "Skipping one text rule" in record.message
-            assert "I am a bad rule!" in str(record.args[0])
-
-    # This helper method is now part of the pytest-style class
-    def _run_draw_test(self, mock_canvas_instance, rule, expected_draw_x, expected_draw_y):
-        """Helper to run a parameterized draw test."""
-
-        mock_page_box = self.MockPageBox(width=600, height=800)  # Define box
-
-        # Reset the mock's calls for this sub-test
-        mock_canvas_instance.reset_mock()
-
-        # Mock stringWidth to a known value
-        mock_canvas_instance.stringWidth.return_value = 100.0  # text width
-
-        drawer = self.TextDrawer(mock_page_box)  # Use box
-        context = {}
-
-        # Set defaults that can be overridden by the 'rule' param
-        full_rule = {
-            "text": lambda ctx: "Hello",
-            "font": "Helvetica",
-            "size": 12.0,
-            "color": (0, 0, 0),
-            "offset-x": 0,
-            "offset-y": 0,
-            "rotate": 0,
-        }
-        full_rule.update(rule)
-
-        # Get final anchor from the rule (e.g., 300, 400 for mid-center)
-        # Note: _get_base_coordinates ignores 'align'
-        base_x, base_y = self.get_base_coordinates(full_rule, mock_page_box)  # Use box
-
-        # Execute
-        drawer.draw_rule(full_rule, context)
-
-        # Verify
-        expected_calls = [
-            call.saveState(),
-            call.setFillColorRGB(ANY, ANY, ANY),  # We use 'ANY' here
-            call.setFont(full_rule["font"], full_rule["size"]),
-            call.translate(base_x, base_y),  # Base anchor point
-            call.rotate(0),
-            call.drawString(expected_draw_x, expected_draw_y, "Hello"),
-            call.restoreState(),
-        ]
-        mock_canvas_instance.assert_has_calls(expected_calls)
-
-    @pytest.mark.parametrize(
-        "position, align, expected_draw_x, expected_draw_y",
-        [
-            # ... (parameters are all correct) ...
-            ("top-left", "left", 0.0, -12.0),
-            ("mid-left", "left", 0.0, -6.0),
-            ("bottom-left", "left", 0.0, 0.0),
-            ("top-center", "center", -50.0, -12.0),
-            ("mid-center", "center", -50.0, -6.0),
-            ("bottom-center", "center", -50.0, 0.0),
-            ("top-right", "right", -100.0, -12.0),
-            ("mid-right", "right", -100.0, -6.0),
-            ("bottom-right", "right", -100.0, 0.0),
-        ],
-    )
-    def test_draw_rule_geometry(self, position, align, expected_draw_x, expected_draw_y):
-        """
-        Tests all 9 combinations of position/alignment geometry.
-        Assumes text_width=100.0 and font_size=12.0.
-        """
-        # Patches are inside the function, which is correct
-        with patch("pdftl.commands.helpers.text_drawer.getFont", MagicMock()):
-            with patch(
-                "pdftl.commands.helpers.text_drawer.reportlab_canvas"
-            ) as mock_reportlab_canvas:
-
-                mock_canvas_instance = mock_reportlab_canvas.Canvas.return_value
-                rule = {"position": position, "align": align, "size": 12.0}
-
-                # Call the helper method using self
-                self._run_draw_test(mock_canvas_instance, rule, expected_draw_x, expected_draw_y)
-
 
 import subprocess
 import sys
+from unittest.mock import ANY, MagicMock, call
 
 import pytest
 
+from pdftl.commands.helpers import text_drawer
 
-class TestTextDrawerImportLogic:
-    """
-    Tests the module's behavior when dependencies are missing.
-    Uses subprocesses to prevent state pollution in the main test suite.
-    """
+# --- Fixtures ---
 
-    def test_text_drawer_raises_error_without_reportlab(self):
-        """
-        Runs a separate python process that:
-        1. Mocks reportlab as missing.
-        2. Tries to instantiate TextDrawer.
-        3. Asserts that it crashes with the correct error.
-        """
-        # Python script to run in the subprocess
-        code = """
+
+@pytest.fixture(scope="module", autouse=True)
+def clean_slate_imports():
+    """
+    Forcefully remove 'reportlab' and 'text_drawer' from sys.modules
+    to recover from any 'poisoning' by previous tests (e.g. setting modules to None).
+    """
+    # 1. Scrub reportlab modules so they can be freshly imported
+    # (Iterate over a copy of keys since we are deleting)
+    for mod_name in list(sys.modules.keys()):
+        if mod_name == "reportlab" or mod_name.startswith("reportlab."):
+            # Delete if it's None (poisoned) or even if it exists, to be safe
+            if sys.modules[mod_name] is None:
+                del sys.modules[mod_name]
+
+    # 2. Scrub the target module so it re-executes its import statements
+    #    (which will now succeed because reportlab is scrubbed)
+    target = "pdftl.commands.helpers.text_drawer"
+    if target in sys.modules:
+        del sys.modules[target]
+
+    # 3. Import it fresh right now to ensure it's valid
+    import importlib
+
+    importlib.import_module(target)
+
+
+@pytest.fixture
+def page_box():
+    """Provides a fresh PageBox for every test."""
+    return text_drawer._PageBox(width=600.0, height=800.0)
+
+
+@pytest.fixture
+def drawer(page_box, monkeypatch):
+    """Provides a TextDrawer instance with reportlab_canvas mocked."""
+    # Create the mock canvas class and its instance
+    mock_canvas_cls = MagicMock()
+    mock_canvas_instance = MagicMock()
+    mock_canvas_cls.return_value = mock_canvas_instance
+
+    # Apply the patch using the standard monkeypatch fixture
+    monkeypatch.setattr(
+        "pdftl.commands.helpers.text_drawer.reportlab_canvas.Canvas", mock_canvas_cls
+    )
+
+    # Create the drawer
+    instance = text_drawer.TextDrawer(page_box)
+
+    # Yield both for the test to use
+    yield instance, mock_canvas_instance
+
+
+# --- Logic Tests ---
+
+
+def test_resolve_dimension():
+    """Tests pure coordinate resolution logic."""
+    resolve = text_drawer._resolve_dimension
+    assert resolve({"type": "pt", "value": 50.0}, 800.0) == 50.0
+    assert resolve({"type": "%", "value": 10.0}, 800.0) == 80.0
+    assert resolve(20.0, 800.0) == 20.0
+    assert resolve(None, 800.0) == 0.0
+
+
+@pytest.mark.parametrize(
+    "rule, expected",
+    [
+        ({"position": "top-left", "align": "left"}, (0.0, 800.0)),
+        ({"position": "top-center", "align": "left"}, (300.0, 800.0)),
+        ({"position": "top-right", "align": "right"}, (600.0, 800.0)),
+        ({"position": "mid-center"}, (300.0, 400.0)),
+    ],
+)
+def test_get_base_coordinates(rule, expected, page_box):
+    assert text_drawer._get_base_coordinates(rule, page_box) == expected
+
+
+# --- Class & Geometry Tests ---
+
+
+def test_get_font_name_logic(drawer, monkeypatch, caplog):
+    inst, _ = drawer
+    # 1. Standard font
+    assert inst.get_font_name("Helvetica") == "Helvetica"
+
+    # 2. Case-insensitive standard font
+    assert inst.get_font_name("times-bold") == "Times-Bold"
+
+    # 3. Bad font fallback
+    from reportlab.pdfbase.pdfmetrics import FontNotFoundError
+
+    mock_get = MagicMock(side_effect=FontNotFoundError("Missing"))
+    monkeypatch.setattr("pdftl.commands.helpers.text_drawer.getFont", mock_get)
+
+    with caplog.at_level("WARNING"):
+        caplog.clear()
+        name = inst.get_font_name("FakeFont")
+        assert name == text_drawer.DEFAULT_FONT_NAME
+        assert "FakeFont" in caplog.text
+
+
+def test_draw_rule_skips_bad_rule(drawer, caplog):
+    inst, _ = drawer
+    # Create a rule that will fail when evaluated
+    bad_rule = {"text": MagicMock(side_effect=TypeError("Logic Error"))}
+
+    with caplog.at_level("WARNING"):
+        caplog.clear()
+        inst.draw_rule(bad_rule, {"page": 1})
+        assert "Skipping one text rule" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "position, align, exp_x, exp_y",
+    [
+        ("top-left", "left", 0.0, -12.0),
+        ("mid-left", "left", 0.0, -6.0),
+        ("bottom-left", "left", 0.0, 0.0),
+        ("top-center", "center", -50.0, -12.0),
+        ("mid-center", "center", -50.0, -6.0),
+        ("bottom-center", "center", -50.0, 0.0),
+        ("top-right", "right", -100.0, -12.0),
+        ("mid-right", "right", -100.0, -6.0),
+        ("bottom-right", "right", -100.0, 0.0),
+    ],
+)
+def test_draw_rule_geometry(drawer, monkeypatch, position, align, exp_x, exp_y, page_box):
+    """Verifies precise call sequence to ensure geometry is correct."""
+    inst, mock_canvas = drawer
+
+    mock_canvas.stringWidth.return_value = 100.0
+
+    rule = {
+        "text": lambda ctx: "Hello",
+        "font": "Helvetica",
+        "size": 12.0,
+        "position": position,
+        "align": align,
+        "color": (0, 0, 0),
+        "offset-x": 0,
+        "offset-y": 0,
+        "rotate": 0,
+    }
+
+    base_x, base_y = text_drawer._get_base_coordinates(rule, page_box)
+
+    mock_get = MagicMock()
+    monkeypatch.setattr("pdftl.commands.helpers.text_drawer.getFont", mock_get)
+
+    inst.draw_rule(rule, {})
+
+    # Ensure calls happened in order to verify state management
+    expected = [
+        call.saveState(),
+        call.setFillColorRGB(ANY, ANY, ANY),
+        call.setFont("Helvetica", 12.0),
+        call.translate(base_x, base_y),
+        call.rotate(0),
+        call.drawString(exp_x, exp_y, "Hello"),
+        call.restoreState(),
+    ]
+    mock_canvas.assert_has_calls(expected, any_order=False)
+
+
+# --- Isolation Tests ---
+
+
+def test_text_drawer_raises_error_without_reportlab():
+    code = """
 import sys
-from unittest.mock import MagicMock
-
-# 1. Poison sys.modules BEFORE importing the target
-#    This simulates 'reportlab' being uninstalled.
 sys.modules["reportlab"] = None
 sys.modules["reportlab.pdfgen"] = None
-sys.modules["reportlab.pdfgen.canvas"] = None
 from pdftl.exceptions import UserCommandLineError
 try:
-    # 2. Import the module under test
     from pdftl.commands.helpers.text_drawer import TextDrawer, _PageBox
-    
-    # 3. Try to instantiate it
-    page_box = _PageBox(width=100, height=100)
-    TextDrawer(page_box)
-
+    TextDrawer(_PageBox(100, 100))
 except UserCommandLineError as e:
-    # 4. Print the error so the parent process can read it
     print(f"CAUGHT: {e}")
-    sys.exit(0) # Exit cleanly if we caught the expected error
-
-# If we get here, it didn't raise!
-print("DID NOT RAISE")
+    sys.exit(0)
 sys.exit(1)
-        """
-
-        # Run the subprocess
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-
-        # Assertions
-        assert result.returncode == 0, f"Subprocess crashed: {result.stderr}"
-        assert "CAUGHT" in result.stdout
-        # Verify your specific error message text here
-        assert "pip install pdftl[add_text]" in result.stdout
-
-
-if __name__ == "__main__":
-    unittest.main()
+    """
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert "pip install pdftl[add_text]" in result.stdout

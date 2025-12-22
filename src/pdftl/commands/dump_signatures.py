@@ -9,7 +9,9 @@
 import io
 import logging
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_output
 
 logger = logging.getLogger(__name__)
@@ -33,28 +35,50 @@ engines.
 """
 
 
+def dump_signatures_cli_hook(result: OpResult, _stage):
+    """
+    CLI Hook for dump_signatures.
+    Formats the list of signature dictionaries into the Stanza text format.
+    """
+    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    signatures = result.data
+
+    with smart_open_output(output_file) as out:
+        if not signatures:
+            print("No signatures found.", file=out)
+            return
+
+        for idx, sig_data in enumerate(signatures):
+            print("SignatureBegin", file=out)
+            print(f"SignatureFieldName: {sig_data.get('field_name')}", file=out)
+            print(f"SignatureSigner: {sig_data.get('signer')}", file=out)
+            print(f"SignatureHashAlgorithm: {sig_data.get('hash_algorithm')}", file=out)
+
+            integrity = "VALID" if sig_data.get("is_valid") else "INVALID"
+            print(f"SignatureIntegrity: {integrity}", file=out)
+
+            print(f"SignatureCoverage: {sig_data.get('coverage')}", file=out)
+            print(f"SignatureModificationLevel: {sig_data.get('modification_level')}", file=out)
+
+            if idx + 1 < len(signatures):
+                print("---", file=out)
+
+
 @register_operation(
     "dump_signatures",
     tags=["info", "security", "signatures"],
+    cli_hook=dump_signatures_cli_hook,
     type="single input operation",
     desc="List and validate digital signatures",
     long_desc=_DUMP_SIGNATURES_LONG_DESC,
     usage="<input> dump_signatures [output <output>]",
     # Pass filename and password to bypass pikepdf object modifications
-    args=(["input_filename", "input_pdf", "input_password"], {"output_file": "output"}),
+    args=([c.INPUT_FILENAME, c.INPUT_PDF, c.INPUT_PASSWORD], {"output_file": c.OUTPUT}),
 )
-def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None):
+def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None) -> OpResult:
     """
-    Validate PDF signatures and dump status in a stanza-based format.
+    Validate PDF signatures and returns a list of validation results.
     """
-    try:
-        from pyhanko.pdf_utils.reader import PdfFileReader
-        from pyhanko.sign.diff_analysis import DiffResult
-        from pyhanko.sign.validation import validate_pdf_signature
-    except ImportError:
-        # Standard error for pdftl when a dependency is missing
-        raise RuntimeError("The 'pyhanko' library is required for dump_signatures.")
-
     # Mute pyHanko's internal validation log noise (tracebacks for self-signed certs)
     ph_logger = logging.getLogger("pyhanko")
     cv_logger = logging.getLogger("pyhanko_certvalidator")
@@ -63,64 +87,63 @@ def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None):
     cv_logger.setLevel(logging.CRITICAL)
 
     try:
-        if pdf_filename != "_":
-            with open(pdf_filename, "rb") as f:
-                source_bytes = f.read()
-        else:
-            buf = io.BytesIO()
-            pdf.save(buf)
-            source_bytes = buf.getvalue()
-
-        # 1. Initialize without the password argument
-        reader = PdfFileReader(io.BytesIO(source_bytes))
-
-        # 2. If a password was provided, decrypt the reader instance
-        if reader.encrypted:
-            password = pdf_password or ""
-            # pyHanko's decrypt usually takes the password as bytes
-            reader.decrypt(password.encode("utf-8"))
-
-        # 3. Now you can access signatures safely
-        signatures = list(reader.embedded_signatures)
-
-        with smart_open_output(output_file) as out:
-            if not signatures:
-                print("No signatures found.", file=out)
-                return
-
-            for idx, sig in enumerate(signatures):
-                # Perform cryptographic validation
-                status = validate_pdf_signature(sig)
-
-                print("SignatureBegin", file=out)
-                print(f"SignatureFieldName: {sig.field_name}", file=out)
-
-                # Safe extraction of signer name
-                signer_name = status.signing_cert.subject.native.get("common_name", "Unknown")
-                print(f"SignatureSigner: {signer_name}", file=out)
-                print(f"SignatureHashAlgorithm: {status.md_algorithm}", file=out)
-
-                # 1. Cryptographic Integrity (The Math)
-                print(
-                    f"SignatureIntegrity: {'VALID' if status.intact else 'INVALID'}",
-                    file=out,
-                )
-
-                # 2. File Coverage
-                print(f"SignatureCoverage: {status.coverage.name}", file=out)
-
-                # 3. Difference Analysis (The Modifications)
-                if isinstance(status.diff_result, DiffResult):
-                    mod_level = status.diff_result.modification_level.name
-                else:
-                    # Handles SuspiciousModification or other exception objects
-                    mod_level = f"SUSPICIOUS ({type(status.diff_result).__name__})"
-
-                print(f"SignatureModificationLevel: {mod_level}", file=out)
-
-                if idx + 1 < len(signatures):
-                    print("---", file=out)
+        signatures_data = _validate_signatures_worker(pdf_filename, pdf, pdf_password)
+        return OpResult(success=True, data=signatures_data, meta={c.META_OUTPUT_FILE: output_file})
     finally:
         # Restore logging levels
         ph_logger.setLevel(prev_ph)
         cv_logger.setLevel(prev_cv)
+
+
+def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
+    try:
+        from pyhanko.pdf_utils.reader import PdfFileReader
+        from pyhanko.sign.diff_analysis import DiffResult
+        from pyhanko.sign.validation import validate_pdf_signature
+    except ImportError:
+        raise RuntimeError("The 'pyhanko' library is required for dump_signatures.")
+
+    # pyHanko prefers reading the raw bytes to ensure signature integrity
+    if pdf_filename != "_":
+        with open(pdf_filename, "rb") as f:
+            source_bytes = f.read()
+    else:
+        buf = io.BytesIO()
+        pdf.save(buf)
+        source_bytes = buf.getvalue()
+
+    # 1. Initialize without the password argument
+    reader = PdfFileReader(io.BytesIO(source_bytes))
+
+    # 2. If a password was provided, decrypt the reader instance
+    if reader.encrypted:
+        password = pdf_password or ""
+        reader.decrypt(password.encode("utf-8"))
+
+    # 3. Access and validate signatures
+    results = []
+
+    for sig in reader.embedded_signatures:
+        # Perform cryptographic validation
+        status = validate_pdf_signature(sig)
+
+        # Extract data into a clean dictionary
+        signer_name = status.signing_cert.subject.native.get("common_name", "Unknown")
+
+        if isinstance(status.diff_result, DiffResult):
+            mod_level = status.diff_result.modification_level.name
+        else:
+            mod_level = f"SUSPICIOUS ({type(status.diff_result).__name__})"
+
+        sig_data = {
+            "field_name": sig.field_name,
+            "signer": signer_name,
+            "hash_algorithm": status.md_algorithm,
+            "is_valid": status.intact,
+            "coverage": status.coverage.name,
+            "modification_level": mod_level,
+            # We could include more raw data here if needed by the API
+        }
+        results.append(sig_data)
+
+    return results

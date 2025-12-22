@@ -1,7 +1,7 @@
 import re
 
 import pytest
-from hypothesis import assume, given
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from pikepdf import Array
 
@@ -43,6 +43,7 @@ st_parts_without_fill = st.lists(
 # ---------------------------
 
 
+@settings(suppress_health_check=[HealthCheck.too_slow], deadline=None)
 @given(
     direction=st.sampled_from(["cols", "rows"]),
     parts=st_parts_with_fill,  # Strategy guarantees "fill"

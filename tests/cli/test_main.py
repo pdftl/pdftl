@@ -80,7 +80,6 @@ def test_is_verbose_and_setup_logging():
 def test_handle_special_flags_calls(monkeypatch):
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stdout=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
-
     # Version flag triggers print_version and exit
     mainmod._handle_special_flags(list(VERSION_FLAGS))
     helpmod.print_version.assert_called_once()
@@ -105,7 +104,6 @@ def test_main_no_stages_raises(monkeypatch):
 
     # Patch parsing to simulate no stages
     monkeypatch.setattr(mainmod, "split_args_by_separator", lambda x: [[]])
-    monkeypatch.setattr(mainmod, "parse_options_and_specs", lambda x: ([], {}))
     monkeypatch.setattr(mainmod, "parse_cli_stage", lambda x, is_first_stage=False: None)
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
     monkeypatch.setattr(mainmod, "UserInputContext", lambda *args, **kwargs: MagicMock())
@@ -122,7 +120,11 @@ def test_print_help_exits(monkeypatch):
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
     mainmod._print_help_and_exit("somecmd")
-    helpmod.print_help.assert_called_once_with(command="somecmd", dest=fake_sys.stdout)
+    helpmod.print_help.assert_called_once_with(
+        command="somecmd",
+        dest=fake_sys.stdout,
+        raw=False,
+    )
     fake_sys.exit.assert_called_once_with(0)
 
 
@@ -134,18 +136,15 @@ def test_main_user_command_line_error(monkeypatch):
     fake_pipeline.run.side_effect = UserCommandLineError("fake error")
     monkeypatch.setattr(mainmod, "PipelineManager", lambda *a, **kw: fake_pipeline)
 
-    # Patch _is_verbose_and_setup_logging to skip logging setup
     monkeypatch.setattr(mainmod, "_is_verbose_and_setup_logging", lambda x: (False, x))
-
-    # Patch initialize_registry to do nothing
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
-
-    # Patch split_args_by_separator and parse_options_and_specs
     monkeypatch.setattr(mainmod, "split_args_by_separator", lambda args: [args])
-    monkeypatch.setattr(mainmod, "parse_options_and_specs", lambda args: (args, {}))
 
-    # Patch parse_cli_stage to return the args as-is
-    monkeypatch.setattr(mainmod, "parse_cli_stage", lambda args, is_first_stage: args)
+    # FIX: The mock must now return an object with an .options attribute,
+    # not just a list, because main() attempts to merge options into it.
+    mock_stage = MagicMock()
+    mock_stage.options = {}
+    monkeypatch.setattr(mainmod, "parse_cli_stage", lambda args, is_first_stage: mock_stage)
 
     # Patch sys.exit so it doesn't actually exit
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stderr=io.StringIO())
@@ -153,7 +152,6 @@ def test_main_user_command_line_error(monkeypatch):
 
     # Run main with dummy args
     mainmod.main(["pdftl", "stage1"])
-
     # Check that sys.exit(1) was called
     fake_sys.exit.assert_called_once_with(1)
 

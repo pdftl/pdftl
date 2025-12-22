@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 
 _ADD_TEXT_LONG_DESC = r"""
@@ -197,9 +199,9 @@ def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
     long_desc=_ADD_TEXT_LONG_DESC,
     usage="<input> add_text <spec>... output <file> [<option>...]",
     examples=_ADD_TEXT_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def add_text_pdf(pdf: "Pdf", specs: list[str]) -> "Pdf":
+def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
     """
     Applies all parsed add_text rules to a PDF **in-place**.
 
@@ -224,7 +226,7 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> "Pdf":
         raise InvalidArgumentError(f"Error in add_text spec: {exc}") from exc
 
     if not page_rules:
-        return pdf  # No rules, return the original PDF
+        return OpResult(success=True, pdf=pdf)  # No rules, return the original PDF
 
     # --- 3. Check for TextDrawer dependency ---
     # We must instantiate the TextDrawer *once* to check for the
@@ -236,7 +238,7 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> "Pdf":
     for i, page in enumerate(pdf.pages):
         _process_page(i, page, page_rules, static_context, TextDrawer)
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _process_page(i, page, page_rules, static_context, drawer_class):

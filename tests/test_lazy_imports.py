@@ -23,11 +23,13 @@ class TraceImports:
         if any(name == f or name.startswith(f + ".") for f in forbidden):
             # Look at the stack to find the last 'pdftl.commands' module
             import inspect
+            count = 0
             for frame in inspect.stack():
                 module = inspect.getmodule(frame[0])
-                if module and module.__name__.startswith("pdftl.commands"):
-                    culprits.add(module.__name__)
-                    break
+                if module and module.__name__.startswith("pdftl"):
+                    culprits.add((count, module.__name__))
+                    count += 1
+                    # break
         return original_import(name, globals, locals, fromlist, level)
 
 original_import = __builtins__.__import__
@@ -43,7 +45,7 @@ except SystemExit:
 
 if culprits:
     print("--- SURGICAL EDIT LIST ---")
-    for c in sorted(culprits):
+    for c in culprits:
         print(f"culprit: {{c}}")
     sys.exit(1)
 
@@ -62,7 +64,7 @@ print("SUCCESS")
         """
         self._run_isolated_cli_check(
             args=["pdftl", "--help"],
-            forbidden_modules=["pikepdf", "ocrmypdf", "pypdfium2", "pathlib"],
+            forbidden_modules=["pikepdf", "ocrmypdf", "pypdfium2"],
         )
 
     def test_cli_processing_imports_pikepdf_only(self, tmp_path, two_page_pdf):

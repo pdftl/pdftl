@@ -1,7 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # src/pdftl/cli/pipeline.py
 
 """Manage a pipeline of operations"""
@@ -11,11 +7,14 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
+from typing import Union
 
 logger = logging.getLogger(__name__)
+import pdftl.core.constants as c
 from pdftl.cli.whoami import WHOAMI
+from pdftl.core.executor import run_operation
 from pdftl.core.registry import register_help_topic, registry
-from pdftl.core.types import HelpExample
+from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_pdf
 from pdftl.utils.user_input import pdf_filename_completer
@@ -68,16 +67,24 @@ class CliStage:
                 self.inputs[i] = new_filename
 
 
+class PipelineResult:
+    """The final payload returned by a pipeline execution."""
+
+    pdf: Union["pikepdf.Pdf", None] = None
+    results: list[OpResult] = field(default_factory=list)
+
+
 # pylint: disable=too-few-public-methods
 class PipelineManager:
     """Orchestrates the execution of a multi-stage PDF processing pipeline."""
 
-    def __init__(self, stages, global_options, input_context):
+    def __init__(self, stages, input_context):
         self.stages: [CliStage] = stages
-        self.global_options = global_options
         self.pipeline_pdf = None
         self.kept_id = None
         self.input_context = input_context
+        self.results: list[OpResult] = []
+        self.result_discardable = False
 
     def run(self):
         """Executes all stages in the pipeline."""
@@ -86,22 +93,51 @@ class PipelineManager:
             for i, stage in enumerate(self.stages):
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
                 self._validate_and_execute_numbered_stage(i, stage)
+                stage_output = stage.options.get(c.OUTPUT)
 
-            if self.pipeline_pdf:
-                save_pdf(
-                    self.pipeline_pdf,
-                    self.global_options.get("output"),
-                    self.input_context,
-                    **self._save_kw_options(),
-                )
+                # Check if we have an output file AND a PDF to save.
+                # Some operations (like dump_text) handle output themselves via hooks
+                # and leave pipeline_pdf as None. We must skip save_pdf in that case.
+                if stage_output and self.pipeline_pdf:
+                    # Pass stage.options directly.
+                    # This ensures intermediate files don't inherit global flags like 'uncompress'.
+                    save_options = stage.options
+
+                    # Call save. _save_kw_options will handle the isolation logic.
+                    save_pdf(
+                        self.pipeline_pdf,
+                        stage_output,
+                        self.input_context,
+                        **self._save_kw_options(override_options=save_options),
+                    )
+
+            # 4. Final Fallback Save
+            # If the last stage DID NOT save (no output arg), and we have a result...
+            # We check if the last stage options contained an output but for some reason
+            # (logic flow) it wasn't caught above, or if we need to warn.
+            # With global_options gone, we assume the Parser attached the 'output'
+            # option to the final stage if it was present on the CLI.
+
+            # NOTE: If the loop above ran for the last stage, it handled the save.
+            # The only case we might be here with an unsaved result is if the
+            # last stage had no 'output' option.
+
         finally:
             import pikepdf
 
             if isinstance(self.pipeline_pdf, pikepdf.Pdf):
                 self.pipeline_pdf.close()
 
-    def _save_kw_options(self):
-        return {"options": self.global_options, "set_pdf_id": self.kept_id}
+    def _save_kw_options(self, override_options=None):
+        """
+        Construct the keyword arguments for the save_pdf function.
+        """
+        # If override_options is provided, we use it.
+        # Otherwise, we default to empty (standard defaults apply).
+        final_options = override_options.copy() if override_options else {}
+
+        # Return the kwargs expected by save_pdf
+        return {c.OPTIONS: final_options, "set_pdf_id": self.kept_id}
 
     def _validate_and_execute_numbered_stage(self, i, stage):
         if not stage.operation and i == len(self.stages) - 1:
@@ -125,6 +161,21 @@ class PipelineManager:
             self.pipeline_pdf.close()
 
         result = self._run_operation(stage, opened_pdfs)
+
+        from pdftl.core.types import OpResult
+
+        if isinstance(result, OpResult):
+            self.results.append(result)
+            self.result_discardable = result.is_discardable
+            if not getattr(self.input_context, "is_api", False):
+                op_entry = registry.operations.get(stage.operation, {})
+                if hook := op_entry.get("cli_hook"):
+                    # Hook now sees stage.options directly, which should include
+                    # the output path if the parser did its job.
+                    hook(result, stage)
+            result = result.pdf
+        else:
+            self.result_discardable = False
 
         if isinstance(result, types.GeneratorType):
             self._save_generator_and_cleanup(result, opened_pdfs)
@@ -157,11 +208,11 @@ class PipelineManager:
 
         op_data = registry.operations.get(stage.operation, {})
         op_requires_output = " output " in op_data.get("usage", "")
-        if (
-            is_last
-            and (stage.operation == "filter" or op_requires_output)
-            and not self.global_options.get("output")
-        ):
+
+        # Check if the stage has an output option
+        has_output = bool(stage.options.get(c.OUTPUT))
+
+        if is_last and (stage.operation == "filter" or op_requires_output) and not has_output:
             raise MissingArgumentError(
                 f"The '{stage.operation}' operation requires 'output <file>' in the final stage."
             )
@@ -195,32 +246,27 @@ class PipelineManager:
         if not op_function or not arg_style:
             raise ValueError(f"Operation '{operation}' is not fully configured.")
 
+        # Determine output pattern from local stage options or default
+        output_pattern = stage.options.get(c.OUTPUT, "pg_%04d.pdf")
+
         call_context = {
             "operation": operation,
-            "inputs": stage.inputs,
-            "opened_pdfs": opened_pdfs,
-            "input_filename": _first_or_none(stage.inputs),
-            "input_password": _first_or_none(stage.input_passwords),
-            "input_pdf": _first_or_none(opened_pdfs),
-            "operation_args": stage.operation_args,
-            "aliases": stage.handles,
-            "overlay_pdf": _first_or_none(stage.operation_args),
-            "on_top": "stamp" in operation,
-            "multi": "multi" in operation,
-            "output": self.global_options.get("output", None),
-            "output_pattern": self.global_options.get("output", "pg_%04d.pdf"),
-            "get_input": self.input_context.get_input,
+            c.INPUTS: stage.inputs,
+            c.OPENED_PDFS: opened_pdfs,
+            c.INPUT_FILENAME: _first_or_none(stage.inputs),
+            c.INPUT_PASSWORD: _first_or_none(stage.input_passwords),
+            c.INPUT_PDF: _first_or_none(opened_pdfs),
+            c.OPERATION_ARGS: stage.operation_args,
+            c.ALIASES: stage.handles,
+            c.OVERLAY_PDF: _first_or_none(stage.operation_args),
+            c.ON_TOP: "stamp" in operation,
+            c.MULTI: "multi" in operation,
+            c.OUTPUT: stage.options.get(c.OUTPUT, None),
+            c.OUTPUT_PATTERN: output_pattern,
+            c.GET_INPUT: self.input_context.get_input,
         }
 
-        try:
-            pos_args, kw_args = self._make_op_args(arg_style, call_context)
-        except Exception as exception:
-            logger.error(
-                "Internal error assigning arguments for operation '%s'. This is a bug.",
-                operation,
-            )
-            raise exception
-        return op_function(*pos_args, **kw_args)
+        return run_operation(operation, call_context)
 
     def _make_op_args(self, arg_style, context):
         pos_arg_names, kw_arg_map = arg_style[:2]
@@ -261,8 +307,6 @@ class PipelineManager:
         try:
             logger.debug("Opening file '%s'", filename)
             return pikepdf.open(filename, **kwargs)
-        except FileNotFoundError as exception:
-            raise UserCommandLineError(exception) from exception
         except pikepdf.PasswordError as exc:
             msg = (
                 str(exc)
@@ -271,10 +315,15 @@ class PipelineManager:
                 f"For help: {WHOAMI} help inputs"
             )
             raise UserCommandLineError(msg) from exc
+        except (FileNotFoundError, pikepdf.PdfError) as exception:
+            raise UserCommandLineError(exception) from exception
 
     def _open_input_pdfs(self, stage, is_first):
         """Opens all PDF inputs required for a stage."""
         opened_pdfs = []
+
+        # We assume global/final options (like keep_first_id) are attached to the LAST stage.
+        final_stage_options = self.stages[-1].options if self.stages else {}
 
         for i, filename in enumerate(stage.inputs):
             if filename in ["-", "_"]:
@@ -284,14 +333,14 @@ class PipelineManager:
                 pdf_obj = self._open_pdf_from_file(filename, password)
             opened_pdfs.append(pdf_obj)
             if (
-                self.global_options.get("keep_first_id")
+                final_stage_options.get("keep_first_id")
                 and is_first
                 and i == 0
                 and len(opened_pdfs) > 0
             ):
                 self.kept_id = list(opened_pdfs[0].trailer.ID)
 
-        if self.global_options.get("keep_final_id") and len(opened_pdfs) > 0:
+        if final_stage_options.get("keep_final_id") and len(opened_pdfs) > 0:
             self.kept_id = list(opened_pdfs[-1].trailer.ID)
 
         return opened_pdfs
@@ -336,7 +385,7 @@ def _pipeline_help_topic():
 
 @register_help_topic(
     "input",
-    title="inputs",
+    title=c.INPUTS,
     desc="Specifying input files and passwords",
 )
 def _inputs_help_topic():
@@ -367,14 +416,14 @@ def _inputs_help_topic():
       - By position: Passwords are applied sequentially to the
         encrypted input files in the order they appear, as in:
 
-          `enc1.pdf plain.pdf enc2.pdf input_pw pass1 pass2`
+        `enc1.pdf plain.pdf enc2.pdf input_pw pass1 pass2`
 
       - By handle: If an input file has a handle (e.g.,
         `A=file.pdf`), its password can be assigned using the same
         handle. This is the most reliable method when using
         multiple encrypted files. As in:
 
-          `A=enc1.pdf B=enc2.pdf input_pw B=pass2 A=pass1`
+        `A=enc1.pdf B=enc2.pdf input_pw B=pass2 A=pass1`
 
     The keyword `PROMPT` can be used in the list to be securely
     prompted for a password. This is recommended.

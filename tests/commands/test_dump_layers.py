@@ -2,7 +2,7 @@ import json
 
 import pikepdf
 
-from pdftl.commands.dump_layers import dump_layers
+from pdftl.commands.dump_layers import dump_layers, dump_layers_cli_hook
 
 
 def test_dump_layers_no_ocg(tmp_path):
@@ -10,7 +10,8 @@ def test_dump_layers_no_ocg(tmp_path):
     pdf = pikepdf.new()
     output_file = tmp_path / "out.json"
 
-    dump_layers(pdf, output_file=str(output_file))
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -38,7 +39,8 @@ def test_dump_layers_basic_hierarchy(tmp_path):
     )
     pdf.Root.OCProperties = ocprops
 
-    dump_layers(pdf, output_file=str(output_file))
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -67,7 +69,8 @@ def test_dump_layers_usage_cleaning(tmp_path):
     )
     pdf.Root.OCProperties = pikepdf.Dictionary(OCGs=[ocg], D=pikepdf.Dictionary())
 
-    dump_layers(pdf, output_file=str(output_file))
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -108,7 +111,8 @@ def test_dump_layers_complex_features(tmp_path):
     )
     pdf.Root.OCProperties = ocprops
 
-    dump_layers(pdf, output_file=str(output_file))
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -133,7 +137,8 @@ def test_dump_layers_legacy_fallback(tmp_path):
         D=pikepdf.Dictionary(BaseState=pikepdf.Name.ON),  # No /Order here
     )
 
-    dump_layers(pdf, output_file=str(output_file))
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -161,7 +166,8 @@ def test_dump_layers_extreme_edge_cases(tmp_path):
         D=pikepdf.Dictionary(BaseState=pikepdf.Name.ON),  # No /Order here hits Line 162
     )
 
-    dump_layers(pdf, output_file=str(output_file))
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None)
 
     with open(output_file) as f:
         res = json.load(f)

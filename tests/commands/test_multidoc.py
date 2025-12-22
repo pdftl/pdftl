@@ -29,7 +29,7 @@ def test_cat_simple(pdf_a):
     specs = ["1-end"]
     aliases = {}
 
-    result = cat_pages(inputs, specs, opened_pdfs, aliases)
+    result = cat_pages(inputs, specs, opened_pdfs, aliases).pdf
 
     assert len(result.pages) == 2
     assert isinstance(result, pikepdf.Pdf)
@@ -46,7 +46,7 @@ def test_cat_multiple_with_handles(pdf_a, pdf_b):
 
     specs = ["A", "B"]
 
-    result = cat_pages(inputs, specs, opened_pdfs, aliases)
+    result = cat_pages(inputs, specs, opened_pdfs, aliases).pdf
 
     # 2 pages from A + 1 page from B = 3 pages
     assert len(result.pages) == 3
@@ -73,7 +73,7 @@ def test_shuffle_basic(pdf_a, pdf_b):
     aliases = {"A": 0, "B": 1}
     specs = []
 
-    result = shuffle_pdfs(inputs, specs, opened_pdfs, aliases)
+    result = shuffle_pdfs(inputs, specs, opened_pdfs, aliases).pdf
 
     # 2 pages + 1 page = 3 pages total
     assert len(result.pages) == 3
@@ -88,7 +88,7 @@ def test_shuffle_with_specs(pdf_a, pdf_b):
     aliases = {"A": 0, "B": 1}
     specs = ["A1", "B1"]
 
-    result = shuffle_pdfs(inputs, specs, opened_pdfs, aliases)
+    result = shuffle_pdfs(inputs, specs, opened_pdfs, aliases).pdf
 
     assert len(result.pages) == 2
 
@@ -101,5 +101,5 @@ def test_shuffle_no_pages_error(pdf_b):
     specs = ["Beven"]  # 'Even' pages of a 1-page PDF -> Empty list
 
     # It seems shuffle doesn't raise ValueError, it just returns an empty PDF
-    result = shuffle_pdfs(inputs, specs, opened_pdfs, aliases)
+    result = shuffle_pdfs(inputs, specs, opened_pdfs, aliases).pdf
     assert len(result.pages) == 0

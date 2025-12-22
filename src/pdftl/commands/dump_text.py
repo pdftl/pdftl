@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# src/pdftl/commands/dump_dests.py
+# src/pdftl/commands/dump_text.py
 
 """Dump information about destinations in a PDF file"""
 
@@ -10,9 +10,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.output.dump import dump
+from pdftl.utils.hooks import text_dump_hook
 from pdftl.utils.string import remove_ignored_nonprinting_chars
 
 _DUMP_TEXT_LONG_DESC = """
@@ -63,19 +66,20 @@ def _extract_text_from_pdf(pdf_path, pdfium, password=None) -> list:
 
 @register_operation(
     "dump_text",
+    cli_hook=text_dump_hook,
     tags=["info", "text", "experimental"],
     type="single input operation",
     desc="Print PDF text data to the console or a file",
     long_desc=_DUMP_TEXT_LONG_DESC,
     usage="<input> dump_text [output <output>]",
     examples=_DUMP_TEXT_EXAMPLES,
-    args=(["input_filename", "input_password"], {"output_file": "output"}),
+    args=([c.INPUT_FILENAME, c.INPUT_PASSWORD], {"output_file": c.OUTPUT}),
 )
-def dump_text(input_filename, input_password, output_file=None):
+def dump_text(input_filename, input_password, output_file=None) -> OpResult:
     """
     Dump text content of a PDF file.
     """
-    logger.debug("Dumping text for '%s' using pdfminer", input_filename)
+    logger.debug("Dumping text for '%s'", input_filename)
 
     if input_password is None:
         logger.debug("No password supplied.")
@@ -92,4 +96,4 @@ def dump_text(input_filename, input_password, output_file=None):
             _extract_text_from_pdf(input_filename, pypdfium2, input_password),
         )
     )
-    dump(output_text, dest=output_file)
+    return OpResult(success=True, data=output_text)

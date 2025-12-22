@@ -3,10 +3,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """Dump Layer (Optional Content Group) information"""
-
 import json
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_output
 
 _DUMP_LAYERS_LONG_DESC = """
@@ -118,62 +119,68 @@ def _parse_usage(ocg):
     return usage_dict
 
 
+def dump_layers_cli_hook(result: OpResult, _stage):
+    # Use smart_open_output to handle stdout vs file correctly
+    with smart_open_output(result.meta.get(c.META_OUTPUT_FILE)) as f:
+        json.dump(result.data, f, indent=2)
+        print("", file=f)  # Ensure trailing newline
+
+
 @register_operation(
     "dump_layers",
+    cli_hook=dump_layers_cli_hook,
     tags=["diagnostic", "layers"],
     type="single input operation",
     desc="Dump layer info (JSON)",
     long_desc=_DUMP_LAYERS_LONG_DESC,
     usage="<input> dump_layers [output <output>]",
     examples=_DUMP_LAYERS_EXAMPLES,
-    # Note the mapping of "output_file": "output" to capture the CLI keyword
-    args=(["input_pdf"], {"output_file": "output"}),
+    # Note the mapping of "output_file": c.OUTPUT to capture the CLI keyword
+    args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
 )
-def dump_layers(pdf, output_file=None):
+def dump_layers(pdf, output_file=None) -> OpResult:
     """
     Extract OCG (Layer) data and write as JSON.
     """
     results = {"has_layers": False, "layers": [], "default_config": {}}
 
     if "/OCProperties" in pdf.Root:
-        results["has_layers"] = True
-        ocprops = pdf.Root.OCProperties
+        results = _extract_ocproperties(pdf.Root.OCProperties)
+    return OpResult(success=True, data=results, meta={c.META_OUTPUT_FILE: output_file})
 
-        # 1. Capture Default Configuration (D) first
-        if "/D" in ocprops:
-            results["default_config"] = _parse_config(ocprops.D)
-            if "ui_hierarchy" in results["default_config"]:
-                results["ui_hierarchy"] = results["default_config"]["ui_hierarchy"]
 
-        # 2. Capture Alternate Configurations
-        if "/Configs" in ocprops:
-            results["alternate_configs"] = [_parse_config(c) for c in ocprops.Configs]
+def _extract_ocproperties(ocprops):
+    results = {"has_layers": True, "layers": [], "default_config": {}}
 
-        # 3. NOW check legacy top-level Order ONLY if D didn't provide one
-        if "/Order" in ocprops and "ui_hierarchy" not in results:
-            results["ui_hierarchy"] = _parse_order(ocprops.Order)  # <--- LINE 162 HITS HERE
+    # 1. Capture Default Configuration (D) first
+    if "/D" in ocprops:
+        results["default_config"] = _parse_config(ocprops.D)
+        if "ui_hierarchy" in results["default_config"]:
+            results["ui_hierarchy"] = results["default_config"]["ui_hierarchy"]
 
-        # Iterate OCGs
-        if "/OCGs" in ocprops:
-            off_ids = results["default_config"].get("off_list_ids", [])
+    # 2. Capture Alternate Configurations
+    if "/Configs" in ocprops:
+        results["alternate_configs"] = [_parse_config(c) for c in ocprops.Configs]
 
-            for ocg in ocprops.OCGs:
-                obj_id = int(ocg.objgen[0])
+    # 3. NOW check legacy top-level Order ONLY if D didn't provide one
+    if "/Order" in ocprops and "ui_hierarchy" not in results:
+        results["ui_hierarchy"] = _parse_order(ocprops.Order)  # <--- LINE 162 HITS HERE
 
-                layer_data = {
-                    "name": str(ocg.get("/Name", "Unnamed")),
-                    "obj_id": obj_id,
-                    "default_state": "OFF" if obj_id in off_ids else "ON",
-                    "intent": (
-                        [_clean_val(i) for i in ocg.get("/Intent", [])]
-                        if "/Intent" in ocg
-                        else None
-                    ),
-                    "usage": _parse_usage(ocg),
-                }
-                results["layers"].append(layer_data)
+    # Iterate OCGs
+    if "/OCGs" in ocprops:
+        off_ids = results["default_config"].get("off_list_ids", [])
 
-    # Use smart_open_output to handle stdout vs file correctly
-    with smart_open_output(output_file) as f:
-        json.dump(results, f, indent=2)
-        print("", file=f)  # Ensure trailing newline
+        for ocg in ocprops.OCGs:
+            obj_id = int(ocg.objgen[0])
+
+            layer_data = {
+                "name": str(ocg.get("/Name", "Unnamed")),
+                "obj_id": obj_id,
+                "default_state": "OFF" if obj_id in off_ids else "ON",
+                "intent": (
+                    [_clean_val(i) for i in ocg.get("/Intent", [])] if "/Intent" in ocg else None
+                ),
+                "usage": _parse_usage(ocg),
+            }
+            results["layers"].append(layer_data)
+    return results

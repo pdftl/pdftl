@@ -7,10 +7,13 @@
 """Dump form data from a PDF file"""
 
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_output
 from pdftl.utils.string import xml_encode_for_info
 
@@ -91,55 +94,66 @@ _DUMP_DATA_FIELDS_EXAMPLES = [
     },
 ]
 
+# --- CLI Hook ---
 
-@register_operation(
-    "dump_data_fields_utf8",
-    tags=["info", "forms"],
-    type="single input operation",
-    desc="Print PDF form field data in UTF-8",
-    long_desc=_DUMP_DATA_FIELDS_UTF8_LONG_DESC,
-    usage="<input> dump_data_fields_utf8 [output <output>]",
-    examples=_DUMP_DATA_FIELDS_UTF8_EXAMPLES,
-    args=(
-        ["input_pdf"],
-        {"output_file": "output"},
-        {"escape_xml": False},
-    ),
-)
-@register_operation(
-    "dump_data_fields",
-    tags=["info", "forms"],
-    type="single input operation",
-    desc="Print PDF form field data with XML-style escaping",
-    long_desc=_DUMP_DATA_FIELDS_LONG_DESC,
-    usage="<input> dump_data_fields [output <output>]",
-    examples=_DUMP_DATA_FIELDS_EXAMPLES,
-    args=(["input_pdf"], {"output_file": "output"}),
-)
-def dump_data_fields(
-    pdf,
-    output_file=None,
-    escape_xml=True,
-    extra_info=False,
-):
+
+def dump_fields_cli_hook(result, stage):
     """
-    Imitate pdftk's dump_data_fields output, writing to a file or stdout.
+    Formats the structured field data (List[Dict]) into the standard
+    stanza-based text format (pdftk style).
     """
-    logger.debug("escape_xml=%s", escape_xml)
+    if not result.data:
+        return
 
-    with smart_open_output(output_file) as file:
+    output_file = stage.options.get("output_file")
+    escape_xml = stage.options.get("escape_xml", True)
 
-        if escape_xml:
+    # Helper for conditional XML escaping
+    def fmt(val):
+        s_val = str(val)
+        return xml_encode_for_info(s_val) if escape_xml else s_val
 
-            def writer(text):
-                print(xml_encode_for_info(text), file=file)
+    with smart_open_output(output_file) as f:
 
-        else:
+        num_fields = len(result.data)
 
-            def writer(text):
-                print(text, file=file)
+        for idx, field in enumerate(result.data):
+            # 1. FieldType / SubType
+            print(f"FieldType: {fmt(field.get('FieldType', ''))}", file=f)
+            if "FieldSubType" in field:
+                print(f"FieldSubType: {fmt(field['FieldSubType'])}", file=f)
 
-        write_fields(writer, pdf, extra_info=extra_info)
+            # 2. FieldName
+            print(f"FieldName: {fmt(field.get('FieldName', ''))}", file=f)
+
+            # 3. FieldFlags
+            if "FieldFlags" in field:
+                print(f"FieldFlags: {field['FieldFlags']}", file=f)
+
+            # 4. FieldValue
+            if "FieldValue" in field:
+                print(f"FieldValue: {fmt(field['FieldValue'])}", file=f)
+
+            # 5. FieldOptions (List behavior)
+            if "FieldStateOption" in field:
+                for opt in field["FieldStateOption"]:
+                    # Option can be a string or a tuple (value, display_name)
+                    if isinstance(opt, (list, tuple)) and len(opt) == 2:
+                        print(f"FieldStateOption: {fmt(opt[0])}", file=f)
+                        print(f"FieldStateOptionDisplay: {fmt(opt[1])}", file=f)
+                    else:
+                        print(f"FieldStateOption: {fmt(opt)}", file=f)
+
+            # 6. Justification
+            if "FieldJustification" in field:
+                print(f"FieldJustification: {fmt(field['FieldJustification'])}", file=f)
+
+            # Separator between stanzas (but not after the last one, to match pdftk)
+            if idx + 1 < num_fields:
+                print("---", file=f)
+
+
+# --- Extraction Logic ---
 
 
 def _get_field_type_strings(field):
@@ -150,80 +164,124 @@ def _get_field_type_strings(field):
     elif type_string_in.endswith("Field"):
         type_string_out = type_string_in[:-5]
     else:
-        raise ValueError(f"Unknown field type: {type_string_in}")
+        # Fallback for unknown types
+        type_string_out = type_string_in
     return type_string_in, type_string_out
 
 
-def _write_field_types_and_name(writer, field, type_string_in, type_string_out, extra_info):
-    """Write field types and name for dump_data_fields"""
-    writer(f"FieldType: {type_string_out}")
-    if extra_info:
-        writer(f"FieldSubType: {type_string_in}")
-    writer(f"FieldName: {field.fully_qualified_name}")
-
-
-def _write_field_flags(writer, field):
-    """Write field flags for dump_data_fields"""
-    if hasattr(field.obj, "Ff"):
-        writer(f"FieldFlags: {field.obj.Ff}")
-
-
-def _write_field_value(writer, field):
-    """Write field value for dump_data_fields"""
+def _extract_field_data(field, extra_info=False):
+    """
+    Extracts data from a single pikepdf field into a Python dictionary.
+    """
     import pikepdf
 
+    data = {}
+
+    # 1. Type info
+    ts_in, ts_out = _get_field_type_strings(field)
+    data["FieldType"] = ts_out
+    if extra_info:
+        data["FieldSubType"] = ts_in
+
+    # 2. Name
+    data["FieldName"] = field.fully_qualified_name
+
+    # 3. Flags
+    if hasattr(field.obj, "Ff"):
+        data["FieldFlags"] = int(field.obj.Ff)
+
+    # 4. Value
     # The value is usually stored in /V.
-    # For some button types (checkboxes), it might be /AS or require resolving.
-    # We check the raw object first.
+    # For some button types (checkboxes), it might be /AS.
     if hasattr(field.obj, "V"):
-        # Convert pikepdf object to string safely
-        val = str(field.obj.V)
-        # Handle Name objects (remove slash) if necessary, though str() usually keeps it.
-        # pdftk usually strips the slash for Name objects.
-        if isinstance(field.obj.V, pikepdf.Name):
-            val = str(field.obj.V).lstrip("/")
-        writer(f"FieldValue: {val}")
+        val = field.obj.V
+        if isinstance(val, pikepdf.Name):
+            val = str(val).lstrip("/")
+        else:
+            val = str(val)
+        data["FieldValue"] = val
     elif hasattr(field.obj, "AS"):
         # For checkboxes/radios, appearance state often indicates value
-        val = str(field.obj.AS).lstrip("/")
-        writer(f"FieldValue: {val}")
+        data["FieldValue"] = str(field.obj.AS).lstrip("/")
 
-
-def _write_field_options(writer, field):
-    """Write field options for dump_data_fields"""
-    import pikepdf
-
+    # 5. Options
     if hasattr(field.obj, "Opt"):
+        opts = []
         for opt in field.obj.Opt:
             if isinstance(opt, pikepdf.Array):
-                writer(f"FieldStateOption: {opt[0]}")
-                writer(f"FieldStateOptionDisplay: {opt[1]}")
+                # Tuple: (export_value, display_value)
+                opts.append((str(opt[0]), str(opt[1])))
             else:
-                writer(f"FieldStateOption: {opt}")
+                opts.append(str(opt))
+        data["FieldStateOption"] = opts
 
-
-def _write_field_justification(writer, field, short_type_string):
-    """Write field justification for dump_data_fields"""
+    # 6. Justification
     if hasattr(field.obj, "Q"):
-        writer(f"FieldJustification: {('Left', 'Center', 'Right')[int(field.obj.Q)]}")
-    elif short_type_string in ("Text", "Button"):
-        writer("FieldJustification: Left")
+        data["FieldJustification"] = ("Left", "Center", "Right")[int(field.obj.Q)]
+    elif ts_out in ("Text", "Button"):
+        data["FieldJustification"] = "Left"
+
+    return data
 
 
-def write_fields(writer, pdf, extra_info):
-    """Write form field info"""
+# --- Operations ---
+
+
+@register_operation(
+    "dump_data_fields_utf8",
+    tags=["info", "forms"],
+    type="single input operation",
+    desc="Print PDF form field data in UTF-8",
+    long_desc=_DUMP_DATA_FIELDS_UTF8_LONG_DESC,
+    examples=_DUMP_DATA_FIELDS_UTF8_EXAMPLES,
+    cli_hook=dump_fields_cli_hook,
+    usage="<input> dump_data_fields_utf8 [output <output>]",
+    args=(
+        [c.INPUT_PDF],
+        {"output_file": c.OUTPUT},
+        {"escape_xml": False},
+    ),
+)
+@register_operation(
+    "dump_data_fields",
+    tags=["info", "forms"],
+    type="single input operation",
+    desc="Print PDF form field data with XML-style escaping",
+    long_desc=_DUMP_DATA_FIELDS_LONG_DESC,
+    examples=_DUMP_DATA_FIELDS_EXAMPLES,
+    cli_hook=dump_fields_cli_hook,
+    usage="<input> dump_data_fields [output <output>]",
+    args=([c.INPUT_PDF], {"output_file": c.OUTPUT}, {"escape_xml": True}),
+)
+def dump_data_fields(
+    pdf,
+    output_file=None,
+    escape_xml=True,
+    extra_info=False,
+) -> OpResult:
+    """
+    Extracts form field data from the PDF.
+
+    Returns:
+        OpResult:
+            data: List[Dict] (Structured field data)
+            pdf: pikepdf.Pdf (The input PDF)
+    """
     from pikepdf.form import Form
 
+    # 1. Extract Data
     form = Form(pdf)
+    all_fields_data = []
 
-    num_fields = len(list(form.items()))
-    for idx, field in enumerate(form):
-        type_strings = _get_field_type_strings(field)
-        _write_field_types_and_name(writer, field, *type_strings, extra_info)
-        if hasattr(field, "obj"):
-            _write_field_flags(writer, field)
-            _write_field_value(writer, field)
-            _write_field_options(writer, field)
-            _write_field_justification(writer, field, type_strings[1])
-        if idx + 1 < num_fields:
-            writer("---")
+    for field in form:
+        field_data = _extract_field_data(field, extra_info=extra_info)
+        all_fields_data.append(field_data)
+
+    # 2. Return Structured Result
+    # The cli_hook handles the text formatting and output_file writing.
+    return OpResult(
+        success=True,
+        data=all_fields_data,
+        pdf=pdf,
+        is_discardable=True,
+    )

@@ -10,7 +10,9 @@ import logging
 import math
 
 logger = logging.getLogger(__name__)
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
@@ -39,9 +41,9 @@ _SPIN_EXAMPLES = [
     long_desc=_SPIN_LONG_DESC,
     usage="<input> spin <spec>... output <file> [<option...>]",
     examples=_SPIN_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def spin_pdf(pdf, specs):
+def spin_pdf(pdf, specs) -> OpResult:
     """Spin pages of a PDF file"""
     total_pages = len(pdf.pages)
     split_specs = []
@@ -58,7 +60,7 @@ def spin_pdf(pdf, specs):
 
     # FIXME: apply any zooms etc from split_specs
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def apply_spin(page, angle):

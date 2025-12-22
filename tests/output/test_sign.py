@@ -54,7 +54,7 @@ def test_pki(tmp_path):
     return key_path, cert_path
 
 
-def test_sign_pipeline_integrity(tmp_path, test_pki):
+def test_sign_pipeline_integrity(tmp_path, test_pki, clean_registry):
     key_path, cert_path = test_pki
     input_pdf = Path("tests/assets/2_page.pdf")
     output_pdf = tmp_path / "signed.pdf"

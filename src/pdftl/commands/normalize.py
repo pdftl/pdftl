@@ -9,7 +9,9 @@
 import logging
 
 logger = logging.getLogger(__name__)
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.normalize import normalize_page_content_stream
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
@@ -46,9 +48,9 @@ _NORMALIZE_EXAMPLES = [
     long_desc=_NORMALIZE_LONG_DESC,
     usage="<input> replace [<spec>...] output <output>",
     examples=_NORMALIZE_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def normalize_content_streams(pdf, specs):
+def normalize_content_streams(pdf, specs) -> OpResult:
     """
     Normalize page content streams.
     """
@@ -62,4 +64,4 @@ def normalize_content_streams(pdf, specs):
                 "After normalization, page content starts: %s",
                 pdf.pages[page_num - 1].Contents,
             )
-    return pdf
+    return OpResult(success=True, pdf=pdf)

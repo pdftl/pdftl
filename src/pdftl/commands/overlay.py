@@ -11,7 +11,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 
 # Shared implementation for stamp, multistamp, background, multibackground
 
@@ -90,7 +92,7 @@ def _register_overlay_op(name, desc, long_desc, examples):
         examples=examples,
         tags=["in_place", "overlay"],
         type="single input operation",
-        args=(["input_pdf", "overlay_pdf"], {"multi": "multi", "on_top": "on_top"}),
+        args=([c.INPUT_PDF, c.OVERLAY_PDF], {c.MULTI: c.MULTI, c.ON_TOP: c.ON_TOP}),
     )
 
 
@@ -124,7 +126,7 @@ def apply_overlay(
     on_top=True,
     multi=False,
     scale_to_fit=True,
-):
+) -> OpResult:
     """
     Apply overlay or underlay PDF to input PDF. Optional scaling to fit
     base page like pdftk.
@@ -160,4 +162,4 @@ def apply_overlay(
         else:
             base_page.add_underlay(overlay_page, rect=rect)
 
-    return input_pdf
+    return OpResult(success=True, pdf=input_pdf)

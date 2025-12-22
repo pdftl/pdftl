@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 
@@ -61,11 +63,11 @@ _CAT_EXAMPLES = [
     long_desc=_CAT_LONG_DESC,
     examples=_CAT_EXAMPLES,
     args=(
-        ["inputs", "operation_args", "opened_pdfs"],
-        {"aliases": "aliases"},
+        [c.INPUTS, c.OPERATION_ARGS, c.OPENED_PDFS],
+        {c.ALIASES: c.ALIASES},
     ),
 )
-def cat_pages(inputs, specs, opened_pdfs, aliases=None):
+def cat_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     """
     Concatenates pages from input PDFs into a new PDF, then rebuilds all
     links and named destinations, including transforming link target
@@ -83,4 +85,4 @@ def cat_pages(inputs, specs, opened_pdfs, aliases=None):
 
     add_pages(new_pdf, opened_pdfs, source_pages_to_process)
 
-    return new_pdf
+    return OpResult(success=True, pdf=new_pdf)

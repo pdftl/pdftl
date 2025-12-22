@@ -16,7 +16,9 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.normalize import (
     get_normalized_page_content_stream,
@@ -71,15 +73,17 @@ _REPLACE_EXAMPLES = [
     long_desc=_REPLACE_LONG_DESC,
     usage="<input> replace [<spec>...] output <output>",
     examples=_REPLACE_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def replace_in_content_streams(pdf, specs, normalize_input=True, normalize_output=True):
+def replace_in_content_streams(
+    pdf, specs, normalize_input=True, normalize_output=True
+) -> OpResult:
     """
     Replace in page content streams.
     """
     for spec in specs:
         _apply_replace_spec_in_content_streams(pdf, spec, normalize_input, normalize_output)
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _apply_replace_spec_in_content_streams(pdf, spec, normalize_input, normalize_output):

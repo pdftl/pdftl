@@ -7,19 +7,21 @@
 """Modify properties of existing annotations"""
 
 import logging
-from typing import Any
-
-logger = logging.getLogger(__name__)
-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
+
+# Local imports
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 
 from .parsers.modify_annots_parser import specs_to_modification_rules
+
+logger = logging.getLogger(__name__)
 
 _MODIFY_ANNOTS_LONG_DESC = """
 
@@ -68,18 +70,22 @@ _MODIFY_ANNOTS_EXAMPLES = [
 
 def _parse_array_value(arr_str: str) -> list:
     """Parses a string like '[0 0 1]' into a list of numbers/strings."""
+    # Ensure we actually have brackets and content
+    if not (arr_str.startswith("[") and arr_str.endswith("]")):
+        return [arr_str]
+
     items = arr_str[1:-1].strip().split()
     py_items: list[Any] = []
     for item in items:
         try:
             # Try parsing as float, but only if it looks like a number
-            # (prevents "1.2.3" from being parsed as "1.2")
             if item.count(".") <= 1 and item.replace(".", "", 1).lstrip("-+").isdigit():
                 py_items.append(float(item))
             else:
-                py_items.append(item)  # Add as string
-        except ValueError:
-            py_items.append(item)  # Add as string
+                py_items.append(item)  # Add as string (e.g. /Name inside array)
+        except (ValueError, TypeError):
+            # Fallback for unexpected parsing edge cases
+            py_items.append(item)
     return py_items
 
 
@@ -100,33 +106,40 @@ def _parse_value_to_python(val_str: str):
     if val_str in static_values:
         return static_values[val_str]
 
+    # Handle PDF Literal Strings (Parentheses)
     if val_str.startswith("(") and val_str.endswith(")"):
-        # Validate balanced parentheses
+        # Validate balanced parentheses - simplified check
         if val_str.count("(") != val_str.count(")"):
-            raise ValueError(f"Mismatched parentheses in string: '{val_str}'")
-        # PDF Literal String -> Python String
+            logger.warning(
+                "Mismatched parentheses in string: '%s'. Attempting to treat as literal.",
+                val_str,
+            )
         return val_str[1:-1]
+
+    # Handle PDF Arrays
     if val_str.startswith("[") and val_str.endswith("]"):
-        # Validate balanced brackets
         if val_str.count("[") != val_str.count("]"):
             raise ValueError(f"Mismatched brackets in array: '{val_str}'")
-        # PDF Array -> Python List
         return _parse_array_value(val_str)
+
+    # Handle PDF Names
     if val_str.startswith("/"):
-        # PDF Name -> pikepdf.Name
         return Name(val_str)
 
+    # Handle Numbers or Fallback Strings
     try:
-        # PDF Number -> Python float
-        return float(val_str)
-    except ValueError as exc:
-        # Final check: if it contains unbalanced special chars, it's invalid
-        if (val_str.count("(") != val_str.count(")")) or (
-            val_str.count("[") != val_str.count("]")
-        ):
-            raise ValueError(f"Malformed value string: '{val_str}'") from exc
-        # Default: A plain string -> Python String
-        return val_str
+        # Check if it looks like a number before converting to float
+        if val_str.replace(".", "", 1).lstrip("-+").isdigit():
+            return float(val_str)
+    except (ValueError, TypeError):
+        pass
+
+    # Final validation for malformed selector-like characters
+    if (val_str.count("(") != val_str.count(")")) or (val_str.count("[") != val_str.count("]")):
+        raise ValueError(f"Malformed value string (unbalanced delimiters): '{val_str}'")
+
+    # Default: A plain string -> Python String
+    return val_str
 
 
 def _apply_mods_to_annot(annot, modifications: list[tuple[str, str]], page_num: int) -> int:
@@ -147,32 +160,21 @@ def _apply_mods_to_annot(annot, modifications: list[tuple[str, str]], page_num: 
                 page_num,
                 exc,
             )
-            continue  # Skip this modification
+            continue
 
-        # The key string from the parser (e.g., "Border")
-        # must be prepended with a '/' to be a valid PDF Name.
+        # Convert key to PDF Name
         key_as_name = Name(f"/{key_str}")
 
         if py_value is None:
-            # Value is 'null', so delete the key
             if key_as_name in annot:
                 del annot[key_as_name]
-                logger.debug(
-                    "Deleted key '%s' from annot on page %s",
-                    key_str,
-                    page_num,
-                )
+                logger.debug("Deleted key '%s' from annot on page %s", key_str, page_num)
                 prop_count += 1
         else:
-            # Set the key to the new value
             annot[key_as_name] = py_value
-            logger.debug(
-                "Set key '%s'=%s on annot on page %s",
-                key_str,
-                py_value,
-                page_num,
-            )
+            logger.debug("Set key '%s'=%s on annot on page %s", key_str, py_value, page_num)
             prop_count += 1
+
     return prop_count
 
 
@@ -184,19 +186,19 @@ def _apply_mods_to_annot(annot, modifications: list[tuple[str, str]], page_num: 
     long_desc=_MODIFY_ANNOTS_LONG_DESC,
     usage="<input> modify_annots <spec(K=V...)>... output <output>",
     examples=_MODIFY_ANNOTS_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def modify_annots(pdf: "Pdf", specs: list[str]):
+def modify_annots(pdf: "Pdf", specs: list[str]) -> OpResult:
     """
     Modifies properties of existing annotations in a PDF.
     """
-
     if not specs:
         logger.warning("No modification specs provided. Nothing to do.")
-        return pdf
+        return OpResult(success=False, pdf=pdf)
+
     pdf_page_count = len(pdf.pages)
     try:
-        rules = specs_to_modification_rules(specs, len(pdf.pages))
+        # Unified call to get rules
         rules = specs_to_modification_rules(specs, pdf_page_count)
     except (ValueError, TypeError) as exc:
         msg = f"Failed to parse modify_annots arguments: {exc}"
@@ -205,7 +207,7 @@ def modify_annots(pdf: "Pdf", specs: list[str]):
 
     if not rules:
         logger.warning("No modification rules parsed. Nothing to do.")
-        return pdf
+        return OpResult(success=False, pdf=pdf)
 
     modified_annot_count = 0
     modified_prop_count = 0
@@ -221,7 +223,7 @@ def modify_annots(pdf: "Pdf", specs: list[str]):
         modified_annot_count,
     )
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _apply_rule(pdf, rule, pdf_page_count):
@@ -236,25 +238,18 @@ def _apply_rule(pdf, rule, pdf_page_count):
                 page_num,
                 pdf_page_count,
             )
-            continue  # Skip this page number
+            continue
 
-        # page_num is 1-based, list index is 0-based
         page = pdf.pages[page_num - 1]
-
-        # Check if the /Annots key exists.
         if Name.Annots not in page:
-            continue  # No annotations on this page
+            continue
 
-        # Iterate over the page.Annots array
         for annot in page.Annots:
-            # Check if the annotation type matches the rule's selector
             if rule.type_selector:
-                # Ensure annot.Subtype exists before comparing
                 annot_subtype = annot.get(Name.Subtype)
                 if annot_subtype != Name(rule.type_selector):
                     continue
 
-            # This annotation is a match. Apply all modifications.
             annot_count += 1
             prop_count += _apply_mods_to_annot(annot, rule.modifications, page_num)
 

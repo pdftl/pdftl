@@ -11,8 +11,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_help_topic, register_operation
-from pdftl.core.types import HelpExample
+from pdftl.core.types import HelpExample, OpResult
 
 # FIXME: repeated data here (cf CLI_DATA)
 
@@ -49,13 +50,13 @@ _FILTER_EXAMPLES = [
     long_desc=_FILTER_LONG_DESC,
     usage="<input> [filter] output <file> [<option...>]",
     examples=_FILTER_EXAMPLES,
-    args=(["input_pdf"], {}),
+    args=([c.INPUT_PDF], {}),
 )
-def filter_pdf(pdf: "Pdf"):
+def filter_pdf(pdf: "Pdf") -> OpResult:
     """
     Return the given PDF.
     """
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 @register_help_topic(

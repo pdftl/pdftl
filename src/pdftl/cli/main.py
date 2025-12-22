@@ -61,28 +61,41 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
     logger.debug("args_for_parsing=%s", args_for_parsing)
     stages_args = split_args_by_separator(args_for_parsing)
     logger.debug("stages_args=%s", stages_args)
-    final_stage_args, global_options = parse_options_and_specs(stages_args[-1])
-    logger.debug("final_stage_args=%s, global_options=%s", final_stage_args, global_options)
-    stages_args[-1] = final_stage_args
+
     parsed_stages = []
     for i, stage_args in enumerate(stages_args):
-        if not stage_args and i == len(stages_args) - 1:
-            continue
-        parsed_stages.append(parse_cli_stage(stage_args, is_first_stage=i == 0))
+        # We parse every stage independently.
+        # If a stage contains only options (e.g., 'output out.pdf'), parse_cli_stage
+        # will return a stage with no explicit operation args, which the system
+        # treats as an implicit 'filter' stage (or purely for saving), as designed.
+        stage_args_core, stage_options = parse_options_and_specs(stage_args)
+        stage = parse_cli_stage(stage_args_core, is_first_stage=i == 0)
+        if stage_options and not stage:
+            logger.warning(
+                "Pipeline stage argument parsing failed, deleting arguments and proceeding: %s",
+                stage_args_core,
+            )
+            stage = parse_cli_stage([], is_first_stage=i == 0)
+        if stage:
+            stage.options.update(stage_options)
+            parsed_stages.append(stage)
+
     if not parsed_stages:
         raise UserCommandLineError(
             "No pipeline stages found.\n "
             "Did you forget an operation?  Hint: pdftl help operations"
         )
+
     input_context = UserInputContext(get_input=get_input, get_pass=getpass.getpass)
-    return PipelineManager(parsed_stages, global_options, input_context)
+    # We no longer pass global_options; all options are encapsulated within their specific stages.
+    return PipelineManager(parsed_stages, input_context)
 
 
-def _print_help_and_exit(command):
+def _print_help_and_exit(command, raw=False):
     """Prints the relevant help topic and exits the program."""
     from pdftl.cli.help import print_help
 
-    print_help(command=command, dest=sys.stdout)
+    print_help(command=command, dest=sys.stdout, raw=raw)
     sys.exit(0)
 
 

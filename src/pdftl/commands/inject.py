@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.page_specs import page_number_matches_page_spec
 
@@ -51,9 +53,9 @@ _INJECT_EXAMPLES = [
     long_desc=_INJECT_LONG_DESC,
     usage="<input> inject <injection_spec>... output <file> [<option...>]",
     examples=_INJECT_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def inject_pdf(pdf: "Pdf", inject_args: list):
+def inject_pdf(pdf: "Pdf", inject_args: list) -> OpResult:
     """
     Injects code at the start and/or end of page content streams.
     """
@@ -75,7 +77,7 @@ def inject_pdf(pdf: "Pdf", inject_args: list):
         _apply_injection_rules(pdf, page, page_num, heads, "head")
         _apply_injection_rules(pdf, page, page_num, tails, "tail")
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _apply_injection_rules(pdf, page, page_num, rules, injection_type):

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-from pdftl.commands.generate_fdf import generate_fdf
+from pdftl.commands.generate_fdf import generate_fdf, generate_fdf_cli_hook
 
 
 @pytest.fixture
@@ -65,7 +65,8 @@ def test_generate_fdf_structure(fdf_source_pdf, tmp_path):
     """Test that generated FDF contains correct keys and values."""
     output = tmp_path / "out.fdf"
 
-    generate_fdf(fdf_source_pdf, lambda x: x, str(output))
+    result = generate_fdf(fdf_source_pdf, lambda x: x, str(output))
+    generate_fdf_cli_hook(result, None)
 
     # Read as bytes because FDF headers are binary
     content = output.read_bytes()
@@ -86,7 +87,8 @@ def test_generate_fdf_prompt(fdf_source_pdf, tmp_path):
     def mock_input(msg, **kwargs):
         return str(output)
 
-    generate_fdf(fdf_source_pdf, mock_input, "PROMPT")
+    result = generate_fdf(fdf_source_pdf, mock_input, "PROMPT")
+    generate_fdf_cli_hook(result, None)
 
     assert output.exists()
 
@@ -116,7 +118,8 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
             output = tmp_path / "binary.fdf"
 
             # Pass None as input_pdf because we mocked Form(pdf)
-            generate_fdf(None, None, str(output))
+            result = generate_fdf(None, None, str(output))
+            generate_fdf_cli_hook(result, None)
 
             content = output.read_bytes()
             # Verify it fell back to unparse()

@@ -189,3 +189,225 @@ class TestParseDumpCoverage:
         # Also directly test _parse_top_level_field to ensure line 198 is hit
         with pytest.raises(ValueError, match="Unknown key AnotherBadKey in metadata"):
             _parse_top_level_field("AnotherBadKey", value, pdf_data_struct, TEST_DECODER)
+
+
+from unittest.mock import MagicMock, call, patch
+
+import pikepdf
+import pytest
+from pikepdf import (
+    Dictionary,
+    Name,
+    NumberTree,
+    OutlineItem,
+    Pdf,
+    String,
+)
+
+# --- Import Modules to Test ---
+from pdftl.info import set_info as set_info_module
+
+# --- Import Functions to Test ---
+from pdftl.info.parse_dump import (
+    _parse_info_field,
+    _safe_float_list,
+    _safe_int,
+    parse_dump_data,
+)
+from pdftl.info.set_info import (
+    CANNOT_SET_PDFID1,
+    _add_bookmark,
+    _make_page_label,
+    _set_docinfo,
+    _set_id_info,
+    _set_page_media_entry,
+    set_metadata_in_pdf,
+)
+
+# --- Import Exceptions ---
+
+
+# --- General Fixtures ---
+
+
+@pytest.fixture
+def mock_pdf():
+    """Creates a comprehensive mock pikepdf.Pdf object."""
+    pdf = MagicMock(spec=pikepdf.Pdf)
+    pdf.pdf_version = "1.7"
+    pdf.is_encrypted = False
+
+    # DocInfo
+    pdf.docinfo = MagicMock(spec=pikepdf.Dictionary)
+    pdf.docinfo.items.return_value = [
+        (Name("/Title"), String("Test Title")),
+        (Name("/Author"), String("Test Author")),
+        (Name("/Invalid"), 123),  # Should be skipped
+    ]
+
+    # Pages
+    mock_page1 = MagicMock(spec=pikepdf.Page, name="Page1")
+
+    def page1_get_side_effect(key, default=None):
+        if key == "/Rotate":
+            return 0
+        return default
+
+    mock_page1.get.side_effect = page1_get_side_effect
+    mock_page1.get.return_value = 0  # Default for /Rotate
+    mock_page1.mediabox = [0, 0, 600, 800]
+    mock_page1.cropbox = [0, 0, 600, 800]
+    mock_page1.objgen = (1, 0)
+
+    mock_page2 = MagicMock(spec=pikepdf.Page, name="Page2")
+    mock_page2.get.side_effect = lambda key, default: 90 if key == "/Rotate" else "ii"
+    mock_page2.mediabox = [0, 0, 500, 500]
+    mock_page2.cropbox = [10, 10, 490, 490]  # Different from mediabox
+    mock_page2.objgen = (2, 0)
+
+    pdf.pages = [mock_page1, mock_page2]
+
+    # ID
+    pdf.trailer = MagicMock()
+    pdf.trailer.ID = [b"id0_bytes", b"id1_bytes"]
+
+    # Outlines
+    pdf.open_outline.return_value.__enter__.return_value = MagicMock()
+    pdf.Root = MagicMock(spec=pikepdf.Dictionary)
+
+    # Page Labels
+    pdf.Root.PageLabels = None  # Default
+
+    return pdf
+
+
+@pytest.fixture
+def mock_writer():
+    """Returns a list that can be used as a simple writer function."""
+    output = []
+
+    def writer(text):
+        output.append(text)
+
+    writer.output = output
+    return writer
+
+
+@pytest.fixture(autouse=True)
+def patch_logging(mocker):
+    """Patch logging for all tests in these modules."""
+    mocker.patch("pdftl.info.output_info.logging")
+    mocker.patch("pdftl.info.parse_dump.logging")
+    mocker.patch("pdftl.info.set_info.logging")
+
+
+# ==================================================================
+# === Tests for pdftl.info.parse_dump
+# ==================================================================
+
+
+class TestParseDump:
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [("123", 123), ("-10", -10), ("0", 0), ("foo", "foo"), (None, None)],
+    )
+    def test_safe_int(self, value, expected):
+        assert _safe_int(value) == expected
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ("1.5 2.0", [1.5, 2.0]),
+            ("-10 0", [-10.0, 0.0]),
+            ("foo", "foo"),
+            (None, None),
+        ],
+    )
+    def test_safe_float_list(self, value, expected):
+        assert _safe_float_list(value) == expected
+
+    def test_parse_info_field(self, caplog):
+        """Tests the stateful parsing of InfoKey/InfoValue pairs."""
+        info_dict = {}
+        state = {"last_info_key": None}
+        decoder = lambda x: x  # Passthrough
+
+        # 1. Key, then Value
+        _parse_info_field("InfoKey", "Title", info_dict, state, decoder)
+        assert state["last_info_key"] == "Title"
+        assert info_dict == {}
+
+        _parse_info_field("InfoValue", "My Doc", info_dict, state, decoder)
+        assert state["last_info_key"] is None  # Key was consumed
+        assert info_dict == {"Title": "My Doc"}
+
+        # 2. Value, then Key (should log warning and do nothing)
+        with caplog.at_level("WARNING"):
+            _parse_info_field("InfoValue", "Orphan Value", info_dict, state, decoder)
+
+        assert info_dict == {"Title": "My Doc"}
+        assert len(caplog.records) == 1
+        assert caplog.records[0].message == "Got InfoValue without a preceding InfoKey. Ignoring"
+
+    def test_parse_dump_data_integration(self):
+        """Full integration test for parse_dump_data."""
+        dump_data = [
+            "InfoBegin",
+            "InfoKey: Title",
+            "InfoValue: My Document",
+            "InfoKey: Author",
+            "InfoValue: Me",
+            "PdfID0: 12345",
+            "NumberOfPages: 10",
+            "BookmarkBegin",
+            "BookmarkTitle: Chapter 1",
+            "BookmarkLevel: 1",
+            "BookmarkPageNumber: 1",
+            "BookmarkBegin",
+            "BookmarkTitle: Section 1.1",
+            "BookmarkLevel: 2",
+            "BookmarkPageNumber: 2",
+            "PageMediaBegin",
+            "PageMediaNumber: 1",
+            "PageMediaRotation: 90",
+            "PageMediaRect: 0 0 600 800",
+            "PageLabelBegin",
+            "PageLabelNewIndex: 1",
+            "PageLabelPrefix: A-",
+        ]
+
+        decoder = lambda x: x  # Passthrough
+        result = parse_dump_data(dump_data, decoder)
+
+        # Check top-level
+        assert result["PdfID0"] == "12345"
+        assert result["NumberOfPages"] == 10
+
+        # Check Info
+        assert result["Info"] == {"Title": "My Document", "Author": "Me"}
+
+        # Check Bookmarks
+        assert len(result["BookmarkList"]) == 2
+        assert result["BookmarkList"][0] == {
+            "Title": "Chapter 1",
+            "Level": 1,
+            "PageNumber": 1,
+        }
+        assert result["BookmarkList"][1] == {
+            "Title": "Section 1.1",
+            "Level": 2,
+            "PageNumber": 2,
+        }
+
+        # Check PageMedia
+        assert len(result["PageMediaList"]) == 1
+        assert result["PageMediaList"][0] == {
+            "Number": 1,
+            "Rotation": 90,
+            "Rect": [0.0, 0.0, 600.0, 800.0],
+        }
+
+        # Check PageLabels
+        assert len(result["PageLabelList"]) == 1
+        assert result["PageLabelList"][0] == {"NewIndex": 1, "Prefix": "A-"}

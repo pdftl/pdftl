@@ -14,8 +14,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
+import pdftl.core.constants as c
 from pdftl.commands.helpers.crop_fit import FitCropContext
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.affix_content import affix_content
 
 from .parsers.crop_parser import (
@@ -85,9 +87,9 @@ _CROP_EXAMPLES = [
     long_desc=_CROP_LONG_DESC,
     usage="<input> crop <specs>... [preview] output <file> [<option...>]",
     examples=_CROP_EXAMPLES,
-    args=(["input_pdf", "operation_args"], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def crop_pages(pdf: "Pdf", specs: list):
+def crop_pages(pdf: "Pdf", specs: list) -> OpResult:
     """
     Crop pages in a PDF using specs like '1-3(10pt,5%)'.
     """
@@ -101,7 +103,7 @@ def crop_pages(pdf: "Pdf", specs: list):
             # We pass fit_ctx and all_rules to handle 'fit-group' logic
             _apply_crop_rule_to_page(page_rules[i], i, pdf, preview, fit_ctx, page_rules)
 
-    return pdf
+    return OpResult(success=True, pdf=pdf)
 
 
 def _apply_crop_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules):

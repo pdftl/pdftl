@@ -17,7 +17,7 @@ def mock_pdf():
 def test_rotate_pdf_90_degrees(mock_pdf):
     """Test that pages rotate correctly by 90 degrees."""
     specs = ["1-endright"]  # Rotate all pages 90 degrees clockwise
-    result = rotate_pdf(mock_pdf, specs)
+    result = rotate_pdf(mock_pdf, specs).pdf
     # After rotation, the width and height should swap
     mediabox = result.pages[0].mediabox
     mediarect = Rectangle(*mediabox)

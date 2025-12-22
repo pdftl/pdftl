@@ -16,11 +16,11 @@ def mock_pdf():
 def test_filter_pdf_no_changes(mock_pdf):
     """Test that the 'filter' operation returns the PDF without changes."""
     result = filter_pdf(mock_pdf)
-    assert result is mock_pdf, "The PDF should remain unchanged"
+    assert result.pdf is mock_pdf, "The PDF should remain unchanged"
 
 
 def test_filter_pdf_empty():
     """Test that an empty PDF still returns the same."""
     empty_pdf = Pdf.new()
     result = filter_pdf(empty_pdf)
-    assert result == empty_pdf, "Empty PDF should remain unchanged"
+    assert result.pdf == empty_pdf, "Empty PDF should remain unchanged"

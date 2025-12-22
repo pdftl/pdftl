@@ -10,15 +10,18 @@ See also: pdftl.output.attach for adding attachments to output.
 """
 
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.utils.user_input import dirname_completer
 
-_LIST_FILES_LONG_DESC = """
+_DUMP_FILES_LONG_DESC = """
 
-The `list_files` operation lists files attached to the input
+The `dump_files` operation lists files attached to the input
 PDF file, if there are any.
 
 The output format is
@@ -31,9 +34,9 @@ where filesize is in bytes.
 
 """
 
-_LIST_FILES_EXAMPLES = [
+_DUMP_FILES_EXAMPLES = [
     {
-        "cmd": "a.pdf list_files",
+        "cmd": "a.pdf dump_files",
         "desc": "List all files attached to a.pdf",
     },
 ]
@@ -67,123 +70,138 @@ _UNPACK_FILES_EXAMPLES = [
 ]
 
 
+def dump_files_cli_hook(result: OpResult, _stage):
+    """CLI Hook to print the file list."""
+    if not result.success:
+        return
+
+    if not result.data:
+        # Original behavior: print message if empty
+        input_filename = result.meta.get("input_filename", "input")
+        print(f"No attachments found in {input_filename}")
+        return
+
+    output_dir = result.meta.get("output_dir")
+    base_path = Path(output_dir) if output_dir else Path(".")
+
+    for item in result.data:
+        # Show where the file would be saved (projected path)
+        display_path = base_path / item["name"]
+        print(f"{item['size']:>9} {display_path}")
+
+
+def unpack_files_cli_hook(result: OpResult, _stage):
+    """CLI Hook to write extracted files to disk."""
+    if not result.success:
+        return
+
+    output_dir = result.meta.get("output_dir")
+
+    # We iterate the generator here to trigger the file saves
+    # The generator yields nothing if there were no attachments
+    has_attachments = False
+
+    if output_dir:
+        output_path = Path(output_dir)
+        if not output_path.is_dir():
+            # We can try to create it, or raise error as per original logic
+            # Original raised ValueError inside command.
+            # We'll log error here to not crash pipeline.
+            logger.error("Output directory %s does not seem to be a directory", output_path)
+            return
+
+    for name, file_bytes in result.data:
+        has_attachments = True
+        out_path = Path(output_dir) / name if output_dir else Path(name)
+
+        logger.debug("saving %s bytes to %s", len(file_bytes), out_path)
+        try:
+            with open(out_path, "wb") as f:
+                f.write(file_bytes)
+        except OSError as e:
+            logger.warning("Could not write file %s: %s", out_path, e)
+
+    if not has_attachments:
+        logger.debug("No attachments found")
+
+
 @register_operation(
-    "list_files",
+    "dump_files",
     tags=["attachments", "info"],
     type="single input operation",
     desc="List file attachments",
-    long_desc=_LIST_FILES_LONG_DESC,
-    usage="<input> list_files [output <dir>]",
-    examples=_LIST_FILES_EXAMPLES,
+    long_desc=_DUMP_FILES_LONG_DESC,
+    cli_hook=dump_files_cli_hook,
+    usage="<input> dump_files [output <dir>]",
+    examples=_DUMP_FILES_EXAMPLES,
     args=(
-        ["input_filename", "input_pdf", "get_input"],
-        {"operation": "operation", "output_dir": "output"},
+        [c.INPUT_FILENAME, c.INPUT_PDF, c.GET_INPUT],
+        {"output_dir": c.OUTPUT},
     ),
 )
+def dump_files(input_filename, pdf, get_input, output_dir=None) -> OpResult:
+    """
+    List files attached to the PDF.
+    Returns a list of dicts: {'name': str, 'size': int}.
+    """
+    if not pdf.attachments:
+        return OpResult(success=True, data=[], meta={"input_filename": input_filename})
+
+    # Handle prompt logic for consistency (even if just displaying projected path)
+    final_output_dir = _resolve_output_dir(output_dir, get_input)
+
+    data = []
+    for name, attachment in pdf.attachments.items():
+        file_bytes = attachment.get_file().read_bytes()
+        data.append({"name": name, "size": len(file_bytes)})
+
+    return OpResult(
+        success=True,
+        data=data,
+        meta={"input_filename": input_filename, "output_dir": final_output_dir},
+    )
+
+
+def _resolve_output_dir(output_dir, get_input):
+    if output_dir == "PROMPT":
+        return get_input(
+            "Enter an output directory for the attachments: ",
+            completer=dirname_completer,
+        )
+    else:
+        return output_dir
+
+
 @register_operation(
     "unpack_files",
     tags=["attachments"],
     type="single input operation",
     desc="Unpack file attachments",
     long_desc=_UNPACK_FILES_LONG_DESC,
+    cli_hook=unpack_files_cli_hook,
     usage="<input> unpack_files [output <dir>]",
     examples=_UNPACK_FILES_EXAMPLES,
     args=(
-        ["input_filename", "input_pdf", "get_input"],
-        {"output_dir": "output", "operation": "operation"},
+        [c.INPUT_PDF, c.GET_INPUT],
+        {"output_dir": c.OUTPUT},
     ),
 )
-def unpack_files(input_filename, pdf, get_input, output_dir=None, operation=None):
+def unpack_files(pdf, get_input, output_dir=None) -> OpResult:
     """
-    Lists or unpacks attachments from a single PDF file.
+    Unpacks attachments from a single PDF file.
+    Returns a generator yielding (filename, bytes).
     """
+    # Resolve output path prompt here because it requires user interaction
+    final_output_dir = _resolve_output_dir(output_dir, get_input)
 
-    try:
-        output_path = _get_output_path(output_dir, operation, get_input)
-    except ValueError as e:
-        logger.error(e)
-        return
+    # We return a generator to keep memory usage low for large attachments
+    def _generator():
+        if not pdf.attachments:
+            return
 
-    action_func = _get_operation_action(operation)
-    if not action_func:
-        return
+        for name, attachment in pdf.attachments.items():
+            logger.debug("found attachment=%s", name)
+            file_bytes = attachment.get_file().read_bytes()
+            yield name, file_bytes
 
-    if not pdf.attachments:
-        _handle_no_attachments(operation, input_filename)
-        return
-
-    _process_attachments(pdf, action_func, output_path)
-
-
-##################################################
-
-
-def _get_output_path(output_dir_str, operation, get_input):
-    """Determines and validates the output directory path."""
-    from pathlib import Path
-
-    path_str = output_dir_str if output_dir_str is not None else "./"
-
-    if operation == "unpack_files":
-        if path_str == "PROMPT":
-            path_str = get_input(
-                "Enter an output directory for the attachments: ",
-                completer=dirname_completer,
-            )
-
-        output_path = Path(path_str)
-        if not output_path.is_dir():
-            raise ValueError(f"\n  Output directory {output_path} does not seem to be a directory")
-        return output_path
-
-    # For any other operation, just return the Path object without validation
-    return Path(path_str)
-
-
-def _get_operation_action(operation):
-    """Returns the function corresponding to the requested operation."""
-    actions = {
-        "unpack_files": _unpack_single_file,
-        "list_files": _list_single_file,
-    }
-    action_func = actions.get(operation)
-    if not action_func:
-        logger.warning("No valid operation '%s' specified to process attachments.", operation)
-    return action_func
-
-
-def _handle_no_attachments(operation, input_filename):
-    """Prints or logs a message when a PDF has no attachments."""
-    if operation == "list_files":
-        print(f"No attachments found in {input_filename}")
-    else:
-        logger.debug("No attachments found")
-
-
-def _process_attachments(pdf, action_func, output_path):
-    """Iterates through attachments and executes the given action for each one."""
-    for name, attachment in pdf.attachments.items():
-        logger.debug("found attachment=%s", name)
-        action_func(attachment, name, output_path)
-
-
-##################################################
-
-
-def _unpack_single_file(attachment, name, output_dir):
-    """Saves a single attachment to the specified output directory."""
-    file_bytes = attachment.get_file().read_bytes()
-    output_filename = output_dir / name
-    logger.debug("saving %s bytes to %s", len(file_bytes), output_filename)
-    try:
-        with open(output_filename, "wb") as f:
-            f.write(file_bytes)
-    except OSError as e:
-        logger.warning("Could not write file %s: %s", output_filename, e)
-
-
-def _list_single_file(attachment, name, output_dir):
-    """Prints the size and projected path of a single attachment."""
-    file_bytes = attachment.get_file().read_bytes()
-    output_filename = output_dir / name
-    print(f"{len(file_bytes):>9} {output_filename}")
+    return OpResult(success=True, data=_generator(), meta={"output_dir": final_output_dir})
