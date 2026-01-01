@@ -191,7 +191,6 @@ class TestGetDestinationArray:
 # --- Tests for resolve_page_number ---
 @patch("pdftl.info.read_info._get_destination_array")
 class TestResolvePageNumber:
-
     # new=lambda... does NOT inject an argument.
     # The signature must not include 'mock_is_page'.
     @patch("pdftl.info.read_info.is_page", new=lambda x: True)

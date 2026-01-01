@@ -37,7 +37,6 @@ def clean_state():
 
 
 class TestParseDumpCoverage:
-
     def test_handle_line_skip_empty_line(self, pdf_data_struct, clean_state):
         """Covers line 60: return when line is empty/whitespace only."""
 
@@ -307,7 +306,6 @@ def patch_logging(mocker):
 
 
 class TestParseDump:
-
     @pytest.mark.parametrize(
         "value, expected",
         [("123", 123), ("-10", -10), ("0", 0), ("foo", "foo"), (None, None)],

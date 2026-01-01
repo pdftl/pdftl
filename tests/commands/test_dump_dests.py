@@ -110,7 +110,6 @@ def patch_pikepdf_types():
         patch("pikepdf.Stream", new=MockStream),
         patch("pikepdf.NameTree", new=MagicMock()) as mock_name_tree,
     ):
-
         # Configure the mock NameTree to be iterable by default
         mock_name_tree.return_value.items.return_value = []
         yield mock_name_tree

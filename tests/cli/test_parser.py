@@ -69,7 +69,6 @@ def patch_logging(mocker):
 
 
 class TestPublicFunctions:
-
     def test_split_args_by_separator(self):
         argv = ["a", "b", "---", "c", "d", "e", "---", "f"]
         assert split_args_by_separator(argv) == [
@@ -155,7 +154,6 @@ class TestPublicFunctions:
 
 
 class TestPrivateHelpers:
-
     def test_find_operation_and_split(self, mock_registry):
         args = ["in.pdf", "A=in2.pdf", "cat", "1-end", "output", "out.pdf"]
         op, pre, post = _find_operation_and_split(args)
@@ -361,7 +359,6 @@ class TestPrivateHelpers:
 
 
 class TestParserIntegration:
-
     def test_parse_cli_stage_specs_and_options(self, mock_registry, mock_constants):
         """
         Tests parsing a full command with specs, flags, and value keywords.

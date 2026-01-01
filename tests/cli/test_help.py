@@ -176,7 +176,6 @@ def test_print_version_to_console(monkeypatch):
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
 
     with patch.object(helpmod, "get_console") as mock_get_console:
-
         # Run the command
         helpmod.print_version()
 

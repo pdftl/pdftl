@@ -54,7 +54,6 @@ def test_api_tutorial_examples(tmp_path, monkeypatch):
         "chapter3.pdf",
         "watermark.pdf",
     ]:
-
         create_dummy_pdf(x)
 
     # 4. Extract Python blocks

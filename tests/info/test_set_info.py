@@ -114,7 +114,6 @@ def patch_logging(mocker):
 
 
 class TestSetInfo:
-
     @patch("pdftl.info.set_info._set_page_labels")
     @patch("pdftl.info.set_info._set_page_media")
     @patch("pdftl.info.set_info._set_bookmarks")

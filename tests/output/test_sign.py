@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -6,6 +7,9 @@ from cryptography.x509.oid import NameOID
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign.validation import validate_pdf_signature
 
+import pdftl.cli.main
+import pdftl.cli.parser
+import pdftl.output.sign
 from pdftl.cli.main import main
 
 
@@ -54,10 +58,16 @@ def test_pki(tmp_path):
     return key_path, cert_path
 
 
-def test_sign_pipeline_integrity(tmp_path, test_pki, clean_registry):
+def test_sign_pipeline_integrity(tmp_path, test_pki):
     key_path, cert_path = test_pki
     input_pdf = Path("tests/assets/2_page.pdf")
     output_pdf = tmp_path / "signed.pdf"
+    # 1. Force Python to re-calculate VALUE_KEYWORDS based on the new registry
+    importlib.reload(pdftl.cli.parser)
+
+    # 2. Reload main to ensure it uses the refreshed parser module
+    importlib.reload(pdftl.cli.main)
+    from pdftl.cli.main import main
 
     # Mock sys.argv so main() thinks it was called from the CLI
     test_args = [
@@ -70,6 +80,9 @@ def test_sign_pipeline_integrity(tmp_path, test_pki, clean_registry):
         "sign_cert",
         str(cert_path),
     ]
+
+    # importlib.reload(pdftl.cli.main)
+    importlib.reload(pdftl.output.sign)
 
     with patch("sys.argv", test_args):
         # main() usually returns None or 0 on success

@@ -170,7 +170,6 @@ class TestAddTextMissingDependency(unittest.TestCase):
 
         # 2. Apply Poison
         with patch.dict(sys.modules, poison_pill):
-
             # 3. Remove text_drawer from cache so it MUST re-import
             #    (and fail to find reportlab)
             if "pdftl.commands.helpers.text_drawer" in sys.modules:

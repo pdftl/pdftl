@@ -114,7 +114,6 @@ def dump_fields_cli_hook(result, stage):
         return xml_encode_for_info(s_val) if escape_xml else s_val
 
     with smart_open_output(output_file) as f:
-
         num_fields = len(result.data)
 
         for idx, field in enumerate(result.data):

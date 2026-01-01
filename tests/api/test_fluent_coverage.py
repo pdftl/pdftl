@@ -12,7 +12,6 @@ from pdftl.fluent import PdfPipeline, pipeline
 
 
 class TestFluentApi:
-
     @patch("pikepdf.open")
     def test_pipeline_open_variants(self, mock_open):
         """Hit lines 24-27: PdfPipeline.open with and without password."""

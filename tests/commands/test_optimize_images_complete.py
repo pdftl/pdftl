@@ -84,7 +84,6 @@ def test_optimize_images_import_failure():
     """
     # Force import failure for 'ocrmypdf'
     with patch.dict(sys.modules, {"ocrmypdf": None, "ocrmypdf.optimize": None}):
-
         # We also need to mock the inputs since we are calling the function directly
         mock_pdf = MagicMock()
 

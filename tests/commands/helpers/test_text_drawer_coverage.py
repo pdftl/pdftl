@@ -80,7 +80,6 @@ class MockCanvasWithState:
 
 
 class TestTextDrawerCoverage(unittest.TestCase):
-
     def setUp(self):
         # Default mock page dimensions
         self.page_box_mock = MockPageBox(width=500, height=700)

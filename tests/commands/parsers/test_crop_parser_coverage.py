@@ -9,7 +9,6 @@ from pdftl.commands.parsers.crop_parser import (
 
 
 class TestCropParserCoverage:
-
     # --- Covers lines 41-42 ---
     def test_specs_to_page_rules_validation_error(self):
         """

@@ -18,7 +18,10 @@ from pdftl.core.types import Compatibility, HelpExample, HelpTopic, Operation, O
 def caller_dict(current_frame):
     """Helper to get caller ("source") data for registry decorators"""
     caller = current_frame.f_back
-    return {"caller": os.path.basename(caller.f_code.co_filename)}
+    # Returns 'pdftl.commands.normalize' or 'pdftl.utils.normalize'
+    module_name = caller.f_globals.get("__name__", "unknown")
+
+    return {"caller": module_name}
 
 
 class Registry:
@@ -104,7 +107,6 @@ class Registry:
         """Decorator to register a command."""
 
         def decorator(func):
-
             if "examples" in metadata:
                 safe_examples = [_to_help_example_helper(ex, name) for ex in metadata["examples"]]
 

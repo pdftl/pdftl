@@ -82,6 +82,56 @@ def encrypted_signed_pdf_path(tmp_path, cert_and_key):
     return str(pdf_path)
 
 
+@pytest.fixture
+def dump_sigs_helper(tmp_path):
+    """
+    Returns a function that runs dump_signatures and returns the output text.
+    Handles temp file creation, cleanup, and string reading automatically.
+    """
+
+    def _runner(pdf_path_or_obj, password=None):
+        # 1. Setup temp file
+        output_file = tmp_path / "sigs_output.txt"
+
+        # 2. Determine args based on input type
+        pdf_path = pdf_path_or_obj if isinstance(pdf_path_or_obj, str) else "_"
+        pdf_obj = pdf_path_or_obj if not isinstance(pdf_path_or_obj, str) else None
+
+        # 3. Run Command
+        result = dump_signatures(pdf_path, pdf_obj, password, output_file=str(output_file))
+        dump_signatures_cli_hook(result, None)
+
+        # 4. Return content
+        return output_file.read_text(encoding="utf-8")
+
+    return _runner
+
+
+# --- The Refactored Tests ---
+
+
+def test_dump_signatures_from_file(signed_pdf_path, dump_sigs_helper):
+    """Tests reading from a physical file path."""
+    results = dump_sigs_helper(signed_pdf_path)
+
+    assert "SignatureBegin" in results
+    assert "SignatureFieldName: Signature1" in results
+    assert "SignatureIntegrity: VALID" in results
+
+
+def test_dump_signatures_from_memory(signed_pdf_path, dump_sigs_helper):
+    """Tests reading from a pikepdf object."""
+    with pikepdf.open(signed_pdf_path) as pdf:
+        results = dump_sigs_helper(pdf)
+        assert "SignatureBegin" in results
+
+
+def test_dump_signatures_encrypted(encrypted_signed_pdf_path, dump_sigs_helper):
+    """Tests decryption logic with provided password."""
+    results = dump_sigs_helper(encrypted_signed_pdf_path, password="bar")
+    assert "SignatureBegin" in results
+
+
 # --- Tests ---
 
 
@@ -91,41 +141,6 @@ def test_dump_signatures_no_signatures(tmp_path, out_pdf_with_no_sigs):
     result = dump_signatures("_", out_pdf_with_no_sigs, None, output_file=str(output_file))
     dump_signatures_cli_hook(result, None)
     assert "No signatures found." in output_file.read_text()
-
-
-def test_dump_signatures_from_file(signed_pdf_path):
-    """Tests reading from a physical file path (Lines 64-66)."""
-    output = io.StringIO()
-    with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
-        mock_open.return_value.__enter__.return_value = output
-        result = dump_signatures(signed_pdf_path, None, None, output_file="dummy.txt")
-        dump_signatures_cli_hook(result, None)
-
-        results = output.getvalue()
-        assert "SignatureBegin" in results
-        assert "SignatureFieldName: Signature1" in results
-        assert "SignatureIntegrity: VALID" in results
-
-
-def test_dump_signatures_from_memory(signed_pdf_path):
-    """Tests reading from a pikepdf object via pdf.save (Lines 67-70)."""
-    output = io.StringIO()
-    with pikepdf.open(signed_pdf_path) as pdf:
-        with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
-            mock_open.return_value.__enter__.return_value = output
-            result = dump_signatures("_", pdf, None, output_file="dummy.txt")
-            dump_signatures_cli_hook(result, None)
-            assert "SignatureBegin" in output.getvalue()
-
-
-def test_dump_signatures_encrypted(encrypted_signed_pdf_path):
-    """Tests decryption logic with provided password (Lines 76-79)."""
-    output = io.StringIO()
-    with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
-        mock_open.return_value.__enter__.return_value = output
-        result = dump_signatures(encrypted_signed_pdf_path, None, "bar", output_file="dummy.txt")
-        dump_signatures_cli_hook(result, None)
-        assert "SignatureBegin" in output.getvalue()
 
 
 def test_dump_signatures_suspicious_mod(signed_pdf_path):

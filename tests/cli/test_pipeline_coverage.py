@@ -140,7 +140,6 @@ def mock_sys_stdin():
 
 
 class TestPipelineManagerCoverage:
-
     def test_cli_stage_resolve_io_prompts_stage_num_gt_one(self, mock_context):
         """Covers line 62: Prompt text includes stage number when stage_num > 1."""
         # FIX: Added matching input_passwords list

@@ -22,7 +22,6 @@ PageSpec = namedtuple("PageSpec", ["start", "end", "qualifiers"])
 
 @patch("pdftl.commands.parsers.add_text_parser.UNITS", MOCKED_UNITS, create=True)
 class TestAddTextParser:
-
     # =========================================================================
     # Test _split_spec_string (Covers Lines: 145, 174)
     # =========================================================================

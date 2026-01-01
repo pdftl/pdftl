@@ -51,7 +51,6 @@ class MockPdfiumPage:
 
 
 class TestFitCropContext:
-
     @pytest.fixture
     def mock_pikepdf_doc(self):
         doc = mock.Mock()
@@ -85,7 +84,6 @@ class TestFitCropContext:
             mock.patch("pdftl.commands.helpers.crop_fit.io.BytesIO") as mock_io,
             mock.patch("pypdfium2.PdfDocument") as mock_pdfium_cls,
         ):
-
             ctx._init_pdfium_doc()
 
             # Should save pikepdf doc to buffer
@@ -195,7 +193,6 @@ class TestFitCropContext:
 
 
 class TestGetVisibleBbox:
-
     # FIX: Patch the global PIL library, not the local module
     @mock.patch("PIL.ImageOps.invert")
     def test_get_visible_bbox_standard(self, mock_invert):

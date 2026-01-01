@@ -242,7 +242,6 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
 
 
 def _process_page(i, page, page_rules, static_context, drawer_class):
-
     from pikepdf import Rectangle
 
     rules_for_page = page_rules.get(i)

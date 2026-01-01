@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - API with fluent and functional interfaces
+- `docs/api_tutorial.md` and auto-generated API docs
+
+### Fixed
+
+- Fixed bug preventing parsing of the page specification "right"
 
 ## [0.3.1] - 2025-12-20
 

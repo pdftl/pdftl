@@ -464,3 +464,86 @@ def clean_registry():
     initialize_registry()
 
     return registry
+
+
+import os
+import pprint
+import sys
+
+import pytest
+
+
+# --- PART 1: Hookwrapper to capture test status ---
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    This hook runs after every test phase (setup, call, teardown).
+    We use it to attach the test report (pass/fail status) to the test item
+    so our fixture can see it.
+    """
+    # Execute all other hooks to obtain the report object
+    outcome = yield
+    rep = outcome.get_result()
+
+    # Attach the report to the test item (node)
+    # We create attributes like 'rep_call', 'rep_setup', etc.
+    setattr(item, "rep_" + rep.when, rep)
+
+
+# --- PART 2: Autouse Fixture to check status and Dump ---
+@pytest.fixture(autouse=True)
+def forensic_dump_on_fail(request):
+    """
+    Runs automatically for every test.
+    In the teardown phase (yield), it checks if the test failed.
+    If yes, it prints the forensic dump.
+    """
+    yield  # Run the test
+
+    # Check if the 'call' phase (the actual test) failed
+    node = request.node
+    report = getattr(node, "rep_call", None)
+
+    if report and report.failed:
+        print("\n\n" + "=" * 80, file=sys.stderr)
+        print("🛑  FORENSIC FAILURE DUMP", file=sys.stderr)
+        print("=" * 80 + "\n", file=sys.stderr)
+
+        # 1. Inspect the Registry State
+        try:
+            from pdftl.core.registry import registry
+
+            # Use a list of keys to keep output clean, but show distinct namespaces
+            for x in ["operations", "options"]:
+                print(f"\n  Examining registry.{x}", file=sys.stderr)
+                reg = getattr(registry, x, None)
+                if reg:
+                    keys = sorted(list(reg.keys()))
+                    pprint.pprint(keys, stream=sys.stderr, width=120, compact=True)
+
+                    # Specific check for signing keys if relevant
+                    if any("sign" in str(k) for k in keys):
+                        print(
+                            f"\n   ✅ Found 'sign' related keys in registry.{x}", file=sys.stderr
+                        )
+                    else:
+                        print(f"\n   ⚠️  NO 'sign' keys found in registry.{x}", file=sys.stderr)
+
+        except Exception as e:
+            print(f"❌ Error inspecting registry: {e}", file=sys.stderr)
+
+        print("-" * 40, file=sys.stderr)
+
+        # 2. Inspect sys.modules (loaded packages)
+        print("📦 LOADED PDFTL MODULES:", file=sys.stderr)
+        pdftl_modules = sorted([m for m in sys.modules.keys() if m.startswith("pdftl")])
+
+        # Highlight crucial modules
+        crucial = ["pdftl.output.sign", "pdftl.registry_init"]
+        for c in crucial:
+            status = "✅ LOADED" if c in pdftl_modules else "❌ MISSING"
+            loc = getattr(sys.modules.get(c), "__file__", "N/A") if c in pdftl_modules else ""
+            print(f"   {status} : {c} ({loc})", file=sys.stderr)
+
+        print("-" * 40, file=sys.stderr)
+        print("\n" + "=" * 80 + "\n", file=sys.stderr)

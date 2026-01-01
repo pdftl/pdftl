@@ -418,7 +418,6 @@ def test_build_chunks_invariant(processed_page_info):
 
         # If they are in the same chunk...
         if chunk_current == chunk_next:
-
             # ...then the non-break condition MUST be true.
             p_curr = processed_page_info[i]
             p_next = processed_page_info[i + 1]

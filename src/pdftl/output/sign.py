@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
-
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     from pyhanko.sign import signers
 

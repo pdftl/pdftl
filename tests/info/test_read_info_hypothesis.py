@@ -152,7 +152,6 @@ def mock_item_strategy(draw, named_dests_map):
 @given(named_dests_map=named_dest_map_strategy(), data=st.data())
 @settings(max_examples=100, deadline=None)
 def test_get_destination_array_hypothesis(named_dests_map, data):
-
     mock_dests = MockNameTree(named_dests_map)
     mock_item, expected_result = data.draw(mock_item_strategy(named_dests_map))
 
@@ -181,7 +180,6 @@ def test_get_destination_array_hypothesis(named_dests_map, data):
 # Patch is_page to check for our MagicMock pages
 @patch("pdftl.info.read_info.is_page", new=lambda x: isinstance(x, MagicMock))
 def test_resolve_page_number_hypothesis(mock_get_dest_array, num_pages, data):
-
     # 1. create_mock_page *must* be fixed to use MagicMock and tuple
     mock_pages = [create_mock_page(i + 1) for i in range(num_pages)]
 

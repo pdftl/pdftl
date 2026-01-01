@@ -157,7 +157,6 @@ def test_process_source_pages_full():
         patch("pdftl.pages.add_pages.apply_scaling") as mock_scale,
         patch("pdftl.pages.add_pages._apply_rotation") as mock_rot,
     ):
-
         # 2. Act
         ctx = process_source_pages(new_pdf, page_transforms)
 

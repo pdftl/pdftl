@@ -102,7 +102,6 @@ def test_integration_cat_a_a(complex_pdf_a: Path, tmp_path: Path):
 
     # Re-open the saved PDF to ensure everything is written correctly
     with Pdf.open(output_path) as result_pdf:
-
         # --- A. Check Page Count ---
         assert len(result_pdf.pages) == 2
         page_1 = result_pdf.pages[0]

@@ -127,7 +127,6 @@ def patch_deps(mocker):
 
 
 class TestInfoExtraction:
-
     def test_get_info_basic(self, mock_pdf):
         """Test basic extraction of pages, IDs, and DocInfo."""
         info = get_info(mock_pdf, "input.pdf", extra_info=True)
@@ -188,7 +187,6 @@ class TestInfoExtraction:
 
 
 class TestInfoWriting:
-
     def test_write_info_orchestration(self, mock_writer, sample_info):
         """Tests that write_info calls all sub-writers."""
         # We can test the output directly rather than mocking internal calls

@@ -107,7 +107,6 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
     # 1. Patch 'String' in the module so `isinstance(val, String)` returns True
     # 2. Patch 'Form' to return our FailingString object as a field value
     with patch("pikepdf.String", FailingString):
-
         mock_field = MagicMock()
         mock_field.value = FailingString()
 
