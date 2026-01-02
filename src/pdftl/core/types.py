@@ -56,6 +56,10 @@ class LegacyDictAccess:
         except AttributeError as e:
             raise KeyError(key) from e
 
+    def __setitem__(self, key, value):
+        """Allow 'obj[key] = value' setting."""
+        setattr(self, key, value)
+
     def __contains__(self, key):
         """Support 'key in obj' checks to prevent fallback sequence iteration."""
         return hasattr(self, key)
@@ -107,6 +111,7 @@ class HelpExample(LegacyDictAccess):
 
     cmd: str
     desc: str
+    topic: str | None = None
 
 
 @dataclass

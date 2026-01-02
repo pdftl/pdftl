@@ -11,6 +11,7 @@ from pdftl.cli.help import (
     find_special_topic_command,
     print_help,
 )
+from pdftl.core.types import HelpExample
 
 
 class TestHelpLogicEdgeCases(unittest.TestCase):
@@ -24,9 +25,9 @@ class TestHelpLogicEdgeCases(unittest.TestCase):
         Covers line 115: Multiple examples for the same topic.
         """
         examples = [
-            {"topic": "foo", "desc": "d1", "cmd": "c1"},
-            {"topic": "foo", "desc": "d2", "cmd": "c2"},
-            {"topic": "bar", "desc": "d3", "cmd": "c3"},
+            HelpExample(topic="foo", desc="d1", cmd="c1"),
+            HelpExample(topic="foo", desc="d2", cmd="c2"),
+            HelpExample(topic="bar", desc="d3", cmd="c3"),
         ]
 
         output = _format_examples_block(examples, show_topics=True)

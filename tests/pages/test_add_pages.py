@@ -6,7 +6,6 @@ from pikepdf import Dictionary, Name, Pdf
 
 # --- Import module and functions to test ---
 from pdftl.pages.add_pages import (
-    PageTransform,
     _apply_rotation,
     add_pages,
     process_source_pages,
@@ -16,6 +15,7 @@ from pdftl.pages.link_remapper import LinkRemapper
 # --- Import dependencies needed for testing ---
 # This is returned by process_source_pages, so we need it.
 from pdftl.pages.links import RebuildLinksPartialContext
+from pdftl.utils.page_specs import PageTransform
 
 # --- Fixtures ---
 

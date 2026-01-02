@@ -369,6 +369,16 @@ class PipelineManager:
         ),
         HelpExample(
             desc=(
+                "Save a snapshot of a rotated file,"
+                " then apply a stamp and save the final version"
+            ),
+            cmd=(
+                "in.pdf rotate right output rotated_snapshot.pdf --- "
+                "stamp watermark.pdf output final.pdf"
+            ),
+        ),
+        HelpExample(
+            desc=(
                 "Crop all pages to A3 in landscape,\n"
                 "and preview the effect of cropping odd pages to A4"
             ),
@@ -377,14 +387,19 @@ class PipelineManager:
     ],
 )
 def _pipeline_help_topic():
-    """
-    Multiple operations can be chained together using `---` as a
+    """Multiple operations can be chained together using `---` as a
     separator. The output of one stage becomes the input for the next
     stage.
 
     If the next stage has no input files, the result from the previous
     is used automatically. For multi-input commands where order matters,
     you can use the special `_` handle to refer to the piped-in input.
+
+    You can use the `output` command in any stage (not just
+    the last one) to save the current state of the
+    document. The pipeline then continues to the next stage
+    using that same document state.
+
     """
 
 

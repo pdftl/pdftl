@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import pdftl.cli.help as helpmod
+from pdftl.core.types import HelpExample
 
 
 @pytest.fixture(autouse=True)
@@ -23,14 +24,14 @@ def patch_environment(monkeypatch, tmp_path):
     fake_op = {
         "desc": "Combine PDFs",
         "usage": "combine a b out",
-        "examples": [{"desc": "Example", "cmd": "combine"}],
+        "examples": [HelpExample(desc="Example", cmd="combine")],
         "long_desc": "Detailed description",
         "tags": ["merge"],
         "title": "combine",
     }
     fake_opt = {
         "desc": "Output file",
-        "examples": [{"desc": "Save", "cmd": "output file.pdf"}],
+        "examples": [HelpExample(desc="Save", cmd="output file.pdf")],
         "long_desc": "More info",
     }
     fake_cli = {
@@ -39,7 +40,7 @@ def patch_environment(monkeypatch, tmp_path):
             "topic1": {
                 "title": "topic1",
                 "desc": "desc",
-                "examples": [{"desc": "x", "cmd": "y"}],
+                "examples": [HelpExample(desc="x", cmd="y")],
             }
         },
     }

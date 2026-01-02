@@ -1,4 +1,5 @@
 # pdftl
+
 <img align="right" width="100" src="https://raw.githubusercontent.com/pdftl/pdftl/main/.github/assets/pdftl.svg">
 
 [![PyPI](https://img.shields.io/pypi/v/pdftl)](https://pypi.org/project/pdftl/)
@@ -72,7 +73,7 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Text replacement:** `replace` text in content streams using regular expressions (experimental).
 * **Code injection:** `inject` raw PDF operators at the head/tail of content streams.
 * **Optimization:** `optimize_images` (smart compression via OCRmyPDF).
-* **Dynamic text:** `add_text` adds page numbers, filenames, or timestamps to pages.
+* **Dynamic text:** `add_text` supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** `normalize` content streams, `linearize` for web viewing.
 
 ## Examples
@@ -132,10 +133,19 @@ pdftl in.pdf add_text 'odd/YOUR AD HERE/(position=mid-center, font=Helvetica-Bol
 ```
 
 ```
+# Add Bates numbering starting at 000121
+# Result: DEF-000121, DEF-000122, ...
+pdftl in.pdf \
+  add_text "/DEF-{page+120:06d}/(position=bottom-center, offset-y=10)" \
+  output bates.pdf
+```
+
+```
 # Content stream replacment with regular expressions (YMMV)
 # Change black to red
 pdftl in.pdf replace '/0 0 0 (RG|rg)/1 0 0 \1/' output redder.pdf
 ```
+
 
 ## Python API
 
@@ -155,7 +165,6 @@ from pdftl import pipeline
 ```
 
 See the **[API Tutorial][4]** for more details.
-
 
 ## Operations and options
 
@@ -250,7 +259,6 @@ Usage
 * **License:** This project is licensed under the [Mozilla Public License 2.0][1].
 * **Changelog:** [CHANGELOG.md][2].
 * **Documentation:** [pdftl.readthedocs.io][3].
-
 
 [1]: https://raw.githubusercontent.com/pdftl/pdftl/main/LICENSE
 [2]: https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md

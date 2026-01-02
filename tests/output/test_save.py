@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
+from pdftl.core import constants as constants_module
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.output import save as save_module
 from pdftl.output.save import (
@@ -114,7 +115,7 @@ def patch_dependencies(mocker):
         "BadFlag": ["non_existent_flag"],  # For testing error
     }
     mocker.patch.dict(
-        save_module.ALLOW_PERMISSIONS_MAP,
+        constants_module.ALLOW_PERMISSIONS_MAP,
         mock_permission_map,
         clear=True,
     )

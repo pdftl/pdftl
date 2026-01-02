@@ -426,9 +426,13 @@ def test_build_chunks_invariant(processed_page_info):
             assert p_curr[2] == p_next[2], "Must be same instance"
             assert p_curr[1] + 1 == p_next[1], "Must be contiguous source pages"
 
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from pdftl.pages.outlines import _get_source_action
+
 
 def test_build_outline_chunks_malformed_data(caplog):
     """Covers lines 199-203: Malformed processed_page_info."""
@@ -439,6 +443,7 @@ def test_build_outline_chunks_malformed_data(caplog):
 
     assert result == []
     assert "Could not build outline chunks" in caplog.text
+
 
 def test_get_source_action_non_goto_action():
     """Covers line 111-114 logic: Action exists but is not GoTo."""
@@ -451,6 +456,7 @@ def test_get_source_action_non_goto_action():
 
     action = _get_source_action(mock_item)
     assert action is None
+
 
 def test_copy_item_recursion_and_pruning():
     """Covers line 96: Recursive child copying."""
@@ -469,7 +475,10 @@ def test_copy_item_recursion_and_pruning():
     new_parent_list = []
 
     # This triggers the recursion at line 96
-    with patch("pikepdf.OutlineItem", side_effect=lambda title, destination: MagicMock(title=title, children=[])):
+    with patch(
+        "pikepdf.OutlineItem",
+        side_effect=lambda title, destination: MagicMock(title=title, children=[]),
+    ):
         copier.copy_item(parent, new_parent_list)
 
     assert len(new_parent_list) == 1

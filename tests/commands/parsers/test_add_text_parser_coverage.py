@@ -192,10 +192,17 @@ class TestAddTextParser:
     )
     def test_evaluate_token_arithmetic_on_non_numeric_variable(self, mock_evaluate):
         """Covers line 509: raise ValueError for arithmetic on non-numeric variable"""
-        # Token for '{filename+1}' would be ('filename', '+', 1)
-        token = ("filename", "+", 1)
+        # OLD: token = ("filename", "+", 1)
+        # NEW: The parser now emits a 'master' token for all arithmetic
+        # Token structure: (var_name, "master", (offset_int, format_string))
+        token = ("filename", "master", (1, None))
+
         context = {"filename": "MyDoc.pdf"}  # Non-numeric value
-        with pytest.raises(ValueError, match="Cannot apply arithmetic to variable: filename"):
+
+        # The error message remains the same
+        with pytest.raises(
+            ValueError, match="Cannot apply arithmetic to non-numeric variable: filename"
+        ):
             mock_evaluate(token, context)
 
     @patch(
@@ -206,7 +213,198 @@ class TestAddTextParser:
     )
     def test_evaluate_token_arithmetic_add(self, mock_evaluate):
         """Covers line 512: return base_value + val"""
-        # Token for '{page+5}' would be ('page', '+', 5)
-        token = ("page", "+", 5)
+        # OLD: token = ("page", "+", 5)
+        # NEW: Offset is positive 5
+        token = ("page", "master", (5, None))
+
         context = {"page": 10}  # Numeric value
         assert mock_evaluate(token, context) == 15
+
+    @patch(
+        "pdftl.commands.parsers.add_text_parser._evaluate_token",
+        wraps=__import__(
+            "pdftl.commands.parsers.add_text_parser"
+        ).commands.parsers.add_text_parser._evaluate_token,
+    )
+    def test_evaluate_token_arithmetic_sub(self, mock_evaluate):
+        """Covers subtraction logic"""
+        # OLD: token = ("page", "-", 2)
+        # NEW: Subtraction is represented as a negative offset in the master token
+        token = ("page", "master", (-2, None))
+
+        context = {"page": 10}
+        assert mock_evaluate(token, context) == 8
+
+
+from pdftl.commands.parsers.add_text_parser import (
+    _compile_text_renderer,
+    _evaluate_token,
+    _normalize_options,
+    _parse_options_content,
+    _parse_var_expression,
+    _tokenize_text_string,
+)
+
+
+class TestAddTextParserExtended:
+    """
+    Targeted tests to close coverage gaps in add_text_parser.py
+    """
+
+    # --- Coverage: Lines 287-288 ---
+    def test_parse_options_skips_empty_commas(self):
+        """
+        Tests that double commas or trailing commas in options don't cause crashes.
+        Covers: if not part: continue
+        """
+        options_str = "align=center, , color=0 0 0,"
+        result = _parse_options_content(options_str)
+        assert result["align"] == "center"
+        # Color normalizes to list
+        assert result["color"] == [0.0, 0.0, 0.0, 1]
+
+    # --- Coverage: Lines 324, 326-329, 331-332 ---
+    def test_normalize_options_full_integration(self):
+        """
+        Tests the integration of layout, formatting, and positioning in one call.
+        Also tests strict error raising for unknown options remains after normalization.
+        """
+        # 1. Test Success Path (Hitting lines 326-329)
+        raw_options = {
+            "rotate": "90",
+            "offset-x": "10pt",
+            "offset-y": "5mm",
+            "font": "Helvetica",
+            "size": "12",
+            "color": "0",
+            "align": "right",
+        }
+        normalized = _normalize_options(raw_options)
+        assert normalized["rotate"] == 90.0
+        assert normalized["font"] == "Helvetica"
+        assert normalized["align"] == "right"
+
+        # 2. Test Error Path (Hitting lines 331-332)
+        with pytest.raises(ValueError, match="Unknown options: invalid_opt"):
+            _normalize_options({"align": "left", "invalid_opt": "10"})
+
+    # --- Coverage: Lines 472-476 ---
+    def test_master_regex_unknown_variable(self):
+        """
+        Tests that a string matching MASTER_VAR_REGEX syntax but containing
+        an unknown variable name raises ValueError.
+        Covers: if var not in KNOWN_VARS check inside the regex block.
+        """
+        # Syntax is valid {var+num}, but 'ghost' is not in KNOWN_VARS
+        expr = "ghost+1"
+        with pytest.raises(ValueError, match="Unknown variable: {ghost}"):
+            _parse_var_expression(expr)
+
+    def test_tokenize_text_string_edge_cases(self):
+        """
+        Tests tokenizer with adjacent tokens to ensure empty strings
+        are skipped correctly.
+        Covers: if not part: continue
+        """
+        # "{page}{total}" splits to ['', '{page}', '', '{total}', '']
+        input_str = "{page}{total}"
+        parts = _tokenize_text_string(input_str)
+
+        # Should contain parsed tuples, no empty strings
+        assert len(parts) == 2
+        assert parts[0][0] == "page"  # var name
+        assert parts[1][0] == "total"  # var name
+
+    def test_compile_text_renderer_literal_braces(self):
+        """
+        Tests escaping braces {{ }}.
+        Covers the elif part.startswith("{{") branch in tokenizer.
+        """
+        input_str = "Value: {{page}}"
+        renderer = _compile_text_renderer(input_str)
+        result = renderer({"page": 99})
+
+        # Should render literal {page}, not the value 99
+        assert result == "Value: {page}"
+
+    # --- Edge Case: Master Formatting Error (Line 532) ---
+    def test_master_formatting_error(self):
+        """
+        Tests standard formatting {var:fmt} when format is invalid.
+        """
+        # :d expects number, but we give it a string context (if mocked)
+        # or invalid syntax.
+        # Let's use an invalid format type for an integer.
+
+        # {page:z} -> 'z' is not a valid format type for integer
+        token = ("page", "master", (0, "z"))
+        context = {"page": 1}
+
+        with pytest.raises(ValueError, match="Formatting error for {page:z}"):
+            _evaluate_token(token, context)
+
+
+from unittest.mock import patch
+
+from pdftl.commands.parsers.add_text_parser import (
+    parse_add_text_specs_to_rules,
+)
+
+
+class TestAddTextParserCoverage:
+
+    def test_legacy_options_passed_through(self):
+        """
+        Covers Lines 314, 316-317.
+        Even though we removed the 'call' syntax, _normalize_options still
+        checks for 'format' and 'start' if passed in the options block.
+        """
+        # Input: 1/text/(format=xyz, start=10)
+        # These options don't do anything in the renderer anymore,
+        # but the parser still processes them.
+        specs = ["1/mytext/(format=xyz, start=10)"]
+        rules = parse_add_text_specs_to_rules(specs, 10)
+
+        # Check page 0 (user page 1)
+        rule = rules[0][0]
+        assert rule["format"] == "xyz"
+        assert rule["start"] == 10
+
+    def test_legacy_option_start_invalid(self):
+        """
+        Covers Lines 318-319.
+        Ensures passing a non-integer 'start' raises ValueError.
+        """
+        specs = ["1/mytext/(start=invalid)"]
+        with pytest.raises(ValueError, match="Variable parameter 'start' must be an integer"):
+            parse_add_text_specs_to_rules(specs, 10)
+
+    def test_evaluate_token_fallback(self):
+        """
+        Covers Line 525.
+        Tests the fallback return when a token has a valid var name
+        but an unknown operation (neither 'master', 'total-page', nor 'meta').
+        """
+        context = {"myvar": "success"}
+        # Manually create a token that the parser wouldn't naturally generate
+        # Token format: (var_name, op_name, params)
+        token = ("myvar", "unknown_op", None)
+
+        result = _evaluate_token(token, context)
+        assert result == "success"
+
+    def test_options_regex_failure(self):
+        """
+        Covers Lines 277-278.
+        Simulates a regex failure in _parse_options_content.
+        This requires mocking because standard strings won't crash re.split.
+        """
+        specs = ["1/text/(a=b)"]
+
+        # Patch the regex object used in the module
+        with patch("pdftl.commands.parsers.add_text_parser.COMMA_SPLIT_REGEX") as mock_regex:
+            # Force the split method to raise a ValueError
+            mock_regex.split.side_effect = ValueError("Mocked regex failure")
+
+            with pytest.raises(ValueError, match="Could not parse options"):
+                parse_add_text_specs_to_rules(specs, 10)

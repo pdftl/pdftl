@@ -30,24 +30,36 @@ PRESET_POSITIONS = {
     "bottom-right",
 }
 
+NUMERIC_VARS = {"page", "total", "source_page", "source_rotation", "source_width", "source_height"}
+
 # Regex to split by commas, but not inside single or double quotes
 COMMA_SPLIT_REGEX = re.compile(r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
 
 # Regex to capture either an escaped block {{...}} OR a variable block {...}
 TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
 
-# Regex for parsing the *inside* of a variable block
-# 1: (page) (2: -) (3: 1)
-VAR_EXPR_REGEX = re.compile(r"^\s*(\w+)\s*([+-])\s*(\d+)\s*$")
 # 1: (total-page)
 COMPLEX_VAR_REGEX = re.compile(r"^\s*(total-page)\s*$")
+
 # 1: (meta:Title)
 META_VAR_REGEX = re.compile(r"^\s*(meta:\w+)\s*$", re.IGNORECASE)
-# 1: (page)
-SIMPLE_VAR_REGEX = re.compile(r"^\s*(\w+)\s*$")
+
+# MASTER REGEX: Handles Var, optional Arithmetic, and optional Formatting
+# Capture Groups:
+#   var: The variable name (e.g. 'page')
+#   op:  The operator (e.g. '+')
+#   num: The operand (e.g. '5000')
+#   fmt: The python format string (e.g. '06d')
+# Examples: "{page}", "{page+1}", "{page:06d}", "{page+5000:06d}"
+MASTER_VAR_REGEX = re.compile(
+    r"^\s*(?P<var>[a-zA-Z_]\w*)"  # Variable name
+    r"(?:\s*(?P<op>[+-])\s*(?P<num>\d+))?"  # Optional Arithmetic (+/- int)
+    r"(?::(?P<fmt>.+))?"  # Optional Format Specifier (start with :)
+    r"\s*$"
+)
 
 # Define the set of known simple variables
-KNOWN_SIMPLE_VARS = {
+KNOWN_VARS = {
     "page",
     "total",
     "filename",
@@ -56,6 +68,17 @@ KNOWN_SIMPLE_VARS = {
     "date",
     "time",
     "datetime",
+    # Source metadata variables
+    "source_filename",
+    "source_path",
+    "source_page",
+    "source_rotation",
+    "source_width",
+    "source_height",
+    "source_orientation",
+    "source_cropbox",
+    "source_mediabox",
+    "source_filesize",
 }
 
 
@@ -228,16 +251,24 @@ def _parse_options_string(options_part: str):
         return {}  # No options provided
 
     if not (options_part.startswith("(") and options_part.endswith(")")):
+        # If it doesn't look like options, it might be part of the text if parsed wrongly,
+        # but here we expect strictly options or empty.
         raise ValueError(
-            "Options block must be enclosed in parentheses, "
-            f"e.g., (...), but got: {options_part}"
+            f"Options block must be enclosed in parentheses, e.g., (...), but got: {options_part}"
         )
 
     content = options_part[1:-1].strip()
-    if not content:
-        return {}  # Empty parentheses
+    return _parse_options_content(content)
 
-    # Replace the permissive re.findall with a strict, two-pass parser.
+
+def _parse_options_content(content: str):
+    """
+    Parses the inner content of an options string: "key=val, key2=val2".
+    Used by both the main command options and variable parameter parsing.
+    """
+    if not content:
+        return {}
+
     options_dict = {}
 
     # 1. Split by commas, but respect commas inside quotes.
@@ -249,12 +280,11 @@ def _parse_options_string(options_part: str):
     for part in parts:
         part = part.strip()
         if not part:
-            continue  # Skip empty parts (e.g., from "foo=bar,,baz=qux")
+            continue
 
         # 2. Split *each part* on the first '='
         key_val = part.split("=", 1)
 
-        # 3. NOW we can find the error you pointed out.
         if len(key_val) != 2:
             raise ValueError(f"Invalid option format: '{part}'")
 
@@ -267,25 +297,34 @@ def _parse_options_string(options_part: str):
 
         options_dict[key] = value
 
-    # Normalize values (e.g., convert "10pt" to a structured dict)
     return _normalize_options(options_dict)
 
 
 def _normalize_options(options_dict: dict):
     """
     Converts a dictionary of string values into a structured dict with
-    parsed and validated types (dimensions, floats, etc.).
+    parsed and validated types.
     """
     normalized = {}
     options_copy = options_dict.copy()
 
-    # Refactored to reduce branch complexity.
-    # Each helper function pops keys from options_copy as it handles them.
+    # Special handling for "format" and "start" which appear in variable params,
+    # but not in the main rule options. We pass them through if present.
+    if "format" in options_copy:
+        normalized["format"] = options_copy.pop("format")
+    if "start" in options_copy:
+        try:
+            normalized["start"] = int(options_copy.pop("start"))
+        except ValueError as exc:
+            raise ValueError("Variable parameter 'start' must be an integer") from exc
+
+    # Standard rule options
     _normalize_positioning(options_copy, normalized)
     _normalize_layout(options_copy, normalized)
     _normalize_formatting(options_copy, normalized)
 
-    # --- Error on unknown ---
+    # If anything remains, it's either an error or a custom param we don't know yet.
+    # For strictness, we raise error.
     if options_copy:
         raise ValueError(f"Unknown options: {', '.join(options_copy.keys())}")
 
@@ -352,7 +391,7 @@ def _parse_dimension(size_str: str):
     dict: {'type': 'pt' | '%', 'value': float}.
     """
     if not isinstance(size_str, str):
-        return size_str  # Already parsed, e.g., from a test
+        return size_str  # Already parsed
 
     size_str = size_str.strip()
     if size_str.endswith("%"):
@@ -365,75 +404,40 @@ def _parse_dimension(size_str: str):
         n = len(unit_name)
         try:
             value = float(size_str[:-n])
-            # Resolve all units to 'pt' immediately
             return {"type": "pt", "value": value * UNITS[unit_name]}
         except ValueError as exc:
             raise ValueError(f"Invalid size value: '{size_str}'") from exc
     else:
-        # Default to 'pt'
         try:
             return {"type": "pt", "value": float(size_str)}
         except ValueError as exc:
             raise ValueError(f"Invalid size or unit in dimension: '{size_str}'") from exc
 
 
-# In add_text_parser.py, replace the _parse_color function
-
-
 def _parse_color(color_str: str):
     """
     Parses a space-separated color string into a list of floats.
-    - "0.2"       -> [0.2, 0.2, 0.2]  (Gray to RGB)
-    - "1 0 0"     -> [1.0, 0.0, 0.0]  (RGB)
-    - "0 0 1 0.5" -> [0.0, 0.0, 1.0, 0.5] (RGBA)
     """
     color_str = color_str.strip()
-
     try:
-        # Split by spaces and convert all parts to float
         parts = [float(c) for c in color_str.split()]
     except ValueError as exc:
-        # This will catch "blue", "1 0 1a", etc.
         raise ValueError(f"Invalid characters in color string: '{color_str}'") from exc
 
     num_parts = len(parts)
-
     if num_parts == 1:
-        # Grayscale: expand [g] to [g, g, g]
         gray = parts[0]
         return [gray, gray, gray, 1]
-
     if num_parts == 3:
-        # RGB: [r, g, b]
         parts.append(1)
         return parts
-
     if num_parts == 4:
-        # RGBA: [r, g, b, a]
         return parts
 
-    # If we get here, it's the wrong number of components
     raise ValueError(
-        f"Color string '{color_str}' must have 1 (Gray), 3 (RGB), or 4 (RGBA) "
-        f"space-separated numbers. Got {num_parts}."
+        f"Color string '{color_str}' must have 1, 3, or 4 space-separated numbers. "
+        f"Got {num_parts}."
     )
-
-
-# def _parse_color(color_str: str):
-#     """
-#     Parses a color string.
-#     - 'red' -> 'red'
-#     - '0.5 0.5 0.5' -> [0.5, 0.5, 0.5]
-#     """
-#     color_str = color_str.strip()
-#     if " " in color_str:
-#         try:
-#             return [float(c) for c in color_str.split()]
-#         except ValueError as exc:
-#             raise ValueError(f"Invalid RGB/CMYK color: '{color_str}'") from exc
-
-#     # Assume it's a named color (e.g., 'red') or hex (which pikepdf handles)
-#     return color_str
 
 
 ##################################################
@@ -443,42 +447,37 @@ def _parse_color(color_str: str):
 
 def _parse_var_expression(expr: str):
     """
-    Parses the inner content of a {variable} block into a token.
-    'page-1' -> ('page', '-', 1)
-    'total'  -> ('total', None, 0)
-    'meta:Title' -> ('meta:Title', None, 0)
+    Parses the inner content of a {variable} block into a token tuple.
     """
-    # 1. Check for complex, hardcoded values
+    # 1. Complex variables
     if COMPLEX_VAR_REGEX.fullmatch(expr):
-        return ("total-page", None, 0)
+        return ("total-page", None, {})
 
-    # 2. Check for simple arithmetic: var+1, var-2
-    match = VAR_EXPR_REGEX.fullmatch(expr)
-    if match:
-        var, op, val = match.groups()
-        var_low = var.lower()
-        # Make sure we're doing math on a known numeric var
-        if var_low not in ("page", "total"):
+    # 2. Metadata variables
+    if match := META_VAR_REGEX.fullmatch(expr):
+        return (f"meta:{match.group(1).split(':', 1)[1]}", None, {})
+
+    # 3. MASTER REGEX: Handles Simple, Arithmetic, and Formatting
+    #    e.g. "page", "page+1", "page:06d", "page+5000:06d"
+    if match := MASTER_VAR_REGEX.fullmatch(expr):
+        groups = match.groupdict()
+        var = groups["var"].lower()
+        if var not in KNOWN_VARS:
+            raise ValueError(f"Unknown variable: {{{var}}}")
+
+        # Build the operation payload
+        # payload = (arithmetic_value, format_string)
+        op_val = int(groups["num"]) if groups["num"] else 0
+        if groups["op"] == "-":
+            op_val = -op_val
+
+        # If arithmetic is requested (op_val != 0), ensure variable is numeric.
+        if op_val != 0 and var not in NUMERIC_VARS:
             raise ValueError(f"Cannot apply arithmetic to non-numeric variable: {var}")
-        return (var_low, op, int(val))
 
-    # 3. Check for metadata variable
-    match = META_VAR_REGEX.fullmatch(expr)
-    if match:
-        var = match.group(1)
-        # We need to normalize the 'meta:' part to lowercase but keep the key case
-        # 'mEtA:Title' -> 'meta:Title'
-        parts = var.split(":", 1)
-        normalized_var = f"meta:{parts[1]}"
-        return (normalized_var, None, 0)
+        fmt_spec = groups["fmt"]  # None if missing
 
-    # 4. Check for simple variable
-    match = SIMPLE_VAR_REGEX.fullmatch(expr)
-    if match:
-        var = match.group(1).lower()
-        # Check if the matched variable is in our known set
-        if var in KNOWN_SIMPLE_VARS:
-            return (var, None, 0)
+        return (var, "master", (op_val, fmt_spec))
 
     raise ValueError(f"Unknown variable expression: {{{expr}}}")
 
@@ -487,60 +486,67 @@ def _evaluate_token(token: tuple, context: dict):
     """
     Evaluates a single parsed token against the runtime context.
     """
-    var, op, val = token
+    var, op, param = token
 
-    # 1. Handle complex 'total-page'
+    # --- Case 1: Special Logic Variables ---
     if var == "total-page":
         return context.get("total", 0) - context.get("page", 0)
 
-    # 2. Handle metadata
     if var.startswith("meta:"):
-        meta_key = var[5:]  # Get 'Title' from 'meta:Title'
-        # Return the value from the metadata dict, or an empty string
+        meta_key = var[5:]
         return context.get("metadata", {}).get(meta_key, "")
 
-    # 3. Handle simple and arithmetic vars
-    base_value = context.get(var, 0)
-    if not isinstance(base_value, (int, float)):
-        # Handle non-numeric context values (e.g., 'filename')
-        if op is None:
-            return base_value
-        # Can't do math on 'filename'
-        raise ValueError(f"Cannot apply arithmetic to variable: {var}")
+    # --- Case 2: Standard Variables ---
+    base_value = context.get(var, "")
 
-    if op == "+":
-        return base_value + val
-    if op == "-":
-        return base_value - val
+    # Handle "master" (Arithmetic + Formatting)
+    if op == "master":
+        offset, fmt_spec = param  # param is (int_offset, str_format)
 
-    # No operator, just return the base value
+        # Apply Arithmetic (only if base is numeric)
+        final_val = base_value
+        if offset != 0:
+            if isinstance(base_value, (int, float)):
+                final_val = base_value + offset
+            else:
+                raise ValueError(f"Cannot apply arithmetic to non-numeric variable: {var}")
+
+        # Apply Formatting
+        if fmt_spec:
+            try:
+                # Python string formatting: "{:06d}".format(val)
+                return "{:{}}".format(final_val, fmt_spec)
+            except (ValueError, TypeError) as e:
+                # Fallback or strict error? Let's be strict for bates stamping.
+                raise ValueError(f"Formatting error for {{{var}:{fmt_spec}}}: {e}")
+
+        return final_val
+
     return base_value
 
 
 def _tokenize_text_string(text_str: str) -> list:
     """
     Splits the text string into a list of literals and parsed tokens.
-    "Page {page}" -> ["Page ", ("page", None, 0)]
     """
     parts = []
     # Split the string by our token regex.
-    # This gives a list like: [LITERAL, TOKEN, LITERAL, TOKEN, ...]
     split_parts = TOKEN_REGEX.split(text_str)
 
     for i, part in enumerate(split_parts):
-        if not part:  # re.split can leave empty strings
+        if not part:
             continue
 
         is_token = i % 2 == 1  # Literals are at even indices
 
         if not is_token:
-            parts.append(part)  # It's a literal string
+            parts.append(part)
         elif part.startswith("{{"):
-            parts.append(part[1:-1])  # It's an escaped literal
+            parts.append(part[1:-1])  # Unescape {{...}}
         else:
-            parts.append(_parse_var_expression(part[1:-1]))  # It's a var
+            # Parse {expr}
+            parts.append(_parse_var_expression(part[1:-1]))
 
-    logger.debug("parts=%s", parts)
     return parts
 
 
@@ -553,7 +559,7 @@ def _default_renderer(parts: list, context: dict) -> str:
         if isinstance(part, str):
             result.append(part)
         else:
-            # It's a token tuple, evaluate it
+            # It's a token tuple
             result.append(str(_evaluate_token(part, context)))
     return "".join(result)
 
@@ -561,18 +567,9 @@ def _default_renderer(parts: list, context: dict) -> str:
 def _compile_text_renderer(text_str: str):
     """
     Parses and "compiles" a text string into a render function.
-    The returned function takes a context dict and returns a final string.
     """
-    # 1. Parse the string into tokens *once*
     parts = _tokenize_text_string(text_str)
-
-    # 2. Return a simple lambda that calls the renderer with those tokens
     return lambda context: _default_renderer(parts, context)
-
-
-##################################################
-# GENERIC HELPERS (replicated from chop_parser.py)
-##################################################
 
 
 def _find_unit(input_str: str):
@@ -585,32 +582,26 @@ def _find_unit(input_str: str):
 
 def _group_specs_with_qualifiers(specs):
     """
-    Pre-processes the specs list to pair qualifiers ('even', 'odd')
-    with the spec string that follows them.
-    Returns a list of tuples: [(spec_str, qualifier_keyword), ...].
+    Pre-processes the specs list to pair qualifiers ('even', 'odd').
     """
-    logger.debug("got specs=%s", specs)
     grouped_specs = []
     specs_iterator = iter(specs)
     for spec in specs_iterator:
         is_qualifier = spec.lower() in ("even", "odd")
         if is_qualifier:
             try:
-                # The qualifier applies to the *next* spec string.
                 next_spec = next(specs_iterator)
                 grouped_specs.append((next_spec, spec.lower()))
             except StopIteration as exc:
                 raise ValueError(f"Missing spec after '{spec}' keyword.") from exc
         else:
-            # This spec has no preceding keyword qualifier.
             grouped_specs.append((spec, None))
-    logger.debug("returning grouped_specs=%s", grouped_specs)
     return grouped_specs
 
 
 def _get_qualified_page_numbers(start, end, qualifier):
     """
-    Generates a list of page numbers for a given range, filtered by a qualifier.
+    Generates a list of page numbers for a given range.
     """
     step = 1 if start <= end else -1
     full_range = list(range(start, end + step, step))

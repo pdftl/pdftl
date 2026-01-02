@@ -104,11 +104,11 @@ def _format_examples_block(examples, show_topics=False):
     for ex in examples:
         # Add topic heading if necessary
         if show_topics and ex.get("topic"):
-            if ex["topic"] == topic:
+            if ex.topic == topic:
                 per_example_topic_count += 1
             else:
                 per_example_topic_count = 1
-            topic = ex["topic"]
+            topic = ex.topic
 
             # Use Markdown heading or strong text for topics
             heading_text = (
@@ -221,7 +221,7 @@ def _discover_examples():
     ):
         new_examples = topic_data.get("examples", [])
         for example in new_examples:
-            example["topic"] = topic
+            example.topic = topic
         all_examples.extend(new_examples)
     return all_examples
 
@@ -403,6 +403,9 @@ def find_option_topic_command(help_topics):
             cmd="help all",
         ),
         HelpExample(desc=("Get help topics tagged with `encryption`"), cmd="help tag:encryption"),
+        HelpExample(
+            desc=("Gather all examples from the various help topics"), cmd="help examples"
+        ),
     ],
 )
 def _help_help_topic():

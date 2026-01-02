@@ -11,7 +11,7 @@ import logging
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
-from pdftl.core.constants import ALLOW_PERMISSIONS_MAP
+import pdftl.core.constants as c
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.output.attach import attach_files
@@ -190,9 +190,9 @@ def _default_permissions_object():
 
 
 def _set_permission_or_raise_error(perm, permissions_dict):
-    if perm not in ALLOW_PERMISSIONS_MAP:
+    if perm not in c.ALLOW_PERMISSIONS_MAP:
         raise ValueError(f"Unknown permission '{perm}' in 'allow' list.")
-    for flag_name in ALLOW_PERMISSIONS_MAP[perm]:
+    for flag_name in c.ALLOW_PERMISSIONS_MAP[perm]:
         if flag_name in permissions_dict:
             permissions_dict[flag_name] = True
         else:
@@ -280,6 +280,12 @@ def _build_save_options(options, input_context):
     }
 
 
+def _remove_source_info(pdf):
+    for page in pdf.pages:
+        if hasattr(page, c.PDFTL_SOURCE_INFO_KEY):
+            del page["/" + c.PDFTL_SOURCE_INFO_KEY]
+
+
 # ---------------------------------------------------------------------------
 # Public save API
 # ---------------------------------------------------------------------------
@@ -295,6 +301,8 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         raise MissingArgumentError("An output file must be specified with the 'output' keyword.")
 
     logger.debug("Preparing to save to '%s' with options %s", output_filename, options)
+
+    _remove_source_info(pdf)
 
     if options.get("flatten"):
         pdf.flatten_annotations()

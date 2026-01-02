@@ -274,6 +274,11 @@ GET_INPUT = "get_input"
 META_OUTPUT_FILE = "output_file"
 META_ESCAPE_XML = "escape_xml"
 META_EXTRA_INFO = "extra_info"
+
+##################################################
+# Page data key
+PDFTL_SOURCE_INFO_KEY = "PdftlSourceInfo"
+
 ##################################################
 # __all__
 

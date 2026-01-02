@@ -7,9 +7,17 @@
 """Utilities for adding pages to a PDF"""
 
 import logging
+import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pikepdf
+
+    from pdftl.utils.page_specs import PageTransform
 
 logger = logging.getLogger(__name__)
 
+import pdftl.core.constants as c
 from pdftl.pages.link_remapper import create_link_remapper
 from pdftl.pages.links import (
     RebuildLinksPartialContext,
@@ -17,7 +25,6 @@ from pdftl.pages.links import (
     write_named_dests,
 )
 from pdftl.pages.outlines import rebuild_outlines
-from pdftl.utils.page_specs import PageTransform
 from pdftl.utils.scale import apply_scaling
 
 
@@ -38,11 +45,18 @@ def _apply_rotation(page, source_page, rotation):
         page.Rotate = angle if absolute else current_rotation + angle
 
 
-def add_pages(new_pdf, opened_pdfs, source_pages_to_process: [PageTransform]):
+def add_pages(
+    new_pdf: "pikepdf.Pdf",
+    opened_pdfs: list["pikepdf.Pdf"],
+    source_pages_to_process: list["PageTransform"],
+):
     """
-    Add pages opened pdf file new_pdf.
-    Arguments:
-        source_pages_to_process: A list of PageTransform instances
+    Add pages to the opened pdf file new_pdf.
+
+    Args:
+        new_pdf: The destination PDF object.
+        opened_pdfs: List of all open source PDF objects (used for indexing).
+        source_pages_to_process: A list of PageTransform instances.
 
     """
     # --- PASS 1: Copy page structure, content, and apply transformations. ---
@@ -77,8 +91,8 @@ def add_pages(new_pdf, opened_pdfs, source_pages_to_process: [PageTransform]):
 
 
 def process_source_pages(
-    new_pdf, source_pages_to_process: list
-):  # Return type hint omitted for brevity
+    new_pdf, source_pages_to_process: list["PageTransform"]
+) -> RebuildLinksPartialContext:
     """Handles PASS 1: Assembling pages and applying transformations.
 
     This function iterates through source pages, copies them to the new PDF,
@@ -162,6 +176,8 @@ def process_source_pages(
         instance_num = instance_counts.get(page_key, 0)
         instance_counts[page_key] = instance_num + 1
 
+        _stash_page_source_data(new_page, source_page, page_data, instance_num)
+
         # Store metadata for PASS 2
         ret.page_map[(*page_key, instance_num)] = new_page
         ret.processed_page_info.append((*page_identity, instance_num))
@@ -174,3 +190,46 @@ def process_source_pages(
         apply_scaling(new_page, page_data.scale)
 
     return ret
+
+
+def _stash_page_source_data(new_page, source_page, page_data, instance_num):
+    # Calculate metadata for variable expansion
+    filename = getattr(page_data.pdf, "filename", "")
+    # Get original page rotation and dimensions
+    orig_rotation = source_page.get("/Rotate", 0)
+    # MediaBox is typically [x0, y0, x1, y1]
+    mediabox = source_page.MediaBox
+    width = float(mediabox[2] - mediabox[0])
+    height = float(mediabox[3] - mediabox[1])
+
+    # Handle rotation for width/height (if page is rotated 90/270, swap w/h)
+    if orig_rotation % 180 != 0:
+        width, height = height, width
+
+    orientation = "portrait" if height >= width else "landscape"
+
+    # Inject comprehensive source data into the PDF page object.
+    # NOTE: We only store serializable data here (strings, numbers).
+    # We do NOT store the pikepdf.Pdf object itself, as it cannot be
+    # serialized to a PDF dictionary.
+    # Internal tools (like Link Rebuilding) use the returned
+    # RebuildLinksPartialContext to access the PDF objects.
+    # Downstream tools (like add_text) use this dictionary for variables.
+    info_dict = {
+        # User-facing variable data
+        "/source_filename": os.path.basename(filename) if filename else "",
+        "/source_path": os.path.abspath(filename) if filename else "",
+        "/source_page": page_data.index + 1,
+        "/source_rotation": int(orig_rotation),
+        "/source_width": width,
+        "/source_height": height,
+        "/source_orientation": orientation,
+        # Transformation data (serializable)
+        "/applied_rotation_angle": page_data.rotation[0],
+        "/applied_rotation_absolute": bool(page_data.rotation[1]),
+        "/applied_scale": float(page_data.scale),
+        "/original_index": page_data.index,
+        "/instance_num": instance_num,
+    }
+    # Store in a custom key in the PDF Page Dictionary
+    new_page["/" + c.PDFTL_SOURCE_INFO_KEY] = info_dict

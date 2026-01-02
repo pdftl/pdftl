@@ -26,7 +26,7 @@ Core dependencies (and installed versions):
 
 SYNOPSIS_TEMPLATE = """
 {whoami} <input>... <operation> [<option...>]
-{whoami} <input>... <operation> --- <operation>... [<option...>]
+{whoami} <input>... <operation> [<option...>] --- [<input>...] <operation>... [<option...>] ...
 {whoami} help [<operation> | <option>]
 {whoami} help [{special_help_topics}]
 {whoami} --version

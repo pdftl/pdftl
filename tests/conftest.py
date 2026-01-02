@@ -324,6 +324,8 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
         "doc_A.pdf",
         "doc_B.pdf",
         "twopagetest.pdf",
+        "A.pdf",
+        "B.pdf",
     }
 
     paths = {}

@@ -13,6 +13,7 @@ which are then applied to the target pages.
 import io
 import logging
 from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
@@ -69,13 +70,32 @@ number. Possible variables are:
   (e.g., 2025-12-12T13:53:41.123456).
 
 
-2. Basic arithmetic: e.g., `{page+1}` (supported on `page` and
-`total`).
+2. Source Metadata (Pipeline): These variables track the original
+source file of a page, even after operations like `cat` or `shuffle`.
 
-3. Complex: e.g., {total-page} gives the number of pages
+   - `source_filename`: The filename of the specific source PDF this page came from.
+
+   - `source_path`: The full file path of the source PDF.
+
+   - `source_page`: The original page number in the source file.
+
+   - `source_rotation`: The rotation of the source page (0, 90, 180, 270).
+
+   - `source_width` / `source_height`: The dimensions of the source page.
+
+   - `source_orientation`: "Portrait" or "Landscape".
+
+
+3. Arithmetic & Formatting: Support for offsets and Python-style
+padding. Useful for Bates stamping.
+   - Offset: `{page+100}` starts numbering at 101.
+   - Padding: `{page:06d}` produces "000001".
+   - Combined: `{page+5000:06d}` produces "005001".
+
+4. Complex: e.g., {total-page} gives the number of pages
 remaining.  (for now, this is the only complex possibility).
 
-4. Metadata: e.g., {meta:Title}. The metadata variables
+5. Metadata: e.g., {meta:Title}. The metadata variables
 `allow` you to insert information stored within the PDF
 document's own metadata dictionary (\`/Title\`, \`/Author\`,
 etc.) into your text.
@@ -89,12 +109,12 @@ stripped).
 The available keys are determined by the contents of the PDF
 itself, but common examples derived from the PDF
 specification include: Title, Author, Subject, Keywords,
-Creator, Producer, CreateionDate. If the specified `<KeyName>`
+Creator, Producer, CreationDate. If the specified `<KeyName>`
 does not exist in the PDF's metadata, the variable will be
 substituted with an `empty` string.
 
 
-5. Escaping: `{{...}}` renders a literal `{...}` string.
+6. Escaping: `{{...}}` renders a literal `{...}` string.
 
 
 ### Options
@@ -158,13 +178,28 @@ _ADD_TEXT_EXAMPLES = [
             " output out.pdf"
         ),
     },
+    {
+        "desc": "Stamp pages with their original filename (useful in pipelines)",
+        "cmd": (
+            "A.pdf B.pdf cat --- add_text "
+            "'1-end/Source: {source_filename} (p.{source_page})/"
+            "(position=bottom-left, size=8)' "
+            "output out.pdf"
+        ),
+    },
+    {
+        "desc": "Apply a Bates stamp (starting at DEF-005001) to the bottom-right",
+        "cmd": (
+            "in.pdf add_text "
+            "'/DEF-{page+5000:06d}/(position=bottom-right, size=10, color=1 0 0)' "
+            "output out.pdf"
+        ),
+    },
 ]
 
 
 def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
     """Builds the context dict for variables that are the same for all pages."""
-    from pathlib import Path
-
     try:
         # .docinfo is a property that lazy-loads the info dict
         metadata = {str(k).lstrip("/"): str(v) for k, v in pdf.docinfo.items()}
@@ -174,9 +209,13 @@ def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
 
     filename = ""
     filename_base = ""
+    filepath = ""
+
     if pdf.filename:
-        filename = Path(pdf.filename).name
-        filename_base = Path(pdf.filename).stem
+        p = Path(pdf.filename)
+        filename = p.name
+        filename_base = p.stem
+        filepath = str(p)
 
     now = datetime.now()
     return {
@@ -184,7 +223,7 @@ def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
         "metadata": metadata,
         "filename": filename,
         "filename_base": filename_base,
-        "filepath": pdf.filename,
+        "filepath": filepath,
         "date": now.strftime("%Y-%m-%d"),
         "time": now.strftime("%H:%M:%S"),
         "datetime": now.isoformat(),
@@ -248,8 +287,34 @@ def _process_page(i, page, page_rules, static_context, drawer_class):
     if not rules_for_page:
         return
 
+    # Use TrimBox if available, fallback to CropBox/MediaBox.
+    # Note: pikepdf properties handle the fallback logic.
     page_box = Rectangle(*page.trimbox)
+
+    # Calculate dimensions for context
+    width = float(page_box.width)
+    height = float(page_box.height)
+
+    # --- Build Page Context ---
     page_context = {**static_context, "page": i + 1}
+
+    # Retrieve "sticky" source metadata if available (e.g. from cat operation)
+    source_meta = getattr(page, c.PDFTL_SOURCE_INFO_KEY, None)
+
+    if source_meta:
+        page_context.update({k[1:]: v for k, v in source_meta.items()})
+    else:
+        # Fallback: The "Source" is the current file.
+        page_context["source_filename"] = static_context.get("filename", "")
+        page_context["source_path"] = static_context.get("filepath", "")
+        page_context["source_page"] = i + 1
+        page_context["source_rotation"] = page.rotate
+        page_context["source_width"] = width
+        page_context["source_height"] = height
+        page_context["source_orientation"] = "Landscape" if width > height else "Portrait"
+        page_context["source_cropbox"] = str(list(page.cropbox))
+        page_context["source_mediabox"] = str(list(page.mediabox))
+        page_context["source_filesize"] = ""
 
     # --- 5. Delegate drawing to drawer = TextDrawer ---
     # Create a new drawer for each page
@@ -269,6 +334,11 @@ def _process_page(i, page, page_rules, static_context, drawer_class):
         try:
             with Pdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
                 # This mutates the page object *in-place*
-                page.add_overlay(overlay_pdf.pages[0])
+                if len(overlay_pdf.pages) > 0:
+                    page.add_overlay(overlay_pdf.pages[0])
+                else:
+                    logger.debug(
+                        "Overlay PDF was empty (likely due to skipped rules) for page %d", i + 1
+                    )
         except (PdfError, TypeError) as e:
             logger.warning("Failed to apply overlay to page %d: %s", i + 1, e)

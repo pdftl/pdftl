@@ -279,9 +279,11 @@ def test_page_attachment_with_relationship(
 
 from pdftl.output.attach import _attach_files_option
 
+
 def test_attach_files_option_registration():
     # Covers line 114
     _attach_files_option()
+
 
 def test_unreadable_attachment_warning(caplog):
     # Covers lines 219-220
@@ -291,6 +293,7 @@ def test_unreadable_attachment_warning(caplog):
         results = _resolve_attachments(parsed, 10, ctx)
         assert len(results) == 0
         assert "Cannot read attachment" in caplog.text
+
 
 def test_recursive_prompt_on_invalid_file():
     # Covers line 258
