@@ -54,7 +54,6 @@ def test_dump_text_real_iteration():
         with patch("pypdfium2.PdfDocument") as MockDoc:
             MockDoc.return_value.__enter__.return_value = mock_pdf
 
-            with patch("pdftl.commands.dump_text.dump") as mock_dump:
-                result = pdftl.commands.dump_text.dump_text("dummy.pdf", "pass")
-                assert result.success is True
-                assert "Text" in result.data
+            result = pdftl.commands.dump_text.dump_text("dummy.pdf", "pass")
+            assert result.success is True
+            assert "Text" in result.data

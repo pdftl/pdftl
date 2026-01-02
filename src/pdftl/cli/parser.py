@@ -9,7 +9,6 @@
 import logging
 
 logger = logging.getLogger(__name__)
-from typing import List
 
 import pdftl.core.constants as c
 from pdftl.cli.pipeline import CliStage
@@ -27,11 +26,16 @@ def _get_registry_data_entries(main_key, sub_key, test, transform=None):
     }
 
 
-FLAG_KEYWORDS = _get_registry_data_entries("options", "type", lambda x: x == "flag")
+def _get_flag_keywords():
+    """Fetch current flag keywords from registry."""
+    return _get_registry_data_entries("options", "type", lambda x: x == "flag")
 
-VALUE_KEYWORDS = _get_registry_data_entries(
-    "options", "type", lambda x: "mandatory argument" in x, lambda x: x.split(" ")[0]
-)
+
+def _get_value_keywords():
+    """Fetch current value keywords from registry."""
+    return _get_registry_data_entries(
+        "options", "type", lambda x: "mandatory argument" in x, lambda x: x.split(" ")[0]
+    )
 
 
 def _find_operation_and_split(args):
@@ -112,7 +116,7 @@ def _parse_attach_files(args, i, options):
     def filename_q(x):
         """Is x a valid filename for attach_files? Equivalently: is x
         not an options keyword?"""
-        return not (x in VALUE_KEYWORDS or x in FLAG_KEYWORDS)
+        return not (x in _get_value_keywords() or x in _get_flag_keywords())
 
     consumed_count, current_pos = _parse_multiple_arguments("attach_files", args, i, filename_q)
     files = options.setdefault(keyword, [])
@@ -150,9 +154,9 @@ def parse_options_and_specs(args):
             val = args[i + 1]
             options[arg_lower] = val
             i += 2
-        elif arg_lower in VALUE_KEYWORDS:
+        elif arg_lower in _get_value_keywords():
             i += _parse_value_keyword(arg, args, i, options)
-        elif arg_lower in FLAG_KEYWORDS:
+        elif arg_lower in _get_flag_keywords():
             i += _parse_flag_keyword(arg, options)
         elif not options:
             specs.append(arg)
@@ -311,7 +315,7 @@ def split_args_by_separator(argv, separator="---"):
     return stages
 
 
-def parse_cli_stages(args: List[str]) -> tuple[List[CliStage], dict]:
+def parse_cli_stages(args: list[str]) -> tuple[list[CliStage], dict]:
     """
     Parses a list of command-line arguments into a list of CliStage objects
     and a dictionary of global options.

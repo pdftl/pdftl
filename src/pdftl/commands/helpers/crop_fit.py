@@ -37,15 +37,18 @@ class FitCropContext:
 
     def _init_pdfium_doc(self):
         """Initializes pypdfium2 from the current pikepdf state."""
-        try:
-            import PIL  # Verify dependency presence
-            import pypdfium2 as pdfium
-        except ImportError as e:
-            logger.error(f"Failed to import geometry dependencies: {e}")
+        import importlib.util
+
+        has_pil = importlib.util.find_spec("PIL") is not None
+        has_pdfium = importlib.util.find_spec("pypdfium2") is not None
+
+        if not (has_pil and has_pdfium):
             raise ImportError(
                 "The 'fit' crop feature requires 'pypdfium2' and 'pillow'. "
                 "Please install with: pip install pdftl[geometry]"
-            ) from e
+            )
+
+        import pypdfium2 as pdfium
 
         pdf_buffer = io.BytesIO()
         self.pikepdf_doc.save(pdf_buffer)

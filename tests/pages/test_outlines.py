@@ -425,3 +425,53 @@ def test_build_chunks_invariant(processed_page_info):
             assert p_curr[0] is p_next[0], "Must be same PDF"
             assert p_curr[2] == p_next[2], "Must be same instance"
             assert p_curr[1] + 1 == p_next[1], "Must be contiguous source pages"
+
+import pytest
+from unittest.mock import MagicMock, patch
+from pdftl.pages.outlines import _get_source_action
+
+def test_build_outline_chunks_malformed_data(caplog):
+    """Covers lines 199-203: Malformed processed_page_info."""
+    # Passing a list with a tuple that has the wrong number of elements
+    malformed_info = [("pdf_obj", 0)]  # Missing inst_num
+
+    result = _build_outline_chunks(malformed_info)
+
+    assert result == []
+    assert "Could not build outline chunks" in caplog.text
+
+def test_get_source_action_non_goto_action():
+    """Covers line 111-114 logic: Action exists but is not GoTo."""
+    from pikepdf import Name
+
+    mock_item = MagicMock()
+    mock_item.destination = None
+    # Simulate a URI action instead of GoTo
+    mock_item.action.S = Name.URI
+
+    action = _get_source_action(mock_item)
+    assert action is None
+
+def test_copy_item_recursion_and_pruning():
+    """Covers line 96: Recursive child copying."""
+    mock_remapper = MagicMock()
+    # Mock remap to return a valid action for everything
+    mock_remapper.remap_goto_action.return_value = (MagicMock(D="remapped"), None)
+
+    copier = OutlineCopier(mock_remapper)
+
+    # Create a mock structure: Parent -> Child
+    child = MagicMock(title="Child", children=[])
+    parent = MagicMock(title="Parent", children=[child])
+    parent.destination = "some_dest"
+    child.destination = "some_dest"
+
+    new_parent_list = []
+
+    # This triggers the recursion at line 96
+    with patch("pikepdf.OutlineItem", side_effect=lambda title, destination: MagicMock(title=title, children=[])):
+        copier.copy_item(parent, new_parent_list)
+
+    assert len(new_parent_list) == 1
+    # Verify child was processed (remapper called twice: parent + child)
+    assert mock_remapper.remap_goto_action.call_count == 2

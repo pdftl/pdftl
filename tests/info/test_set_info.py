@@ -5,9 +5,7 @@ import pytest
 from pikepdf import (
     Dictionary,
     Name,
-    NumberTree,
     OutlineItem,
-    Pdf,
     String,
 )
 
@@ -15,12 +13,6 @@ from pikepdf import (
 from pdftl.info import set_info as set_info_module
 
 # --- Import Functions to Test ---
-from pdftl.info.parse_dump import (
-    _parse_info_field,
-    _safe_float_list,
-    _safe_int,
-    parse_dump_data,
-)
 from pdftl.info.set_info import (
     CANNOT_SET_PDFID1,
     _add_bookmark,

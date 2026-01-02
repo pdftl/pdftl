@@ -5,12 +5,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.4.1] - 2026-01-02
+
+### Fixed
+
+- Broken link in README.md
+
 ## [0.4.0] - 2026-01-01
 
 ### Added
 
 - API with fluent and functional interfaces
 - `docs/api_tutorial.md` and auto-generated API docs
+
+### Changed
+
+- Renamed operation: `list_files` is now `dump_files`
 
 ### Fixed
 

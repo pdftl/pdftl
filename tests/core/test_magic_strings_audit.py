@@ -29,7 +29,7 @@ def test_ensure_no_magic_strings_in_registration(filepath):
     Parses command files and ensures @register does not use raw strings
     for keys that exist in pdftl.core.constants.
     """
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         try:
             tree = ast.parse(f.read())
         except SyntaxError:

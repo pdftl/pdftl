@@ -7,7 +7,10 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
-from typing import Union
+from typing import TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    import pikepdf
 
 logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
@@ -161,7 +164,9 @@ class PipelineManager:
             self.pipeline_pdf.close()
 
         result = self._run_operation(stage, opened_pdfs)
+        self._process_result(result, stage, opened_pdfs)
 
+    def _process_result(self, result, stage, opened_pdfs):
         from pdftl.core.types import OpResult
 
         if isinstance(result, OpResult):

@@ -145,7 +145,6 @@ def test_unknown_field_type():
     """
     Tests that unknown field types are handled gracefully (fallback to class name).
     """
-    from pdftl.commands.dump_data_fields import _get_field_type_strings
 
     class WeirdThing:
         pass

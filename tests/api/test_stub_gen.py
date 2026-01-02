@@ -97,7 +97,7 @@ def test_no_unregistered_ops_in_stubs():
     if not os.path.exists(stub_path):
         pytest.skip("Stub file not yet generated.")
 
-    with open(stub_path, "r") as f:
+    with open(stub_path) as f:
         content = f.read()
 
     for line in content.splitlines():

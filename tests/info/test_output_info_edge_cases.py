@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pikepdf
-import pytest
 from pikepdf.exceptions import OutlineStructureError
 
 from pdftl.info.output_info import get_info

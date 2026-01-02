@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import NameTree
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +224,6 @@ def _extract_bookmarks_recursive(
     items, pages_list, named_destinations, level=1
 ) -> list[BookmarkEntry]:
     """Gather bookmarks into a list of dataclasses using original error handling."""
-    from pikepdf.exceptions import OutlineStructureError
 
     results = []
     for item in items:

@@ -45,7 +45,8 @@ def generate_fdf_cli_hook(result: OpResult, _stage):
     with smart_open_output(output_file, mode="wb") as f:
         import shutil
 
-        # result.data is an io.BytesIO object. getvalue() retrieves bytes without consuming the stream.
+        # result.data is an io.BytesIO object.
+        # shutil.copyfileobj should be memory efficient
         shutil.copyfileobj(result.data, f)
 
 

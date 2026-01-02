@@ -107,10 +107,6 @@ def test_apply_rule_logic():
 
 from unittest.mock import patch
 
-import pytest
-
-from pdftl.commands.modify_annots import _parse_array_value, _parse_value_to_python
-
 
 def test_coverage_mop_up_array_exceptions():
     """

@@ -71,7 +71,6 @@ def dump_annots(pdf, output_file=None) -> OpResult:
     """
     Dumps all annotations from a PDF in JSON format, with compact arrays.
     """
-    import json
 
     logger.debug("Dumping annotations for PDF with %s pages.", len(pdf.pages))
     all_annots_data = _get_all_annots_data(pdf)

@@ -8,11 +8,9 @@ Generate .md and .rst source files for documentation.
 
 import io
 import os
-import re
 
 # Ensure we can see the package
 import sys
-from datetime import date
 from pathlib import Path
 from shutil import copyfile as cp
 
@@ -22,7 +20,7 @@ from common import get_docs_data
 
 import pdftl.api
 from pdftl.cli.help import print_help
-from pdftl.core.types import HelpTopic, Operation, Option
+from pdftl.core.types import HelpTopic, Operation
 
 
 def write_help_topic_to_file(topic, filepath):
@@ -133,7 +131,6 @@ def generate_md_docs(app_data, topics, output_dir="source"):
         # 2. The Reference
         f.write(incl("api_reference"))
         write_api_reference(operations, Path(output_dir) / "api_reference.rst")
-
 
         # --- Project files ---
         f.write(heading("Project files"))

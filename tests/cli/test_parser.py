@@ -51,8 +51,8 @@ def mock_constants(mocker):
         "assembly": "Assembly",
     }
 
-    mocker.patch.object(parser_module, "FLAG_KEYWORDS", mock_flags)
-    mocker.patch.object(parser_module, "VALUE_KEYWORDS", mock_values)
+    mocker.patch.object(parser_module, "_get_flag_keywords", return_value=mock_flags)
+    mocker.patch.object(parser_module, "_get_value_keywords", return_value=mock_values)
     mocker.patch.object(parser_module, "ALLOW_PERMISSIONS", mock_allow)
     mocker.patch.object(parser_module, "ALLOW_PERMISSIONS_L", mock_allow_l)
 

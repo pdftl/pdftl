@@ -46,13 +46,11 @@ def test_all_commands_return_op_result(clean_registry):
     # Assert that the list of legacy commands is empty
     if legacy_commands:
         pytest.fail(
-            (
-                f"The following {len(legacy_commands)} commands have not been migrated "
-                + f"to return 'OpResult':\n\n- "
-                + "\n- ".join(legacy_commands)
-                + "\n\n"
-                + f"The following {len(updated_commands)} commands HAVE been migrated "
-                + f"to return 'OpResult':\n\n- "
-                + "\n- ".join(updated_commands)
-            )
+            f"The following {len(legacy_commands)} commands have not been migrated "
+            + "to return 'OpResult':\n\n- "
+            + "\n- ".join(legacy_commands)
+            + "\n\n"
+            + f"The following {len(updated_commands)} commands HAVE been migrated "
+            + "to return 'OpResult':\n\n- "
+            + "\n- ".join(updated_commands)
         )

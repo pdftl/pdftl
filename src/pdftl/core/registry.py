@@ -7,7 +7,6 @@
 """Registry for various data, loaded at runtime"""
 
 import inspect
-import os
 from collections import OrderedDict
 from dataclasses import fields
 

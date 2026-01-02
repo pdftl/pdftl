@@ -41,7 +41,11 @@ def mock_page_spec_parser(monkeypatch):
             return set(range(1, total_pages + 1))
         return {1}  # Default for unknown specs
 
-    monkeypatch.setattr(map, "page_numbers_matching_page_spec", dummy_page_spec_parser)
+    # monkeypatch.setattr(map, "page_numbers_matching_page_spec", dummy_page_spec_parser)
+    monkeypatch.setattr(
+        "pdftl.commands.parsers.modify_annots_parser.page_numbers_matching_page_spec",
+        dummy_page_spec_parser,
+    )
 
 
 # --- -----------------------

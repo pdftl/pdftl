@@ -7,7 +7,6 @@
 """Dump form data from a PDF file"""
 
 import logging
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -98,58 +97,66 @@ _DUMP_DATA_FIELDS_EXAMPLES = [
 
 
 def dump_fields_cli_hook(result, stage):
-    """
-    Formats the structured field data (List[Dict]) into the standard
-    stanza-based text format (pdftk style).
-    """
+    """Formats structured field data into the standard stanza-based text format."""
     if not result.data:
         return
 
     output_file = stage.options.get("output_file")
     escape_xml = stage.options.get("escape_xml", True)
 
-    # Helper for conditional XML escaping
-    def fmt(val):
-        s_val = str(val)
-        return xml_encode_for_info(s_val) if escape_xml else s_val
-
     with smart_open_output(output_file) as f:
         num_fields = len(result.data)
 
         for idx, field in enumerate(result.data):
-            # 1. FieldType / SubType
-            print(f"FieldType: {fmt(field.get('FieldType', ''))}", file=f)
-            if "FieldSubType" in field:
-                print(f"FieldSubType: {fmt(field['FieldSubType'])}", file=f)
+            # Pass the field and the formatting preferences to the helper
+            _write_field_stanza(f, field, escape_xml)
 
-            # 2. FieldName
-            print(f"FieldName: {fmt(field.get('FieldName', ''))}", file=f)
-
-            # 3. FieldFlags
-            if "FieldFlags" in field:
-                print(f"FieldFlags: {field['FieldFlags']}", file=f)
-
-            # 4. FieldValue
-            if "FieldValue" in field:
-                print(f"FieldValue: {fmt(field['FieldValue'])}", file=f)
-
-            # 5. FieldOptions (List behavior)
-            if "FieldStateOption" in field:
-                for opt in field["FieldStateOption"]:
-                    # Option can be a string or a tuple (value, display_name)
-                    if isinstance(opt, (list, tuple)) and len(opt) == 2:
-                        print(f"FieldStateOption: {fmt(opt[0])}", file=f)
-                        print(f"FieldStateOptionDisplay: {fmt(opt[1])}", file=f)
-                    else:
-                        print(f"FieldStateOption: {fmt(opt)}", file=f)
-
-            # 6. Justification
-            if "FieldJustification" in field:
-                print(f"FieldJustification: {fmt(field['FieldJustification'])}", file=f)
-
-            # Separator between stanzas (but not after the last one, to match pdftk)
+            # Standard pdftk-style separator
             if idx + 1 < num_fields:
                 print("---", file=f)
+
+
+def _write_field_stanza(file_handle, field: dict, escape_xml: bool):
+    """Writes the key-value pairs for a single field stanza."""
+
+    def fmt(val):
+        """Internal formatter to handle XML escaping."""
+        s_val = str(val) if val is not None else ""
+        return xml_encode_for_info(s_val) if escape_xml else s_val
+
+    # 1. Identity & Names
+    print(f"FieldType: {fmt(field.get('FieldType', ''))}", file=file_handle)
+    if "FieldSubType" in field:
+        print(f"FieldSubType: {fmt(field['FieldSubType'])}", file=file_handle)
+
+    print(f"FieldName: {fmt(field.get('FieldName', ''))}", file=file_handle)
+
+    # 2. Simple Attributes
+    if "FieldFlags" in field:
+        print(f"FieldFlags: {field['FieldFlags']}", file=file_handle)
+
+    if "FieldValue" in field:
+        print(f"FieldValue: {fmt(field['FieldValue'])}", file=file_handle)
+
+    # 3. Complex List Attributes (Options)
+    if "FieldStateOption" in field:
+        _write_field_options(file_handle, field["FieldStateOption"], fmt)
+
+    # 4. Layout
+    if "FieldJustification" in field:
+        print(f"FieldJustification: {fmt(field['FieldJustification'])}", file=file_handle)
+
+
+def _write_field_options(file_handle, options: list, fmt_func):
+    """Handles the unique dual-printing of PDF field options."""
+    for opt in options:
+        if isinstance(opt, (list, tuple)) and len(opt) == 2:
+            # Case: (export_value, display_name)
+            print(f"FieldStateOption: {fmt_func(opt[0])}", file=file_handle)
+            print(f"FieldStateOptionDisplay: {fmt_func(opt[1])}", file=file_handle)
+        else:
+            # Case: Simple string option
+            print(f"FieldStateOption: {fmt_func(opt)}", file=file_handle)
 
 
 # --- Extraction Logic ---
@@ -169,58 +176,77 @@ def _get_field_type_strings(field):
 
 
 def _extract_field_data(field, extra_info=False):
-    """
-    Extracts data from a single pikepdf field into a Python dictionary.
-    """
-    import pikepdf
-
-    data = {}
-
-    # 1. Type info
+    """Extracts data from a single pikepdf field into a Python dictionary."""
+    # 1. Basic Identity
     ts_in, ts_out = _get_field_type_strings(field)
-    data["FieldType"] = ts_out
+    data = {
+        "FieldName": field.fully_qualified_name,
+        "FieldType": ts_out,
+    }
+
     if extra_info:
         data["FieldSubType"] = ts_in
 
-    # 2. Name
-    data["FieldName"] = field.fully_qualified_name
-
-    # 3. Flags
+    # 2. Add Optional Attributes
     if hasattr(field.obj, "Ff"):
         data["FieldFlags"] = int(field.obj.Ff)
 
-    # 4. Value
-    # The value is usually stored in /V.
-    # For some button types (checkboxes), it might be /AS.
+    # 3. Use specialized helpers for complex logic
+    data["FieldValue"] = _extract_field_value(field)
+
+    if hasattr(field.obj, "Opt"):
+        data["FieldStateOption"] = _extract_field_options(field.obj.Opt)
+
+    data["FieldJustification"] = _extract_field_justification(field, ts_out)
+
+    return data
+
+
+def _extract_field_value(field) -> str | None:
+    """Extracts the current value or appearance state of a field."""
+    import pikepdf
+
+    # Standard value
     if hasattr(field.obj, "V"):
         val = field.obj.V
         if isinstance(val, pikepdf.Name):
-            val = str(val).lstrip("/")
+            return str(val).lstrip("/")
+        return str(val)
+
+    # Checkbox/Radio appearance fallback
+    if hasattr(field.obj, "AS"):
+        return str(field.obj.AS).lstrip("/")
+
+    return None
+
+
+def _extract_field_options(opt_array) -> list:
+    """Parses PDF choice field options into strings or (export, display) tuples."""
+    import pikepdf
+
+    opts = []
+    for opt in opt_array:
+        if isinstance(opt, pikepdf.Array):
+            # Format: (export_value, display_value)
+            opts.append((str(opt[0]), str(opt[1])))
         else:
-            val = str(val)
-        data["FieldValue"] = val
-    elif hasattr(field.obj, "AS"):
-        # For checkboxes/radios, appearance state often indicates value
-        data["FieldValue"] = str(field.obj.AS).lstrip("/")
+            opts.append(str(opt))
+    return opts
 
-    # 5. Options
-    if hasattr(field.obj, "Opt"):
-        opts = []
-        for opt in field.obj.Opt:
-            if isinstance(opt, pikepdf.Array):
-                # Tuple: (export_value, display_value)
-                opts.append((str(opt[0]), str(opt[1])))
-            else:
-                opts.append(str(opt))
-        data["FieldStateOption"] = opts
 
-    # 6. Justification
+def _extract_field_justification(field, field_type_out: str) -> str | None:
+    """Determines the text alignment of a field."""
     if hasattr(field.obj, "Q"):
-        data["FieldJustification"] = ("Left", "Center", "Right")[int(field.obj.Q)]
-    elif ts_out in ("Text", "Button"):
-        data["FieldJustification"] = "Left"
+        align_map = ("Left", "Center", "Right")
+        try:
+            return align_map[int(field.obj.Q)]
+        except (IndexError, ValueError):
+            return "Left"
 
-    return data
+    if field_type_out in ("Text", "Button"):
+        return "Left"
+
+    return None
 
 
 # --- Operations ---

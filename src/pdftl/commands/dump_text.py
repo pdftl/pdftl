@@ -14,7 +14,6 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.output.dump import dump
 from pdftl.utils.hooks import text_dump_hook
 from pdftl.utils.string import remove_ignored_nonprinting_chars
 

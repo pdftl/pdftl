@@ -14,7 +14,7 @@ from __future__ import annotations
 import inspect
 import logging
 import types
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pikepdf
@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_inputs(
-    user_inputs: List[Union[str, "pikepdf.Pdf"]] | None,
-    user_opened: Union[Dict[int, "pikepdf.Pdf"], List["pikepdf.Pdf"]] | None,
+    user_inputs: list[str | pikepdf.Pdf] | None,
+    user_opened: dict[int, pikepdf.Pdf] | list[pikepdf.Pdf] | None,
     password: str | None,
-) -> tuple[List[str], Dict[int, "pikepdf.Pdf"]]:
+) -> tuple[list[str], dict[int, pikepdf.Pdf]]:
     """
     Normalizes user-provided inputs into the internal format expected by commands.
     """
@@ -139,50 +139,56 @@ def _map_positional_args(operation_name, positional_args):
 
 
 def call(operation_name: str, *args: Any, **kwargs: Any) -> Any:
-    """
-    Execute a registered operation by name.
-    """
+    """Execute a registered operation by name."""
+    # 1. Pop control flags
     return_full = kwargs.pop("full_result", False)
     run_hook = kwargs.pop("run_cli_hook", False)
 
-    # 1. Gather Inputs
+    # 2. Prepare Context
+    context = _prepare_operation_context(operation_name, args, kwargs)
+
+    # 3. Execute
+    try:
+        result = executor.run_operation(operation_name, context)
+    except MissingArgumentError as e:
+        raise TypeError(f"missing required argument: {str(e)}") from e
+    except UserCommandLineError as e:
+        raise ValueError(f"Invalid operation parameters: {str(e)}") from e
+
+    # 4. Handle Result
+    return _process_operation_result(operation_name, result, context, return_full, run_hook)
+
+
+def _prepare_operation_context(operation_name: str, args: tuple, kwargs: dict) -> dict:
+    """Gathers and normalizes all inputs and arguments into a context dict."""
+    # Gather Inputs
     raw_inputs = kwargs.get(c.INPUTS, [])
     if "pdf" in kwargs:
         raw_inputs = [kwargs.pop("pdf")] + raw_inputs
 
-    # 2. Gather Op Args
+    # Gather Op Args
     op_args = kwargs.get(c.OPERATION_ARGS, [])
 
-    # 3. Handle Positional Arguments (User Friendliness)
-    # This maps args like ('file.pdf') to inputs/op_args based on the command def.
+    # Map Positional Arguments
     if args:
         pos_inputs, pos_op_args = _map_positional_args(operation_name, args)
         raw_inputs.extend(pos_inputs)
         op_args.extend(pos_op_args)
 
-    # FIX: Ensure all operation arguments are strings.
-    # The internal command parsers (cli-centric) expect strings and will fail with integers.
-    # This allows API calls like .rotate(90) to work correctly.
+    # Convert all op_args to strings for CLI-centric parsers
     op_args = [str(a) for a in op_args]
 
-    # 4. Normalize Inputs (Open files, etc.)
+    # Normalize Inputs (Open files, etc.)
     raw_opened = kwargs.get(c.OPENED_PDFS, {})
     password = kwargs.get("password") or kwargs.get(c.INPUT_PASSWORD)
     final_inputs, final_opened = _normalize_inputs(raw_inputs, raw_opened, password)
 
-    # Helper to get the first item safely
+    # Resolve primary references
     first_input = final_inputs[0] if final_inputs else None
-
-    # Safely get the first opened PDF
     first_pdf = None
     if final_opened:
         first_idx = sorted(final_opened.keys())[0]
         first_pdf = final_opened[first_idx]
-
-    # Derived context values matching pipeline.py logic
-    overlay_pdf = op_args[0] if op_args else None
-    output_file = kwargs.get(c.OUTPUT)
-    output_pattern = kwargs.get(c.OUTPUT_PATTERN, "pg_%04d.pdf")
 
     context = {
         "operation": operation_name,
@@ -191,74 +197,65 @@ def call(operation_name: str, *args: Any, **kwargs: Any) -> Any:
         c.INPUTS: final_inputs,
         c.OPENED_PDFS: final_opened,
         c.ALIASES: kwargs.get(c.ALIASES, {"DEFAULT": 0}),
-        # Convenience keys required by many commands
         c.INPUT_FILENAME: first_input,
         c.INPUT_PDF: first_pdf,
         c.INPUT_PASSWORD: password,
-        # Advanced keys for stamp/burst/overlay operations
-        c.OVERLAY_PDF: overlay_pdf,
+        c.OVERLAY_PDF: op_args[0] if op_args else None,
         c.ON_TOP: "stamp" in operation_name,
         c.MULTI: "multi" in operation_name,
-        c.OUTPUT: output_file,
-        c.OUTPUT_PATTERN: output_pattern,
-        # Interactive input hook (defaults to built-in input for API usage)
+        c.OUTPUT: kwargs.get(c.OUTPUT),
+        c.OUTPUT_PATTERN: kwargs.get(c.OUTPUT_PATTERN, "pg_%04d.pdf"),
         c.GET_INPUT: kwargs.get(c.GET_INPUT, input),
     }
 
-    # Cleanup context options to prevent recursive keys in OPTIONS
+    # Clean up OPTIONS to avoid recursion
     for key in [c.INPUTS, c.OPENED_PDFS, c.OPERATION_ARGS, c.ALIASES, "pdf", "password"]:
-        if key in context[c.OPTIONS]:
-            del context[c.OPTIONS][key]
+        context[c.OPTIONS].pop(key, None)
 
-    try:
-        result = executor.run_operation(operation_name, context)
-    except MissingArgumentError as e:
-        raise TypeError(f"missing required argument: {str(e)}") from e
-    except UserCommandLineError as e:
-        raise ValueError(f"Invalid operation parameters: {str(e)}") from e
+    return context
 
+
+def _process_operation_result(
+    op_name: str, result: Any, context: dict, return_full: bool, run_hook: bool
+) -> Any:
+    """Unpacks OpResult and optionally runs CLI hooks."""
     from pdftl.core.types import OpResult
 
     if not isinstance(result, OpResult):
         return result
 
     if not result.success:
-        raise OperationError(f"Operation '{operation_name}' failed: {result.summary}")
+        raise OperationError(f"Operation '{op_name}' failed: {result.summary}")
 
     if result.summary:
-        logger.info(f"[{operation_name}] {result.summary}")
+        logger.info(f"[{op_name}] {result.summary}")
 
-    # Optionally execute the CLI hook (e.g. for printing/saving output)
     if run_hook:
-        op_data = executor.registry.operations.get(operation_name, {})
-
-        # Safely access 'cli_hook' whether op_data is a dict or an object
-        if isinstance(op_data, dict):
-            hook = op_data.get("cli_hook")
-        else:
-            hook = getattr(op_data, "cli_hook", None)
-
-        if hook:
-            # Construct a mock stage object with options, as hooks expect a 'stage'
-            # hooks.py typically accesses stage.options.get("output")
-            stage_options = context[c.OPTIONS]
-            mock_stage = types.SimpleNamespace(options=stage_options)
-            hook(result, mock_stage)
-        else:
-            raise ValueError(
-                f"Operation '{operation_name}' does not support run_cli_hook (no hook registered)."
-            )
+        _run_cli_hook(op_name, result, context)
 
     if return_full:
         return result
 
-    if result.data is not None:
-        return result.data
+    return result.data if result.data is not None else result.pdf
 
-    if result.pdf is not None:
-        return result.pdf
 
-    return None
+def _run_cli_hook(op_name: str, result: Any, context: dict):
+    """Executes the registered CLI hook for an operation."""
+    op_data = executor.registry.operations.get(op_name, {})
+
+    # Handle both dict-based and object-based registries
+    hook = (
+        op_data.get("cli_hook")
+        if isinstance(op_data, dict)
+        else getattr(op_data, "cli_hook", None)
+    )
+
+    if not hook:
+        raise ValueError(f"Operation '{op_name}' does not support run_cli_hook.")
+
+    # Construct mock stage for the hook
+    mock_stage = types.SimpleNamespace(options=context[c.OPTIONS])
+    hook(result, mock_stage)
 
 
 def _create_signature(op_name):
@@ -273,11 +270,6 @@ def _create_signature(op_name):
     # Try to determine if the op takes inputs or op_args to make help signature cleaner
     op_data = executor.registry.operations.get(op_name, {})
 
-    # Safely unpack just the first element (positional args list),
-    # ignoring whether the tuple has 2 or 3 elements.
-    args_conf = op_data.get("args", ([], {}))
-    reg_pos_args = args_conf[0] if args_conf else []
-
     parameters = []
 
     # If the registry says it takes inputs, allow positional args in signature roughly
@@ -286,16 +278,16 @@ def _create_signature(op_name):
     # Just standardizing for now to avoid confusion
     parameters = [
         inspect.Parameter(
-            c.INPUTS, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=List[str]
+            c.INPUTS, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=list[str]
         ),
         inspect.Parameter(
             c.OPENED_PDFS,
             inspect.Parameter.KEYWORD_ONLY,
             default=None,
-            annotation=List[pikepdf.Pdf],
+            annotation=list[pikepdf.Pdf],
         ),
         inspect.Parameter(
-            c.OPERATION_ARGS, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=List[str]
+            c.OPERATION_ARGS, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=list[str]
         ),
         inspect.Parameter(
             "password", inspect.Parameter.KEYWORD_ONLY, default=None, annotation=str
@@ -308,10 +300,10 @@ def _create_signature(op_name):
             "full_result", inspect.Parameter.KEYWORD_ONLY, default=False, annotation=bool
         ),
         inspect.Parameter(
-            c.ALIASES, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=Dict[str, Any]
+            c.ALIASES, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=dict[str, Any]
         ),
         inspect.Parameter(
-            c.OPTIONS, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=Dict[str, Any]
+            c.OPTIONS, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=dict[str, Any]
         ),
     ]
 
@@ -344,9 +336,8 @@ def __getattr__(name: str) -> Any:
         op_data = executor.registry.operations[name]
 
         # Access properties safely whether op_data is dict or object
-        get_val = lambda k: (
-            op_data.get(k) if isinstance(op_data, dict) else getattr(op_data, k, None)
-        )
+        def get_val(k):
+            return op_data.get(k) if isinstance(op_data, dict) else getattr(op_data, k, None)
 
         op_function = get_val("function")
         long_desc = get_val("long_desc")

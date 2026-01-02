@@ -1,9 +1,4 @@
-import json
-import sys
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from pdftl.core.types import OpResult
 from pdftl.utils import hooks

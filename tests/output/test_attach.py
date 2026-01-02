@@ -275,3 +275,33 @@ def test_page_attachment_with_relationship(
 
     assert mock_spec.relationship == pikepdf.Name("/Source")
     mock_page.Annots.append.assert_called_once()
+
+
+from pdftl.output.attach import _attach_files_option
+
+def test_attach_files_option_registration():
+    # Covers line 114
+    _attach_files_option()
+
+def test_unreadable_attachment_warning(caplog):
+    # Covers lines 219-220
+    parsed = [ParsedAttachment(path="non_existent_file.pdf")]
+    ctx = MagicMock()
+    with patch("pdftl.output.attach.can_read_file", return_value=False):
+        results = _resolve_attachments(parsed, 10, ctx)
+        assert len(results) == 0
+        assert "Cannot read attachment" in caplog.text
+
+def test_recursive_prompt_on_invalid_file():
+    # Covers line 258
+    ctx = MagicMock()
+    # First side effect: invalid file, Second side effect: valid file
+    ctx.get_input.side_effect = ["invalid.pdf", "valid.pdf"]
+
+    with patch("pdftl.output.attach.can_read_file") as mock_read:
+        mock_read.side_effect = [False, True, True]
+        parsed = [ParsedAttachment(path="PROMPT")]
+        results = _resolve_attachments(parsed, 10, ctx)
+
+        assert len(results) == 1
+        assert ctx.get_input.call_count == 2

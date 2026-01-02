@@ -67,7 +67,6 @@ def test_sign_pipeline_integrity(tmp_path, test_pki):
 
     # 2. Reload main to ensure it uses the refreshed parser module
     importlib.reload(pdftl.cli.main)
-    from pdftl.cli.main import main
 
     # Mock sys.argv so main() thinks it was called from the CLI
     test_args = [

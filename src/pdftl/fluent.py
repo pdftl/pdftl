@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -15,17 +16,17 @@ initialize_registry()
 
 
 class PdfPipeline:
-    def __init__(self, pdf: pikepdf.Pdf):
+    def __init__(self, pdf: Pdf):
         self._pdf = pdf
 
     @classmethod
-    def open(cls, filename: Union[str, "Path"], password: Optional[str] = None) -> PdfPipeline:
+    def open(cls, filename: str | Path, password: str | None = None) -> PdfPipeline:
         import pikepdf
 
         pdf = pikepdf.open(filename, password=password) if password else pikepdf.open(filename)
         return cls(pdf)
 
-    def save(self, filename: Union[str, "Path"], **kwargs: Any) -> None:
+    def save(self, filename: str | Path, **kwargs: Any) -> None:
         self._pdf.save(filename, **kwargs)
 
     def __dir__(self):
@@ -35,88 +36,81 @@ class PdfPipeline:
         return default_attrs + dynamic_attrs
 
     def __getattr__(self, name: str) -> Any:
-        import pikepdf
+        if name not in registry.operations:
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-        if name in registry.operations:
+        def fluent_method(*args, **kwargs):
+            # 1. Prepare arguments based on registry metadata
+            op_data = registry.operations[name]
+            final_kwargs = self._map_fluent_args(op_data, args, kwargs)
 
-            def fluent_method(*args, **kwargs):
-                # 1. Inspect the registry to see what this command expects
-                op_data = registry.operations[name]
+            # 2. Execute via the API
+            result = api.call(name, **final_kwargs)
 
-                # Retrieve the positional args configuration
-                args_conf = op_data.args if hasattr(op_data, "args") else ([], {})
-                reg_pos_args = list(args_conf[0]) if args_conf else []
+            # 3. Handle state (Chain or Return)
+            from pikepdf import Pdf
 
-                # 2. Prepare the primary input (the pipeline's current PDF)
-                current_inputs = kwargs.get(c.INPUTS, [])
-                if not isinstance(current_inputs, list):
-                    current_inputs = [current_inputs]
+            if isinstance(result, Pdf):
+                self._pdf = result
+                return self
+            return result
 
-                # Prepend our pipeline PDF
-                full_inputs = [self._pdf] + current_inputs
+        # 4. Attach metadata (Docstrings/Signatures) for better DX
+        return self._apply_metadata(fluent_method, name)
 
-                # 3. Intelligent Argument Mapping
-                mapped_op_args = kwargs.get(c.OPERATION_ARGS, [])
+    def _map_fluent_args(self, op_data: Any, user_args: tuple, kwargs: dict) -> dict:
+        """Translates fluent call args into the standard API kwargs format."""
+        # Initialize structures
+        args_conf = op_data.args if hasattr(op_data, "args") else ([], {})
+        reg_pos_args = list(args_conf[0]) if args_conf else []
 
-                # If the command takes a primary input, our self._pdf satisfies it.
-                if reg_pos_args and reg_pos_args[0] in (c.INPUT_PDF, c.INPUT_FILENAME):
-                    reg_pos_args.pop(0)
+        current_inputs = kwargs.get(c.INPUTS, [])
+        if not isinstance(current_inputs, list):
+            current_inputs = [current_inputs]
 
-                # Map user's *args to remaining targets
-                user_args = list(args)
+        # Logic: Pipeline's current PDF is always the primary input
+        full_inputs = [self._pdf] + current_inputs
+        mapped_op_args = kwargs.get(c.OPERATION_ARGS, [])
 
-                if user_args:
-                    if c.INPUTS in reg_pos_args:
-                        full_inputs.extend(user_args)
-                    elif c.OPERATION_ARGS in reg_pos_args:
-                        mapped_op_args.extend(user_args)
-                    else:
-                        mapped_op_args.extend(user_args)
+        # If the command expects a PDF first, self._pdf already satisfied it
+        if reg_pos_args and reg_pos_args[0] in (c.INPUT_PDF, c.INPUT_FILENAME):
+            reg_pos_args.pop(0)
 
-                # 4. Construct the clean call
-                kwargs[c.INPUTS] = full_inputs
-                kwargs[c.OPERATION_ARGS] = mapped_op_args
+        # Map remaining user *args
+        remaining_args = list(user_args)
+        if remaining_args:
+            if c.INPUTS in reg_pos_args:
+                full_inputs.extend(remaining_args)
+            else:
+                mapped_op_args.extend(remaining_args)
 
-                # Execute
-                result = api.call(name, **kwargs)
+        # Re-package into kwargs for api.call
+        kwargs[c.INPUTS] = full_inputs
+        kwargs[c.OPERATION_ARGS] = mapped_op_args
+        return kwargs
 
-                # Update state if a PDF was returned
-                if isinstance(result, pikepdf.Pdf):
-                    self._pdf = result
-                    return self
-
-                return result
-
-            fluent_method.__name__ = name
-
-            # --- METADATA FIX ---
-            # We look up the corresponding function in the API layer.
-            # pdftl.api generates nice signatures and docstrings dynamically.
-            # We simply copy them to our fluent wrapper so help() works.
-            try:
-                api_func = getattr(api, name)
-                fluent_method.__doc__ = api_func.__doc__
-                if hasattr(api_func, "__signature__"):
-                    fluent_method.__signature__ = api_func.__signature__
-            except Exception:
-                # Fallback if introspection fails (e.g. partial initialization)
-                pass
-
-            return fluent_method
-
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+    def _apply_metadata(self, func: Callable, name: str) -> Callable:
+        """Copies docstrings and signatures from the API function to the wrapper."""
+        func.__name__ = name
+        try:
+            api_func = getattr(api, name)
+            func.__doc__ = api_func.__doc__
+            if hasattr(api_func, "__signature__"):
+                func.__signature__ = api_func.__signature__
+        except AttributeError:
+            # Silence issues with dynamic API generation or partial init
+            pass
+        return func
 
     @property
-    def native(self) -> pikepdf.Pdf:
+    def native(self) -> Pdf:
         return self._pdf
 
-    def get(self) -> pikepdf.Pdf:
+    def get(self) -> Pdf:
         return self._pdf
 
 
-def pipeline(
-    pdf_or_path: Union["Pdf", str, "Path"], password: Optional[str] = None
-) -> PdfPipeline:
+def pipeline(pdf_or_path: Pdf | str | Path, password: str | None = None) -> PdfPipeline:
     """
     Entry point for the fluent API.
     Accepts a pikepdf.Pdf object or a filename/path.

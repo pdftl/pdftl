@@ -7,9 +7,9 @@ Unit tests for the add_text_parser module.
 Requires 'pytest' and 'hypothesis' to run.
 """
 
-import re
 import unittest
 from collections import namedtuple
+from unittest.mock import patch
 
 import pytest
 
@@ -67,12 +67,12 @@ from pdftl.commands.parsers.add_text_parser import (  # Import new function for 
     parse_add_text_specs_to_rules,
 )
 
-# --- Monkey-patching the parser's imports ---
-# We must replace the imported names *within the parser module*
-pdftl.commands.parsers.add_text_parser.UNITS = UNITS
-pdftl.commands.parsers.add_text_parser.parse_page_spec = mock_parse_page_spec
-# We also need to give it the 're' module for the fixed _split_spec_string
-pdftl.commands.parsers.add_text_parser.re = re
+# # --- Monkey-patching the parser's imports ---
+# # We must replace the imported names *within the parser module*
+# pdftl.commands.parsers.add_text_parser.UNITS = UNITS
+# pdftl.commands.parsers.add_text_parser.parse_page_spec = mock_parse_page_spec
+# # We also need to give it the 're' module for the fixed _split_spec_string
+# pdftl.commands.parsers.add_text_parser.re = re
 
 
 class TestAddTextParser(unittest.TestCase):
@@ -91,6 +91,17 @@ class TestAddTextParser(unittest.TestCase):
                 "Author": "John Doe",
             },
         }
+        self.patcher_units = patch("pdftl.commands.parsers.add_text_parser.UNITS", UNITS)
+        self.patcher_pages = patch(
+            "pdftl.commands.parsers.add_text_parser.parse_page_spec", mock_parse_page_spec
+        )
+
+        self.patcher_units.start()
+        self.patcher_pages.start()
+
+        # Ensure we clean up after the test
+        self.addCleanup(self.patcher_units.stop)
+        self.addCleanup(self.patcher_pages.stop)
 
     def test_split_spec_string(self):
         """Test the robust, right-to-left spec string splitter."""

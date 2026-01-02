@@ -92,3 +92,54 @@ class TestFluentApi:
         # Accessing the method should give us a function with the right name
         method = pipe.name_check_op
         assert method.__name__ == "name_check_op"
+
+
+from unittest.mock import patch
+
+import pdftl.core.constants as c
+
+
+def test_fluent_dir_discovery(mocker):
+    # Coverage for lines 34-36
+    # Mock registry to ensure there is at least one dynamic op
+    mocker.patch("pdftl.fluent.registry.operations", {"mock_op": MagicMock()})
+    p = pipeline(MagicMock())
+
+    attrs = dir(p)
+    assert "mock_op" in attrs
+    assert "save" in attrs  # Ensure default attrs are still there
+
+
+def test_map_fluent_args_edge_cases():
+    mock_pdf = MagicMock()
+    p = PdfPipeline(mock_pdf)
+
+    # Coverage for line 69: Pass INPUTS as a single string, not a list
+    op_data = MagicMock()
+    op_data.args = ([], {})
+    res = p._map_fluent_args(op_data, (), {c.INPUTS: "single_file.pdf"})
+    assert res[c.INPUTS] == [mock_pdf, "single_file.pdf"]
+
+    # Coverage for line 83: c.INPUTS is a positional target
+    # Setup: op expects (INPUT_PDF, INPUTS)
+    op_data_multi = MagicMock()
+    op_data_multi.args = ([c.INPUT_PDF, c.INPUTS], {})
+
+    # Calling p.cmd("extra.pdf")
+    # self._pdf satisfies INPUT_PDF, so "extra.pdf" should hit line 83
+    res = p._map_fluent_args(op_data_multi, ("extra.pdf",), {})
+    assert res[c.INPUTS] == [mock_pdf, "extra.pdf"]
+
+
+def test_apply_metadata_inconsistency(mocker):
+    # Coverage for lines 100-102
+    # We want a case where registry has 'missing_op' but api module does not
+    mocker.patch("pdftl.fluent.registry.operations", {"missing_op": MagicMock()})
+    p = pipeline(MagicMock())
+
+    # Patch api to ensure 'missing_op' is missing
+    with patch("pdftl.api.missing_op", side_effect=AttributeError):
+        # Accessing the attribute triggers __getattr__ -> _apply_metadata
+        func = p.missing_op
+        assert func.__name__ == "missing_op"
+        # Verify it didn't crash and returned the function even without docstrings

@@ -405,13 +405,8 @@ def assert_dump_output(capsys):
 
 
 import importlib
-import pkgutil
-import sys
 
 import pytest
-
-import pdftl.commands
-from pdftl.core.registry import registry
 
 
 @pytest.fixture
@@ -466,9 +461,7 @@ def clean_registry():
     return registry
 
 
-import os
 import pprint
-import sys
 
 import pytest
 

@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-import pdftl.core.constants as c
 from pdftl.core.registry import registry
 from pdftl.fluent import PdfPipeline
 

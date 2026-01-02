@@ -45,12 +45,9 @@ def annot_pdf():
 
 
 from pdftl.commands.dump_annots import (
-    dump_annots,
     dump_annots_cli_hook,
-    dump_data_annots,
     dump_data_annots_cli_hook,
 )
-from pdftl.core.types import OpResult
 
 
 def test_dump_data_annots_pdftk_style(annot_pdf, capsys):

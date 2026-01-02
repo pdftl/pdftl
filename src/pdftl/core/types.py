@@ -14,7 +14,7 @@ Contains dataclasses and structural schemas used by the registry.
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from types import GeneratorType
