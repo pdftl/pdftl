@@ -16,7 +16,7 @@ MOCKED_UNITS = {
     "in": 72.0,  # Example value
 }
 
-# Mock the return type of parse_page_spec
+# Mock the return type of parse_sub_page_spec
 PageSpec = namedtuple("PageSpec", ["start", "end", "qualifiers"])
 
 

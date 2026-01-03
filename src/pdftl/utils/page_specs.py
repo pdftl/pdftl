@@ -12,29 +12,32 @@ Public:
 PageTransform
 PageSpec
 
+parse_specs(specs, total_pages) -> Generator[PageSpec]
+parse_compound_page_spec(spec_str) -> list[str]
+parse_sub_page_spec(spec, total_pages) -> PageSpec
+
 expand_specs_to_pages(specs, aliases=None, inputs=None, opened_pdfs=None)
   -> [PageTransform]
-parse_page_spec(spec, total_pages) -> PageSpec
+
 page_number_matches_page_spec(n, page_spec_str, total_pages) -> bool
 page_numbers_matching_page_spec(page_spec, total_pages) -> [int]
 page_numbers_matching_page_specs(specs, total_pages) -> [int]
-
 """
 
 import logging
 import math
 import re
 from dataclasses import dataclass
-
-logger = logging.getLogger(__name__)
-
 from typing import TYPE_CHECKING
+from collections.abc import Generator
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
 from pdftl.core.registry import register_help_topic
 from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -43,7 +46,7 @@ class PageTransform:
 
     pdf: "Pdf"
     index: int
-    rotation: (int | float, bool)
+    rotation: tuple[int | float, bool]
     scale: float
 
 
@@ -83,8 +86,6 @@ ROTATION_MAP = {
 # Set of supported page qualifiers.
 QUALIFIER_MAP = {"even", "odd"}
 
-# FIXME: can "right" be confused with "r" here?
-# generate test cases
 SPEC_REGEX = re.compile(
     r"""
     ^                     # Anchor to the start of the string
@@ -103,155 +104,78 @@ SPEC_REGEX = re.compile(
 )
 
 
-def _handle_no_specs(inputs, opened_pdfs) -> [PageTransform]:
+# --- Internal Parsing Helpers ---
+
+
+def _expand_square_brackets(specs: list[str]) -> list[str]:
     """
-    Generates a list of PageTransform s for all pages of all inputs when no spec is given.
+    Expands Group Syntax: `[A,B]mod` -> `Amod, Bmod`.
+    Raises UserCommandLineError if the spec is ambiguous (e.g. `[1,2]x2,3`).
     """
-    page_tuples = []
-    for input_idx in range(len(inputs)):
-        pdf = opened_pdfs[input_idx]
-        for i in range(len(pdf.pages)):
-            # Append a 4-item tuple with default rotation and scale
-            page_tuples.append(PageTransform(pdf=pdf, index=i, rotation=(0, False), scale=1.0))
-    return page_tuples
+    expanded = []
+    # Matches [content]suffix
+    group_re = re.compile(r"^\[([^\]]+)\](.*)$")
+
+    for spec in specs:
+        if spec is None:
+            continue
+        spec = spec.strip()
+        match = group_re.match(spec)
+
+        if match:
+            content, suffix = match.groups()
+
+            # Guardrail: If the suffix contains a comma, the user likely forgot a space.
+            if "," in suffix:
+                raise UserCommandLineError(
+                    f"Invalid page spec: '{spec}'.\n"
+                    f"Found a comma after the closing bracket (in '{suffix}').\n"
+                    "Please separate distinct page specifications with spaces.\n"
+                    "Example: Use '[1,2]x3 6x2' instead of '[1,2]x3,6x2'."
+                )
+
+            # 1. Split the inner content by comma
+            sub_specs = [s.strip() for s in content.split(",") if s.strip()]
+
+            # 2. Distribute the suffix to every item
+            for sub in sub_specs:
+                expanded.append(f"{sub}{suffix}")
+        else:
+            expanded.append(spec)
+
+    return expanded
 
 
-def _resolve_alias_and_spec(spec, opened_pdfs_by_alias, default_alias):
+def _flatten_spec_list(specs: list[str]) -> list[str]:
     """
-    Determines the correct PDF object and page spec string from a full spec string.
-    e.g., "A1-5" -> (pdf_A, "1-5", "A")
+    Takes a list of spec strings (which may contain commas) and returns
+    a flat list of atomic spec strings.
+    e.g. ["1,3", "5-7"] -> ["1", "3", "5-7"]
     """
-    if spec and spec.startswith("_"):
-        alias = default_alias
-        page_spec_full = spec[1:]
-    elif spec and spec[0].isalpha() and spec[0].upper() in opened_pdfs_by_alias:
-        alias = spec[0].upper()
-        page_spec_full = spec[1:]
-    else:
-        alias = default_alias
-        page_spec_full = spec
+    flat = []
+    for s in specs:
+        if s is None:
+            continue
 
-    if not alias or alias not in opened_pdfs_by_alias:
-        raise UserCommandLineError(f"Cannot determine a valid alias for spec '{spec}'")
+        # If the string is empty or just whitespace, we treat it as an empty spec
+        # (which parse_sub_page_spec interprets as 'all pages').
+        if s.strip() == "":
+            flat.append("")
+            continue
 
-    pdf = opened_pdfs_by_alias[alias]
-    return pdf, page_spec_full, alias
-
-
-def _filter_page_numbers(page_numbers, qualifiers, omissions):
-    """
-    Applies even/odd and omission filters to a list of 1-based page numbers.
-    """
-    if "even" in qualifiers:
-        page_numbers = [p for p in page_numbers if p % 2 == 0]
-    if "odd" in qualifiers:
-        page_numbers = [p for p in page_numbers if p % 2 != 0]
-
-    for om_start, om_end in omissions:
-        page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
-    return page_numbers
-
-
-def _create_page_tuples_from_numbers(
-    page_numbers, pdf, rotate, scale, spec_for_error
-) -> [PageTransform]:
-    """
-    Validates page numbers (1-based) and creates the final list of page tuples.
-    """
-    new_tuples = []
-    total_pages = len(pdf.pages)
-    pdf_filename = (
-        pdf.filename
-        if hasattr(pdf, "filename") and pdf.filename != "empty PDF"
-        else "pipeline PDF"
-    )
-
-    for page_num in page_numbers:
-        if not 1 <= page_num <= total_pages:
-            raise UserCommandLineError(
-                f"Invalid page.\n  "
-                f"Page spec '{spec_for_error}' includes page {page_num} but "
-                f"there are only {total_pages} pages in {pdf_filename}"
-            )
-        # Convert 1-based page_num to 0-based index for pikepdf and append
-        new_tuples.append(PageTransform(pdf=pdf, index=page_num - 1, rotation=rotate, scale=scale))
-    return new_tuples
-
-
-def expand_specs_to_pages(specs, aliases=None, inputs=None, opened_pdfs=None) -> [PageTransform]:
-    """
-    Expand pdftk-style page specs into an array of PageTransform
-    """
-    aliases = aliases or {}
-    opened_pdfs = opened_pdfs or {}
-
-    logger.debug("specs=%s, aliases=%s, inputs=%s", specs, aliases, inputs)
-
-    if not inputs:
-        raise ValueError("inputs were not passed in expand_specs_to_pages")
-
-    # The opened_pdfs dict maps an input index to a pikepdf.Pdf object.
-    # The aliases dict maps a string (e.g., 'A') to an input index (e.g., 0).
-    default_alias = "DEFAULT"
-    aliases[default_alias] = 0
-    opened_pdfs_by_alias = {alias: opened_pdfs[idx] for alias, idx in aliases.items()}
-
-    # Handle the simple case of no specs first and exit early.
-    if not specs:
-        page_tuples = _handle_no_specs(inputs, opened_pdfs)
-        logger.debug("No specs provided, expanded to %s pages.", len(page_tuples))
-        return page_tuples
-
-    page_tuples = []
-    for spec_str in specs:
-        page_tuples.extend(
-            _new_tuples_from_spec_str(spec_str, opened_pdfs_by_alias, default_alias)
-        )
-
-    logger.debug("Total specs expanded to %s pages.", len(page_tuples))
-    return page_tuples
-
-
-def _new_tuples_from_spec_str(spec_str, opened_pdfs_by_alias, default_alias) -> [PageTransform]:
-    # Step 1: Isolate the logic for determining the PDF and page spec.
-    pdf, page_spec_full, alias = _resolve_alias_and_spec(
-        spec_str, opened_pdfs_by_alias, default_alias
-    )
-
-    # Step 2: Parse the page spec string into its component parts.
-    page_spec = parse_page_spec(page_spec_full, len(pdf.pages))
-
-    # Step 3: Generate the initial list of 1-based page numbers for the full range.
-    step = 1 if page_spec.start <= page_spec.end else -1
-    initial_page_numbers = list(range(page_spec.start, page_spec.end + step, step))
-
-    # Step 4: Isolate the filtering logic.
-    final_page_numbers = _filter_page_numbers(
-        initial_page_numbers, page_spec.qualifiers, page_spec.omissions
-    )
-
-    # Step 5: Isolate the validation and final tuple creation.
-    new_tuples = _create_page_tuples_from_numbers(
-        final_page_numbers, pdf, page_spec.rotate, page_spec.scale, spec_str
-    )
-    logger.debug(
-        "Spec '%s' expanded to %s pages from alias '%s'.",
-        spec_str,
-        len(new_tuples),
-        alias,
-    )
-    return new_tuples
+        # Split by comma and strip whitespace
+        parts = [p.strip() for p in s.split(",") if p.strip()]
+        flat.extend(parts)
+    return flat
 
 
 def _resolve_page_token(token_str, is_reverse, total_pages):
-    """Converts a string token ('end', '5') into an absolute page number.
-    If None is passed, return None."""
     if token_str is None:
         return None
     is_end_token = token_str.lower() == "end"
     if is_reverse:
         if is_end_token:
-            return 1  # 'rend' means page 1, just as 'r1' means last page
+            return 1  # 'rend' means page 1
         return total_pages - int(token_str) + 1
     if is_end_token:
         return total_pages
@@ -259,7 +183,6 @@ def _resolve_page_token(token_str, is_reverse, total_pages):
 
 
 def _parse_range_part(spec, total_pages):
-    """Parses the 'start-end' part of the spec string."""
     range_match = SPEC_REGEX.match(spec)
     if not range_match:
         raise InvalidArgumentError(f"Invalid page spec format: {spec}")
@@ -267,11 +190,9 @@ def _parse_range_part(spec, total_pages):
     start_is_rev, start_str, end_is_rev, end_str, modifier_str = range_match.groups()
 
     if start_str is not None or end_str is not None:
-        # pdftk.java seems to default to 0, so we replicate that behavior.
         start = _resolve_page_token(start_str, start_is_rev, total_pages) or 0
         end = _resolve_page_token(end_str, end_is_rev, total_pages) or start
     else:
-        # If no range is specified, it applies to all pages.
         start, end = 1, total_pages
 
     if start <= 0:
@@ -284,9 +205,7 @@ def _parse_range_part(spec, total_pages):
 
 
 def _parse_qualifiers(modifier_str):
-    """Extracts 'even' or 'odd' qualifiers from the modifier string."""
     qualifiers = set()
-    # Using a loop with replace ensures we find all occurrences, same as original
     for qual in QUALIFIER_MAP:
         if qual in modifier_str:
             qualifiers.add(qual)
@@ -295,20 +214,14 @@ def _parse_qualifiers(modifier_str):
 
 
 def _parse_rotation(modifier_str):
-    """Extracts a rotation modifier from the string."""
-
-    # The original debug helper function
-
     for key, value in ROTATION_MAP.items():
         if key in modifier_str:
             return value, modifier_str.replace(key, "", 1)
-    return (0, False), modifier_str  # Default value
+    return (0, False), modifier_str
 
 
 def _parse_scaling(modifier_str):
-    """Extracts 'x' and 'z' scaling modifiers and combines them."""
     scale = 1.0
-
     # Find 'x' scaling
     scale_re = re.compile(r"x([+-]?\d*\.?\d+)")
     scale_match = scale_re.search(modifier_str)
@@ -331,7 +244,6 @@ def _parse_scaling(modifier_str):
 
 
 def _parse_omissions(modifier_str, total_pages):
-    """Parses and resolves page omission sub-specs (e.g., '~1-5')."""
     omissions = []
     omit_re = re.compile(r"^(~([^~]*))")
 
@@ -340,13 +252,13 @@ def _parse_omissions(modifier_str, total_pages):
         omit_match = omit_re.match(remaining_str)
         if not omit_match:
             raise InvalidArgumentError(
-                f"Invalid part '{remaining_str}' should start with ~ " f"while parsing omissions."
+                f"Invalid part '{remaining_str}' should start with ~ while parsing omissions."
             )
 
         omit_range_str = omit_match.group(2)
         if omit_range_str:
-            # Recursive call to the main public function, preserving original behavior
-            omit_page_spec = parse_page_spec(omit_range_str, total_pages)
+            # Recursive call to the atomic parser
+            omit_page_spec = parse_sub_page_spec(omit_range_str, total_pages)
             omissions.append(tuple(sorted((omit_page_spec.start, omit_page_spec.end))))
 
         remaining_str = omit_re.sub("", remaining_str, 1)
@@ -354,38 +266,38 @@ def _parse_omissions(modifier_str, total_pages):
     return omissions, remaining_str
 
 
-def parse_page_spec(spec, total_pages) -> PageSpec:
-    """
-    Parses a pdftk-style page specification for page ranges, rotation,
-    scaling (including x and z modifiers), and qualifiers, including reverse
-    page numbers (e.g., r1, r3-r1).
+# --- Public API ---
 
-    Returns: a PageSpec, with fields:
-    start, end, rotate, scale, qualifiers, omissions
-    """
 
+def parse_compound_page_spec(spec_str: str) -> list[str]:
+    """
+    Parses a single potentially complex spec string (like "[1,2]x2" or "1,5")
+    into a flat list of atomic spec strings (like ["1x2", "2x2"] or ["1", "5"]).
+    """
+    # Wrap in list because _expand_square_brackets expects a list of args
+    grouped = _expand_square_brackets([spec_str])
+    return _flatten_spec_list(grouped)
+
+
+def parse_sub_page_spec(spec, total_pages) -> PageSpec:
+    """
+    Parses a SINGLE atomic pdftk-style page specification.
+
+    WARNING: This does NOT handle commas or brackets.
+    Use parse_specs or parse_compound_page_spec for full support.
+
+    Returns: a PageSpec object.
+    """
     logger.debug("spec=%s, total_pages=%s", spec, total_pages)
 
-    # 1. Parse the primary page range (e.g., '1-10', 'r5-end')
+    # 1. Parse the primary page range
     start, end, modifier_str = _parse_range_part(spec, total_pages)
 
-    # 2. Sequentially parse all modifiers from the remaining string.
-    #    The order of these operations is critical and preserved from the original.
+    # 2. Sequentially parse modifiers
     qualifiers, modifier_str = _parse_qualifiers(modifier_str.lower())
     rotate, modifier_str = _parse_rotation(modifier_str)
     scale, modifier_str = _parse_scaling(modifier_str)
     omissions, modifier_str = _parse_omissions(modifier_str, total_pages)
-
-    logger.debug("finally, modifier_str=%s", modifier_str)
-    logger.debug(
-        "start=%s, end=%s, rotate=%s, scale=%s, qualifiers=%s, omissions=%s",
-        start,
-        end,
-        rotate,
-        scale,
-        qualifiers,
-        omissions,
-    )
 
     return PageSpec(
         start=start,
@@ -397,56 +309,194 @@ def parse_page_spec(spec, total_pages) -> PageSpec:
     )
 
 
+def parse_specs(specs: list[str], total_pages: int) -> Generator[PageSpec, None, None]:
+    """
+    The Smart Funnel.
+
+    Takes a list of raw spec strings (from CLI arguments), handles
+    group expansion ([1,2]x2) and comma splitting (1,3), and yields
+    parsed PageSpec objects one by one.
+
+    This is the preferred entry point for commands like rotate, spin, etc.
+    """
+    # 1. Expand Groups: [1,2]x2 -> 1x2, 2x2
+    grouped_specs = _expand_square_brackets(specs)
+
+    # 2. Flatten commas: "1,3" -> "1", "3"
+    flattened_specs = _flatten_spec_list(grouped_specs)
+
+    for spec_str in flattened_specs:
+        yield parse_sub_page_spec(spec_str, total_pages)
+
+
+def expand_specs_to_pages(
+    specs, aliases=None, inputs=None, opened_pdfs=None
+) -> list[PageTransform]:
+    """
+    Expand pdftk-style page specs into an array of PageTransform objects.
+    Used primarily by the 'cat' command.
+    """
+    aliases = aliases or {}
+    opened_pdfs = opened_pdfs or {}
+
+    if not inputs:
+        raise ValueError("inputs were not passed in expand_specs_to_pages")
+
+    default_alias = "DEFAULT"
+    aliases[default_alias] = 0
+    opened_pdfs_by_alias = {alias: opened_pdfs[idx] for alias, idx in aliases.items()}
+
+    if not specs:
+        return _handle_no_specs(inputs, opened_pdfs)
+
+    # Reuse the logic of expanding groups and flattening lists
+    grouped_specs = _expand_square_brackets(specs)
+    flattened_specs = _flatten_spec_list(grouped_specs)
+
+    page_tuples = []
+    for spec_str in flattened_specs:
+        page_tuples.extend(
+            _new_tuples_from_spec_str(spec_str, opened_pdfs_by_alias, default_alias)
+        )
+
+    return page_tuples
+
+
+# --- Internal Cat Helpers ---
+
+
+def _handle_no_specs(inputs, opened_pdfs) -> list[PageTransform]:
+    page_tuples = []
+    for input_idx in range(len(inputs)):
+        pdf = opened_pdfs[input_idx]
+        for i in range(len(pdf.pages)):
+            page_tuples.append(PageTransform(pdf=pdf, index=i, rotation=(0, False), scale=1.0))
+    return page_tuples
+
+
+def _resolve_alias_and_spec(spec, opened_pdfs_by_alias, default_alias):
+    if spec and spec.startswith("_"):
+        alias = default_alias
+        page_spec_full = spec[1:]
+    elif spec and spec[0].isalpha() and spec[0].upper() in opened_pdfs_by_alias:
+        alias = spec[0].upper()
+        page_spec_full = spec[1:]
+    else:
+        alias = default_alias
+        page_spec_full = spec
+
+    if not alias or alias not in opened_pdfs_by_alias:
+        raise UserCommandLineError(f"Cannot determine a valid alias for spec '{spec}'")
+
+    pdf = opened_pdfs_by_alias[alias]
+    return pdf, page_spec_full, alias
+
+
+def _filter_page_numbers(page_numbers, qualifiers, omissions):
+    if "even" in qualifiers:
+        page_numbers = [p for p in page_numbers if p % 2 == 0]
+    if "odd" in qualifiers:
+        page_numbers = [p for p in page_numbers if p % 2 != 0]
+
+    for om_start, om_end in omissions:
+        page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
+    return page_numbers
+
+
+def _create_page_tuples_from_numbers(
+    page_numbers, pdf, rotate, scale, spec_for_error
+) -> list[PageTransform]:
+    new_tuples = []
+    total_pages = len(pdf.pages)
+    pdf_filename = (
+        pdf.filename
+        if hasattr(pdf, "filename") and pdf.filename != "empty PDF"
+        else "pipeline PDF"
+    )
+
+    for page_num in page_numbers:
+        if not 1 <= page_num <= total_pages:
+            raise UserCommandLineError(
+                f"Invalid page.\n  "
+                f"Page spec '{spec_for_error}' includes page {page_num} but "
+                f"there are only {total_pages} pages in {pdf_filename}"
+            )
+        new_tuples.append(PageTransform(pdf=pdf, index=page_num - 1, rotation=rotate, scale=scale))
+    return new_tuples
+
+
+def _new_tuples_from_spec_str(
+    spec_str, opened_pdfs_by_alias, default_alias
+) -> list[PageTransform]:
+    pdf, page_spec_full, alias = _resolve_alias_and_spec(
+        spec_str, opened_pdfs_by_alias, default_alias
+    )
+
+    # Use the atomic parser here
+    page_spec = parse_sub_page_spec(page_spec_full, len(pdf.pages))
+
+    step = 1 if page_spec.start <= page_spec.end else -1
+    initial_page_numbers = list(range(page_spec.start, page_spec.end + step, step))
+
+    final_page_numbers = _filter_page_numbers(
+        initial_page_numbers, page_spec.qualifiers, page_spec.omissions
+    )
+
+    new_tuples = _create_page_tuples_from_numbers(
+        final_page_numbers, pdf, page_spec.rotate, page_spec.scale, spec_str
+    )
+    return new_tuples
+
+
+# --- Query Helpers ---
+
+
 def page_number_matches_page_spec(n, page_spec_str, total_pages) -> bool:
     """
     Does page n fall within the given pdftk-style page specification?
-    See parse_page_spec for details of the page spec format.
-
-    Returns:
-    True or False
+    Supports comma-separated specs (e.g., "1,3,5").
     """
-    p = parse_page_spec(page_spec_str, total_pages)
+    # Use public helper to handle commas/brackets if any
+    specs = parse_compound_page_spec(page_spec_str)
 
-    (start, end) = (p.start, p.end) if p.start <= p.end else (p.end, p.start)
+    for s in specs:
+        p = parse_sub_page_spec(s, total_pages)
+        (start, end) = (p.start, p.end) if p.start <= p.end else (p.end, p.start)
 
-    if "even" in p.qualifiers and n % 2 == 1:
-        return False
-    if "odd" in p.qualifiers and n % 2 == 0:
-        return False
-    if n < start or n > end:
-        return False
-    return all(n < omission[0] or n > omission[1] for omission in p.omissions)
+        if "even" in p.qualifiers and n % 2 == 1:
+            continue
+        if "odd" in p.qualifiers and n % 2 == 0:
+            continue
+        if n < start or n > end:
+            continue
+        if any(omission[0] <= n <= omission[1] for omission in p.omissions):
+            continue
+
+        return True  # Matched this sub-spec
+
+    return False
 
 
-def page_numbers_matching_page_spec(page_spec, total_pages) -> [int]:
-    """
-    Return all page numbers which fall within the given
-    pdftk-style page specification.
-
-    See parse_page_spec for details of the page spec format.
-
-    Returns:
-    an array of page numbers (starting at 1)
-
-    """
+def page_numbers_matching_page_spec(page_spec, total_pages) -> list[int]:
+    """Return all page numbers which fall within the given spec."""
     return page_numbers_matching_page_specs([page_spec], total_pages)
 
 
-def page_numbers_matching_page_specs(specs, total_pages) -> [int]:
-    """
-    Return all page numbers which fall within any of the given
-    pdftk-style page specifications.
+def page_numbers_matching_page_specs(specs, total_pages) -> list[int]:
+    """Return all page numbers which fall within any of the given specs."""
+    # Flatten via internal or public helpers
+    flattened_specs = []
+    # If specs is just a list of strings, we can run them through expansion
+    grouped = _expand_square_brackets(specs)
+    flattened_specs = _flatten_spec_list(grouped)
 
-    See parse_page_spec for details of the page spec format.
-
-    Returns:
-    an array of page numbers (starting at 1)
-
-    """
     return [
         n
         for n in range(1, total_pages + 1)
-        if any(page_number_matches_page_spec(n, page_spec, total_pages) for page_spec in specs)
+        if any(
+            page_number_matches_page_spec(n, page_spec, total_pages)
+            for page_spec in flattened_specs
+        )
     ]
 
 
@@ -476,6 +526,8 @@ def _help_topic_page_specs():
 
     A page range defines the starting and ending page
     numbers. If omitted, the specification applies to all pages.
+
+    Multiple ranges can be separated by commas (e.g. `1,3,5-10`).
 
     A page identifier can be:
 
@@ -569,6 +621,17 @@ def _help_topic_page_specs():
     number). For example, z1 will scale A4 pages up to A3, and
     `z-1` scales A4 pages down to A5.
 
+    #### Groups (Applies to all contents)
+
+    `[<Range>, <Range>]<Modifier>`: Applies the modifier to the entire
+    disjoint set of pages.
+
+    Example: `[1-3, 5]x2` scales pages 1, 2, 3, and 5.
+
+    **Note:** Group specifications must be distinct arguments. You cannot
+    combine them with other ranges using commas (e.g. `[1,2]x3,6x2` is invalid).
+    Use spaces instead: `[1,2]x3 6x2`.
+
     ### Examples
 
     `1-5eastx2` selects pages 1 through 5, rotating them 90
@@ -589,5 +652,9 @@ def _help_topic_page_specs():
     same goes for `~3-5`).
 
     `end-r4` selects the last 4 pages, in reverse order.
+
+    `1,3,5` selects pages 1, 3, and 5.
+
+    `[1,3,5]x2` selects pages 1, 3, and 5 and scales them all.
 
     """

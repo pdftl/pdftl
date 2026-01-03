@@ -7,15 +7,14 @@
 """Method(s) for geometric transformations of PDF pages"""
 
 import logging
+from typing import TYPE_CHECKING, Union
 
 logger = logging.getLogger(__name__)
-
-from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from pikepdf import Array, Pdf
 
-from pdftl.utils.page_specs import page_numbers_matching_page_spec, parse_page_spec
+from pdftl.utils.page_specs import parse_specs
 from pdftl.utils.scale import apply_scaling
 
 
@@ -26,19 +25,45 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
     IMPORTANT: This function opens the PDF and modifies it in-memory.
 
     Returns:
-       A pikepdf.Pdf object with the transformations applied in memory.
-       The caller is responsible for saving this object to a file.
+        A pikepdf.Pdf object with the transformations applied in memory.
+        The caller is responsible for saving this object to a file.
     """
     total_pages = len(source_pdf.pages)
 
-    for spec_str in specs:
-        page_spec = parse_page_spec(spec_str, total_pages)
+    # The parse_specs generator handles commas and brackets, yielding
+    # atomic PageSpec objects one by one.
+    for page_spec in parse_specs(specs, total_pages):
+
+        # 1. Generate the list of target pages from the PageSpec object
+        step = 1 if page_spec.start <= page_spec.end else -1
+
+        # Inclusive range (end + step)
+        page_numbers = list(range(page_spec.start, page_spec.end + step, step))
+
+        # 2. Filter: Qualifiers (Even/Odd)
+        if "even" in page_spec.qualifiers:
+            page_numbers = [p for p in page_numbers if p % 2 == 0]
+        if "odd" in page_spec.qualifiers:
+            page_numbers = [p for p in page_numbers if p % 2 != 0]
+
+        # 3. Filter: Omissions
+        # Omissions are stored as list of (start, end) tuples in the PageSpec
+        for om_start, om_end in page_spec.omissions:
+            page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
+
+        # 4. Apply Transformations
         (angle, relative), scale = page_spec.rotate, page_spec.scale
 
-        for i in page_numbers_matching_page_spec(spec_str, total_pages):
+        for i in page_numbers:
+            # i is 1-based, pikepdf is 0-based
             page = source_pdf.pages[i - 1]
+
             if scale != 1.0:
                 apply_scaling(page, scale)
+
+            # Apply rotation if it is non-zero (or if it is a relative 0, though that's a no-op)
+            # Optimization: 0-degree relative rotation does nothing, but we pass it anyway
+            # to keep logic simple unless strict performance is needed.
             page.rotate(angle, relative=relative)
 
     return source_pdf

@@ -25,7 +25,7 @@ from pdftl.utils.page_specs import (
     page_number_matches_page_spec,
     page_numbers_matching_page_spec,
     page_numbers_matching_page_specs,
-    parse_page_spec,
+    parse_sub_page_spec,
 )
 
 # --- Total Pages constant for most tests ---
@@ -133,9 +133,9 @@ def test_parse_scaling_invalid():
 )
 def test_parse_omissions(modifier_str, expected_omissions, expected_remaining):
     """Tests parsing omission strings like '~1-5'."""
-    # We patch the main parse_page_spec function that _parse_omissions
+    # We patch the main parse_sub_page_spec function that _parse_omissions
     # calls recursively.
-    with patch("pdftl.utils.page_specs.parse_page_spec") as mock_parse:
+    with patch("pdftl.utils.page_specs.parse_sub_page_spec") as mock_parse:
         # Define the side effects for the recursive calls
         if "~even" in modifier_str:
             mock_parse.return_value = PageSpec(1, 10, (0, False), 1.0, {"even"}, [])
@@ -165,7 +165,7 @@ def test_parse_omissions_invalid_token():
         _parse_omissions("foo", TOTAL_PAGES)
 
 
-# --- Test for Core Parser: parse_page_spec ---
+# --- Test for Core Parser: parse_sub_page_spec ---
 
 
 @pytest.mark.parametrize(
@@ -205,8 +205,8 @@ def test_parse_omissions_invalid_token():
         ),
     ],
 )
-def test_parse_page_spec_valid(spec, total_pages, expected_spec):
-    """Tests the main parse_page_spec function with various valid inputs."""
+def test_parse_sub_page_spec_valid(spec, total_pages, expected_spec):
+    """Tests the main parse_sub_page_spec function with various valid inputs."""
     # We patch the _parse_omissions helper to simplify the test
     with patch("pdftl.utils.page_specs._parse_omissions") as mock_omissions:
         # Set the mock return for the complex case
@@ -215,7 +215,7 @@ def test_parse_page_spec_valid(spec, total_pages, expected_spec):
         else:
             mock_omissions.return_value = ([], "")  # Default return
 
-        result = parse_page_spec(spec, total_pages)
+        result = parse_sub_page_spec(spec, total_pages)
 
         # Compare all fields of the dataclass
         assert result.start == expected_spec.start
@@ -228,10 +228,10 @@ def test_parse_page_spec_valid(spec, total_pages, expected_spec):
 
 # --- Removed 'r0' from this test ---
 @pytest.mark.parametrize("spec", ["0-5", "0"])
-def test_parse_page_spec_invalid_range(spec):
+def test_parse_sub_page_spec_invalid_range(spec):
     """Tests that a 0 or negative page number raises an error."""
     with pytest.raises(InvalidArgumentError, match="Valid page numbers start at 1"):
-        parse_page_spec(spec, TOTAL_PAGES)
+        parse_sub_page_spec(spec, TOTAL_PAGES)
 
 
 def test_parse_range_part_invalid():

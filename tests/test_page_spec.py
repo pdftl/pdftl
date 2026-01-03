@@ -5,7 +5,7 @@ import pytest
 from pdftl.exceptions import InvalidArgumentError
 
 # We must import the PageSpec class to construct our expected results
-from pdftl.utils.page_specs import page_numbers_matching_page_spec, parse_page_spec
+from pdftl.utils.page_specs import page_numbers_matching_page_spec, parse_sub_page_spec
 
 # =======================================================================
 #  Tests for page_numbers_matching_page_spec
@@ -94,7 +94,7 @@ def test_page_spec_invalid(invalid_spec):
 
 
 # =======================================================================
-#  Tests for parse_page_spec (The Core Parser)
+#  Tests for parse_sub_page_spec (The Core Parser)
 #
 #  This tests the function that returns the PageSpec data structure.
 # =======================================================================
@@ -122,17 +122,17 @@ def test_page_spec_invalid(invalid_spec):
         ("evenodd", 5, {"start": 1, "end": 5, "qualifiers": {"even", "odd"}}),
     ],
 )
-def test_parse_page_spec(spec, total_pages, expected_fields):
+def test_parse_sub_page_spec(spec, total_pages, expected_fields):
     """
     Tests the core parser that returns the PageSpec data structure.
     """
     # 1. Get a "default" PageSpec object by parsing a simple case.
     #    This is safer than assuming the defaults.
     #    We use a known simple spec like "1-1" on 1 page.
-    default_spec = parse_page_spec("1-1", 1)
+    default_spec = parse_sub_page_spec("1-1", 1)
 
     # 2. Get the actual result from the test spec
-    result = parse_page_spec(spec, total_pages)
+    result = parse_sub_page_spec(spec, total_pages)
 
     # 3. Check all fields, comparing to the 'expected_fields' dict
     #    and falling back to the 'default_spec' for any field

@@ -14,12 +14,12 @@ The Fluent API uses method chaining to build readable, multi-step processing pip
 from pdftl import pipeline
 
 # 1. Open a PDF
-# 2. Rotate all pages 90 degrees
+# 2. Rotate all pages right 90 degrees
 # 3. Crop pages 1-5 to a 10pt margin
 # 4. Save the result
 (
     pipeline("input.pdf")
-    .rotate(90)
+    .rotate("right")
     .crop("1-5(10pt)")
     .save("output.pdf")
 )

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pikepdf import Array
 
 from pdftl.core.constants import UNITS
-from pdftl.utils.page_specs import parse_page_spec
+from pdftl.utils.page_specs import parse_specs
 
 MAX_PIECES = 10_000
 
@@ -59,31 +59,46 @@ def parse_chop_specs_to_rules(specs, total_pages):
     """
     page_rules = {}
 
-    # 1. Pre-process specs to handle 'even'/'odd' keywords cleanly.
+    # 1. Pre-process specs to handle legacy 'even'/'odd' keywords.
+    #    e.g. "odd 1-5rows2".
+    #    New syntax like "[1-5]oddrows2" is handled by parse_specs naturally.
     grouped_specs = _group_specs_with_qualifiers(specs)
 
-    for spec_str, keyword_qualifiers in grouped_specs:
+    for spec_str, keyword_qualifier in grouped_specs:
+
         # 2. Split the spec into its two main parts.
+        #    e.g. "1-5rows2" -> "1-5", "rows2"
+        #    e.g. "1,3rows2" -> "1,3", "rows2"
         page_range_part, chop_part = _split_spec_string(spec_str)
 
-        # 3. Parse the page range to get numbers and a potential qualifier.
-        page_spec = parse_page_spec(page_range_part, total_pages)
-        start, end, range_qualifiers = (
-            page_spec.start,
-            page_spec.end,
-            page_spec.qualifiers,
-        )
+        # 3. Use the central parser to resolve the page selection.
+        #    We pass the page_range_part as a single-element list.
+        for page_spec in parse_specs([page_range_part], total_pages):
 
-        # 4. Determine the final qualifier (the range qualifier takes precedence).
-        final_qualifiers = range_qualifiers or keyword_qualifiers
+            # 4. Generate the list of affected page numbers from the PageSpec
+            step = 1 if page_spec.start <= page_spec.end else -1
+            page_numbers = list(range(page_spec.start, page_spec.end + step, step))
 
-        # 5. Generate the list of affected page numbers.
-        page_numbers = _get_qualified_page_numbers(start, end, final_qualifiers)
+            # Filter: Internal Qualifiers (from [1-5]even syntax)
+            if "even" in page_spec.qualifiers:
+                page_numbers = [p for p in page_numbers if p % 2 == 0]
+            if "odd" in page_spec.qualifiers:
+                page_numbers = [p for p in page_numbers if p % 2 != 0]
 
-        # 6. Apply the chop rule to the generated pages.
-        for p_num in page_numbers:
-            # Convert from 1-based page number to 0-based index.
-            page_rules[p_num - 1] = chop_part
+            # Filter: External Keyword Qualifier (legacy "even 1-5..." syntax)
+            if keyword_qualifier == "even":
+                page_numbers = [p for p in page_numbers if p % 2 == 0]
+            elif keyword_qualifier == "odd":
+                page_numbers = [p for p in page_numbers if p % 2 != 0]
+
+            # Filter: Omissions
+            for om_start, om_end in page_spec.omissions:
+                page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
+
+            # 5. Apply the chop rule to the generated pages.
+            for p_num in page_numbers:
+                # Convert from 1-based page number to 0-based index.
+                page_rules[p_num - 1] = chop_part
 
     return page_rules
 
@@ -131,19 +146,7 @@ def _split_spec_string(spec_str):
     return page_range_part, chop_part
 
 
-def _get_qualified_page_numbers(start, end, qualifier):
-    """
-    Generates a list of page numbers for a given range, filtered by a qualifier.
-    """
-    step = 1 if start <= end else -1
-    full_range = list(range(start, end + step, step))
-
-    if qualifier == "even":
-        return [p for p in full_range if p % 2 == 0]
-    if qualifier == "odd":
-        return [p for p in full_range if p % 2 != 0]
-
-    return full_range
+# _get_qualified_page_numbers removed (logic moved to main loop)
 
 
 ##################################################

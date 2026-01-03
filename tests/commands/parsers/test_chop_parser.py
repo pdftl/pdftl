@@ -202,19 +202,6 @@ def test_split_spec_string_no_match():
 
 
 # ---------------------------
-# _get_qualified_page_numbers
-# ---------------------------
-
-
-def test_get_qualified_page_numbers_even_odd():
-    assert cp._get_qualified_page_numbers(1, 6, "even") == [2, 4, 6]
-    assert cp._get_qualified_page_numbers(1, 6, "odd") == [1, 3, 5]
-    assert cp._get_qualified_page_numbers(1, 3, None) == [1, 2, 3]
-    # reversed range
-    assert cp._get_qualified_page_numbers(5, 3, None) == [5, 4, 3]
-
-
-# ---------------------------
 # _group_specs_with_qualifiers
 # ---------------------------
 
@@ -243,20 +230,23 @@ class DummyPageSpec:
     def __init__(self, start, end, qualifiers=None):
         self.start = start
         self.end = end
-        self.qualifiers = qualifiers
+        self.qualifiers = qualifiers if qualifiers is not None else set()
+        self.omissions = []
 
 
 @pytest.fixture(autouse=True)
-def mock_parse_page_spec(monkeypatch):
+def mock_parse_sub_page_spec(monkeypatch):
     def dummy_parse(spec_str, total_pages):
-        # simulate parse_page_spec returning an object with start/end/qualifiers
+        # simulate parse_sub_page_spec returning an object with start/end/qualifiers
         if spec_str == "1-3":
             return DummyPageSpec(1, 3, None)
         if spec_str == "4-6":
             return DummyPageSpec(4, 6, "even")
         return DummyPageSpec(1, total_pages, None)
 
-    monkeypatch.setattr(cp, "parse_page_spec", dummy_parse)
+    import pdftl.utils.page_specs
+
+    monkeypatch.setattr(pdftl.utils.page_specs, "parse_sub_page_spec", dummy_parse)
     yield
 
 

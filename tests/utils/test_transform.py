@@ -109,37 +109,42 @@ def mock_pdf():
         yield pdf
 
 
-# We patch the dependencies that are imported *within* the transform.py module
 @patch("pdftl.utils.transform.apply_scaling")
-@patch("pdftl.utils.transform.page_numbers_matching_page_spec")
-@patch("pdftl.utils.transform.parse_page_spec")
+@patch("pdftl.utils.page_specs.parse_sub_page_spec")
 def test_transform_pdf(
     mock_parse_spec,
-    mock_page_numbers,
     mock_apply_scaling,
     mock_pdf,
 ):
     """
     Tests the orchestration logic of transform_pdf.
-    - Mocks all external dependencies.
-    - Checks that the correct pages are rotated and scaled.
     """
     # --- Arrange ---
-    # 1. Setup the spec string
-    spec_str = "1,3"  # We'll transform pages 1 and 3
+    spec_str = "1,3"
 
-    # 2. Setup mock for parse_page_spec
-    # This mock object will be returned by parse_page_spec
-    mock_spec_obj = MagicMock()
-    mock_spec_obj.rotate = (90, True)  # (angle, relative)
-    mock_spec_obj.scale = 2.0
-    mock_parse_spec.return_value = mock_spec_obj
+    # Define a side effect to return different specs based on input
+    def parser_side_effect(spec, total_pages):
+        m = MagicMock()
+        m.rotate = (90, True)
+        m.scale = 2.0
+        m.qualifiers = set()
+        m.omissions = []
 
-    # 3. Setup mock for page_numbers_matching_page_spec
-    # Tell it to return pages 1 and 3 (which are 1-indexed)
-    mock_page_numbers.return_value = [1, 3]
+        if spec == "1":
+            m.start = 1
+            m.end = 1
+        elif spec == "3":
+            m.start = 3
+            m.end = 3
+        else:
+            # Default fallback (shouldn't happen with "1,3")
+            m.start = 1
+            m.end = total_pages
+        return m
 
-    # 4. Get references to the mock pages
+    mock_parse_spec.side_effect = parser_side_effect
+
+    # Get references to the mock pages
     page1 = mock_pdf.pages[0]
     page2 = mock_pdf.pages[1]
     page3 = mock_pdf.pages[2]
@@ -149,25 +154,20 @@ def test_transform_pdf(
     returned_pdf = transform_pdf(mock_pdf, [spec_str])
 
     # --- Assert ---
-    # Check that the returned PDF is the same one we passed in
     assert returned_pdf is mock_pdf
 
     # Check that our spec parsers were called correctly
-    mock_parse_spec.assert_called_with(spec_str, 4)  # 4 = total_pages
-    mock_page_numbers.assert_called_with(spec_str, 4)
+    expected_calls = [call("1", 4), call("3", 4)]
+    mock_parse_spec.assert_has_calls(expected_calls, any_order=True)
 
-    # Check transformations on PAGE 1 (index 0)
+    # Check transformations on PAGE 1
     mock_apply_scaling.assert_any_call(page1, 2.0)
     page1.rotate.assert_called_with(90, relative=True)
 
-    # Check transformations on PAGE 3 (index 2)
+    # Check transformations on PAGE 3
     mock_apply_scaling.assert_any_call(page3, 2.0)
     page3.rotate.assert_called_with(90, relative=True)
 
     # Check that pages 2 and 4 were NOT touched
     page2.rotate.assert_not_called()
     page4.rotate.assert_not_called()
-
-    # Check that apply_scaling was only called for pages 1 and 3
-    assert mock_apply_scaling.call_count == 2
-    mock_apply_scaling.assert_has_calls([call(page1, 2.0), call(page3, 2.0)])

@@ -13,9 +13,7 @@ from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import UNITS
-
-# We import the same utilities as chop_parser
-from pdftl.utils.page_specs import parse_page_spec
+from pdftl.utils.page_specs import parse_specs
 
 # Set of valid, case-insensitive preset position keywords
 PRESET_POSITIONS = {
@@ -96,54 +94,55 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
     # 1. Pre-process specs to handle 'even'/'odd' keywords cleanly.
     grouped_specs = _group_specs_with_qualifiers(specs)
 
-    for spec_str, keyword_qualifiers in grouped_specs:
-        # 2. Parse this single spec into its rules and page numbers
+    for spec_str, keyword_qualifier in grouped_specs:
         try:
-            rules_for_spec = _parse_one_spec_to_rules(spec_str, keyword_qualifiers, total_pages)
-            # 3. Merge these rules into the main dictionary
-            for page_index, rule in rules_for_spec:
-                page_rules[page_index].append(rule)
+            # 2. Split the spec into its three main parts.
+            #    e.g. "1-5/my text/(pos=top)" -> "1-5", "my text", "(pos=top)"
+            page_range_part, text_string, options_part = _split_spec_string(spec_str)
+
+            logger.debug(
+                "page_range_part='%s', text_string='%s', options_part='%s'",
+                page_range_part,
+                text_string,
+                options_part,
+            )
+
+            # 3. Parse the operation string into a structured rule dictionary ONCE.
+            rule_dict = _parse_add_text_op(text_string, options_part)
+
+            # 4. Use the central parser to resolve the page selection.
+            #    We pass the page_range_part as a single-element list.
+            for page_spec in parse_specs([page_range_part], total_pages):
+
+                # 5. Generate the list of affected page numbers
+                step = 1 if page_spec.start <= page_spec.end else -1
+                page_numbers = list(range(page_spec.start, page_spec.end + step, step))
+
+                # Filter: Internal Qualifiers (from [1-5]even syntax)
+                if "even" in page_spec.qualifiers:
+                    page_numbers = [p for p in page_numbers if p % 2 == 0]
+                if "odd" in page_spec.qualifiers:
+                    page_numbers = [p for p in page_numbers if p % 2 != 0]
+
+                # Filter: External Keyword Qualifier (legacy "even 1-5..." syntax)
+                if keyword_qualifier == "even":
+                    page_numbers = [p for p in page_numbers if p % 2 == 0]
+                elif keyword_qualifier == "odd":
+                    page_numbers = [p for p in page_numbers if p % 2 != 0]
+
+                # Filter: Omissions
+                for om_start, om_end in page_spec.omissions:
+                    page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
+
+                # 6. Apply the parsed rule to all generated page numbers.
+                for p_num in page_numbers:
+                    # Convert from 1-based page number to 0-based index.
+                    page_rules[p_num - 1].append(rule_dict)
+
         except ValueError as exc:
             raise ValueError(f"Invalid add_text spec '{spec_str}': {exc}") from exc
 
     return dict(page_rules)
-
-
-def _parse_one_spec_to_rules(spec_str: str, keyword_qualifiers: str | None, total_pages: int):
-    """
-    Parses a single spec string and returns a list of (page_index, rule) tuples.
-    This helper function exists to reduce the number of local variables in
-    the main `parse_add_text_specs_to_rules` loop.
-    """
-    # 1. Split the spec into its three main parts.
-    page_range_part, text_string, options_part = _split_spec_string(spec_str)
-    logger.debug(
-        "page_range_part='%s', text_string='%s', options_part='%s'",
-        page_range_part,
-        text_string,
-        options_part,
-    )
-
-    # 2. Parse the page range to get numbers and a potential qualifier.
-    page_spec = parse_page_spec(page_range_part, total_pages)
-    start, end, range_qualifiers = (
-        page_spec.start,
-        page_spec.end,
-        page_spec.qualifiers,
-    )
-
-    # 3. Determine the final qualifier (the range qualifier takes precedence).
-    final_qualifiers = range_qualifiers or keyword_qualifiers
-
-    # 4. Generate the list of affected page numbers.
-    page_numbers = _get_qualified_page_numbers(start, end, final_qualifiers)
-
-    # 5. Parse the operation string into a structured rule dictionary.
-    rule_dict = _parse_add_text_op(text_string, options_part)
-
-    # 6. Apply the parsed rule to all generated page numbers.
-    #    We convert from 1-based page number to 0-based index.
-    return [(p_num - 1, rule_dict) for p_num in page_numbers]
 
 
 ##################################################
@@ -597,18 +596,3 @@ def _group_specs_with_qualifiers(specs):
         else:
             grouped_specs.append((spec, None))
     return grouped_specs
-
-
-def _get_qualified_page_numbers(start, end, qualifier):
-    """
-    Generates a list of page numbers for a given range.
-    """
-    step = 1 if start <= end else -1
-    full_range = list(range(start, end + step, step))
-
-    if qualifier == "even":
-        return [p for p in full_range if p % 2 == 0]
-    if qualifier == "odd":
-        return [p for p in full_range if p % 2 != 0]
-
-    return full_range

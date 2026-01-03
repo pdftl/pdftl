@@ -178,7 +178,7 @@ A wannabe CLI compatible clone/extension of pdftk
 Usage
 
  pdftl <input>... <operation> [<option...>]
- pdftl <input>... <operation> --- <operation>... [<option...>]
+ pdftl <input>... <operation> [<option...>] --- [<input>...] <operation>... [<option...>] ...
  pdftl help [<operation> | <option>]
  pdftl help [help | sign | filter | input | --- | pages | output | example | all]
  pdftl --version
@@ -203,6 +203,7 @@ Usage
   dump_data_utf8          Metadata, page and bookmark info (in UTF-8)
   dump_dests              Print PDF named destinations data to the console
   dump_files              List file attachments
+  dump_layers             Dump layer info (JSON)
   dump_signatures         List and validate digital signatures
   dump_text               Print PDF text data to the console or a file
   fill_form               Fill a PDF form
@@ -211,6 +212,7 @@ Usage
   inject                  Inject code at start or end of page content streams
   insert                  Insert blank pages
   modify_annots           Modify properties of existing annotations
+  move                    Move pages to a new location
   multibackground         Use multiple pages as backgrounds
   multistamp              Stamp multiple pages onto an input PDF
   normalize               Reformat page content streams
@@ -252,7 +254,6 @@ Usage
   uncompress               Disable compression of output file streams
   user_pw <pw>             Set user password and encrypt output
   verbose                  Turn on verbose output
-
 ```
 
 ## Links

@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from pikepdf import Pdf, Array
 
 import pdftl.core.constants as c
-
 from pdftl.commands.parsers.crop_parser import parse_paper_spec
 from pdftl.commands.parsers.insert_parser import InsertSpec, parse_insert_args
 from pdftl.core.registry import register_operation
