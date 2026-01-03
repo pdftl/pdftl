@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [0.4.2] - 2026-01-02
+## [0.5.0] - 2026-01-03
 
 ### Added
 
@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Bates stamping variable features,
     e.g. `DEF-{page+120:06d}` produces DEF-000121, DEF-000122,
     ...
+
+- `insert` operation: insert blank pages
 
 ## [0.4.1] - 2026-01-02
 

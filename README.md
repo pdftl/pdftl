@@ -209,6 +209,7 @@ Usage
   filter                  Do nothing (the default if <operation> is absent)
   generate_fdf            Generate an FDF file containing PDF form data
   inject                  Inject code at start or end of page content streams
+  insert                  Insert blank pages
   modify_annots           Modify properties of existing annotations
   multibackground         Use multiple pages as backgrounds
   multistamp              Stamp multiple pages onto an input PDF
