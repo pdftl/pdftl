@@ -3,10 +3,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import pdftl.commands.parsers.crop_parser as cp
+from pdftl.utils.dimensions import dim_str_to_pts
 
 # ---------------------------
 # Reusable Strategies
 # ---------------------------
+
+CM_PT = 28.3464566929
 
 # Strategy for a single, simple margin value string
 st_margin_value_str = st.one_of(
@@ -38,23 +41,23 @@ def test_parse_single_margin_value_property(value, dimension):
     # Test percentages
     percent_str = f"{value}%"
     expected_percent = (value / 100.0) * dimension
-    assert pytest.approx(cp._parse_single_margin_value(percent_str, dimension)) == expected_percent
+    assert pytest.approx(dim_str_to_pts(percent_str, dimension)) == expected_percent
 
     # Test 'pt' (which is the default)
     pt_str = f"{value}"
-    assert pytest.approx(cp._parse_single_margin_value(pt_str, dimension)) == value
+    assert pytest.approx(dim_str_to_pts(pt_str, dimension)) == value
 
     # Test 'in'
     in_str = f"{value}in"
-    assert pytest.approx(cp._parse_single_margin_value(in_str, dimension)) == value * 72.0
+    assert pytest.approx(dim_str_to_pts(in_str, dimension)) == value * 72.0
 
     # Test 'cm'
     cm_str = f"{value}cm"
-    assert pytest.approx(cp._parse_single_margin_value(cm_str, dimension)) == value * 28.35
+    assert pytest.approx(dim_str_to_pts(cm_str, dimension)) == value * CM_PT
 
     # Test 'mm'
     mm_str = f"{value}mm"
-    assert pytest.approx(cp._parse_single_margin_value(mm_str, dimension)) == value * 2.835
+    assert pytest.approx(dim_str_to_pts(mm_str, dimension)) == value * CM_PT / 10
 
 
 @given(paper_spec=st_paper_sizes)
@@ -86,19 +89,19 @@ def test_parse_crop_margins_shorthand_property(parts):
 
     # We need to parse the values * ourselves* to check the logic
     # This is a bit complex but necessary to validate the test.
-    parsed_parts = [cp._parse_single_margin_value(p, page_width) for p in parts]
+    parsed_parts = [dim_str_to_pts(p, page_width) for p in parts]
 
     # Parse using the function
     left, top, right, bottom = cp.parse_crop_margins(spec_str, page_width, page_height)
 
     if len(parts) == 1:
         # 1 value: [all sides]
-        expected = cp._parse_single_margin_value(parts[0], page_width)
+        expected = dim_str_to_pts(parts[0], page_width)
         assert (left, top, right, bottom) == (expected, expected, expected, expected)
     elif len(parts) == 2:
         # 2 values: [left] [top] (right=left, bottom=top)
-        expected_left = cp._parse_single_margin_value(parts[0], page_width)
-        expected_top = cp._parse_single_margin_value(parts[1], page_width)
+        expected_left = dim_str_to_pts(parts[0], page_width)
+        expected_top = dim_str_to_pts(parts[1], page_width)
         assert (left, top, right, bottom) == (
             expected_left,
             expected_top,
@@ -107,9 +110,9 @@ def test_parse_crop_margins_shorthand_property(parts):
         )
     elif len(parts) == 3:
         # 3 values: [left] [top] [right] (bottom=top)
-        expected_left = cp._parse_single_margin_value(parts[0], page_width)
-        expected_top = cp._parse_single_margin_value(parts[1], page_width)
-        expected_right = cp._parse_single_margin_value(parts[2], page_width)
+        expected_left = dim_str_to_pts(parts[0], page_width)
+        expected_top = dim_str_to_pts(parts[1], page_width)
+        expected_right = dim_str_to_pts(parts[2], page_width)
         assert (left, top, right, bottom) == (
             expected_left,
             expected_top,
@@ -119,10 +122,10 @@ def test_parse_crop_margins_shorthand_property(parts):
     elif len(parts) == 4:
         # 4 values: [left] [top] [right] [bottom]
         # Note: 'bottom' (parts[3]) uses page_height!
-        expected_left = cp._parse_single_margin_value(parts[0], page_width)
-        expected_top = cp._parse_single_margin_value(parts[1], page_width)
-        expected_right = cp._parse_single_margin_value(parts[2], page_width)
-        expected_bottom = cp._parse_single_margin_value(parts[3], page_height)  # Uses page_height
+        expected_left = dim_str_to_pts(parts[0], page_width)
+        expected_top = dim_str_to_pts(parts[1], page_width)
+        expected_right = dim_str_to_pts(parts[2], page_width)
+        expected_bottom = dim_str_to_pts(parts[3], page_height)  # Uses page_height
         assert (left, top, right, bottom) == (
             expected_left,
             expected_top,

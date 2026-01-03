@@ -11,6 +11,7 @@ import re
 
 logger = logging.getLogger(__name__)
 from pdftl.core.constants import PAPER_SIZES
+from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 
@@ -157,52 +158,17 @@ def parse_crop_margins(spec_str, page_width, page_height):
         )
 
     # The logic cascades based on the number of parts provided.
-    left = _parse_single_margin_value(parts[0], page_width)
+    left = dim_str_to_pts(parts[0], page_width)
 
-    top = _parse_single_margin_value(parts[1], page_width) if num_parts >= 2 else left
+    top = dim_str_to_pts(parts[1], page_width) if num_parts >= 2 else left
 
-    right = _parse_single_margin_value(parts[2], page_width) if num_parts >= 3 else left
+    right = dim_str_to_pts(parts[2], page_width) if num_parts >= 3 else left
 
     # Bottom defaults to top's value but uses page_height for its own calculation
     # only when a fourth value is explicitly provided.
     if num_parts >= 4:
-        bottom = _parse_single_margin_value(parts[3], page_height)
+        bottom = dim_str_to_pts(parts[3], page_height)
     else:
         bottom = top
 
     return left, top, right, bottom
-
-
-def _parse_single_margin_value(val_str, total_dimension):
-    """
-    Parses a single crop dimension string (e.g., '10%', '2in', '50pt')
-    and converts it into points.
-    """
-    val_str = val_str.lower().strip()
-    if not val_str:
-        return 0.0
-
-    # Using a dictionary lookup is cleaner than a long if/elif chain.
-    unit_multipliers = {
-        "in": 72.0,
-        "cm": 28.35,
-        "mm": 2.835,
-    }
-
-    if val_str.endswith("%"):
-        # Percentage is a special case that depends on the total dimension.
-        numeric_part = val_str[:-1]
-        try:
-            return (float(numeric_part) / 100.0) * total_dimension
-        except ValueError:
-            # Let it fall through to the float conversion below which will raise error
-            pass
-
-    for unit, multiplier in unit_multipliers.items():
-        if val_str.endswith(unit):
-            numeric_part = val_str[: -len(unit)]
-            return float(numeric_part) * multiplier
-
-    # Default to points, stripping an optional 'pt' suffix.
-    numeric_part = re.sub(r"pt$", "", val_str)
-    return float(numeric_part)

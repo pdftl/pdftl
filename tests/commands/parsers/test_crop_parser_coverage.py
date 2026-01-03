@@ -1,7 +1,6 @@
 import pytest
 
 from pdftl.commands.parsers.crop_parser import (
-    _parse_single_margin_value,
     parse_crop_content,
     parse_smart_crop_spec,
     specs_to_page_rules,
@@ -59,15 +58,3 @@ class TestCropParserCoverage:
         # "fit, 10pt" -> splits into ["fit", "10pt"] -> padding_str="10pt"
         res = parse_smart_crop_spec("fit, 10pt", 100, 100)
         assert res["padding"] == (10.0, 10.0, 10.0, 10.0)
-
-    # --- Covers lines 197-199 ---
-    def test_parse_single_margin_value_bad_percentage(self):
-        """
-        Triggers the specific ValueError catch block for percentages.
-        Input 'bad%' passes `.endswith('%')`, but `float('bad')` raises ValueError.
-        The code catches it, passes, and falls through to the final float conversion.
-        """
-        # "bad%" -> triggers line 197 (ValueError) -> line 199 (pass)
-        # -> line 207 (strip pt) -> line 208 float('bad%') -> raises ValueError again.
-        with pytest.raises(ValueError):
-            _parse_single_margin_value("bad%", 100)

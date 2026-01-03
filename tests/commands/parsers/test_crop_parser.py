@@ -5,34 +5,6 @@ import pdftl.commands.parsers.crop_parser as cp
 # We now expect the parser to fail correctly, so we don't need this
 # from pdftl.exceptions import InvalidArgumentError
 
-# ---------------------------
-# Tests for _parse_single_margin_value (internal helper)
-# ---------------------------
-
-
-@pytest.mark.parametrize(
-    "val_str, total_dimension, expected_pts",
-    [
-        ("50", 800, 50.0),  # Default unit is pt
-        ("50pt", 800, 50.0),  # Explicit pt
-        ("0", 800, 0.0),  # Zero value
-        ("", 800, 0.0),  # Empty value
-        ("10%", 800, 80.0),  # Percentage
-        ("1in", 100, 72.0),  # Inch
-        ("2in", 100, 144.0),  # Multiple inches
-        ("1cm", 100, 28.35),  # Centimeter
-        ("10mm", 100, 28.35),  # Millimeter (10mm = 1cm)
-    ],
-)
-def test_parse_single_margin_value(val_str, total_dimension, expected_pts):
-    result = cp._parse_single_margin_value(val_str, total_dimension)
-    assert pytest.approx(result) == expected_pts
-
-
-def test_parse_single_margin_value_invalid():
-    with pytest.raises(ValueError):
-        cp._parse_single_margin_value("foo", 800)
-
 
 # ---------------------------
 # Tests for parse_paper_spec
@@ -78,7 +50,8 @@ def test_parse_crop_margins_shorthand():
     assert margins == (10.0, 10.0, 10.0, 10.0)
     # Test 2 values
     margins = cp.parse_crop_margins("1cm, 2cm", page_width, page_height)
-    assert pytest.approx(margins) == (28.35, 56.7, 28.35, 56.7)
+    cm_pt = 28.34645669
+    assert pytest.approx(margins) == (cm_pt, cm_pt * 2, cm_pt, cm_pt * 2)
     # Test 3 values
     margins = cp.parse_crop_margins("10, 20, 30", page_width, page_height)
     assert margins == (10.0, 20.0, 30.0, 20.0)
