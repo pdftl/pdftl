@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pikepdf import Array, Pdf
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.page_specs import parse_specs
 from pdftl.utils.scale import apply_scaling
 
@@ -56,7 +57,12 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
 
         for i in page_numbers:
             # i is 1-based, pikepdf is 0-based
-            page = source_pdf.pages[i - 1]
+            try:
+                page = source_pdf.pages[i - 1]
+            except IndexError:
+                raise InvalidArgumentError(
+                    f"Page {i} does not exist in the PDF (total pages: {total_pages})."
+                )
 
             if scale != 1.0:
                 apply_scaling(page, scale)

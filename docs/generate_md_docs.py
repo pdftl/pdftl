@@ -6,15 +6,14 @@
 Generate .md and .rst source files for documentation.
 """
 
-import io
-import os
-
-# Ensure we can see the package
 import sys
+import os
+sys.path.insert(0, os.path.abspath("../src"))
+
+import io
+import inspect
 from pathlib import Path
 from shutil import copyfile as cp
-
-sys.path.insert(0, os.path.abspath("../src"))
 
 from common import get_docs_data
 
@@ -49,16 +48,18 @@ def write_api_reference(operations, filepath):
 
         for name, op_data in operations:
             func = getattr(op_data, "function", None)
-            docstring = None
+            raw_doc = None
             if func and func.__doc__:
-                docstring = func.__doc__
+                raw_doc = func.__doc__
             elif hasattr(op_data, "long_desc"):
-                docstring = op_data.long_desc
+                raw_doc = op_data.long_desc
             elif hasattr(op_data, "desc"):
-                docstring = op_data.desc
+                raw_doc = op_data.desc
 
-            if not docstring:
-                docstring = "No documentation available."
+            if not raw_doc:
+                raw_doc = "No documentation available."
+
+            cleaned_doc = inspect.cleandoc(raw_doc)
 
             try:
                 sig = str(pdftl.api._create_signature(name))
@@ -67,8 +68,11 @@ def write_api_reference(operations, filepath):
 
             f.write(f".. py:function:: {name}{sig}\n\n")
 
-            for line in docstring.strip().split("\n"):
-                f.write(f"   {line}\n")
+            for line in cleaned_doc.strip().split("\n"):
+                if line.strip():
+                    f.write(f"   {line}\n")
+                else:
+                    f.write(f"\n")
 
             f.write("\n\n")
 
