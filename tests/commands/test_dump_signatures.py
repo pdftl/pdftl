@@ -164,3 +164,75 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
             result = dump_signatures(signed_pdf_path, None, None)
             dump_signatures_cli_hook(result, None)
             assert "SignatureModificationLevel: SUSPICIOUS (Exception)" in output.getvalue()
+
+
+import sys
+
+import pytest
+
+import pdftl.core.constants as c
+from pdftl.commands.dump_signatures import _validate_signatures_worker
+from pdftl.core.types import OpResult
+
+
+def test_dump_signatures_hook_multiple_sigs():
+    """
+    Covers line 64: print("---", file=out)
+    Verifies that the separator is printed when multiple signatures exist.
+    """
+    # 1. Mock result data with TWO signatures
+    fake_sigs = [
+        {
+            "field_name": "Sig1",
+            "signer": "Alice",
+            "hash_algorithm": "sha256",
+            "is_valid": True,
+            "coverage": "ENTIRE_FILE",
+            "modification_level": "NONE",
+        },
+        {
+            "field_name": "Sig2",
+            "signer": "Bob",
+            "hash_algorithm": "sha256",
+            "is_valid": False,
+            "coverage": "PARTIAL",
+            "modification_level": "FORM_FILLING",
+        },
+    ]
+
+    op_result = OpResult(
+        success=True, data=fake_sigs, meta={c.META_OUTPUT_FILE: None}  # None -> Stdout
+    )
+
+    # 2. Capture stdout
+    # We patch smart_open_output or just capture stdout if output_file is None.
+    # The hook uses smart_open_output(None) which usually defaults to sys.stdout.
+    # We will assume smart_open_output handles None by yielding sys.stdout,
+    # so we can use capsys.
+
+    # Actually, let's mock smart_open_output to be safe and independent of IO implementation
+    with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
+        # Create a StringIO to capture output
+        mock_buffer = io.StringIO()
+        mock_open.return_value.__enter__.return_value = mock_buffer
+
+        dump_signatures_cli_hook(op_result, "post_run")
+
+        output = mock_buffer.getvalue()
+
+    # 3. Assert separator exists
+    assert "---" in output
+    assert "SignatureFieldName: Sig1" in output
+    assert "SignatureFieldName: Sig2" in output
+
+
+def test_validate_signatures_missing_pyhanko():
+    """
+    Covers lines 103-104: except ImportError: raise RuntimeError(...)
+    """
+    # 1. Simulate pyhanko being missing by setting it to None in sys.modules
+    with patch.dict(sys.modules, {"pyhanko": None, "pyhanko.pdf_utils.reader": None}):
+
+        with pytest.raises(RuntimeError, match="pyhanko' library is required"):
+            # We call the worker directly or the main command; worker is direct access to the import block
+            _validate_signatures_worker("dummy.pdf", None, None)

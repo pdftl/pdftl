@@ -150,3 +150,38 @@ def test_non_contiguous_source(numbered_pdf):
     heights = get_heights(numbered_pdf)
     expected = [101, 103, 105, 106, 100, 102, 104, 107, 108, 109]
     assert heights == expected
+
+
+import logging
+
+import pytest
+
+
+
+def test_move_empty_source_spec(two_page_pdf, caplog):
+    """
+    Covers lines 46-47:
+    logger.warning("Move source '%s' matched no pages...", ...)
+    return OpResult(...)
+    """
+    # 1. Provide a source spec that matches nothing (e.g., "100" in a small doc)
+    args = ["100", "before", "1"]
+
+    with caplog.at_level(logging.WARNING):
+        result = move_pages(pikepdf.open(two_page_pdf), args)
+
+    # Assert successful return but no changes
+    assert result.success
+    assert "matched no pages" in caplog.text
+
+
+def test_move_invalid_target_spec(two_page_pdf):
+    """
+    Covers line 54:
+    if not target_nums: raise UserCommandLineError(...)
+    """
+    # 1. Provide a valid source but invalid target
+    args = ["1", "before", "100"]  # '100' does not exist
+
+    with pytest.raises(UserCommandLineError, match="matched no pages"):
+        move_pages(pikepdf.open(two_page_pdf), args)

@@ -4,6 +4,7 @@ import types
 import pytest
 
 import pdftl.registry_init as reg_init
+from pdftl.registry_init import _discover_modules
 
 
 @pytest.fixture(autouse=True)
@@ -115,3 +116,22 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
     assert any("pdftl.commands.alpha" in msg for msg in caplog.messages)
     assert isinstance(loaded, list)
     assert set(loaded) == {"pdftl.commands.alpha", "pdftl.commands.beta"}
+
+
+def test_discover_modules_skips_no_path(caplog):
+    """
+    Covers lines 33-34:
+    logger.warning("Skipping discovery for %s (no __path__)", pkg.__name__)
+    continue
+    """
+    # 1. Create a dummy module object (standard Python module type)
+    # This behaves exactly like a real module: it has a __name__ but no __path__ (unless we add it).
+    mock_module = types.ModuleType("mock_file_module")
+
+    with caplog.at_level(logging.WARNING):
+        loaded = _discover_modules([mock_module], "test_label")
+
+    # 2. Assertions
+    assert len(loaded) == 0
+    # Now this will match exactly because types.ModuleType respects the name we gave it.
+    assert "Skipping discovery for mock_file_module" in caplog.text

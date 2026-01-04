@@ -542,3 +542,13 @@ def forensic_dump_on_fail(request):
 
         print("-" * 40, file=sys.stderr)
         print("\n" + "=" * 80 + "\n", file=sys.stderr)
+
+
+@pytest.fixture
+def minimal_pdf():
+    """Creates a simple in-memory PDF with one page."""
+    import pikepdf
+
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page(page_size=(100, 100))
+        yield pdf

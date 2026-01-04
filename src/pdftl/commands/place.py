@@ -16,7 +16,6 @@ import pdftl.core.constants as c
 from pdftl.commands.parsers.place_parser import PlacementOp, parse_place_args
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.exceptions import UserCommandLineError
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.page_specs import page_numbers_matching_page_spec

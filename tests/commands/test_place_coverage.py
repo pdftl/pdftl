@@ -2,7 +2,6 @@ import pikepdf
 import pytest
 
 from pdftl.commands.place import place_content
-from pdftl.exceptions import UserCommandLineError
 
 
 @pytest.fixture

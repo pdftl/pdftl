@@ -38,3 +38,21 @@ def test_rotate_pdf_invalid_spec(test_pdf):
     specs = ["invalid_spec"]
     with pytest.raises(InvalidArgumentError):
         normalize_content_streams(test_pdf, specs)
+
+
+import pikepdf
+
+
+
+def test_normalize_default_specs():
+    """
+    Covers line 58: if not specs: specs = ["1-end"]
+    """
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+
+        # Pass empty specs list to trigger default behavior
+        result = normalize_content_streams(pdf, specs=[])
+
+        assert result.success
+        # If no exception occurred and success is True, the loop ran over all pages (1-end)

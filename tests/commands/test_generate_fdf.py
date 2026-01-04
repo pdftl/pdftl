@@ -123,3 +123,43 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
             content = output.read_bytes()
             # Verify it fell back to unparse()
             assert b"/V <BINARY>" in content
+
+
+import io
+from types import SimpleNamespace
+
+from pdftl.commands.generate_fdf import _write_field_as_fdf_to_file
+from pdftl.core.types import OpResult
+
+
+def test_generate_fdf_hook_failure():
+    """
+    Covers line 40: if not result.success: return
+    """
+    result = OpResult(success=False)
+
+    # Mock smart_open to ensure it is NOT called
+    with patch("pdftl.commands.generate_fdf.smart_open_output") as mock_open:
+        generate_fdf_cli_hook(result, "post")
+        mock_open.assert_not_called()
+
+
+def test_write_field_non_string_value():
+    """
+    Covers lines 125-126: elif val is not None: val_as_string = str(val)
+    """
+    # 1. Mock a field object with an integer value
+    mock_field = SimpleNamespace(value=999, default_value=None)
+
+    buffer = io.BytesIO()
+
+    # 2. Call the helper directly
+    # Note: The function writes bytes to the file, so we expect bytes in buffer
+    # It imports pikepdf types locally, but we don't need to mock them
+    # unless 'val' matches them. Here 'val' is int, so it falls through.
+    _write_field_as_fdf_to_file("AgeField", mock_field, buffer)
+
+    # 3. Verify output contains the integer converted to string
+    content = buffer.getvalue().decode("utf-8")
+    assert "/V 999" in content
+    assert "/T (AgeField)" in content

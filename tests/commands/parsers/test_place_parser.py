@@ -71,3 +71,32 @@ def test_parser_errors():
     # Shift missing y (comma)
     with pytest.raises(UserCommandLineError, match="Shift requires x,y"):
         parse_place_args(["1(shift=100)"])
+
+
+
+
+def test_place_parser_implicit_pages():
+    """
+    Covers line 30: arg = "1-end" + arg
+    Triggered when the argument starts with '('.
+    """
+    args = ["(shift=10,10)"]
+    commands = parse_place_args(args)
+
+    assert len(commands) == 1
+    assert commands[0].page_spec == "1-end"
+    assert commands[0].operations[0].name == "shift"
+
+
+def test_place_parser_invalid_op_format():
+    """
+    Covers line 57: raise UserCommandLineError... if "=" not in token
+    Triggered when an operation lacks an equals sign.
+    """
+    args = ["1(shift=10,10;invalid_op)"]
+
+    with pytest.raises(UserCommandLineError) as exc:
+        parse_place_args(args)
+
+    assert "Invalid operation format" in str(exc.value)
+    assert "invalid_op" in str(exc.value)

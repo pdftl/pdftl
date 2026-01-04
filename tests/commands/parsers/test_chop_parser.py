@@ -269,3 +269,95 @@ def test_parse_chop_specs_to_rules_with_range_qualifier(monkeypatch):
     result = cp.parse_chop_specs_to_rules(specs, 10)
     # only even pages 4 and 6 from range qualifier
     assert set(result.keys()) == {3, 5}
+
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from pdftl.commands.parsers.chop_parser import (
+    MAX_PIECES,
+    _parse_integer_spec,
+    parse_chop_spec,
+    parse_chop_specs_to_rules,
+)
+
+
+def test_chop_parser_legacy_qualifiers_odd():
+    """
+    Covers line 92: page_numbers = [p for p in page_numbers if p % 2 != 0]
+    Triggered when using the legacy 'odd' keyword before a spec.
+    """
+    # Syntax: "odd", "1-5rows2" -> chops pages 1, 3, 5
+    specs = ["odd", "1-5rows2"]
+    total_pages = 10
+
+    rules = parse_chop_specs_to_rules(specs, total_pages)
+
+    # Check 0-based indices
+    assert 0 in rules  # Page 1
+    assert 2 in rules  # Page 3
+    assert 4 in rules  # Page 5
+    assert 1 not in rules  # Page 2 (even)
+    assert 3 not in rules  # Page 4 (even)
+
+
+def test_chop_parser_omissions():
+    """
+    Covers line 96: if not om_start <= p <= om_end
+    We mock parse_specs to guarantee omissions are present, isolating the logic in chop_parser.
+    """
+    with patch("pdftl.commands.parsers.chop_parser.parse_specs") as mock_parse:
+        # Create a mock PageSpec that selects 1-5 but omits 3
+        mock_spec = MagicMock()
+        mock_spec.start = 1
+        mock_spec.end = 5
+        mock_spec.qualifiers = []
+        mock_spec.omissions = [(3, 3)]  # Omit page 3
+
+        mock_parse.return_value = [mock_spec]
+
+        # The actual string doesn't matter much since we mock the parser,
+        # but it must split correctly into range/chop parts.
+        specs = ["1-5rows2"]
+        total_pages = 10
+
+        rules = parse_chop_specs_to_rules(specs, total_pages)
+
+        # Expected: 1, 2, 4, 5 (indices 0, 1, 3, 4)
+        assert 0 in rules  # Page 1
+        assert 1 in rules  # Page 2
+        assert 2 not in rules  # Page 3 (Excluded)
+        assert 3 in rules  # Page 4
+
+
+def test_chop_parser_max_pieces_exceeded():
+    """
+    Covers line 201: raise ValueError(...larger than MAX_PIECES...)
+    We call _parse_integer_spec directly to ensure we are testing the integer
+    limit logic, not the fallback behavior of the main parser.
+    """
+    huge_number = MAX_PIECES + 1
+    total_dim = 1000
+
+    with pytest.raises(ValueError) as exc:
+        _parse_integer_spec(str(huge_number), total_dim)
+
+    assert "Number of pieces is larger than MAX_PIECES" in str(exc.value.__cause__)
+
+
+def test_chop_parser_comma_spec_excessive_size():
+    """
+    Ensures comma specs raise error if fixed sizes exceed page dimensions.
+    We use explicit units ('pt') to force the parser to skip the integer strategy
+    and use the comma/unit strategy.
+    """
+    page_rect = Array([0, 0, 100, 100])  # Height is 100
+
+    # "rows2000pt" -> Explicit unit forces comma parsing. 2000 > 100.
+    spec_str = "rows2000pt"
+
+    with pytest.raises(ValueError) as exc:
+        parse_chop_spec(spec_str, page_rect)
+
+    assert "Sum of fixed sizes in chop spec exceeds page dimensions" in str(exc.value)

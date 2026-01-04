@@ -1,7 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # tests/commands/parsers/test_modify_annots_parser.py
 
 """
@@ -10,43 +6,12 @@ Requires 'pytest' and 'hypothesis'.
 """
 
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'map'
 import pdftl.commands.parsers.modify_annots_parser as map
 from pdftl.commands.parsers.modify_annots_parser import ModificationRule
-
-# --- -----------------------
-# Fixtures
-# --- -----------------------
-
-
-@pytest.fixture
-def mock_page_spec_parser(monkeypatch):
-    """
-    Mock the page_numbers_matching_page_spec helper to return predictable
-    page sets based on the input string.
-    """
-
-    def dummy_page_spec_parser(spec_str, total_pages):
-        # This is a simple mock.
-        if spec_str == "1-4":
-            return {1, 2, 3, 4}
-        if spec_str == "odd":
-            return {1, 3, 5, 7, 9}
-        if spec_str == "/Link":  # This shouldn't happen, but test it
-            return set(range(1, total_pages + 1))
-        if spec_str == "1-end" or not spec_str:
-            return set(range(1, total_pages + 1))
-        return {1}  # Default for unknown specs
-
-    # monkeypatch.setattr(map, "page_numbers_matching_page_spec", dummy_page_spec_parser)
-    monkeypatch.setattr(
-        "pdftl.commands.parsers.modify_annots_parser.page_numbers_matching_page_spec",
-        dummy_page_spec_parser,
-    )
-
 
 # --- -----------------------
 # Tests for _unquote_string
@@ -157,48 +122,50 @@ def test_parse_selector_string(input_str, expected_page_spec, expected_type):
 # --- -----------------------
 
 
-def test_parser_success_simple(mock_page_spec_parser):
+def test_parser_success_simple():
     """
-    This test uses the CORRECT syntax which the parser
-    should now accept.
+    Tests basic rule parsing using the REAL page_numbers_matching_page_spec logic.
     """
     specs = ["1-4/Link(Border=null, Foo=bar)"]
+    # We use total_pages=10 so 1-4 is valid.
     rules = map.specs_to_modification_rules(specs, total_pages=10)
 
     assert len(rules) == 1
     rule = rules[0]
     assert isinstance(rule, ModificationRule)
-    assert rule.page_numbers == {1, 2, 3, 4}
+
+    # FIXED: Expect a List, not a Set
+    assert rule.page_numbers == [1, 2, 3, 4]
+
     assert rule.type_selector == "/Link"
     assert rule.modifications == [("Border", "null"), ("Foo", "bar")]
 
 
-def test_parser_success_multiple_specs(mock_page_spec_parser):
+def test_parser_success_multiple_specs():
     """
     Tests multiple specs, including type-only and page-only selectors.
-    This test uses the CORRECT syntax.
     """
     specs = [
         "odd(C=[1 0 0])",
-        "/Text(T='(New Author)')",  # Quotes go around the value, not the whole pair
-        "(Key=Val)",  # Empty selector
+        "/Text(T='(New Author)')",
+        "(Key=Val)",  # Empty selector -> 1-end
     ]
     rules = map.specs_to_modification_rules(specs, total_pages=10)
 
     assert len(rules) == 3
 
-    # Rule 1
-    assert rules[0].page_numbers == {1, 3, 5, 7, 9}
+    # Rule 1: "odd" -> List [1, 3, 5, 7, 9]
+    assert rules[0].page_numbers == [1, 3, 5, 7, 9]
     assert rules[0].type_selector is None
     assert rules[0].modifications == [("C", "[1 0 0]")]
 
-    # Rule 2
-    assert rules[1].page_numbers == set(range(1, 11))
+    # Rule 2: "/Text" -> "1-end" -> List [1..10]
+    assert rules[1].page_numbers == list(range(1, 11))
     assert rules[1].type_selector == "/Text"
     assert rules[1].modifications == [("T", "(New Author)")]
 
-    # Rule 3
-    assert rules[2].page_numbers == set(range(1, 11))
+    # Rule 3: "" -> "1-end" -> List [1..10]
+    assert rules[2].page_numbers == list(range(1, 11))
     assert rules[2].type_selector is None
     assert rules[2].modifications == [("Key", "Val")]
 
@@ -207,14 +174,12 @@ def test_parser_success_multiple_specs(mock_page_spec_parser):
 # Hypothesis Property-Based Tests
 # --- -----------------------
 
-# Strategy for a valid Key
 st_key = st.text(
     alphabet=st.characters(min_codepoint=65, max_codepoint=122, whitelist_categories=("L", "N")),
     min_size=1,
     max_size=10,
 ).filter(lambda s: not s.startswith("=") and not s.startswith("/"))
 
-# Strategy for a valid Value
 st_value = st.one_of(
     st.just("null"),
     st.just("true"),
@@ -225,14 +190,12 @@ st_value = st.one_of(
     st.text(alphabet="abc 123", min_size=1, max_size=20),
 )
 
-# Strategy for a list of Key=Value pairs
 st_kv_list = st.lists(
     st.tuples(st_key, st_value).map(lambda kv: f"{kv[0]}={kv[1]}"),
     min_size=1,
     max_size=5,
 )
 
-# Strategy for a selector
 st_selector = st.one_of(
     st.just(""),
     st.just("1-5"),
@@ -243,24 +206,23 @@ st_selector = st.one_of(
 
 
 @given(selector=st_selector, kv_list=st_kv_list)
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-def test_parser_hypothesis_valid_specs(selector, kv_list, mock_page_spec_parser):
+def test_parser_hypothesis_valid_specs(selector, kv_list):
     """
     Tests that the parser can handle a wide variety of valid
-    (and correctly-formatted) specs without crashing.
+    specs without crashing.
     """
     mod_str = ", ".join(kv_list)
     spec_str = f"{selector}({mod_str})"
 
+    # Using the real logic is fine as long as total_pages is sufficient for "1-5"
     rules = map.specs_to_modification_rules([spec_str], total_pages=10)
+
     assert len(rules) == 1
     assert len(rules[0].modifications) == len(kv_list)
     assert rules[0].modifications[0][0] == kv_list[0].split("=")[0]
 
 
-@given(
-    spec=st.text().filter(lambda s: not map.spec_pattern.match(s))  # Test strings that DON'T match
-)
+@given(spec=st.text().filter(lambda s: not map.spec_pattern.match(s)))
 def test_parser_hypothesis_invalid_specs(spec):
     """
     Tests that any string that does NOT match the spec pattern

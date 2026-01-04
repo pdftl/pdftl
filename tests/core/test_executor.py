@@ -51,3 +51,51 @@ def test_executor_full_run():
 
         assert result == "Success"
         mock_func.assert_called_once_with("test.pdf")
+
+
+# tests/core/test_executor_coverage.py
+
+import logging
+
+
+from pdftl.core.registry import registry
+
+
+def test_run_operation_unregistered():
+    """
+    Covers line 23: raise ValueError(f"Operation '{operation_name}' is not registered.")
+    """
+    with pytest.raises(ValueError, match="is not registered"):
+        run_operation("non_existent_op", {})
+
+
+def test_run_operation_malformed_entry(monkeypatch):
+    """
+    Covers line 29: raise ValueError(... is missing function or arg_style)
+    """
+    # Inject a bad registry entry
+    monkeypatch.setitem(registry.operations, "bad_op", {"desc": "Missing stuff"})
+
+    with pytest.raises(ValueError, match="missing function or arg_style"):
+        run_operation("bad_op", {})
+
+
+def test_run_operation_internal_error_logging(monkeypatch, caplog):
+    """
+    Covers line 40: logger.error("Internal error in operation '%s': %s", ...)
+    """
+
+    # 1. Define a dummy function that raises a generic Exception (not UserCommandLineError)
+    def crashing_func(*args, **kwargs):
+        raise RuntimeError("Something exploded")
+
+    # 2. Register it temporarily
+    op_data = {"function": crashing_func, "args": ([], {}, {})}  # Empty arg spec
+    monkeypatch.setitem(registry.operations, "crashing_op", op_data)
+
+    # 3. Run and verify it logs the error before re-raising
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="Something exploded"):
+            run_operation("crashing_op", {})
+
+    assert "Internal error in operation 'crashing_op'" in caplog.text
