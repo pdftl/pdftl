@@ -19,6 +19,7 @@ from pdftl.commands.helpers.crop_fit import FitCropContext
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.utils.affix_content import affix_content
+from pdftl.utils.dimensions import get_visible_page_dimensions
 
 from .parsers.crop_parser import (
     parse_crop_content,
@@ -111,7 +112,7 @@ def _apply_crop_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules):
 
     page = pdf.pages[i]
 
-    if (page_dims := _get_page_dimensions(page)) is None:
+    if (page_dims := get_visible_page_dimensions(page)) is None:
         logger.warning("Warning: Skipping page %s as it has no valid MediaBox.", i + 1)
         return
 
@@ -208,14 +209,3 @@ def _crop_margins_from_paper_size(width, height, paper_width, paper_height):
     top = (height - paper_height) / 2
     right, bottom = left, top
     return left, top, right, bottom
-
-
-def _get_page_dimensions(page):
-    """Safely retrieves the page's MediaBox dimensions.
-    Returns: origin_x, origin_y, signed_width, signed_height, or None on error.
-    """
-    try:
-        x0, y0, x1, y1 = (float(p) for p in page.mediabox)
-        return x0, y0, x1 - x0, y1 - y0
-    except (TypeError, IndexError, ValueError):
-        return None

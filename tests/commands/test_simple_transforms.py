@@ -6,13 +6,13 @@ from pdftl.commands.delete import delete_pages
 from pdftl.commands.delete_annots import delete_annots
 from pdftl.commands.filter import filter_pdf
 from pdftl.commands.modify_annots import modify_annots
+from pdftl.commands.place import place_content
 from pdftl.commands.rotate import rotate_pdf
-from pdftl.commands.spin import spin_pdf
 
 # Define the cases: (Function, Specs List, Expected Page Count Change)
 PARAMS = [
     (rotate_pdf, ["1-endeast"], 0),  # Rotation keeps page count
-    (spin_pdf, ["1-end:45"], 0),  # Spin keeps page count
+    (place_content, ["1-end(spin=45)"], 0),  # Spin keeps page count
     (delete_pages, ["2"], -1),  # Deleting 1 page reduces count by 1
     (crop_pages, ["1-end(0,0,100,100)"], 0),  # Crop keeps page count
     (filter_pdf, [], 0),  # Filter usually just passes through

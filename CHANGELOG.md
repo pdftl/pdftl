@@ -5,6 +5,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.6.0] - Unreleased
+
+### Added
+
+- `move` operation: move pages within a PDF file
+
+- `place` operation: arbitrarily shift, scale and/or spin
+  content within the page
+
+### Changed
+
+- Now handles compound page specifications like `1,3-4,7-end`
+
+### Fixed
+
+- Improved API documentation generation
+
+### Removed
+
+- `spin` operation. See `place` for this functionality.
+
 ## [0.5.0] - 2026-01-03
 
 ### Added

@@ -217,10 +217,10 @@ Usage
   multistamp              Stamp multiple pages onto an input PDF
   normalize               Reformat page content streams
   optimize_images         Optimize images
+  place                   Shift, scale, and spin page content
   replace                 Regex replacement on page content streams
   rotate                  Rotate pages in a PDF
   shuffle                 Interleave pages from multiple input PDFs
-  spin                    Spin page content in a PDF
   stamp                   Stamp a 1-page PDF onto each page of an input PDF
   unpack_files            Unpack file attachments
   update_info             Update PDF metadata from dump_data instructions

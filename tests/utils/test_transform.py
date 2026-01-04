@@ -171,3 +171,56 @@ def test_transform_pdf(
     # Check that pages 2 and 4 were NOT touched
     page2.rotate.assert_not_called()
     page4.rotate.assert_not_called()
+
+
+import pytest
+
+from pdftl.exceptions import InvalidArgumentError
+
+
+@pytest.fixture
+def dummy_pdf():
+    # Create a simple 5-page PDF (default rotation 0)
+    pdf = pikepdf.new()
+    for _ in range(5):
+        pdf.add_blank_page()
+    return pdf
+
+
+def test_transform_even_odd_qualifiers(dummy_pdf):
+    # Tests lines 46 (even) and 48 (odd)
+    # Syntax: "evenright" -> Rotate even pages 90°
+    # Syntax: "odddown"   -> Rotate odd pages 180°
+    # (Assuming concatenation is allowed like 1-5right)
+    specs = ["evenright", "odddown"]
+    transform_pdf(dummy_pdf, specs)
+
+    # Check Page 1 (Odd) -> 180
+    assert dummy_pdf.pages[0].get("/Rotate") == 180
+    # Check Page 2 (Even) -> 90
+    assert dummy_pdf.pages[1].get("/Rotate") == 90
+
+
+def test_transform_omissions(dummy_pdf):
+    # Tests line 53 (omissions)
+    # Syntax: "1-5~3right" -> Range 1-5, omit 3, rotate 90°
+    specs = ["1-5~3right"]
+    transform_pdf(dummy_pdf, specs)
+
+    # Page 1 (Included) -> 90
+    assert dummy_pdf.pages[0].get("/Rotate") == 90
+    # Page 3 (Omitted) -> Should be None (0 default)
+    assert dummy_pdf.pages[2].get("/Rotate") is None
+    # Page 5 (Included) -> 90
+    assert dummy_pdf.pages[4].get("/Rotate") == 90
+
+
+def test_transform_page_out_of_bounds(dummy_pdf):
+    # Tests lines 62-63 (IndexError -> InvalidArgumentError)
+    # Page 10 on a 5-page PDF, rotate right
+    specs = ["10right"]
+
+    with pytest.raises(InvalidArgumentError) as exc:
+        transform_pdf(dummy_pdf, specs)
+
+    assert "Page 10 does not exist" in str(exc.value)

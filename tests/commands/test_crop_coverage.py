@@ -95,7 +95,7 @@ def test_crop_missing_mediabox(pdf, caplog):
     # where MediaBox is missing or invalid.
     caplog.set_level(logging.DEBUG)
 
-    with patch("pdftl.commands.crop._get_page_dimensions", return_value=None):
+    with patch("pdftl.commands.crop.get_visible_page_dimensions", return_value=None):
         crop_pages(pdf, ["1-end(10)"])
 
     assert "no valid MediaBox" in caplog.text

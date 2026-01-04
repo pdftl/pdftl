@@ -6,12 +6,13 @@
 Generate .md and .rst source files for documentation.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath("../src"))
 
-import io
 import inspect
+import io
 from pathlib import Path
 from shutil import copyfile as cp
 

@@ -6,7 +6,12 @@
 
 """Utilities related to dimensions, e.g., conversion"""
 
+from typing import TYPE_CHECKING
+
 from pdftl.core.constants import UNITS
+
+if TYPE_CHECKING:
+    import pikepdf
 
 
 def dim_str_to_pts(val_str, total_dimension=None):
@@ -37,3 +42,18 @@ def dim_str_to_pts(val_str, total_dimension=None):
     # Default to points, stripping an optional 'pt' suffix.
     numeric_part = re.sub(r"pts?$", "", val_str)
     return float(numeric_part)
+
+
+def get_visible_page_dimensions(page: "pikepdf.Page"):
+    """Safely retrieves the page's visible dimensions using
+    /CropBox if present, or /MediaBox otherwise.
+
+    Returns:
+        origin_x, origin_y, signed_width, signed_height, or None on error.
+
+    """
+    try:
+        x0, y0, x1, y1 = (float(p) for p in page.cropbox)
+        return x0, y0, x1 - x0, y1 - y0
+    except (TypeError, IndexError, ValueError, AttributeError):
+        return None

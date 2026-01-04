@@ -27,9 +27,9 @@ page_numbers_matching_page_specs(specs, total_pages) -> [int]
 import logging
 import math
 import re
+from collections.abc import Generator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from collections.abc import Generator
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
