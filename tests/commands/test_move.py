@@ -157,7 +157,6 @@ import logging
 import pytest
 
 
-
 def test_move_empty_source_spec(two_page_pdf, caplog):
     """
     Covers lines 46-47:

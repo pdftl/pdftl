@@ -73,8 +73,6 @@ def test_parser_errors():
         parse_place_args(["1(shift=100)"])
 
 
-
-
 def test_place_parser_implicit_pages():
     """
     Covers line 30: arg = "1-end" + arg

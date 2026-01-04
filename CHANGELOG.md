@@ -5,14 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [0.6.0] - Unreleased
+## [0.6.0] - 2026-01-04
 
 ### Added
 
 - `move` operation: move pages within a PDF file
 
-- `place` operation: arbitrarily shift, scale and/or spin
-  content within the page
+- `place` operation: shift, scale and/or spin content within
+  the page
 
 ### Changed
 

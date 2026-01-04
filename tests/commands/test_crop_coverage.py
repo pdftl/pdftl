@@ -104,7 +104,6 @@ def test_crop_missing_mediabox(pdf, caplog):
 import pytest
 
 
-
 def test_crop_fit_mode_execution(minimal_pdf):
     """
     Covers line 152: return fit_ctx.calculate_rect(...)

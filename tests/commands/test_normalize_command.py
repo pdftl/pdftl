@@ -43,7 +43,6 @@ def test_rotate_pdf_invalid_spec(test_pdf):
 import pikepdf
 
 
-
 def test_normalize_default_specs():
     """
     Covers line 58: if not specs: specs = ["1-end"]

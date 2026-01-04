@@ -57,7 +57,6 @@ def test_executor_full_run():
 
 import logging
 
-
 from pdftl.core.registry import registry
 
 

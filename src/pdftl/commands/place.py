@@ -21,7 +21,7 @@ from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 _PLACE_LONG_DESC = """
-Applies geometric transformations (affine transforms) to the content of selected pages.
+Applies geometric transformations (direct similarities) to the content of selected pages.
 
 **Syntax:**
   `pdftl <input> place "<pages>(<op>=<val>; ...)" output <file>`
