@@ -103,3 +103,64 @@ def test_replace_no_normalization(pdf_with_content):
 
     content = pdf_with_content.pages[0].Contents.read_bytes()
     assert b"(Hola World)" in content
+
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from pdftl.commands.replace import RegexReplaceContentStream, replace_in_content_streams
+
+
+def test_replace_empty_spec_element():
+    """
+    Covers Line 91: 'if not spec: return'
+
+    The function 'replace_in_content_streams' iterates over 'specs'.
+    If we pass a list with an empty string, it calls '_apply_replace_spec_in_content_streams'
+    with empty input, triggering the early return.
+    """
+    mock_pdf = MagicMock()
+
+    # Execute with an empty spec string
+    replace_in_content_streams(mock_pdf, [""])
+
+    # Verify: If it returned early, it didn't access pdf.pages (Line 93)
+    mock_pdf.pages.assert_not_called()
+
+
+def test_replacer_fallback_no_regex():
+    """
+    Covers Line 138: 'else: new_content_stream = content_stream'
+
+    This occurs inside RegexReplaceContentStream.apply() if 'self.from_re' is empty.
+    We instantiate the class directly to force this state.
+    """
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+
+    # Setup page content
+    # We use normalize_input=False to skip the complex normalization logic
+    # and hit the read_bytes() path, making the test cleaner.
+    mock_page.Contents.read_bytes.return_value = b"Original Content"
+
+    # Mock the PDF accessing the page (page_num - 1)
+    mock_pdf.pages = [mock_page]
+
+    # Instantiate Replacer manually with empty from_re
+    replacer = RegexReplaceContentStream(
+        pdf=mock_pdf,
+        from_re=b"",  # Empty bytes triggers line 138
+        to_re=b"anything",
+        count=0,
+        normalize_input=False,
+        normalize_output=False,
+    )
+
+    # Act
+    replacer.apply(1)  # page_num is 1-based
+
+    # Assert
+    # Verify it passed the original content directly to make_stream
+    # (skipping re.sub at line 136)
+    mock_pdf.make_stream.assert_called_with(b"Original Content")

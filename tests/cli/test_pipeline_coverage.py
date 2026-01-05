@@ -72,9 +72,9 @@ def mock_context():
 
 
 @pytest.fixture
-def mock_save_pdf():
-    """Mock the save_pdf function."""
-    with patch("pdftl.cli.pipeline.save_pdf") as mock:
+def mock_save_content():
+    """Mock the save_content function."""
+    with patch("pdftl.cli.pipeline.save_content") as mock:
         yield mock
 
 
@@ -168,7 +168,7 @@ class TestPipelineManagerCoverage:
         )
 
     def test_run_final_pipeline_pdf_close(
-        self, mock_context, mock_pikepdf, mock_save_pdf, mock_registry
+        self, mock_context, mock_pikepdf, mock_save_content, mock_registry
     ):
         """Covers line 100: self.pipeline_pdf.close() in the finally block."""
         # FIX: Added matching input_passwords list

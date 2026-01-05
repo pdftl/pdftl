@@ -154,3 +154,13 @@ line_length = 99
 line-length = 99
 target-version = ['py310']
 include = '\.pyi?$'
+
+[tool.coverage.report]
+exclude_also = [
+    # A pragma comment that excludes an entire file:
+    '\A(?s:.*# pragma: exclude this file.*)\Z',
+]
+
+[[tool.mypy.overrides]]
+module = "pypdfium2"
+ignore_missing_imports = true  # no stubs available :-(

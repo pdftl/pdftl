@@ -141,6 +141,13 @@ def test_execute_stage_non_generator(monkeypatch):
 
 
 def test_execute_stage_generator(monkeypatch):
+    import types
+    from unittest.mock import MagicMock, patch
+
+    import pikepdf
+
+    from pdftl.cli.pipeline import CliStage, PipelineManager
+
     dummy_pdf = MagicMock(spec=pikepdf.Pdf)
     stage = CliStage(operation="single_op", inputs=["a.pdf"])
     manager = PipelineManager(stages=[], input_context=MagicMock())
@@ -150,9 +157,19 @@ def test_execute_stage_generator(monkeypatch):
 
     manager._open_input_pdfs = MagicMock(return_value=[dummy_pdf])
     manager._run_operation = MagicMock(return_value=gen())
-    with patch("pdftl.cli.pipeline.save_pdf") as save_mock:
+
+    with patch("pdftl.cli.pipeline.save_content") as save_mock:
         manager._execute_stage(stage, is_first=True)
-        save_mock.assert_called_once()
+
+        # 1. It should NOT save yet (saving happens in the 'run' loop now)
+        save_mock.assert_not_called()
+
+        # 2. The pipeline_pdf should be set to the generator
+        assert isinstance(manager.pipeline_pdf, types.GeneratorType)
+
+        # 3. CRITICAL: It should NOT have closed the input PDF
+        # (This confirms your fix for the blank pages/render bug)
+        dummy_pdf.close.assert_not_called()
 
 
 # -----------------------------
@@ -267,7 +284,7 @@ def test_pipeline_run_dummy_op(monkeypatch):
     monkeypatch.setattr(
         PipelineManager, "_run_operation", lambda self, stage, opened_pdfs: DummyPdf()
     )
-    with patch("pdftl.cli.pipeline.save_pdf") as save_mock:
+    with patch("pdftl.cli.pipeline.save_content") as save_mock:
         manager.run()
         assert isinstance(manager.pipeline_pdf, DummyPdf)
         save_mock.assert_called_once()

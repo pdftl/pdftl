@@ -184,3 +184,32 @@ def test_move_invalid_target_spec(two_page_pdf):
 
     with pytest.raises(UserCommandLineError, match="matched no pages"):
         move_pages(pikepdf.open(two_page_pdf), args)
+
+
+import json
+from unittest.mock import mock_open, patch
+
+import pytest
+
+
+def test_move_command_loads_json_spec():
+    """
+    Test that the move_pages command delegates to arg_resolver
+    when it sees an @ argument.
+    """
+    move_json = json.dumps({"source_spec": "10", "mode": "after", "target_spec": "1"})
+
+    # 1. Mock 'open' so we can read the fake file
+    with patch("builtins.open", mock_open(read_data=move_json)):
+        # 2. CRITICAL FIX: Mock 'exists' so the helper believes the file is there
+        with patch("pathlib.Path.exists", return_value=True):
+            # 3. Mock execute_move so we don't need a real PDF
+            with patch("pdftl.commands.move.execute_move") as mock_exec:
+
+                # We can pass None as the PDF since execute_move is mocked
+                move_pages(None, ["@my_plan.json"])
+
+                assert mock_exec.called
+                _, called_spec = mock_exec.call_args[0]
+                assert called_spec.source_spec == "10"
+                assert called_spec.mode == "after"

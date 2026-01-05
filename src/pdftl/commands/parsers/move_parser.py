@@ -1,14 +1,13 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/commands/parsers/move_parser.py
 
-from typing import NamedTuple
+"""Parser for move command arguments"""
 
+from pdftl.commands.types.move_types import MoveSpec
 from pdftl.exceptions import UserCommandLineError
-
-
-class MoveSpec(NamedTuple):
-    source_spec: str
-    mode: str  # 'before' or 'after'
-    target_spec: str
 
 
 def parse_move_args(args: list[str]) -> MoveSpec:
@@ -23,7 +22,7 @@ def parse_move_args(args: list[str]) -> MoveSpec:
 
     # Find the pivot keyword (before/after)
     pivot_idx = -1
-    mode = None
+    mode = "after"
 
     for i, arg in enumerate(args):
         if arg.lower() in ("before", "after"):

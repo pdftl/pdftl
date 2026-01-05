@@ -10,6 +10,7 @@ import glob
 import logging
 import os
 from dataclasses import dataclass
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,8 @@ logger = logging.getLogger(__name__)
 class UserInputContext:
     """A container for user input callbacks"""
 
-    get_input: callable
-    get_pass: callable
+    get_input: Callable
+    get_pass: Callable
 
 
 def get_input(msg, completer=None):
@@ -34,7 +35,7 @@ def get_input(msg, completer=None):
 
     try:
         import readline
-    except ImportError:
+    except ImportError:  # pragma: no cover
         # e.g., Windows has no readline
         return input(msg)
 

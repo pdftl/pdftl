@@ -5,6 +5,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Added
+
+- `render` operation: rasterize pages
+
+- `move` accepts @instructions.json
+
+### Fixed
+
+- bug in `add_pages.py` when a page has an integer key-value
+
 ## [0.6.0] - 2026-01-04
 
 ### Added

@@ -4,7 +4,7 @@
 
 # src/pdftl/output/save.py
 
-"""Methods for saving PDF files, with options registered for CLI."""
+"""Methods for saving PDF files (and other files), with options registered for CLI."""
 
 import inspect
 import logging
@@ -289,6 +289,54 @@ def _remove_source_info(pdf):
 # ---------------------------------------------------------------------------
 # Public save API
 # ---------------------------------------------------------------------------
+def save_content(content, output_path, input_context, **kwargs):
+    """
+    Determines the appropriate saving strategy based on the content type.
+    """
+    import types
+
+    # Handle Generators (e.g., burst or render)
+    if isinstance(content, (types.GeneratorType, list)):
+        for filename, item in content:
+            try:
+                _save_by_type(item, filename, input_context, **kwargs)
+            finally:
+                _cleanup_item(item)
+
+    # Handle Single Objects
+    else:
+        _save_by_type(content, output_path, input_context, **kwargs)
+
+
+def _cleanup_item(item):
+    """Closes objects if they require it (like pikepdf.Pdf)."""
+    import pikepdf
+
+    if isinstance(item, pikepdf.Pdf):
+        logger.debug("Closing pikepdf object during generator cleanup.")
+        item.close()
+    # PIL Images are garbage collected once the reference is gone,
+    # but you can call .close() on them too if they are file-based.
+    elif hasattr(item, "close"):
+        item.close()
+
+
+def _save_by_type(item, path, input_context, **kwargs):
+    """The actual 'figuring out' part for saving an unknown item."""
+
+    # 1. Is it a PIL Image? (from render)
+    if hasattr(item, "format") or str(type(item)).find("PIL") != -1:
+        logger.debug("Routing to Image Saver: %s", path)
+        # Note: PIL.save usually doesn't take the same kwargs as pikepdf
+        item.save(path)
+
+    # 2. Is it a PDF? (from pikepdf)
+    elif hasattr(item, "save"):
+        logger.debug("Routing to PDF Saver: %s", path)
+        save_pdf(item, path, input_context, **kwargs)
+
+    else:
+        raise TypeError(f"Unknown content object type: {type(item)}")
 
 
 def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None):

@@ -53,7 +53,8 @@ def get_visible_page_dimensions(page: "pikepdf.Page"):
 
     """
     try:
-        x0, y0, x1, y1 = (float(p) for p in page.cropbox)
+        rect = page.cropbox
+        x0, y0, x1, y1 = float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])
         return x0, y0, x1 - x0, y1 - y0
     except (TypeError, IndexError, ValueError, AttributeError):
         return None

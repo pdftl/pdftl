@@ -100,7 +100,9 @@ def dump_dests_cli_hook(result: OpResult, _stage):
     CLI Hook for dump_dests.
     Serializes the raw destinations data to a compacted JSON string and outputs it.
     """
-    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    from pdftl.utils.hooks import from_result_meta
+
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
     output_data = result.data
     _write_json_output(output_data, output_file)
 
@@ -125,7 +127,7 @@ def dump_dests(pdf, output_file=None) -> OpResult:
 
     logger.debug("Dumping Dests name tree for PDF with %s pages.", len(pdf.pages))
 
-    output_data = {"dests": [], "errors": []}
+    output_data: dict[str, list] = {"dests": [], "errors": []}
 
     # Create the page map *once*
     page_object_to_num_map = {p.obj.objgen: i + 1 for i, p in enumerate(pdf.pages)}
@@ -158,7 +160,7 @@ def dump_dests(pdf, output_file=None) -> OpResult:
                     # Error processing a *single* destination
                     output_data["errors"].append(
                         {
-                            "error": f"Failed to process destination value for key '{name}'",
+                            "error": f"Failed to process destination value for key {name!r}",
                             "details": str(e),
                             "raw_value": repr(dest_obj),
                         }

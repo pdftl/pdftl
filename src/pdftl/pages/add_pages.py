@@ -124,7 +124,7 @@ def process_source_pages(
 
     ret = RebuildLinksPartialContext()
 
-    instance_counts = {}
+    instance_counts: dict[tuple, int] = {}
     seen_pages = set()
 
     # Pre-cache source pages to avoid repeated attribute access/hashing
@@ -169,7 +169,32 @@ def process_source_pages(
             src_obj = source_page.obj
             for k, v in src_obj.items():
                 if k != "/Parent":
-                    new_page[k] = new_pdf_copy_foreign(page_data.pdf.make_indirect(v))
+                    # The simplest types in PDFs are
+                    # directly represented as Python types:
+                    # int, bool, and None stand for PDF
+                    # integers, booleans and the
+                    # “null”. Decimal is used for floating
+                    # point numbers in PDFs. If a value in a
+                    # PDF is assigned a Python float,
+                    # pikepdf will convert it to Decimal.
+                    #
+                    # Types that are not directly
+                    # convertible to Python are represented
+                    # as pikepdf.Object, a compound object
+                    # that offers a superset of possible
+                    # methods, some of which only if the
+                    # underlying type is suitable. Use the
+                    # EAFP idiom, or isinstance to determine
+                    # the type more precisely. This partly
+                    # reflects the fact that the PDF
+                    # specification allows many data fields
+                    # to be one of several types.
+
+                    try:
+                        new_val = new_pdf_copy_foreign(page_data.pdf.make_indirect(v))
+                    except TypeError:
+                        new_val = k
+                    new_page[k] = new_val
 
         # --- COMMON POST-PROCESSING ---
 

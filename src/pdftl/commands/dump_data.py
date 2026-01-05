@@ -170,7 +170,12 @@ def dump_data_cli_hook(result: OpResult, _stage):
     CLI-specific side effect: Writes the snapshot to stdout or a file.
     This function is only called by the CLI pipeline.
     """
-    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    if result.meta is None:
+        raise AttributeError("No result metadata")
+
+    from pdftl.utils.hooks import from_result_meta
+
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
     escape_xml = result.meta.get(c.META_ESCAPE_XML, True)
     extra_info = result.meta.get(c.META_EXTRA_INFO, False)
 

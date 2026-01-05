@@ -25,15 +25,15 @@ def mock_registry():
 
 
 @pytest.fixture
-def mock_save_pdf():
-    with patch("pdftl.cli.pipeline.save_pdf") as mock:
+def mock_save_content():
+    with patch("pdftl.cli.pipeline.save_content") as mock:
         yield mock
 
 
 # --- Tests ---
 
 
-def test_pipeline_op_result_hook_and_discard(mock_context, mock_registry, mock_save_pdf):
+def test_pipeline_op_result_hook_and_discard(mock_context, mock_registry, mock_save_content):
     """
     Covers:
     - Lines 150-156: Handling OpResult, setting discardable, calling cli_hook.
@@ -78,7 +78,7 @@ def test_pipeline_op_result_hook_and_discard(mock_context, mock_registry, mock_s
         assert manager.pipeline_pdf == real_pdf
 
         # Cover Lines 111-114: Verify Save Skipped
-        mock_save_pdf.assert_not_called()
+        mock_save_content.assert_not_called()
 
         # Cleanup verification (Line 119)
         mock_pdf_close.assert_called_once()

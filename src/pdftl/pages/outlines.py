@@ -21,7 +21,7 @@ from collections import namedtuple
 
 logger = logging.getLogger(__name__)
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -140,31 +140,20 @@ def rebuild_outlines(
         logger.debug("no chunks found. exiting")
         return []
 
-    # # Build the same caches that rebuild_links() uses.
-    # # We need this to resolve named destinations.
-    # rev_maps, dest_caches, include_instance, include_pdf_id = _build_link_caches(
-    #     call_context.processed_page_info, call_context.unique_source_pdfs
-    # )
-
-    # # --- Create a LinkRemapper for this chunk ---
-    # remapper_context = RemapperContext(
-    #     page_map=call_context.page_map,
-    #     rev_maps=rev_maps,
-    #     dest_caches=dest_caches,
-    #     pdf_to_input_index=pdf_to_input_index,
-    #     page_transforms=call_context.page_transforms,
-    #     include_instance=include_instance,
-    #     include_pdf_id=include_pdf_id,
-    # )
-    # remapper = LinkRemapper(remapper_context)
-
-    new_dests_from_outlines = []
+    new_dests_from_outlines: list[Any] = []
 
     with new_pdf.open_outline() as new_outline:
         for chunk in chunks:
             remapper.set_call_context(new_pdf, chunk.pdf, chunk.instance_num)
             _process_chunk(chunk, remapper, new_outline)
 
+    # FIXME: this return value is always empty.
+    #
+    # The `_process_chunk` function appears to resolve
+    # destinations immediately (early binding), so this list
+    # is never populated. It is currently
+    # vestigial. Probably.  We are keeping it to satisfy the
+    # function signature until a future refactor.
     return new_dests_from_outlines
 
 
@@ -174,7 +163,7 @@ def rebuild_outlines(
 @dataclass
 class _OutlineChunkState:
     pdf: "Pdf"
-    chunks: list
+    chunks: list[ChunkData]
     chunk_map: dict
     page_in_chunk_idx: int
     output_start_page: int
@@ -182,14 +171,14 @@ class _OutlineChunkState:
     last_src_idx: int
 
 
-def _build_outline_chunks(processed_page_info: list) -> [ChunkData]:
+def _build_outline_chunks(processed_page_info: list) -> list[ChunkData]:
     """
     Builds a list of "outline chunks" from the processed_page_info.
 
     A new chunk is created whenever the source PDF, the instance number,
     or page contiguity changes. This fixes the `cat A A` bug.
     """
-    chunks = []
+    chunks: list[ChunkData] = []
     if not processed_page_info:
         return []
 
@@ -279,7 +268,7 @@ def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
 
     with source_pdf.open_outline() as source_outline:
         root_items = list(source_outline.root)
-        logger.debug("[DEBUG] Source outline has %s root items.", len(root_items))
+        logger.debug("Source outline has %s root items.", len(root_items))
         for source_item in source_outline.root:
             copier.copy_item(
                 source_item,

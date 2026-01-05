@@ -41,9 +41,12 @@ def dump_annots_cli_hook(result: OpResult, _stage):
     CLI Hook for dump_annots.
     Serializes the raw annotation data to a compacted JSON string and outputs it.
     """
+
     import json
 
-    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    from pdftl.utils.hooks import from_result_meta
+
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
     # Serialize to JSON string
     json_string = json.dumps(result.data, indent=2)
@@ -116,7 +119,9 @@ def dump_data_annots_cli_hook(result: OpResult, _stage):
     CLI Hook for dump_data_annots.
     Formats the raw structured data into the pdftk style report.
     """
-    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    from pdftl.utils.hooks import from_result_meta
+
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
     if not result.data:
         logger.warning("No data available to generate full dump_data_annots report.")

@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import OutlineItem, NameTree
 
-
 from pdftl.utils.whatisit import is_page
 
 
@@ -56,17 +55,20 @@ def _get_destination_array(item: "OutlineItem", named_destinations: "NameTree"):
     # if not isinstance(item, (Dictionary, dict, OutlineItem)) or not hasattr(item, "destination"):
     #     logger.debug("returning early: item is not a valid container")
     #     return None
-    from pikepdf import Array, Dictionary, Name, OutlineItem, String
+    from pikepdf import Array, Dictionary, Name, Object, OutlineItem, String
 
     if not isinstance(item, OutlineItem):
         logger.warning("Invalid item passed, returning None")
         return None
 
-    dest = item.destination
+    dest: Object | Array | Name | int | String | None = item.destination
     logger.debug("dest=%s, type: %s", dest, type(dest))
     # 1. Fallback to the action's destination if the primary one is missing
-    if dest is None and hasattr(item, "action") and hasattr(item.action, "D"):
-        dest = item.action.D
+    if dest is None:
+        if hasattr(item, "action"):
+            action = item.action
+            if action is not None and hasattr(action, "D"):
+                dest = action.D
 
     # 2. Handle direct array destinations
     if isinstance(dest, Array):

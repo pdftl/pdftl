@@ -57,7 +57,7 @@ class FitCropContext:
 
     def calculate_rect(
         self, page_idx: int, parsed: dict, rule_str: str, all_rules: dict
-    ) -> tuple[float, float, float, float]:
+    ) -> tuple[float, float, float, float] | None:
         """
         Calculates the new CropBox based on 'fit' or 'fit-group' logic.
         Returns (llx, lly, urx, ury) in absolute PDF coordinates.
@@ -84,6 +84,8 @@ class FitCropContext:
                 final_bbox = self._calculate_group_union(source_spec, rule_str, all_rules)
                 self._group_cache[cache_key] = final_bbox
 
+        if final_bbox is None:
+            return None
         # Apply Padding (Left, Top, Right, Bottom)
         # get_visible_bbox returns (x0, y0, x1, y1) where y0 is bottom.
         pad_l, pad_t, pad_r, pad_b = padding

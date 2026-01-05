@@ -29,7 +29,7 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
         # Extract the actual values from the pikepdf.Encryption object
         user_pw = enc_obj.user or ""
         owner_pw = enc_obj.owner or ""
-        print(f"[DEBUG] Found encryption object. User: {user_pw}, Owner: {owner_pw}")
+        logger.debug("Found encryption object. User: %s, Owner: %s", user_pw, owner_pw)
 
     # 2. Save pikepdf state to buffer WITH the encryption object
     # Passing the enc_obj directly back to save() is the most reliable way
@@ -39,9 +39,9 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
 
     # Verify the buffer
     if b"/Encrypt" in buffer.getvalue():
-        print("[DEBUG] SUCCESS: Buffer is now encrypted.")
+        logger.debug("SUCCESS: Buffer is now encrypted.")
     else:
-        print("[DEBUG] ERROR: Buffer still missing /Encrypt. Check if pdf object is modified.")
+        logger.debug("ERROR: Buffer still missing /Encrypt. Check if pdf object is modified.")
 
     # 3. Setup pyHanko writer
     w = IncrementalPdfFileWriter(buffer)
@@ -50,7 +50,7 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
         # decrypting the reader and cloning the encryption for the writer.
         pw_to_use = (user_pw or owner_pw).encode("utf-8")
         w.encrypt(user_pwd=pw_to_use)
-        print("[DEBUG] pyHanko writer encrypted (cloned from base)")
+        logger.debug("pyHanko writer encrypted (cloned from base)")
 
     # 4. Load the Signer
     key_and_cert = (sign_cfg["key"], sign_cfg["cert"])

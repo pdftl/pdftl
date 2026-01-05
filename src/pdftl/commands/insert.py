@@ -112,13 +112,13 @@ def insert_pages(pdf: "Pdf", args: list) -> OpResult:
 
     count_inserted = 0
     for insert_idx, media_box, crop_box, trim_box in actions:
-        for _ in range(spec.count):
+        for _ in range(spec.insert_count):
             new_page = dummy_pdf.add_blank_page()
-            new_page.MediaBox = list(media_box)
+            new_page.MediaBox = list(media_box)  # type: ignore[call-overload]
             if crop_box:
-                new_page.CropBox = list(crop_box)
+                new_page.CropBox = list(crop_box)  # type: ignore[call-overload]
             if trim_box:
-                new_page.TrimBox = list(trim_box)
+                new_page.TrimBox = list(trim_box)  # type: ignore[call-overload]
 
             pdf.pages.insert(insert_idx, new_page)
             count_inserted += 1
@@ -155,8 +155,8 @@ def _resolve_geometry(
     # Identify context for relative units (%, etc)
     target_page = pdf.pages[target_idx]
     target_media = target_page.MediaBox
-    ref_w = float(target_media[2] - target_media[0])
-    ref_h = float(target_media[3] - target_media[1])
+    ref_w = float(target_media[2]) - float(target_media[0])
+    ref_h = float(target_media[3]) - float(target_media[1])
 
     # Strategy A: Explicit Geometry
     if spec.geometry_spec and not is_model_mode:

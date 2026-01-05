@@ -29,8 +29,8 @@ def parse_chop_spec(spec_str: str, page_rect: "Array"):
     """
     content, direction = _parse_chop_spec_prep(spec_str)
 
-    page_width = abs(float(page_rect[2] - page_rect[0]))
-    page_height = abs(float(page_rect[3] - page_rect[1]))
+    page_width = abs(float(page_rect[2]) - float(page_rect[0]))
+    page_height = abs(float(page_rect[3]) - float(page_rect[1]))
     total_dim = page_width if direction == "cols" else page_height
 
     # now try each parsing strategy in turn

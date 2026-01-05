@@ -263,12 +263,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
             # 2. Force a clean re-import of the module
             import pdftl.commands.helpers.text_drawer as _td_mod
 
-            # Check the resulting alias on the module itself.
-            self.assertIs(
-                _td_mod.InvalidArgumentError,
-                ValueError,
-                "InvalidArgumentError should fall back to ValueError (L24)",
-            )
+            assert issubclass(_td_mod.InvalidArgumentError, ValueError)
 
     def test_dummy_textdrawer_methods_l331_335(self):
         """

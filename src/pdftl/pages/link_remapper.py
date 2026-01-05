@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf, Dictionary, Array
+    from pikepdf import Pdf, Dictionary, Array, Object
 
 from pdftl.utils.transform import transform_destination_coordinates
 
@@ -89,7 +89,7 @@ class LinkRemapper:
         self.source_pdf = source_pdf
         self.instance_num = instance_num
 
-    def _copy_action(self, original_action: "Dictionary") -> Union["Dictionary", None]:
+    def _copy_action(self, original_action: "Dictionary") -> Union["Object", None]:
         """
         Safely copy a PDF action dictionary from the source to the target PDF.
 
@@ -104,8 +104,10 @@ class LinkRemapper:
             Dictionary | None: A deep copy of the action, owned by `self.pdf`,
             or None if copying failed due to a ForeignObjectError.
         """
-        from pikepdf import ForeignObjectError
+        from pikepdf import Dictionary, ForeignObjectError
 
+        if self.source_pdf is None or self.pdf is None:
+            raise ValueError("Unconfigured LinkRemapper attempted to use _copy_action")
         try:
             indirect_action = self.source_pdf.make_indirect(original_action)
             return self.pdf.copy_foreign(indirect_action)
@@ -151,9 +153,11 @@ class LinkRemapper:
         Returns:
             Array: A transformed destination array referencing the target page.
         """
+        from typing import Any, Iterable, cast
+
         from pikepdf import Array, Name
 
-        d_details = list(dest_array)[1:]
+        d_details = list(cast(Iterable[Any], dest_array))[1:]
         rotation, scale = self.context.page_transforms.get(
             target_page.obj.objgen, ((0, False), 1.0)
         )
@@ -292,15 +296,14 @@ class LinkRemapper:
         from pikepdf import Array, Dictionary, Name, String
 
         dest = action.D
-        resolved = dest.resolve() if isinstance(dest, Dictionary) else dest
         new_action_dest = None
         new_named_dest = None
 
         # Dispatch based on destination type
-        if isinstance(resolved, (String, Name)):
-            new_action_dest, new_named_dest = self._remap_named_destination_data(resolved)
-        elif isinstance(resolved, Array):
-            new_action_dest, new_named_dest = self._remap_explicit_destination_data(resolved)
+        if isinstance(dest, (String, Name)):
+            new_action_dest, new_named_dest = self._remap_named_destination_data(dest)
+        elif isinstance(dest, Array):
+            new_action_dest, new_named_dest = self._remap_explicit_destination_data(dest)
 
         if new_action_dest is None:
             return None, None
@@ -338,7 +341,9 @@ class LinkRemapper:
         """
         from pikepdf import Name
 
-        action_type = action.get(Name.S, "Unknown")
+        action_type: Object | str | None = action.get(Name.S, None)
+        if action_type is None:
+            action_type = "Unknown"
         logger.warning(
             "Unsupported action type '%s' copied without remapping. "
             "It is highly likely to be broken in the final document.",

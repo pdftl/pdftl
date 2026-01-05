@@ -118,8 +118,8 @@ class RegexReplaceContentStream:
     """A regular expression replacer for PDF content streams"""
 
     pdf: "Pdf"
-    from_re: str = ""
-    to_re: str = ""
+    from_re: bytes = b""
+    to_re: bytes = b""
     count: int = 0
     normalize_input: bool = True
     normalize_output: bool = True

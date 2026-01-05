@@ -7,7 +7,7 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, List, Union
 
 if TYPE_CHECKING:
     import pikepdf
@@ -19,7 +19,7 @@ from pdftl.core.executor import run_operation
 from pdftl.core.registry import register_help_topic, registry
 from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
-from pdftl.output.save import save_pdf
+from pdftl.output.save import save_content
 from pdftl.utils.user_input import pdf_filename_completer
 
 
@@ -41,7 +41,7 @@ class CliStage:
     input_passwords: list[str | None] = field(default_factory=list)
     handles: dict[str, int] = field(default_factory=dict)
     operation_args: list[str] = field(default_factory=list)
-    options: dict[str, any] = field(default_factory=dict)
+    options: dict[str, Any] = field(default_factory=dict)
 
     def resolve_stage_io_prompts(self, get_input, stage_num):
         """
@@ -81,8 +81,8 @@ class PipelineResult:
 class PipelineManager:
     """Orchestrates the execution of a multi-stage PDF processing pipeline."""
 
-    def __init__(self, stages, input_context):
-        self.stages: [CliStage] = stages
+    def __init__(self, stages, input_context) -> None:
+        self.stages: List[CliStage] = stages
         self.pipeline_pdf = None
         self.kept_id = None
         self.input_context = input_context
@@ -107,7 +107,7 @@ class PipelineManager:
                     save_options = stage.options
 
                     # Call save. _save_kw_options will handle the isolation logic.
-                    save_pdf(
+                    save_content(
                         self.pipeline_pdf,
                         stage_output,
                         self.input_context,
@@ -167,40 +167,50 @@ class PipelineManager:
         self._process_result(result, stage, opened_pdfs)
 
     def _process_result(self, result, stage, opened_pdfs):
+        """
+        Updates pipeline state and manages file cleanup.
+        Crucially, it defers cleanup if the result is a generator.
+        """
+
+        import pikepdf
+
         from pdftl.core.types import OpResult
 
+        # 1. Unpack OpResult if present
         if isinstance(result, OpResult):
             self.results.append(result)
             self.result_discardable = result.is_discardable
+
+            # CLI Hooks (like printing text to console)
             if not getattr(self.input_context, "is_api", False):
                 op_entry = registry.operations.get(stage.operation, {})
                 if hook := op_entry.get("cli_hook"):
-                    # Hook now sees stage.options directly, which should include
-                    # the output path if the parser did its job.
                     hook(result, stage)
-            result = result.pdf
+
+            # Update the pipeline data
+            result_val = result.pdf
         else:
             self.result_discardable = False
+            result_val = result
 
-        if isinstance(result, types.GeneratorType):
-            self._save_generator_and_cleanup(result, opened_pdfs)
+        # 2. Update the Pipeline State Variable
+        self.pipeline_pdf = result_val
+
+        # 3. Smart Cleanup Logic
+        # CASE A: Generator (Lazy Evaluation)
+        # We CANNOT close opened_pdfs here because the generator hasn't run yet.
+        # We rely on the generator having a `finally` block to close these when done.
+        if isinstance(result_val, types.GeneratorType):
+            logger.debug("Stage returned a generator. Deferring cleanup to the generator.")
+            # Do nothing. The generator "owns" the opened_pdfs now.
+
+        # CASE B: Standard Object (Immediate Evaluation)
+        # We can safely close the inputs that aren't the result.
         else:
             for pdf in opened_pdfs:
-                if pdf != result:
-                    pdf.close()
-            self.pipeline_pdf = result
-
-    def _save_generator_and_cleanup(self, result, opened_pdfs):
-        """Save a generator pipeline output and clean up"""
-        logger.debug("Found a PDF generator in the pipeline. Saving.")
-        # we must consume the generator now, before closing opened pdfs
-        for filename, pdf in result:
-            logger.debug("Saving a generator PDF to '%s'", filename)
-            save_pdf(pdf, filename, self.input_context.get_input, **self._save_kw_options())
-            pdf.close()
-        # generator finished, so close all opened pdfs
-        for pdf in opened_pdfs:
-            pdf.close()
+                if pdf != result_val:
+                    if isinstance(pdf, pikepdf.Pdf):
+                        pdf.close()
 
     def _validate_stage_args(self, stage, is_first, is_last):
         """Validates arguments for a given stage."""
@@ -302,16 +312,17 @@ class PipelineManager:
             )
         return self.pipeline_pdf
 
-    def _open_pdf_from_file(self, filename: str, password: str or None):
+    def _open_pdf_from_file(self, filename: str, password: str | None):
         """
         Opens a PDF from a file path, handling passwords and file-related errors.
         """
         import pikepdf
 
-        kwargs = {"password": password} if password else {}
         try:
             logger.debug("Opening file '%s'", filename)
-            return pikepdf.open(filename, **kwargs)
+            if password:
+                return pikepdf.open(filename, password=password)
+            return pikepdf.open(filename)
         except pikepdf.PasswordError as exc:
             msg = (
                 str(exc)

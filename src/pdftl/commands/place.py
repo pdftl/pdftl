@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.commands.parsers.place_parser import PlacementOp, parse_place_args
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
+from pdftl.core.types import HelpExample, OpResult
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -45,20 +45,25 @@ Applies geometric transformations (direct similarities) to the content of select
   * **Named:** `center` (default), `top-left`, `top`, `top-right`,
     `left`, `right`, `bottom-left`, `bottom`, `bottom-right`.
   * **Coordinate:** `x,y` (e.g., `0,0` for bottom-left corner).
-
-**Examples:**
-  * Shift all pages up by 1 inch:
-    `all(shift=0, 1in)`
-
-  * Shrink odd pages to 90% size, centered:
-    `odd(scale=0.9)`
-
-  * Rotate page 1 by 45 degrees around the top-left corner:
-    `1(spin=45:top-left)`
-
-  * Chain operations (shift then scale):
-    `1-5(shift=10,10; scale=0.8)`
 """
+
+_PLACE_EXAMPLES = [
+    HelpExample(
+        desc="Shift all pages up by 1 inch", cmd="in.pdf place '(shift=0, 1in)' output out.pdf"
+    ),
+    HelpExample(
+        desc="Shrink odd pages to 90% size, centered",
+        cmd="in.pdf place 'odd(scale=0.9)' output out.pdf",
+    ),
+    HelpExample(
+        desc="Rotate page 1 by 45 degrees around the top-left corner",
+        cmd="in.pdf place '1(spin=45:top-left)' output out.pdf",
+    ),
+    HelpExample(
+        desc="Chain operations (shift then scale)",
+        cmd="in.pdf place '1-5(shift=10,10; scale=0.8)' output out.pdf",
+    ),
+]
 
 
 @register_operation(
@@ -66,6 +71,7 @@ Applies geometric transformations (direct similarities) to the content of select
     tags=["content_modification", "geometry"],
     desc="Shift, scale, and spin page content",
     usage="<input> place <spec>... output <file>",
+    examples=_PLACE_EXAMPLES,
     long_desc=_PLACE_LONG_DESC,
     args=(
         [c.INPUT_PDF, c.OPERATION_ARGS],
@@ -87,7 +93,7 @@ def place_content(target_pdf, place_specs) -> OpResult:
             page = target_pdf.pages[p_num - 1]
             matrix = _calculate_transformation_matrix(page, cmd.operations)
 
-            if matrix:
+            if matrix is not None:
                 matrix_str = " ".join(f"{x:.4f}" for x in matrix)
                 affix_content(page, "Q", "tail")
                 affix_content(page, f"q {matrix_str} cm", "head")
@@ -96,7 +102,9 @@ def place_content(target_pdf, place_specs) -> OpResult:
     return OpResult(success=True, pdf=target_pdf)
 
 
-def _calculate_transformation_matrix(page: "Page", operations: list[PlacementOp]) -> list[float]:
+def _calculate_transformation_matrix(
+    page: "Page", operations: list[PlacementOp]
+) -> list[float] | None:
     ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]  # Identity
     dims = get_visible_page_dimensions(page)
 

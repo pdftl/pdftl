@@ -134,7 +134,6 @@ def test_parser_success_simple():
     rule = rules[0]
     assert isinstance(rule, ModificationRule)
 
-    # FIXED: Expect a List, not a Set
     assert rule.page_numbers == [1, 2, 3, 4]
 
     assert rule.type_selector == "/Link"

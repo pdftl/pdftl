@@ -2,7 +2,9 @@
 
 import json
 import sys
+from typing import Any
 
+from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_output
 
 
@@ -70,3 +72,15 @@ def json_dump_hook(result, stage):
     finally:
         if output_path:
             f.close()
+
+
+def from_result_meta(result: OpResult, attrib: str) -> Any:
+    """Utility to get a value from result.meta or error out if impossible"""
+    assert result.meta is not None
+    return result.meta.get(attrib)
+
+
+def str_from_result_meta(result: OpResult, attrib: str) -> str:
+    """Utility to get a value from result.meta, asserting that it is a string"""
+    assert isinstance(ret := from_result_meta(result, attrib), str)
+    return ret

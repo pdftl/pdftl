@@ -75,6 +75,9 @@ def dump_files_cli_hook(result: OpResult, _stage):
     if not result.success:
         return
 
+    if result.meta is None:
+        raise AttributeError("Missing metadata")
+
     if not result.data:
         # Original behavior: print message if empty
         input_filename = result.meta.get("input_filename", "input")
@@ -94,6 +97,9 @@ def unpack_files_cli_hook(result: OpResult, _stage):
     """CLI Hook to write extracted files to disk."""
     if not result.success:
         return
+
+    if result.meta is None:
+        raise AttributeError("Missing metadata")
 
     output_dir = result.meta.get("output_dir")
 

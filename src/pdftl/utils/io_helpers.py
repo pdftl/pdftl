@@ -10,7 +10,7 @@ import sys
 from contextlib import nullcontext
 
 
-def smart_open_output(filename: str, mode="w", encoding="utf-8"):
+def smart_open_output(filename: str | None, mode="w", encoding="utf-8"):
     """
     Context manager that opens a filename for writing,
     or yields sys.stdout (or sys.stdout.buffer) if filename is None.

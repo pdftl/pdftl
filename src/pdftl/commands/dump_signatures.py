@@ -40,7 +40,9 @@ def dump_signatures_cli_hook(result: OpResult, _stage):
     CLI Hook for dump_signatures.
     Formats the list of signature dictionaries into the Stanza text format.
     """
-    output_file = result.meta.get(c.META_OUTPUT_FILE)
+    from pdftl.utils.hooks import from_result_meta
+
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
     signatures = result.data
 
     with smart_open_output(output_file) as out:

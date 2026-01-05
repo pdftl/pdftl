@@ -224,7 +224,7 @@ def _extract_field_options(opt_array) -> list:
     """Parses PDF choice field options into strings or (export, display) tuples."""
     import pikepdf
 
-    opts = []
+    opts: list[str | tuple] = []
     for opt in opt_array:
         if isinstance(opt, pikepdf.Array):
             # Format: (export_value, display_value)

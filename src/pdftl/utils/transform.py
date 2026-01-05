@@ -126,8 +126,8 @@ def transform_destination_coordinates(
     """
     x_coord = float(coords[0]) if coords[0] is not None else None
     y_coord = float(coords[1]) if coords[1] is not None else None
-    width = float(page_box[2] - page_box[0])
-    height = float(page_box[3] - page_box[1])
+    width = float(page_box[2]) - float(page_box[0])
+    height = float(page_box[3]) - float(page_box[1])
 
     # Apply rotation first to get coordinates in the unscaled, rotated space
     x_coord, y_coord = _rotate_pair(angle, x_coord, y_coord, width, height)

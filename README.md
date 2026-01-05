@@ -219,6 +219,7 @@ Usage
   optimize_images         Optimize images
   place                   Shift, scale, and spin page content
   replace                 Regex replacement on page content streams
+  render                  Render PDF pages as images
   rotate                  Rotate pages in a PDF
   shuffle                 Interleave pages from multiple input PDFs
   stamp                   Stamp a 1-page PDF onto each page of an input PDF

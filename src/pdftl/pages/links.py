@@ -72,6 +72,9 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
     """
     from pikepdf import ForeignObjectError, Name
 
+    if remapper.pdf is None or remapper.source_pdf is None:
+        return None, None
+
     try:
         new_annot = remapper.pdf.copy_foreign(remapper.source_pdf.make_indirect(original_annot))
     except (ForeignObjectError, ValueError, RuntimeError) as e:
@@ -119,7 +122,11 @@ def _rebuild_annotations_for_page(
     Returns:
         list: A flat list of (name, dest) tuples for newly created named destinations.
     """
-    Array = pikepdf.Array
+
+    if remapper.pdf is None:
+        raise ValueError("Internal error: unconfigured LinkRemapper")
+
+    from pikepdf import Array
 
     if "/Annots" not in source_page:
         return []

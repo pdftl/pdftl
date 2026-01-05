@@ -3,6 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # src/pdftl/__main__.py
+
+# pragma: exclude this file
+
 """
 Main entrypoint for pdftl.
 """

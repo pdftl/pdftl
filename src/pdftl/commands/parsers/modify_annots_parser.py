@@ -62,7 +62,7 @@ spec_pattern = re.compile(r"^([^(]*)?\((.*?)\)$")
 class ModificationRule:
     """Dataclass to hold a single modification rule."""
 
-    page_numbers: set[int]
+    page_numbers: list[int]
     type_selector: str | None
     modifications: list[tuple[str, str]]
 

@@ -7,14 +7,8 @@
 """Parser for the insert operation"""
 
 import re
-from typing import NamedTuple
 
-
-class InsertSpec(NamedTuple):
-    count: int
-    geometry_spec: str | None
-    mode: str  # 'after' or 'before'
-    target_page_spec: str
+from pdftl.commands.types.insert_types import InsertSpec
 
 
 def parse_insert_args(args: list[str]) -> InsertSpec:
@@ -35,7 +29,7 @@ def parse_insert_args(args: list[str]) -> InsertSpec:
       - `insert 2 after 5`: Insert 2 pages after page 5.
     """
     # Defaults
-    count = 1
+    insert_count = 1
     geometry_spec = None
     mode = "after"
     target_page_spec = "1-end"
@@ -65,7 +59,7 @@ def parse_insert_args(args: list[str]) -> InsertSpec:
 
             if is_definition:
                 if c_str:
-                    count = int(c_str)
+                    insert_count = int(c_str)
                 if g_str:
                     geometry_spec = g_str
                 remaining_args = remaining_args[1:]
@@ -82,4 +76,4 @@ def parse_insert_args(args: list[str]) -> InsertSpec:
             # Implicit "after" (default), rest is range.
             target_page_spec = " ".join(remaining_args)
 
-    return InsertSpec(count, geometry_spec, mode, target_page_spec)
+    return InsertSpec(insert_count, geometry_spec, mode, target_page_spec)

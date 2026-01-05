@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from pdftl.exceptions import UserCommandLineError
 
@@ -9,7 +10,7 @@ from pdftl.exceptions import UserCommandLineError
 @dataclass
 class PlacementOp:
     name: str
-    params: dict[str, any]
+    params: dict[str, Any]
 
 
 @dataclass
@@ -81,7 +82,7 @@ def _parse_operations(ops_str: str) -> list[PlacementOp]:
             if ":" in val:
                 value_part, anchor_part = val.split(":", 1)
 
-            params = {"value": value_part.strip()}
+            params: dict[str, Any] = {"value": value_part.strip()}
 
             if anchor_part:
                 anchor_part = anchor_part.strip()

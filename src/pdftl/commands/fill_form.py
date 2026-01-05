@@ -11,7 +11,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -33,12 +33,12 @@ XFDF support is currently somewhere between flaky and non-existent.
 
 """
 
-_FILL_FORM_EXAMPLES = [
-    # {
-    #     "cmd": "in.pdf fill_form data.fdf output out.pdf",
-    #     "desc": "Complete a form in in.pdf using data from data.fdf"
-    # }
-]
+# _FILL_FORM_EXAMPLES = [
+#     {
+#         "cmd": "in.pdf fill_form data.fdf output out.pdf",
+#         "desc": "Complete a form in in.pdf using data from data.fdf"
+#     }
+# ]
 
 
 @register_operation(
@@ -48,10 +48,10 @@ _FILL_FORM_EXAMPLES = [
     desc="Fill a PDF form",
     long_desc=_FILL_FORM_LONG_DESC,
     usage="<input> fill_form <form_data> output <file> [<option>...]",
-    examples=_FILL_FORM_EXAMPLES,
+    #    examples=_FILL_FORM_EXAMPLES,  # FIXME
     args=([c.INPUT_PDF, c.OPERATION_ARGS, c.GET_INPUT], {}),
 )
-def fill_form(pdf: "Pdf", args: [str], get_input: callable) -> OpResult:
+def fill_form(pdf: "Pdf", args: list[str], get_input: Callable) -> OpResult:
     """
     Fill in a form, treating the first argument as a filename (or similar) for data
     """

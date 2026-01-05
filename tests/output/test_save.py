@@ -514,3 +514,87 @@ def test_save_pdf_need_appearances_fails(
     assert record.message == "Problem setting need_appearances: AttributeError Test error"
 
     mock_pdf.save.assert_called_once()
+
+
+from unittest.mock import patch
+
+from pdftl.core.constants import PDFTL_SOURCE_INFO_KEY
+from pdftl.output.save import _remove_source_info, save_content
+
+
+def test_save_generator_logic(tmp_path):
+    """
+    Covers lines 301-305 (generator loop) and 313-320 (cleanup).
+    Simulates saving a result that is a generator of PDF objects.
+    """
+    mock_pdf_item = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf_item.save = MagicMock()
+    mock_pdf_item.close = MagicMock()
+
+    # Create a generator
+    def data_gen():
+        yield ("doc_1.pdf", mock_pdf_item)
+
+    # Patch the internal router to isolate the loop logic
+    with patch("pdftl.output.save._save_by_type") as mock_router:
+        save_content(data_gen(), str(tmp_path), None)
+
+        # Verify router was called
+        mock_router.assert_called()
+        # Verify cleanup (close) was called on the item
+        mock_pdf_item.close.assert_called()
+
+
+def test_remove_source_info_logic():
+    """Covers line 286: Deleting the specific source info key."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(100, 100))
+
+    # Inject the key that _remove_source_info looks for
+    target_key = "/" + PDFTL_SOURCE_INFO_KEY
+    page[target_key] = "Metadata to remove"
+
+    _remove_source_info(pdf)
+
+    assert target_key not in page
+
+
+from unittest.mock import patch
+
+import pytest
+
+
+def test_save_generator_image_routing_and_close(tmp_path):
+    """
+    Covers:
+    - Lines 331-333: Routing to item.save() for Image-like objects.
+    - Lines 322-323: Calling .close() on non-pikepdf objects.
+    """
+    # Create a Mock that looks like a PIL Image
+    mock_image = MagicMock()
+    mock_image.format = "PNG"  # Trigger detection
+    mock_image.save = MagicMock()
+    mock_image.close = MagicMock()
+
+    def image_gen():
+        yield ("test_img.png", mock_image)
+
+    # We patch _save_by_type's internal logic or simply let it run
+    # since we want to hit the if/else blocks inside _save_by_type.
+    # We pass None as input_context as it's not used for images.
+    save_content(image_gen(), str(tmp_path), None)
+
+    # Verify Save called
+    mock_image.save.assert_called_with("test_img.png")
+    # Verify Close called
+    mock_image.close.assert_called()
+
+
+def test_save_unknown_type(tmp_path):
+    """Covers Line 341: TypeError for unknown objects."""
+
+    def bad_gen():
+        yield ("test.txt", object())  # Plain object has no .save
+
+    with pytest.raises(TypeError, match="Unknown content object type"):
+        save_content(bad_gen(), str(tmp_path), None)

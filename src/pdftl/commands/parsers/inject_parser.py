@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def parse_inject_args(inject_args: list):
+def parse_inject_args(inject_args: list[str]):
     """
     Parses the command-line style arguments for injection commands.
 
@@ -22,7 +22,7 @@ def parse_inject_args(inject_args: list):
     """
 
     state = "neutral"
-    specs = []
+    specs: list[str] = []
     heads = []
     tails = []
     for arg in inject_args:

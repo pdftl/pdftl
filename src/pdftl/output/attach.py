@@ -149,7 +149,7 @@ def _get_attachments_from_options(options, num_pages, input_context):
 
 
 def _parse_attach_specs_to_intent(args: list[str]) -> list[ParsedAttachment]:
-    parsed_attachments = []
+    parsed_attachments: list[ParsedAttachment] = []
     i = 0
     while i < len(args):
         i += _process_next_attach_arguments_for_intent(args, i, parsed_attachments)
@@ -209,7 +209,7 @@ def _resolve_attachments(
 ) -> list[Attachment]:
     from pathlib import Path
 
-    resolved_list = []
+    resolved_list: list[Attachment] = []
     for parsed in parsed_items:
         final_filename = parsed.path
         if final_filename == "PROMPT":

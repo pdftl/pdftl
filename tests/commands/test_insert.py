@@ -38,7 +38,7 @@ from pdftl.exceptions import UserCommandLineError
 def test_insert_parser(args, expected):
     """Verify that CLI arguments are parsed into the correct InsertSpec."""
     spec = parse_insert_args(args)
-    assert spec.count == expected[0]
+    assert spec.insert_count == expected[0]
     assert spec.geometry_spec == expected[1]
     assert spec.mode == expected[2]
     assert spec.target_page_spec == expected[3]

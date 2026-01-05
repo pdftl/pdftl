@@ -121,7 +121,10 @@ def _parse_usage(ocg):
 
 def dump_layers_cli_hook(result: OpResult, _stage):
     # Use smart_open_output to handle stdout vs file correctly
-    with smart_open_output(result.meta.get(c.META_OUTPUT_FILE)) as f:
+    from pdftl.utils.hooks import from_result_meta
+
+    output_filename = from_result_meta(result, c.META_OUTPUT_FILE)
+    with smart_open_output(output_filename) as f:
         json.dump(result.data, f, indent=2)
         print("", file=f)  # Ensure trailing newline
 

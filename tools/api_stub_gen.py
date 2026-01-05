@@ -1,6 +1,11 @@
 # tools/api_stub_gen.py
+import inspect
+
 import pdftl.core.constants as c
 from pdftl.core.registry import registry
+
+# Import the actual function to inspect its signature
+from pdftl.fluent import pipeline
 from pdftl.registry_init import initialize_registry
 
 
@@ -24,11 +29,21 @@ def generate():
     ]
 
     # --- Generate Fluent Stubs ---
-    # Using 'PdfPipeline' as string return type for 3.10 compatibility
+
+    # 1. Inspect the real 'pipeline' function signature
+    sig = inspect.signature(pipeline)
+
     fluent_stubs = [
         "# src/pdftl/fluent.pyi",
         "from typing import Any, Dict, List, Optional",
         "import pikepdf",
+        # --- FIX: Add these imports so the inspected signature types are valid ---
+        "from pikepdf import Pdf",
+        "from pathlib import Path",
+        # -----------------------------------------------------------------------
+        "",
+        # Insert the dynamic function definition here
+        f"def pipeline{sig}: ...",
         "",
         "class PdfPipeline:",
         "    def __init__(self, pdf: pikepdf.Pdf): ...",
@@ -42,7 +57,20 @@ def generate():
 
     for name, op_data in registry.operations.items():
         args_meta = getattr(op_data, "args", ([], {}, {}))
-        consumed_constants = set(args_meta[0]) | set(args_meta[1].values())
+        consumed_constants = []
+        seen = set()
+
+        # 1. Process positional args (args_meta[0])
+        for const in args_meta[0]:
+            if const not in seen:
+                consumed_constants.append(const)
+                seen.add(const)
+
+        # 2. Process keyword args (args_meta[1].values())
+        for const in args_meta[1].values():
+            if const not in seen:
+                consumed_constants.append(const)
+                seen.add(const)
 
         # API signature (returns Pdf)
         api_params = []
