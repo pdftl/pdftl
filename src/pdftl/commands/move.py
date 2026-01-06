@@ -31,6 +31,23 @@ Semantics:
   - `<target>` is a page spec (target range) defining a single anchor position.
   - `before`: insert before the first page of the target range.
   - `after`: insert after the last page of the target range.
+
+The following syntax is also supported:
+
+```
+pdftl in.pdf move @instructions.json output out.pdf
+```
+
+where `instructions.json` is a file containing valid JSON
+`move` data. An example would be:
+
+```
+{
+   "source_spec": "2-6even",
+   "mode": "after",
+   "target_spec": "end"
+}
+```
 """
 
 _MOVE_EXAMPLES = [
@@ -78,7 +95,7 @@ _MOVE_EXAMPLES = [
 )
 def move_pages(pdf: "Pdf", args: list) -> OpResult:
     """
-    CLI Adapter: Parses string arguments into a spec, then runs logic.
+    CLI Adapter for `move`: Parses string arguments into a spec, then runs logic.
     """
     spec = resolve_operation_spec(args, parse_move_args, MoveSpec)
     return execute_move(pdf, spec)

@@ -418,7 +418,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.pages.link_remapper import LinkRemapper, RemapperContext
 
 
 # Mock pikepdf.Name for property access (e.g., Name.XYZ)

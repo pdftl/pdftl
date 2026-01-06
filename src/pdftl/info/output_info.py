@@ -13,7 +13,6 @@ write_info
 """
 
 import logging
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -22,6 +21,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
+from pdftl.info.info_types import (
+    BookmarkEntry,
+    DocInfoEntry,
+    PageLabelEntry,
+    PageMediaEntry,
+    PdfInfo,
+)
 from pdftl.info.read_info import (
     get_named_destinations,
     pdf_id_metadata_as_strings,
@@ -34,53 +40,6 @@ from pdftl.utils.string import (
 )
 
 
-@dataclass
-class PageLabelEntry:
-    index: int  # 1-based
-    start: int
-    prefix: str | None = None
-    style: str | None = None
-
-
-@dataclass
-class DocInfoEntry:
-    key: str
-    value: str
-
-
-@dataclass
-class BookmarkEntry:
-    title: str
-    level: int
-    page: int
-    children: list["BookmarkEntry"] = field(default_factory=list)
-
-
-@dataclass
-class PageMediaEntry:
-    number: int
-    rotation: int
-    rect: list[float]
-    dimensions: tuple[str, str]
-    crop_rect: list[float] | None = None
-
-
-@dataclass
-class PdfInfo:
-    """The complete structured representation of a PDF's metadata."""
-
-    pages: int
-    ids: list[str]
-    doc_info: list[DocInfoEntry] = field(default_factory=list)
-    bookmarks: list[BookmarkEntry] = field(default_factory=list)
-    page_media: list[PageMediaEntry] = field(default_factory=list)
-    page_labels: list[PageLabelEntry] = field(default_factory=list)
-    # Extra fields for --extra-info
-    file_path: str | None = None
-    version: str | None = None
-    encrypted: bool | None = None
-
-
 def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
     info = PdfInfo(pages=len(pdf.pages), ids=pdf_id_metadata_as_strings(pdf))
     if extra_info:
@@ -88,6 +47,8 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
         info.version = pdf.pdf_version
         info.encrypted = pdf.is_encrypted
     if pdf.docinfo:
+        if info.doc_info is None:
+            info.doc_info = []
         for key, value in pdf.docinfo.items():
             info.doc_info.append(DocInfoEntry(key=str(key)[1:], value=str(value)))
     for i, page in enumerate(pdf.pages):
@@ -95,6 +56,8 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
         mediabox = page.mediabox
         width_str = pdf_num_to_string(abs(float(mediabox[2] - mediabox[0])))
         height_str = pdf_num_to_string(abs(float(mediabox[3] - mediabox[1])))
+        if info.page_media is None:
+            info.page_media = []
         info.page_media.append(
             PageMediaEntry(
                 number=i + 1, rotation=rotation, rect=mediabox, dimensions=(width_str, height_str)
@@ -113,7 +76,8 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
                 )
             except StopIteration:
                 found_style = "NoNumber"
-
+            if info.page_labels is None:
+                info.page_labels = []
             info.page_labels.append(
                 PageLabelEntry(
                     index=int(page_idx) + 1,
@@ -161,7 +125,7 @@ def _write_pages_info(writer, info):
 
 def _write_page_media_info(writer, info):
     """Writes the media box and rotation information for each page."""
-    for entry in info.page_media:
+    for entry in info.page_media or {}:
         writer(
             "PageMediaBegin\n"
             f"PageMediaNumber: {entry.number}\n"
@@ -176,7 +140,7 @@ def _write_page_media_info(writer, info):
 
 def _write_page_labels(writer, info):
     """Writes the document's page label definitions."""
-    for entry in info.page_labels:
+    for entry in info.page_labels or {}:
         writer(
             f"PageLabelBegin\n"
             f"PageLabelNewIndex: {entry.index}\n"
@@ -188,7 +152,7 @@ def _write_page_labels(writer, info):
 
 
 def _write_id_info(writer, info):
-    for i, id_str in enumerate(info.ids):
+    for i, id_str in enumerate(info.ids or []):
         writer(f"PdfID{i}: {id_str}")
 
 
@@ -200,21 +164,21 @@ def _write_extra_info(writer, info):
 
 def _write_docinfo(writer, info, escape_xml):
     """Writes the document's Info dictionary (DocInfo) to the output."""
-    for entry in info.doc_info:
+    for entry in info.doc_info or {}:
         key, value = entry.key, entry.value
         value_str = xml_encode_for_info(value) if escape_xml else value
         writer(f"InfoBegin\nInfoKey: {key}\nInfoValue: {value_str}")
 
 
-def _write_bookmarks(writer, bookmarks: list[BookmarkEntry], escape_xml=True):
+def _write_bookmarks(writer, bookmarks: list[BookmarkEntry] | None, escape_xml=True):
     """Recursively write the bookmarks from the dataclass list."""
-    for bm in bookmarks:
+    for bm in bookmarks or {}:
         title = xml_encode_for_info(bm.title) if escape_xml else bm.title
 
         writer("BookmarkBegin")
         writer(f"BookmarkTitle: {title}")
         writer(f"BookmarkLevel: {bm.level}")
-        writer(f"BookmarkPageNumber: {bm.page}")
+        writer(f"BookmarkPageNumber: {bm.page_number}")
 
         if bm.children:
             _write_bookmarks(writer, bm.children, escape_xml)
@@ -238,7 +202,7 @@ def _extract_bookmarks_recursive(
             )
             page_num = 0
 
-        entry = BookmarkEntry(title=str(item.title), level=level, page=page_num)
+        entry = BookmarkEntry(title=str(item.title), level=level, page_number=page_num)
 
         if item.children:
             entry.children = _extract_bookmarks_recursive(

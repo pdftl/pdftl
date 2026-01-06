@@ -9,10 +9,16 @@ from pikepdf import (
     String,
 )
 
-# --- Import Modules to Test ---
 from pdftl.info import set_info as set_info_module
 
-# --- Import Functions to Test ---
+# Import your data classes
+from pdftl.info.info_types import (
+    BookmarkEntry,
+    DocInfoEntry,
+    PageLabelEntry,
+    PageMediaEntry,
+    PdfInfo,
+)
 from pdftl.info.set_info import (
     CANNOT_SET_PDFID1,
     _add_bookmark,
@@ -22,11 +28,6 @@ from pdftl.info.set_info import (
     _set_page_media_entry,
     set_metadata_in_pdf,
 )
-
-# --- Import Exceptions ---
-
-
-# --- General Fixtures ---
 
 
 @pytest.fixture
@@ -115,24 +116,27 @@ class TestSetInfo:
         self, mock_docinfo, mock_id, mock_bookmarks, mock_media, mock_labels, mock_pdf
     ):
         """Tests the main set_metadata orchestrator."""
-        meta_dict = {
-            "Info": {"Title": "A"},
-            "PdfID0": "123",
-            "BookmarkList": [{}],
-            "PageMediaList": [{}],
-            "PageLabelList": [{}],
-        }
-        set_metadata_in_pdf(mock_pdf, meta_dict)
+        # Create a full PdfInfo object
+        info = PdfInfo(
+            doc_info=[DocInfoEntry("Title", "A")],
+            ids=["123", None],
+            bookmarks=[BookmarkEntry(level=1, page_number=1, title="Test")],
+            page_media=[PageMediaEntry(number=1)],
+            page_labels=[PageLabelEntry(index=1)],
+        )
 
-        mock_docinfo.assert_called_once_with(mock_pdf, meta_dict["Info"])
-        mock_id.assert_called_with(mock_pdf, 0, meta_dict["PdfID0"])
-        mock_bookmarks.assert_called_once_with(mock_pdf, meta_dict["BookmarkList"])
-        mock_media.assert_called_once_with(mock_pdf, meta_dict["PageMediaList"])
-        mock_labels.assert_called_once_with(mock_pdf, meta_dict["PageLabelList"])
+        set_metadata_in_pdf(mock_pdf, info)
+
+        mock_docinfo.assert_called_once_with(mock_pdf, info.doc_info)
+        mock_id.assert_called_with(mock_pdf, 0, "123")
+        mock_bookmarks.assert_called_once_with(mock_pdf, info.bookmarks)
+        mock_media.assert_called_once_with(mock_pdf, info.page_media)
+        mock_labels.assert_called_once_with(mock_pdf, info.page_labels)
 
     def test_set_docinfo(self, mock_pdf):
-        info_dict = {"Title": "New Title", "Subject": "New Subject"}
-        _set_docinfo(mock_pdf, info_dict)
+        """Tests setting DocInfo from DocInfoEntry objects."""
+        entries = [DocInfoEntry("Title", "New Title"), DocInfoEntry("Subject", "New Subject")]
+        _set_docinfo(mock_pdf, entries)
 
         mock_pdf.docinfo.__setitem__.assert_has_calls(
             [
@@ -144,14 +148,10 @@ class TestSetInfo:
     def test_set_page_media_entry(self, mock_pdf):
         """Tests setting page media properties."""
         mock_page = mock_pdf.pages[0]
-        page_media = {
-            "Number": 1,
-            "Rotation": 180,
-            "Rect": [0, 0, 1, 1],
-            "CropRect": [0, 0, 2, 2],
-        }
 
-        _set_page_media_entry(mock_pdf, page_media)
+        entry = PageMediaEntry(number=1, rotation=180, rect=[0, 0, 1, 1], crop_rect=[0, 0, 2, 2])
+
+        _set_page_media_entry(mock_pdf, entry)
 
         mock_page.rotate.assert_called_once_with(180, relative=False)
         assert mock_page.mediabox == [0, 0, 1, 1]
@@ -159,23 +159,16 @@ class TestSetInfo:
 
     def test_set_page_media_entry_errors(self, mock_pdf, caplog):
         """Tests error handling for _set_page_media_entry."""
-        # 1. Missing page number
-        with caplog.at_level("WARNING"):
-            _set_page_media_entry(mock_pdf, {"Rotation": 90})
-        assert len(caplog.records) == 1
-        record = caplog.records[0]
-        assert record.message == (
-            (
-                "Skipping PageMedia metadata with missing page number (PageMediaNumber)."
-                " Metadata entry details:\n  %s"
-            )
-            % {"Rotation": 90}
-        )
+        # Case 1: "Missing page number" is no longer possible because
+        # PageMediaEntry.number is required/present on the object.
+        # We only test logic errors now.
 
-        # 2. Non-existent page number
+        # 1. Non-existent page number
         caplog.clear()
         with caplog.at_level("WARNING"):
-            _set_page_media_entry(mock_pdf, {"Number": 99})
+            entry = PageMediaEntry(number=99)
+            _set_page_media_entry(mock_pdf, entry)
+
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert record.message == "Nonexistent page 99 requested for PageMedia metadata. Skipping."
@@ -198,14 +191,14 @@ class TestSetInfo:
         ancestors = []
 
         # 1. Add Level 1
-        b1 = {"Title": "Chap 1", "Level": 1, "PageNumber": 1}
+        b1 = BookmarkEntry(title="Chap 1", level=1, page_number=1)
         ancestors = _add_bookmark(mock_pdf, b1, mock_outline, ancestors)
         oi1 = ancestors[0]
         mock_outline.root.append.assert_called_once_with(oi1)
         assert len(ancestors) == 1
 
         # 2. Add Level 2 (child of Chap 1)
-        b2 = {"Title": "Sec 1.1", "Level": 2, "PageNumber": 2}
+        b2 = BookmarkEntry(title="Sec 1.1", level=2, page_number=2)
         ancestors = _add_bookmark(mock_pdf, b2, mock_outline, ancestors)
         oi2 = ancestors[1]
         assert oi2 in oi1.children
@@ -213,7 +206,7 @@ class TestSetInfo:
         assert len(ancestors) == 2
 
         # 3. Add another Level 2 (sibling of Sec 1.1)
-        b3 = {"Title": "Sec 1.2", "Level": 2, "PageNumber": 3}
+        b3 = BookmarkEntry(title="Sec 1.2", level=2, page_number=3)
         ancestors = _add_bookmark(mock_pdf, b3, mock_outline, ancestors)
         oi3 = ancestors[1]  # Replaces oi2 in ancestor list
         assert oi3 in oi1.children
@@ -221,7 +214,7 @@ class TestSetInfo:
         assert len(ancestors) == 2
 
         # 4. Add Level 1 (sibling of Chap 1)
-        b4 = {"Title": "Chap 2", "Level": 1, "PageNumber": 4}
+        b4 = BookmarkEntry(title="Chap 2", level=1, page_number=4)
         ancestors = _add_bookmark(mock_pdf, b4, mock_outline, ancestors)
         oi4 = ancestors[0]  # Replaces oi1/oi3 in ancestor list
         mock_outline.root.append.assert_called_with(oi4)
@@ -230,20 +223,14 @@ class TestSetInfo:
     def test_add_bookmark_errors(self, mock_pdf, caplog):
         mock_pdf.pages = [MagicMock()]  # 1 page
 
-        # 1. Missing key
-        with caplog.at_level("WARNING"):
-            _add_bookmark(mock_pdf, {"Title": "Fail"}, MagicMock(), [])
-        assert len(caplog.records) == 1
-        record = caplog.records[0]
-        assert (
-            "Skipping incomplete bookmark, we need Level, PageNumber and Title." in record.message
-        )
+        # Case 1: "Missing key" is no longer possible with objects.
 
         # 2. Bad page number
-        b = {"Title": "B", "Level": 1, "PageNumber": 99}
+        b = BookmarkEntry(title="B", level=1, page_number=99)
         caplog.clear()
         with caplog.at_level("WARNING"):
             _add_bookmark(mock_pdf, b, MagicMock(), [])
+
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert (
@@ -252,10 +239,11 @@ class TestSetInfo:
         )
 
         # 3. Bad level (too deep)
-        b = {"Title": "C", "Level": 3, "PageNumber": 1}
+        b = BookmarkEntry(title="C", level=3, page_number=1)
         caplog.clear()
         with caplog.at_level("WARNING"):
             _add_bookmark(mock_pdf, b, MagicMock(), [])
+
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert record.message == (
@@ -264,30 +252,22 @@ class TestSetInfo:
         )
 
     @pytest.mark.parametrize(
-        "label_data, expected_dict, expected_index",
+        "label_entry, expected_dict, expected_index",
         [
-            ({"NewIndex": 1}, {}, 0),  # Simplest case
+            (PageLabelEntry(index=1), {}, 0),  # Simplest case
             (
-                {
-                    "NewIndex": 3,
-                    "Prefix": "A-",
-                    "Start": 5,
-                    "NumStyle": "UppercaseRoman",
-                },
+                PageLabelEntry(index=3, prefix="A-", start=5, style="UppercaseRoman"),
                 {"/P": "A-", "/St": 5, "/S": Name("/R")},
                 2,
             ),
             (
-                {
-                    "Prefix": "Intro",
-                    "NumStyle": "LowercaseRoman",
-                },  # Defaults NewIndex/Start
+                PageLabelEntry(index=1, prefix="Intro", style="LowercaseRoman"),
                 {"/P": "Intro", "/S": Name("/r")},
                 0,
             ),
         ],
     )
-    def test_make_page_label(self, label_data, expected_dict, expected_index, mock_pdf, mocker):
+    def test_make_page_label(self, label_entry, expected_dict, expected_index, mock_pdf, mocker):
         mock_map = {
             "UppercaseRoman": "/R",
             "LowercaseRoman": "/r",
@@ -296,7 +276,7 @@ class TestSetInfo:
         mock_indirect = MagicMock()
         mock_pdf.make_indirect.return_value = mock_indirect
 
-        index, label_obj = _make_page_label(mock_pdf, label_data)
+        index, label_obj = _make_page_label(mock_pdf, label_entry)
 
         assert index == expected_index
         assert label_obj == mock_indirect
@@ -322,22 +302,16 @@ class TestSetInfo:
     @patch("pdftl.info.set_info._set_id_info")
     def test_set_metadata_in_pdf_id1(self, mock_id, mock_pdf):
         """Tests that 'PdfID1' is correctly handled in the orchestrator."""
-        meta_dict = {"PdfID1": "abc"}
-        set_metadata_in_pdf(mock_pdf, meta_dict)
-        # Note: The code has a bug here, it passes meta_dict["PdfID0"]
-        # The test should reflect the code as-written.
-        # If you fix the bug to meta_dict["PdfID1"], update this test.
-        try:
-            mock_id.assert_called_with(mock_pdf, 1, meta_dict["PdfID0"])
-            set_info_module.logging.warning("BUG: set_metadata_in_pdf uses PdfID0 for PdfID1")
-        except KeyError:
-            # This will happen if you fix the bug
-            mock_id.assert_called_with(mock_pdf, 1, meta_dict["PdfID1"])
+        # New code expects id[1]
+        info = PdfInfo(ids=[None, "abc"])
+        set_metadata_in_pdf(mock_pdf, info)
+
+        mock_id.assert_called_with(mock_pdf, 1, "abc")
 
     @patch("pdftl.info.set_info._set_page_media_entry")
     def test_set_page_media_loop(self, mock_entry, mock_pdf):
         """Tests the _set_page_media loop function."""
-        page_media_list = [{"Number": 1}, {"Number": 2}]
+        page_media_list = [PageMediaEntry(number=1), PageMediaEntry(number=2)]
         set_info_module._set_page_media(mock_pdf, page_media_list)
 
         mock_entry.assert_has_calls(
@@ -350,10 +324,10 @@ class TestSetInfo:
     def test_set_page_media_entry_dimensions(self, mock_pdf):
         """Tests the 'elif "Dimensions"' branch of _set_page_media_entry."""
         mock_page = mock_pdf.pages[0]
-        # This dict must *not* have "Rect" or "CropRect"
-        page_media = {"Number": 1, "Dimensions": [300, 400]}
+        # Entry with dimensions but no rect/crop_rect
+        entry = PageMediaEntry(number=1, dimensions=[300, 400])
 
-        _set_page_media_entry(mock_pdf, page_media)
+        _set_page_media_entry(mock_pdf, entry)
 
         # Check that mediabox was set using Dimensions
         assert mock_page.mediabox == [0, 0, 300, 400]
@@ -364,7 +338,11 @@ class TestSetInfo:
     @patch("pdftl.info.set_info._add_bookmark")
     def test_set_bookmarks_loop(self, mock_add_bookmark, mock_pdf):
         """Tests the _set_bookmarks loop and outline clearing."""
-        bookmark_list = [{"Title": "A"}, {"Title": "B"}]
+        # FIX: Added dummy level=1, page_number=1 to satisfy the constructor
+        bookmark_list = [
+            BookmarkEntry(title="A", level=1, page_number=1),
+            BookmarkEntry(title="B", level=1, page_number=1),
+        ]
         mock_outline = mock_pdf.open_outline.return_value.__enter__.return_value
 
         # 1. Test with delete_existing_bookmarks=True (default)
@@ -412,7 +390,7 @@ class TestSetInfo:
     def test_add_bookmark_errors_bad_level(self, mock_pdf, caplog):
         """Tests the error case for a bookmark level < 1."""
         mock_pdf.pages = [MagicMock()]
-        b = {"Title": "A", "Level": 0, "PageNumber": 1}
+        b = BookmarkEntry(title="A", level=0, page_number=1)
         ancestors = []
 
         with caplog.at_level("WARNING"):
@@ -432,7 +410,7 @@ class TestSetInfo:
         mock_pdf.Root.PageLabels = Dictionary()
         mock_nt_instance = mock_NumberTree.return_value
 
-        label_list = [{"NewIndex": 1}]
+        label_list = [PageLabelEntry(index=1)]
 
         # 2. Act: Call with delete_existing=False
         set_info_module._set_page_labels(mock_pdf, label_list, delete_existing=False)

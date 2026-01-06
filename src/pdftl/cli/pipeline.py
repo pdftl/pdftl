@@ -7,7 +7,7 @@ import logging
 import sys
 import types
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, List, Union
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     import pikepdf
@@ -82,7 +82,7 @@ class PipelineManager:
     """Orchestrates the execution of a multi-stage PDF processing pipeline."""
 
     def __init__(self, stages, input_context) -> None:
-        self.stages: List[CliStage] = stages
+        self.stages: list[CliStage] = stages
         self.pipeline_pdf = None
         self.kept_id = None
         self.input_context = input_context

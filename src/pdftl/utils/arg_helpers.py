@@ -1,8 +1,15 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/utils/arg_helpers.py
+
+"""Utilities to help operations gather arguments in different formats"""
+
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 # Optional: Support YAML if PyYAML is installed
 try:
@@ -17,8 +24,9 @@ T = TypeVar("T")
 
 def resolve_operation_spec(
     args_or_spec: list[str] | T,
-    parser_func: Callable[[list[str]], T],
+    parser_func: Callable,
     model_class: type[T] | None = None,
+    data: Any = None,
 ) -> T:
     """
     Resolves an operation specification from CLI arguments, a file, or a direct object.
@@ -54,7 +62,19 @@ def resolve_operation_spec(
     if not isinstance(args_or_spec, list):
         raise TypeError(f"Expected list of strings or {model_class}, got {type(args_or_spec)}")
 
-    return parser_func(args_or_spec)
+    safe_data = data if data is not None else {}
+
+    # INSPECTION LOGIC:
+    # Check if the parser accepts a second argument (data)
+    import inspect
+
+    sig = inspect.signature(parser_func)
+
+    # Count how many parameters the function accepts
+    if len(sig.parameters) >= 2:
+        return parser_func(args_or_spec, safe_data)
+    else:
+        return parser_func(args_or_spec)
 
 
 def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T:

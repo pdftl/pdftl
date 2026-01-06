@@ -44,3 +44,26 @@ def test_unpack_files(pdf_with_attachment, tmp_path):
         expected_file = tmp_path / "hello.txt"
         assert expected_file.exists()
         assert expected_file.read_text() == "Hello World"
+
+
+from pdftl.commands.attachments import dump_files_cli_hook
+from pdftl.core.types import OpResult
+
+
+def test_attachments_hooks_failures():
+    """Test early returns and error raises in hooks."""
+
+    # 1. Failure (success=False) -> Should return silently (Lines 76, 99)
+    # We just ensure it doesn't raise exception
+    fail_res = OpResult(success=False)
+    dump_files_cli_hook(fail_res, None)
+    unpack_files_cli_hook(fail_res, None)
+
+    # 2. Missing Metadata -> Should raise AttributeError (Lines 79, 102)
+    success_no_meta = OpResult(success=True, meta=None)
+
+    with pytest.raises(AttributeError, match="Missing metadata"):
+        dump_files_cli_hook(success_no_meta, None)
+
+    with pytest.raises(AttributeError, match="Missing metadata"):
+        unpack_files_cli_hook(success_no_meta, None)

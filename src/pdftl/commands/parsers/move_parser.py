@@ -10,7 +10,7 @@ from pdftl.commands.types.move_types import MoveSpec
 from pdftl.exceptions import UserCommandLineError
 
 
-def parse_move_args(args: list[str]) -> MoveSpec:
+def parse_move_args(args: list[str], _data=None) -> MoveSpec:
     """
     Parses arguments for the move command.
     Syntax: <source-spec> {before|after} <target-spec>

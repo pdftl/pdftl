@@ -9,6 +9,8 @@ xml_{de,en}code_for_info"""
 
 import itertools
 import re
+from typing import TypeVar
+from collections.abc import Callable
 
 from pdftl.utils.whatisit import whatis_guess
 
@@ -98,6 +100,21 @@ def xml_decode_for_info(x):
         x = x[1:]
 
     return out
+
+
+T = TypeVar("T")
+
+
+def recursive_decode(data: T, decoder: Callable[[str], str]) -> T:
+    """Recursively 'decode' using the given str to str decoder"""
+    # Note: type ignore directives are due to mypy limitations
+    if isinstance(data, str):
+        return decoder(data)  # type: ignore[return-value]
+    if isinstance(data, list):
+        return [recursive_decode(i, decoder) for i in data]  # type: ignore[return-value]
+    if isinstance(data, dict):
+        return {k: recursive_decode(v, decoder) for k, v in data.items()}  # type: ignore[return-value]
+    return data
 
 
 def before_space(x):

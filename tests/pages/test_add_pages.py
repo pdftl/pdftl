@@ -333,7 +333,7 @@ def test_add_page_rotated_dimensions(tmp_path):
     pass
 
 
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

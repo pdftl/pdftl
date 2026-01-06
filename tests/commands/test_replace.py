@@ -109,7 +109,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pdftl.commands.replace import RegexReplaceContentStream, replace_in_content_streams
+from pdftl.commands.replace import RegexReplaceContentStream
 
 
 def test_replace_empty_spec_element():

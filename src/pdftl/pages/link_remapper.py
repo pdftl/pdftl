@@ -104,7 +104,7 @@ class LinkRemapper:
             Dictionary | None: A deep copy of the action, owned by `self.pdf`,
             or None if copying failed due to a ForeignObjectError.
         """
-        from pikepdf import Dictionary, ForeignObjectError
+        from pikepdf import ForeignObjectError
 
         if self.source_pdf is None or self.pdf is None:
             raise ValueError("Unconfigured LinkRemapper attempted to use _copy_action")
@@ -153,7 +153,8 @@ class LinkRemapper:
         Returns:
             Array: A transformed destination array referencing the target page.
         """
-        from typing import Any, Iterable, cast
+        from typing import Any, cast
+        from collections.abc import Iterable
 
         from pikepdf import Array, Name
 
@@ -293,7 +294,7 @@ class LinkRemapper:
                 - new_action (Dictionary | None): The remapped action object.
                 - new_named_dest (tuple | None): A new named destination, if created.
         """
-        from pikepdf import Array, Dictionary, Name, String
+        from pikepdf import Array, Name, String
 
         dest = action.D
         new_action_dest = None

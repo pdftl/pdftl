@@ -37,25 +37,33 @@ def test_update_info_os_error(pdf):
 
 def test_update_info_no_xml_strings(pdf):
     """Test xml_strings=False (Line 131)."""
-    # If xml_strings is False, the decoder is lambda x: x
-    # We can verify this by passing a string that WOULD change if decoded
-    # e.g., "&#x41;" (A). If passed raw, it remains "&#x41;".
 
-    # We mock parse_dump_data to check what decoder it receives
-    with patch("pdftl.commands.update_info.parse_dump_data") as mock_parse:
-        mock_parse.return_value = {}  # Return empty dict to satisfy function
+    # We patch 'parse_dump_data' where it is USED inside the parser module.
+    # This captures the call made by update_info_parser.
+    target = "pdftl.commands.parsers.update_info_parser.parse_dump_data"
 
+    with patch(target) as mock_parse_dump:
+        # Return an empty dict so PdfInfo.from_dict doesn't crash
+        mock_parse_dump.return_value = {}
+
+        # We also mock open so the file reading part doesn't fail
         with patch("builtins.open", new_callable=MagicMock):
+
+            # 1. Run with xml_strings=False
             update_info(pdf, ["meta.txt"], None, xml_strings=False)
 
-            # Check the decoder passed to parse_dump_data
-            decoder = mock_parse.call_args[0][1]
-            assert decoder("&lt;") == "&lt;"  # Should NOT decode
+            # Check the decoder passed to parse_dump_data(lines, decoder)
+            # args[0] is lines, args[1] is the decoder function
+            decoder_false = mock_parse_dump.call_args[0][1]
 
-            # Compare with True case
+            # Verify it is a passthrough (identity) function
+            assert decoder_false("&lt;") == "&lt;"
+            assert decoder_false("Foo") == "Foo"
+
+            # 2. Run with xml_strings=True
             update_info(pdf, ["meta.txt"], None, xml_strings=True)
-            decoder_true = mock_parse.call_args[0][1]
-            # Verify decoder_true is actually xml_decode_for_info
-            # (assuming xml_decode_for_info("&lt;") == "<")
-            # We can just assert they are different functions
-            assert decoder != decoder_true
+
+            decoder_true = mock_parse_dump.call_args[0][1]
+
+            # Verify it decodes XML entities
+            assert decoder_true("&lt;") == "<"

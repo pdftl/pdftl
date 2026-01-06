@@ -10,7 +10,7 @@ import glob
 import logging
 import os
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

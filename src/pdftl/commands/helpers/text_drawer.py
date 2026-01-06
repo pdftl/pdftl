@@ -15,7 +15,7 @@ error on instantiation. This isolates the optional dependency.
 import io
 import logging
 from collections import namedtuple
-from typing import Any, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -81,14 +81,14 @@ def _get_preset_y(pos: str, page_height: float) -> float:
     return 0.0  # Default to bottom
 
 
-def _get_absolute_coordinates(rule: dict, page_box: _PageBox) -> Tuple[float, float]:
+def _get_absolute_coordinates(rule: dict, page_box: _PageBox) -> tuple[float, float]:
     """Calculates anchor X,Y based on absolute 'x'/'y' rules."""
     anchor_x = _resolve_dimension(rule.get("x"), page_box.width)
     anchor_y = _resolve_dimension(rule.get("y"), page_box.height)
     return anchor_x, anchor_y
 
 
-def _get_base_coordinates(rule: dict, page_box: _PageBox) -> Tuple[float, float]:
+def _get_base_coordinates(rule: dict, page_box: _PageBox) -> tuple[float, float]:
     """
     Gets the (x, y) coordinates for the text anchor point.
     Dispatches to preset helper or absolute helper.

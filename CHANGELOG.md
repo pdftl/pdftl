@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `render` operation: rasterize pages
 
-- `move` accepts @instructions.json
+- `move`, `update_info`, `update_info_utf8` can now
+  instructions from a JSON "at-file" using `@filename.json`
+  in place of CLI arguments
 
 ### Fixed
 
