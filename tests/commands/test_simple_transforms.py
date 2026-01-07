@@ -1,13 +1,13 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.crop import crop_pages
-from pdftl.commands.delete import delete_pages
-from pdftl.commands.delete_annots import delete_annots
-from pdftl.commands.filter import filter_pdf
-from pdftl.commands.modify_annots import modify_annots
-from pdftl.commands.place import place_content
-from pdftl.commands.rotate import rotate_pdf
+from pdftl.operations.crop import crop_pages
+from pdftl.operations.delete import delete_pages
+from pdftl.operations.delete_annots import delete_annots
+from pdftl.operations.filter import filter_pdf
+from pdftl.operations.modify_annots import modify_annots
+from pdftl.operations.place import place_content
+from pdftl.operations.rotate import rotate_pdf
 
 # Define the cases: (Function, Specs List, Expected Page Count Change)
 PARAMS = [

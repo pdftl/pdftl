@@ -17,7 +17,7 @@ from pdftl.core.types import Compatibility, HelpExample, HelpTopic, Operation, O
 def caller_dict(current_frame):
     """Helper to get caller ("source") data for registry decorators"""
     caller = current_frame.f_back
-    # Returns 'pdftl.commands.normalize' or 'pdftl.utils.normalize'
+    # Returns 'pdftl.operations.normalize' or 'pdftl.utils.normalize'
     module_name = caller.f_globals.get("__name__", "unknown")
 
     return {"caller": module_name}

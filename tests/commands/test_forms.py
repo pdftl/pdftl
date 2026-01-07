@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pikepdf
 import pytest
 
-from pdftl.commands.dump_data_fields import dump_data_fields, dump_fields_cli_hook
-from pdftl.commands.fill_form import fill_form
+from pdftl.operations.dump_data_fields import dump_data_fields, dump_fields_cli_hook
+from pdftl.operations.fill_form import fill_form
 
 
 @pytest.fixture

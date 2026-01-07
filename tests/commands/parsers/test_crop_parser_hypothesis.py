@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-import pdftl.commands.parsers.crop_parser as cp
+import pdftl.operations.parsers.crop_parser as cp
 from pdftl.utils.dimensions import dim_str_to_pts
 
 # ---------------------------

@@ -10,12 +10,12 @@ from pdftl.exceptions import InvalidArgumentError
 def test_dump_text_missing_dependency():
     """Test missing dependency error."""
     with patch.dict(sys.modules, {"pypdfium2": None}):
-        import pdftl.commands.dump_text
+        import pdftl.operations.dump_text
 
-        importlib.reload(pdftl.commands.dump_text)
+        importlib.reload(pdftl.operations.dump_text)
 
         # We must invoke the helper that checks the flag
-        from pdftl.commands.dump_text import dump_text
+        from pdftl.operations.dump_text import dump_text
 
         with pytest.raises(InvalidArgumentError, match="requires the 'pypdfium2' library"):
             dump_text("dummy.pdf", "passwd123")
@@ -25,14 +25,14 @@ def test_dump_text_password_none():
     """Test None password handling."""
     # Reload with mock success
     with patch.dict(sys.modules, {"pypdfium2": MagicMock()}):
-        import pdftl.commands.dump_text
+        import pdftl.operations.dump_text
 
-        importlib.reload(pdftl.commands.dump_text)
+        importlib.reload(pdftl.operations.dump_text)
 
         with patch(
-            "pdftl.commands.dump_text._extract_text_from_pdf", return_value=[]
+            "pdftl.operations.dump_text._extract_text_from_pdf", return_value=[]
         ) as mock_extract:
-            pdftl.commands.dump_text.dump_text("dummy.pdf", None)
+            pdftl.operations.dump_text.dump_text("dummy.pdf", None)
             # Verify it was called (implies None check passed)
             mock_extract.assert_called_once()
 
@@ -47,13 +47,13 @@ def test_dump_text_real_iteration():
     mock_pdf.__iter__.return_value = iter([mock_page])
 
     with patch.dict(sys.modules, {"pypdfium2": MagicMock()}):
-        import pdftl.commands.dump_text
+        import pdftl.operations.dump_text
 
-        importlib.reload(pdftl.commands.dump_text)
+        importlib.reload(pdftl.operations.dump_text)
 
         with patch("pypdfium2.PdfDocument") as MockDoc:
             MockDoc.return_value.__enter__.return_value = mock_pdf
 
-            result = pdftl.commands.dump_text.dump_text("dummy.pdf", "pass")
+            result = pdftl.operations.dump_text.dump_text("dummy.pdf", "pass")
             assert result.success is True
             assert "Text" in result.data

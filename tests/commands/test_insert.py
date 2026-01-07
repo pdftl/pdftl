@@ -1,11 +1,11 @@
-# tests/commands/test_insert.py
+# tests/operations/test_insert.py
 
 import pikepdf
 import pytest
 
-from pdftl.commands.insert import insert_pages
-from pdftl.commands.parsers.insert_parser import parse_insert_args
 from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.insert import insert_pages
+from pdftl.operations.parsers.insert_parser import parse_insert_args
 
 # --- PART 1: Parser Logic Tests ---
 
@@ -139,7 +139,7 @@ def test_insert_before_start(simple_pdf):
     assert simple_pdf.pages[1].MediaBox == [0, 0, 100, 100]
 
 
-# ... (append to tests/commands/test_insert.py)
+# ... (append to tests/operations/test_insert.py)
 
 
 def test_insert_no_matching_target(simple_pdf, caplog):

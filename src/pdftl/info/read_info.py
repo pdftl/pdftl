@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import OutlineItem, NameTree
 
+from pdftl.utils.destinations import get_named_destinations
 from pdftl.utils.whatisit import is_page
 
 
@@ -32,15 +33,6 @@ def pdf_id_metadata_as_strings(pdf):
         for id_data in pdf.trailer.ID:
             output.append(bytes(id_data).hex())
     return output
-
-
-def get_named_destinations(pdf):
-    """Get the named destinations NameTree from the PDF, if there is one"""
-    from pikepdf import NameTree
-
-    if "/Names" in pdf.Root and "/Dests" in pdf.Root.Names:
-        return NameTree(pdf.Root.Names.Dests)
-    return None
 
 
 def _get_destination_array(item: "OutlineItem", named_destinations: "NameTree"):

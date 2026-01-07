@@ -13,7 +13,7 @@ from unittest.mock import ANY, MagicMock, call
 
 import pytest
 
-from pdftl.commands.helpers import text_drawer
+from pdftl.operations.helpers import text_drawer
 
 # --- Fixtures ---
 
@@ -34,7 +34,7 @@ def clean_slate_imports():
 
     # 2. Scrub the target module so it re-executes its import statements
     #    (which will now succeed because reportlab is scrubbed)
-    target = "pdftl.commands.helpers.text_drawer"
+    target = "pdftl.operations.helpers.text_drawer"
     if target in sys.modules:
         del sys.modules[target]
 
@@ -60,7 +60,7 @@ def drawer(page_box, monkeypatch):
 
     # Apply the patch using the standard monkeypatch fixture
     monkeypatch.setattr(
-        "pdftl.commands.helpers.text_drawer.reportlab_canvas.Canvas", mock_canvas_cls
+        "pdftl.operations.helpers.text_drawer.reportlab_canvas.Canvas", mock_canvas_cls
     )
 
     # Create the drawer
@@ -110,7 +110,7 @@ def test_get_font_name_logic(drawer, monkeypatch, caplog):
     from reportlab.pdfbase.pdfmetrics import FontNotFoundError
 
     mock_get = MagicMock(side_effect=FontNotFoundError("Missing"))
-    monkeypatch.setattr("pdftl.commands.helpers.text_drawer.getFont", mock_get)
+    monkeypatch.setattr("pdftl.operations.helpers.text_drawer.getFont", mock_get)
 
     with caplog.at_level("WARNING"):
         caplog.clear()
@@ -165,7 +165,7 @@ def test_draw_rule_geometry(drawer, monkeypatch, position, align, exp_x, exp_y, 
     base_x, base_y = text_drawer._get_base_coordinates(rule, page_box)
 
     mock_get = MagicMock()
-    monkeypatch.setattr("pdftl.commands.helpers.text_drawer.getFont", mock_get)
+    monkeypatch.setattr("pdftl.operations.helpers.text_drawer.getFont", mock_get)
 
     inst.draw_rule(rule, {})
 
@@ -192,7 +192,7 @@ sys.modules["reportlab"] = None
 sys.modules["reportlab.pdfgen"] = None
 from pdftl.exceptions import UserCommandLineError
 try:
-    from pdftl.commands.helpers.text_drawer import TextDrawer, _PageBox
+    from pdftl.operations.helpers.text_drawer import TextDrawer, _PageBox
     TextDrawer(_PageBox(100, 100))
 except UserCommandLineError as e:
     print(f"CAUGHT: {e}")

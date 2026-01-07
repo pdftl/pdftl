@@ -1,12 +1,12 @@
 import dataclasses
-from typing import Any, Dict, Type, TypeVar
+from typing import Any, TypeVar
 
 from pdftl.exceptions import PdftlConfigError
 
 T = TypeVar("T")
 
 
-def safe_create(cls: Type[T], data: Dict[str, Any]) -> T:
+def safe_create(cls: type[T], data: dict[str, Any]) -> T:
     """
     Dynamically validates and creates a dataclass instance.
     Raises PdftlInputError if mandatory fields are missing.

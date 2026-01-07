@@ -1,6 +1,6 @@
 import pytest
 
-import pdftl.commands.parsers.crop_parser as cp
+import pdftl.operations.parsers.crop_parser as cp
 
 # We now expect the parser to fail correctly, so we don't need this
 # from pdftl.exceptions import InvalidArgumentError
@@ -77,7 +77,7 @@ def test_parse_crop_margins_invalid():
 
 def test_specs_to_page_rules_simple(mocker):
     mock_page_spec = mocker.patch(
-        "pdftl.commands.parsers.crop_parser.page_numbers_matching_page_spec"
+        "pdftl.operations.parsers.crop_parser.page_numbers_matching_page_spec"
     )
     mock_page_spec.return_value = [1, 2, 3]
     specs = ["1-3(10pt)"]
@@ -89,7 +89,7 @@ def test_specs_to_page_rules_simple(mocker):
 
 def test_specs_to_page_rules_with_preview(mocker):
     mock_page_spec = mocker.patch(
-        "pdftl.commands.parsers.crop_parser.page_numbers_matching_page_spec"
+        "pdftl.operations.parsers.crop_parser.page_numbers_matching_page_spec"
     )
     mock_page_spec.return_value = [1]
     specs = ["1(a4)", "preview"]
@@ -101,7 +101,7 @@ def test_specs_to_page_rules_with_preview(mocker):
 
 def test_specs_to_page_rules_multiple_and_default_range(mocker):
     mock_page_spec = mocker.patch(
-        "pdftl.commands.parsers.crop_parser.page_numbers_matching_page_spec"
+        "pdftl.operations.parsers.crop_parser.page_numbers_matching_page_spec"
     )
     mock_page_spec.side_effect = [[2], [1, 2]]
     specs = ["2(a5)", "(10pt)"]

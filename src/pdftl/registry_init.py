@@ -6,7 +6,7 @@
 
 """
 Single entry point for initializing the application registry.
-This function populates registry options and discovers all commands.
+This function populates registry options and discovers all operations.
 """
 
 import importlib
@@ -16,6 +16,53 @@ import pkgutil
 import pdftl
 
 logger = logging.getLogger(__name__)
+
+import importlib.util
+import os
+import pathlib
+import sys
+
+
+def _discover_external_operations():
+    """Discover user-provided operations in the config directory."""
+    if os.name == "nt":
+        config_base = pathlib.Path(os.environ.get("APPDATA", ""))
+    else:
+        config_base = pathlib.Path.home() / ".config"
+
+    op_dir = config_base / "pdftl" / "operations"
+
+    if not op_dir.exists():
+        return
+
+    # Add op_dir to sys.path so the modules can be imported by name
+    # and can find each other if they have local imports.
+    op_path_str = str(op_dir)
+    if op_path_str not in sys.path:
+        sys.path.insert(0, op_path_str)  # Priority over built-ins if you want shadowing
+
+    for py_file in op_dir.glob("*.py"):
+        if py_file.stem == "__init__":
+            continue
+
+        module_name = py_file.stem
+        try:
+            # Using import_module because we added op_dir to sys.path
+            importlib.import_module(module_name)
+            logger.debug("Loaded external operation: %s", module_name)
+        except ImportError as e:
+            logger.error("Could not import external operation '%s': %s", module_name, e)
+        except SyntaxError as e:
+            logger.error(
+                "Syntax error in external operation '%s' at line %s: %s",
+                module_name,
+                e.lineno,
+                e.msg,
+            )
+        except Exception:
+            # We catch bare Exception here to prevent a buggy user plugin
+            # from stopping pdftl from starting entirely.
+            logger.exception("Unexpected error loading external operation '%s'", module_name)
 
 
 def _discover_modules(parent_modules, label):
@@ -50,7 +97,7 @@ def initialize_registry():
     Initialize the entire application registry.
 
     This function is idempotent (safe to call multiple times).
-    It populates static options and discovers all commands/operations.
+    It populates static options and discovers all operations.
     """
 
     if getattr(initialize_registry, "initialized", False):
@@ -59,12 +106,15 @@ def initialize_registry():
     # 1. Import the packages to be discovered
     # We must explicitly import 'utils' and 'cli' so their submodules (like
     # page_specs.py and pipeline.py) can be discovered and their decorators executed.
-    for module in ["commands", "core", "output", "cli", "utils"]:
+    for module in ["operations", "core", "output", "cli", "utils"]:
         importlib.import_module(f"pdftl.{module}")
 
-    # 2. Discover and register all commands and help topics
+    # 2. Discover and register all operations and help topics
     # We scan all relevant packages to find @register_operation and @register_help_topic
-    _discover_modules([pdftl.commands, pdftl.core, pdftl.cli, pdftl.utils], "operation")
+    _discover_modules([pdftl.operations, pdftl.core, pdftl.cli, pdftl.utils], "operation")
     _discover_modules([pdftl.output], "option")
+
+    # 3. Discover external operations last (change order? depending on shadowing preference)
+    _discover_external_operations()
 
     initialize_registry.initialized = True

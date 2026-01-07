@@ -1,11 +1,11 @@
-# tests/commands/test_move.py
+# tests/operations/test_move.py
 
 import pikepdf
 import pytest
 
-from pdftl.commands.move import move_pages
-from pdftl.commands.parsers.move_parser import parse_move_args
 from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.move import move_pages
+from pdftl.operations.parsers.move_parser import parse_move_args
 
 # --- Parser Tests ---
 
@@ -204,7 +204,7 @@ def test_move_command_loads_json_spec():
         # 2. CRITICAL FIX: Mock 'exists' so the helper believes the file is there
         with patch("pathlib.Path.exists", return_value=True):
             # 3. Mock execute_move so we don't need a real PDF
-            with patch("pdftl.commands.move.execute_move") as mock_exec:
+            with patch("pdftl.operations.move.execute_move") as mock_exec:
 
                 # We can pass None as the PDF since execute_move is mocked
                 move_pages(None, ["@my_plan.json"])

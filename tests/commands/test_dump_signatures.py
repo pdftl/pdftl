@@ -7,7 +7,7 @@ import pytest
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
 
-from pdftl.commands.dump_signatures import dump_signatures, dump_signatures_cli_hook
+from pdftl.operations.dump_signatures import dump_signatures, dump_signatures_cli_hook
 
 # --- Fixtures ---
 
@@ -159,7 +159,7 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
     target = "pyhanko.sign.validation.validate_pdf_signature"
 
     with patch(target, return_value=mock_status):
-        with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
+        with patch("pdftl.operations.dump_signatures.smart_open_output") as mock_open:
             mock_open.return_value.__enter__.return_value = output
             result = dump_signatures(signed_pdf_path, None, None)
             dump_signatures_cli_hook(result, None)
@@ -171,8 +171,8 @@ import sys
 import pytest
 
 import pdftl.core.constants as c
-from pdftl.commands.dump_signatures import _validate_signatures_worker
 from pdftl.core.types import OpResult
+from pdftl.operations.dump_signatures import _validate_signatures_worker
 
 
 def test_dump_signatures_hook_multiple_sigs():
@@ -211,7 +211,7 @@ def test_dump_signatures_hook_multiple_sigs():
     # so we can use capsys.
 
     # Actually, let's mock smart_open_output to be safe and independent of IO implementation
-    with patch("pdftl.commands.dump_signatures.smart_open_output") as mock_open:
+    with patch("pdftl.operations.dump_signatures.smart_open_output") as mock_open:
         # Create a StringIO to capture output
         mock_buffer = io.StringIO()
         mock_open.return_value.__enter__.return_value = mock_buffer

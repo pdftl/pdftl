@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 # --- Module Name for explicit reloads ---
-module_name = "pdftl.commands.helpers.text_drawer"
+module_name = "pdftl.operations.helpers.text_drawer"
 
 # Mock structure for reportlab dependencies, used for patching.
 mock_colors = mock.MagicMock()
@@ -101,7 +101,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
             # Patch sys.modules with the reportlab mocks needed to pass the try/except block
             with mock.patch.dict("sys.modules", mock_reportlab):
                 # Import the module. It should now successfully define the REAL TextDrawer.
-                import pdftl.commands.helpers.text_drawer as _td_mod
+                import pdftl.operations.helpers.text_drawer as _td_mod
 
                 return _td_mod
         except Exception as e:
@@ -112,7 +112,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
 
     def test_resolve_dimension_invalid_type_l59(self):
         """Covers L59: Fallback return 0.0 for unknown dim_rule types."""
-        import pdftl.commands.helpers.text_drawer as _td_mod
+        import pdftl.operations.helpers.text_drawer as _td_mod
 
         # Non-dict, non-int, non-float, non-None
         self.assertEqual(_td_mod._resolve_dimension("invalid_string", 500), 0.0)
@@ -120,14 +120,14 @@ class TestTextDrawerCoverage(unittest.TestCase):
 
     def test_get_preset_x_default_l75(self):
         """Covers L75: Default return 0.0 (left) for unknown position strings."""
-        import pdftl.commands.helpers.text_drawer as _td_mod
+        import pdftl.operations.helpers.text_drawer as _td_mod
 
         self.assertEqual(_td_mod._get_preset_x("unknown-position", 500), 0.0)
         self.assertEqual(_td_mod._get_preset_x("midtop", 500), 0.0)
 
     def test_get_preset_y_coverage_l85_l87_l89_l90(self):
         """Covers L85, L87, L89, L90: Checks calculations for top, mid, bottom, and default/unknown positions."""
-        import pdftl.commands.helpers.text_drawer as _td_mod
+        import pdftl.operations.helpers.text_drawer as _td_mod
 
         # Covers L90: Default return (unknown position)
         self.assertEqual(_td_mod._get_preset_y("unknown-position", 700), 0.0)
@@ -250,7 +250,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
 
     # --- Tests for Exception Handling Paths ---
 
-    @mock.patch("pdftl.commands.helpers.text_drawer.InvalidArgumentError")
+    @mock.patch("pdftl.operations.helpers.text_drawer.InvalidArgumentError")
     def test_import_error_fallback_valueerror_l23_24(self, mock_exception_alias):
         """
         Covers L23-24: Tests the case where pdftl.exceptions is NOT available
@@ -261,7 +261,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
 
         with mock.patch.dict("sys.modules", {"pdftl.exceptions": None}):
             # 2. Force a clean re-import of the module
-            import pdftl.commands.helpers.text_drawer as _td_mod
+            import pdftl.operations.helpers.text_drawer as _td_mod
 
             assert issubclass(_td_mod.InvalidArgumentError, ValueError)
 
@@ -285,7 +285,7 @@ class TestTextDrawerCoverage(unittest.TestCase):
             with mock.patch.dict("sys.modules", mocked_modules_none):
                 # 3. Perform a fresh import. This will execute the code and hit
                 # the 'except ImportError' block (L314) due to the patch.
-                import pdftl.commands.helpers.text_drawer as _td_mod
+                import pdftl.operations.helpers.text_drawer as _td_mod
 
                 # Get the dummy class that was defined in the except block
                 DummyTextDrawer = _td_mod.TextDrawer

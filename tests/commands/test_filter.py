@@ -1,7 +1,7 @@
 import pytest
 from pikepdf import Pdf
 
-from pdftl.commands.filter import filter_pdf
+from pdftl.operations.filter import filter_pdf
 
 
 @pytest.fixture

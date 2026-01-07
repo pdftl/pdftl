@@ -28,7 +28,6 @@ def camel_case_dict_factory(data):
     3. Auto-converts remaining snake_case keys to PascalCase (e.g. media_rect -> MediaRect).
     """
     # breakpoint()
-    import pikepdf
 
     clean_dict = {}
     for k, v in data:
@@ -238,7 +237,7 @@ class PdfInfo:
         # 2. Patch the structural mismatches manually
 
         # Patch Info: Convert list of dicts [{'Key': 'Title', 'Value': 'A'}] -> {'Title': 'A'}
-        # The factory turns DocInfoEntry(key="Title", value="A") into {"Key": "Title", "Value": "A"}
+        # Factory turns DocInfoEntry(key="Title", value="A") into {"Key": "Title", "Value": "A"}
         if "Info" in d and isinstance(d["Info"], list):
             d["Info"] = {item["Key"]: item["Value"] for item in d["Info"]}
 

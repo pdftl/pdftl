@@ -2,7 +2,7 @@ import json
 
 import pikepdf
 
-from pdftl.commands.dump_layers import dump_layers, dump_layers_cli_hook
+from pdftl.operations.dump_layers import dump_layers, dump_layers_cli_hook
 
 
 def test_dump_layers_no_ocg(tmp_path):

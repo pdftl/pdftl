@@ -1,9 +1,9 @@
-# tests/commands/test_place.py
+# tests/operations/test_place.py
 
 import pikepdf
 import pytest
 
-from pdftl.commands.place import place_content
+from pdftl.operations.place import place_content
 
 
 @pytest.fixture

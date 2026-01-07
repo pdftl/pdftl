@@ -1,6 +1,6 @@
 import pytest
 
-from pdftl.commands.parsers.crop_parser import (
+from pdftl.operations.parsers.crop_parser import (
     parse_crop_content,
     parse_smart_crop_spec,
     specs_to_page_rules,

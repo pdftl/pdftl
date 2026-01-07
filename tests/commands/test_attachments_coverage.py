@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.commands.attachments import (
+from pdftl.operations.attachments import (
     dump_files,
     dump_files_cli_hook,
     unpack_files,

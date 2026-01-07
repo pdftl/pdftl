@@ -1,7 +1,7 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.dump_data_fields import _get_field_type_strings, dump_data_fields
+from pdftl.operations.dump_data_fields import _get_field_type_strings, dump_data_fields
 
 # --- Fixture for Complex Form (Multiple Types) ---
 

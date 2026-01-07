@@ -5,7 +5,7 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from pikepdf import Array
 
-import pdftl.commands.parsers.chop_parser as cp
+import pdftl.operations.parsers.chop_parser as cp
 
 # ---------------------------
 # Reusable Strategies

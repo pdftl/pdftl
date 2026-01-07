@@ -1,8 +1,8 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.replace import replace_in_content_streams
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.replace import replace_in_content_streams
 
 
 @pytest.fixture
@@ -109,7 +109,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pdftl.commands.replace import RegexReplaceContentStream
+from pdftl.operations.replace import RegexReplaceContentStream
 
 
 def test_replace_empty_spec_element():

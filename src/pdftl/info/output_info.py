@@ -13,7 +13,8 @@ write_info
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Iterable, cast
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     pass
@@ -42,7 +43,6 @@ from pdftl.utils.string import (
 
 
 def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
-    from collections import OrderedDict
 
     import pikepdf
 

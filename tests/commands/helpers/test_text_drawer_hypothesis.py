@@ -5,8 +5,8 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from pdftl.commands.helpers.text_drawer import _PageBox  # Import the helper tuple
-from pdftl.commands.helpers.text_drawer import (
+from pdftl.operations.helpers.text_drawer import _PageBox  # Import the helper tuple
+from pdftl.operations.helpers.text_drawer import (
     _get_base_coordinates,
     _resolve_dimension,
 )

@@ -1,7 +1,7 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.place import place_content
+from pdftl.operations.place import place_content
 
 
 @pytest.fixture

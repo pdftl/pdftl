@@ -6,3 +6,8 @@ extensions = [
     "myst_parser",
     "sphinx_rtd_theme",
 ]
+html_context = {
+    "github_user": "pdftl",  # Username
+    "github_repo": "pdftl",  # Repo name
+    "github_version": "main",  # Version
+}

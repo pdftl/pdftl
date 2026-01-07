@@ -448,7 +448,7 @@ def clean_registry():
 
     # Helper to force-reload all 'pdftl.commands' submodules
     for mod_name in list(sys.modules.keys()):
-        if mod_name.startswith("pdftl.commands."):
+        if mod_name.startswith("pdftl.operations."):
             try:
                 importlib.reload(sys.modules[mod_name])
             except ImportError:

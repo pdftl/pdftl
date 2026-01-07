@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-from pdftl.commands.generate_fdf import generate_fdf, generate_fdf_cli_hook
+from pdftl.operations.generate_fdf import generate_fdf, generate_fdf_cli_hook
 
 
 @pytest.fixture
@@ -128,8 +128,8 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
 import io
 from types import SimpleNamespace
 
-from pdftl.commands.generate_fdf import _write_field_as_fdf_to_file
 from pdftl.core.types import OpResult
+from pdftl.operations.generate_fdf import _write_field_as_fdf_to_file
 
 
 def test_generate_fdf_hook_failure():
@@ -139,7 +139,7 @@ def test_generate_fdf_hook_failure():
     result = OpResult(success=False)
 
     # Mock smart_open to ensure it is NOT called
-    with patch("pdftl.commands.generate_fdf.smart_open_output") as mock_open:
+    with patch("pdftl.operations.generate_fdf.smart_open_output") as mock_open:
         generate_fdf_cli_hook(result, "post")
         mock_open.assert_not_called()
 

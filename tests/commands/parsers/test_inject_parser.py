@@ -1,4 +1,4 @@
-import pdftl.commands.parsers.inject_parser as cp
+import pdftl.operations.parsers.inject_parser as cp
 
 
 def test_parse_inject_args_empty():

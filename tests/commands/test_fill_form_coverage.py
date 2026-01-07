@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-from pdftl.commands.fill_form import fill_form
 from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.fill_form import fill_form
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def test_fill_form_xfdf_fallback(pdf):
     Test that if FDF parsing fails, it tries XFDF (which isn't implemented),
     and eventually raises UserCommandLineError.
     """
-    with patch("pdftl.commands.fill_form._fill_form_from_fdf_data") as mock_fdf:
+    with patch("pdftl.operations.fill_form._fill_form_from_fdf_data") as mock_fdf:
         mock_fdf.side_effect = ValueError("Not FDF")
 
         with patch("builtins.open", new_callable=MagicMock) as mock_open:

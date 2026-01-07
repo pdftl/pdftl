@@ -1,8 +1,8 @@
 import pikepdf
 
-from pdftl.commands.dump_annots import dump_annots, dump_annots_cli_hook
-from pdftl.commands.dump_data import dump_data_cli_hook, pdf_info
-from pdftl.commands.dump_text import dump_text
+from pdftl.operations.dump_annots import dump_annots, dump_annots_cli_hook
+from pdftl.operations.dump_data import dump_data_cli_hook, pdf_info
+from pdftl.operations.dump_text import dump_text
 
 # --- 1. Test dumping to a file (Paths) ---
 

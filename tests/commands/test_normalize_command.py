@@ -1,8 +1,8 @@
 import pytest
 from pikepdf import Array, Pdf
 
-from pdftl.commands.normalize import normalize_content_streams
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.normalize import normalize_content_streams
 
 
 @pytest.fixture

@@ -53,8 +53,8 @@ def test_discover_modules_imports_all(monkeypatch):
     result = reg_init._discover_modules([fake_commands, fake_core], "operation")
 
     expected_imports = {
-        "pdftl.commands.mod_a",
-        "pdftl.commands.mod_b",
+        "pdftl.operations.mod_a",
+        "pdftl.operations.mod_b",
         "pdftl.core.mod_a",
         "pdftl.core.mod_b",
     }
@@ -113,9 +113,9 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
     loaded = reg_init._discover_modules([fake_pkg], "operation")
 
     assert any("Loaded" in msg for msg in caplog.messages)
-    assert any("pdftl.commands.alpha" in msg for msg in caplog.messages)
+    assert any("pdftl.operations.alpha" in msg for msg in caplog.messages)
     assert isinstance(loaded, list)
-    assert set(loaded) == {"pdftl.commands.alpha", "pdftl.commands.beta"}
+    assert set(loaded) == {"pdftl.operations.alpha", "pdftl.commands.beta"}
 
 
 def test_discover_modules_skips_no_path(caplog):

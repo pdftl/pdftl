@@ -1,4 +1,4 @@
-# tests/commands/parsers/test_modify_annots_parser.py
+# tests/operations/parsers/test_modify_annots_parser.py
 
 """
 Unit tests for the modify_annots_parser module.
@@ -10,8 +10,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'map'
-import pdftl.commands.parsers.modify_annots_parser as map
-from pdftl.commands.parsers.modify_annots_parser import ModificationRule
+import pdftl.operations.parsers.modify_annots_parser as map
+from pdftl.operations.parsers.modify_annots_parser import ModificationRule
 
 # --- -----------------------
 # Tests for _unquote_string

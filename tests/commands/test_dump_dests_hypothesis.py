@@ -10,7 +10,7 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 
 # Import the internal functions to test
-from pdftl.commands.dump_dests import (
+from pdftl.operations.dump_dests import (
     _atomic_obj_to_json,
     _pdf_obj_to_json,
     _write_json_output,
@@ -214,7 +214,7 @@ class MockStream(MockString):
 # --- Patches for the module under test ---
 # These replace the real pikepdf types *inside the dump_dests module*
 # with our mock classes, so that `isinstance` checks will pass.
-MODULE_PATH = "pdftl.commands.dump_dests"
+MODULE_PATH = "pdftl.operations.dump_dests"
 
 
 @patch("pikepdf.Dictionary", new=MockDictionary)

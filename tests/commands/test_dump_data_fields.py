@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from pdftl.commands.dump_data_fields import _extract_field_justification, dump_fields_cli_hook
+from pdftl.operations.dump_data_fields import _extract_field_justification, dump_fields_cli_hook
 
 
 def test_dump_fields_cli_hook_no_data(capsys):

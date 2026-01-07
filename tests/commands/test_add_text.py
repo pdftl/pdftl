@@ -1,4 +1,4 @@
-# src/pdftl/commands/test_add_text.py
+# src/pdftl/operations/test_add_text.py
 
 import importlib
 import sys
@@ -10,7 +10,7 @@ from pikepdf import Array, Name, Pdf, Rectangle
 
 # --- Local Imports ---
 # We import the module to reload it during cleanup
-from pdftl.commands.add_text import _build_static_context, add_text_pdf
+from pdftl.operations.add_text import _build_static_context, add_text_pdf
 
 # Handle optional exception import
 try:
@@ -57,11 +57,11 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.mock_parser = MagicMock()
-        self.patcher_drawer = patch("pdftl.commands.helpers.text_drawer.TextDrawer")
+        self.patcher_drawer = patch("pdftl.operations.helpers.text_drawer.TextDrawer")
         self.mock_TextDrawer_cls = self.patcher_drawer.start()
         self.mock_drawer_instance = self.mock_TextDrawer_cls.return_value
         self.parser_patcher = patch(
-            "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules",
+            "pdftl.operations.parsers.add_text_parser.parse_add_text_specs_to_rules",
             self.mock_parser,
         )
         self.parser_patcher.start()
@@ -75,7 +75,7 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
         self.mock_parser.return_value = {0: [self.mock_rule]}
 
         # This calls add_text_pdf, which runs:
-        # "from pdftl.commands.helpers.text_drawer import TextDrawer"
+        # "from pdftl.operations.helpers.text_drawer import TextDrawer"
         # Since we patched that source path in setUp, it imports our Mock.
         result = add_text_pdf(self.pdf, ["spec"]).pdf
 
@@ -137,7 +137,7 @@ class TestAddTextMissingDependency(unittest.TestCase):
 
         # Mock parser so we get far enough to hit the drawer
         self.patch_parser = patch(
-            "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules"
+            "pdftl.operations.parsers.add_text_parser.parse_add_text_specs_to_rules"
         )
         self.mock_parser = self.patch_parser.start()
         self.mock_parser.return_value = {0: ["dummy"]}
@@ -151,12 +151,12 @@ class TestAddTextMissingDependency(unittest.TestCase):
         # the "Poison Pill" from leaking into other tests.
 
         # 1. Remove the poisoned helper module
-        if "pdftl.commands.helpers.text_drawer" in sys.modules:
-            del sys.modules["pdftl.commands.helpers.text_drawer"]
+        if "pdftl.operations.helpers.text_drawer" in sys.modules:
+            del sys.modules["pdftl.operations.helpers.text_drawer"]
 
         # 2. Reload the orchestrator so it forgets the poisoned class
-        if "pdftl.commands.add_text" in sys.modules:
-            importlib.reload(sys.modules["pdftl.commands.add_text"])
+        if "pdftl.operations.add_text" in sys.modules:
+            importlib.reload(sys.modules["pdftl.operations.add_text"])
 
     def test_missing_reportlab_raises_error(self):
         """
@@ -172,13 +172,13 @@ class TestAddTextMissingDependency(unittest.TestCase):
         with patch.dict(sys.modules, poison_pill):
             # 3. Remove text_drawer from cache so it MUST re-import
             #    (and fail to find reportlab)
-            if "pdftl.commands.helpers.text_drawer" in sys.modules:
-                del sys.modules["pdftl.commands.helpers.text_drawer"]
+            if "pdftl.operations.helpers.text_drawer" in sys.modules:
+                del sys.modules["pdftl.operations.helpers.text_drawer"]
 
             # 4. Reload orchestrator to force it to import the new (dummy) drawer
-            if "pdftl.commands.add_text" in sys.modules:
+            if "pdftl.operations.add_text" in sys.modules:
                 # It exists? Force it to refresh (so it hits the poison)
-                module_obj = sys.modules["pdftl.commands.add_text"]
+                module_obj = sys.modules["pdftl.operations.add_text"]
                 importlib.reload(module_obj)
             else:
                 # It was wiped? Just import it (it will hit the poison naturally)

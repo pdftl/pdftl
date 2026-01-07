@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 # Assume the module being tested is imported as 'parser'
-# from pdftl.commands.parsers import add_text_parser as parser
+# from pdftl.operations.parsers import add_text_parser as parser
 
 # --- Setup Mocks for External Dependencies ---
 
@@ -20,16 +20,16 @@ MOCKED_UNITS = {
 PageSpec = namedtuple("PageSpec", ["start", "end", "qualifiers"])
 
 
-@patch("pdftl.commands.parsers.add_text_parser.UNITS", MOCKED_UNITS, create=True)
+@patch("pdftl.operations.parsers.add_text_parser.UNITS", MOCKED_UNITS, create=True)
 class TestAddTextParser:
     # =========================================================================
     # Test _split_spec_string (Covers Lines: 145, 174)
     # =========================================================================
     @patch(
-        "pdftl.commands.parsers.add_text_parser._split_spec_string",
+        "pdftl.operations.parsers.add_text_parser._split_spec_string",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._split_spec_string,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._split_spec_string,
     )
     def test_split_spec_string_raises_on_empty_spec(self, mock_split):
         """Covers line 145: raise ValueError("Empty add_text spec")"""
@@ -37,10 +37,10 @@ class TestAddTextParser:
             mock_split("")
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._split_spec_string",
+        "pdftl.operations.parsers.add_text_parser._split_spec_string",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._split_spec_string,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._split_spec_string,
     )
     def test_split_spec_string_raises_on_only_options_block(self, mock_split):
         """Covers line 174: raise ValueError("Missing text string component")"""
@@ -52,12 +52,12 @@ class TestAddTextParser:
     # Test _parse_options_string (Covers Lines: 234, 242-243, 248, 255)
     # =========================================================================
 
-    @patch("pdftl.commands.parsers.add_text_parser._normalize_options", return_value={})
+    @patch("pdftl.operations.parsers.add_text_parser._normalize_options", return_value={})
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_options_string",
+        "pdftl.operations.parsers.add_text_parser._parse_options_string",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_options_string,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_options_string,
     )
     def test_parse_options_string_empty_parentheses(self, mock_parse, mock_normalize):
         """Covers line 234: return {}"""
@@ -65,10 +65,10 @@ class TestAddTextParser:
         mock_normalize.assert_not_called()
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_options_string",
+        "pdftl.operations.parsers.add_text_parser._parse_options_string",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_options_string,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_options_string,
     )
     def test_parse_options_string_invalid_option_format(self, mock_parse):
         """Covers line 255: raise ValueError for invalid key/value format"""
@@ -77,14 +77,14 @@ class TestAddTextParser:
             mock_parse("(key='value, value, key2=value2)")
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._normalize_options",
+        "pdftl.operations.parsers.add_text_parser._normalize_options",
         return_value={"font": "Arial", "size": {"type": "pt", "value": 12.0}},
     )
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_options_string",
+        "pdftl.operations.parsers.add_text_parser._parse_options_string",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_options_string,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_options_string,
     )
     def test_parse_options_string_empty_part_after_comma(self, mock_parse, mock_normalize):
         """Covers line 248: continue (Skip empty parts, e.g., from "foo=bar,,baz=qux")"""
@@ -102,10 +102,10 @@ class TestAddTextParser:
     # =========================================================================
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_dimension",
+        "pdftl.operations.parsers.add_text_parser._parse_dimension",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_dimension,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_dimension,
     )
     def test_parse_dimension_already_parsed(self, mock_parse):
         """Covers line 353: return size_str (Already parsed, e.g., from a test)"""
@@ -113,10 +113,10 @@ class TestAddTextParser:
         assert mock_parse(pre_parsed) is pre_parsed
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_dimension",
+        "pdftl.operations.parsers.add_text_parser._parse_dimension",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_dimension,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_dimension,
     )
     def test_parse_dimension_invalid_percentage(self, mock_parse):
         """Covers lines 359-360: try/except for percentage float conversion"""
@@ -124,10 +124,10 @@ class TestAddTextParser:
             mock_parse("50a%")
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_dimension",
+        "pdftl.operations.parsers.add_text_parser._parse_dimension",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_dimension,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_dimension,
     )
     def test_parse_dimension_invalid_unit_value(self, mock_parse):
         """Covers lines 368-369: try/except for unit value float conversion"""
@@ -136,10 +136,10 @@ class TestAddTextParser:
             mock_parse("10bpt")
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_dimension",
+        "pdftl.operations.parsers.add_text_parser._parse_dimension",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_dimension,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_dimension,
     )
     def test_parse_dimension_invalid_default_value(self, mock_parse):
         """Covers lines 374-375: try/except for default 'pt' float conversion"""
@@ -152,10 +152,10 @@ class TestAddTextParser:
     # =========================================================================
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_color",
+        "pdftl.operations.parsers.add_text_parser._parse_color",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_color,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_color,
     )
     def test_parse_color_invalid_characters(self, mock_parse):
         """Covers lines 395-397: try/except for float conversion of parts"""
@@ -164,10 +164,10 @@ class TestAddTextParser:
             mock_parse("1 0 a")
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._parse_color",
+        "pdftl.operations.parsers.add_text_parser._parse_color",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._parse_color,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._parse_color,
     )
     def test_parse_color_invalid_num_parts(self, mock_parse):
         """Covers line 416: raise ValueError for incorrect number of parts (2)"""
@@ -185,10 +185,10 @@ class TestAddTextParser:
     # =========================================================================
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._evaluate_token",
+        "pdftl.operations.parsers.add_text_parser._evaluate_token",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._evaluate_token,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._evaluate_token,
     )
     def test_evaluate_token_arithmetic_on_non_numeric_variable(self, mock_evaluate):
         """Covers line 509: raise ValueError for arithmetic on non-numeric variable"""
@@ -206,10 +206,10 @@ class TestAddTextParser:
             mock_evaluate(token, context)
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._evaluate_token",
+        "pdftl.operations.parsers.add_text_parser._evaluate_token",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._evaluate_token,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._evaluate_token,
     )
     def test_evaluate_token_arithmetic_add(self, mock_evaluate):
         """Covers line 512: return base_value + val"""
@@ -221,10 +221,10 @@ class TestAddTextParser:
         assert mock_evaluate(token, context) == 15
 
     @patch(
-        "pdftl.commands.parsers.add_text_parser._evaluate_token",
+        "pdftl.operations.parsers.add_text_parser._evaluate_token",
         wraps=__import__(
-            "pdftl.commands.parsers.add_text_parser"
-        ).commands.parsers.add_text_parser._evaluate_token,
+            "pdftl.operations.parsers.add_text_parser"
+        ).operations.parsers.add_text_parser._evaluate_token,
     )
     def test_evaluate_token_arithmetic_sub(self, mock_evaluate):
         """Covers subtraction logic"""
@@ -236,7 +236,7 @@ class TestAddTextParser:
         assert mock_evaluate(token, context) == 8
 
 
-from pdftl.commands.parsers.add_text_parser import (
+from pdftl.operations.parsers.add_text_parser import (
     _compile_text_renderer,
     _evaluate_token,
     _normalize_options,
@@ -346,7 +346,7 @@ class TestAddTextParserExtended:
 
 from unittest.mock import patch
 
-from pdftl.commands.parsers.add_text_parser import (
+from pdftl.operations.parsers.add_text_parser import (
     parse_add_text_specs_to_rules,
 )
 
@@ -402,7 +402,7 @@ class TestAddTextParserCoverage:
         specs = ["1/text/(a=b)"]
 
         # Patch the regex object used in the module
-        with patch("pdftl.commands.parsers.add_text_parser.COMMA_SPLIT_REGEX") as mock_regex:
+        with patch("pdftl.operations.parsers.add_text_parser.COMMA_SPLIT_REGEX") as mock_regex:
             # Force the split method to raise a ValueError
             mock_regex.split.side_effect = ValueError("Mocked regex failure")
 

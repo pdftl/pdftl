@@ -1,8 +1,8 @@
-# tests/commands/test_delete_annots.py
+# tests/operations/test_delete_annots.py
 
 import pikepdf
 
-from pdftl.commands.delete_annots import delete_annots
+from pdftl.operations.delete_annots import delete_annots
 
 
 def test_delete_annots_with_existing_annotations():

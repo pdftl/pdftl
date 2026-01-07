@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-from pdftl.commands.update_info import update_info
 from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.update_info import update_info
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def test_update_info_no_xml_strings(pdf):
 
     # We patch 'parse_dump_data' where it is USED inside the parser module.
     # This captures the call made by update_info_parser.
-    target = "pdftl.commands.parsers.update_info_parser.parse_dump_data"
+    target = "pdftl.operations.parsers.update_info_parser.parse_dump_data"
 
     with patch(target) as mock_parse_dump:
         # Return an empty dict so PdfInfo.from_dict doesn't crash

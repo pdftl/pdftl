@@ -1,8 +1,8 @@
 import pytest
 from pikepdf import Pdf, Rectangle
 
-from pdftl.commands.rotate import rotate_pdf
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.rotate import rotate_pdf
 
 
 @pytest.fixture

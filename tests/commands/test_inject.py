@@ -1,7 +1,7 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.inject import inject_pdf
+from pdftl.operations.inject import inject_pdf
 
 
 def _read_page_content(page):

@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.commands.dump_annots import dump_annots, dump_data_annots
+from pdftl.operations.dump_annots import dump_annots, dump_data_annots
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def annot_pdf():
     return pdf
 
 
-from pdftl.commands.dump_annots import (
+from pdftl.operations.dump_annots import (
     dump_annots_cli_hook,
     dump_data_annots_cli_hook,
 )
@@ -125,7 +125,7 @@ def test_dump_annots_filters_and_errors(annot_pdf, capsys, caplog):
 
     # Now patch the helper used by the HOOK (since that's where formatting happens)
     with patch(
-        "pdftl.commands.dump_annots._data_item_to_string_helper",
+        "pdftl.operations.dump_annots._data_item_to_string_helper",
         side_effect=side_effect,
     ):
         # Invoke formatting logic via the hook

@@ -16,10 +16,14 @@ def smart_open_output(filename: str | None, mode="w", encoding="utf-8"):
     or yields sys.stdout (or sys.stdout.buffer) if filename is None.
     """
     if filename is None:
-        # If binary mode is requested, use the buffer underlying stdout
+        if "w" in mode:
+            # If binary mode is requested, use the buffer underlying stdout
+            if "b" in mode:
+                return nullcontext(sys.stdout.buffer)
+            return nullcontext(sys.stdout)
         if "b" in mode:
-            return nullcontext(sys.stdout.buffer)
-        return nullcontext(sys.stdout)
+            return nullcontext(sys.stdin.buffer)
+        return nullcontext(sys.stdin)
 
     if "b" in mode:
         # Binary mode doesn't take an encoding argument

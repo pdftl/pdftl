@@ -1,8 +1,8 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.cat import cat_pages
-from pdftl.commands.shuffle import shuffle_pdfs
+from pdftl.operations.cat import cat_pages
+from pdftl.operations.shuffle import shuffle_pdfs
 
 
 @pytest.fixture

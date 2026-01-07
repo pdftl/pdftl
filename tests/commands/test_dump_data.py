@@ -4,10 +4,10 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 import pdftl.core.constants as c
-from pdftl.commands.dump_data import dump_data_cli_hook, pdf_info
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.info.info_types import PdfInfo
+from pdftl.operations.dump_data import dump_data_cli_hook, pdf_info
 
 
 def test_dump_data_cli_hook_json(tmp_path):

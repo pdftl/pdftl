@@ -1,7 +1,7 @@
 import pytest
 from pikepdf import Array
 
-import pdftl.commands.parsers.chop_parser as cp
+import pdftl.operations.parsers.chop_parser as cp
 
 # ---------------------------
 # Fixtures and helpers
@@ -275,7 +275,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.commands.parsers.chop_parser import (
+from pdftl.operations.parsers.chop_parser import (
     MAX_PIECES,
     _parse_integer_spec,
     parse_chop_spec,
@@ -307,7 +307,7 @@ def test_chop_parser_omissions():
     Covers line 96: if not om_start <= p <= om_end
     We mock parse_specs to guarantee omissions are present, isolating the logic in chop_parser.
     """
-    with patch("pdftl.commands.parsers.chop_parser.parse_specs") as mock_parse:
+    with patch("pdftl.operations.parsers.chop_parser.parse_specs") as mock_parse:
         # Create a mock PageSpec that selects 1-5 but omits 3
         mock_spec = MagicMock()
         mock_spec.start = 1

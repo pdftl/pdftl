@@ -1,9 +1,9 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.chop import chop_pages
-from pdftl.commands.overlay import apply_overlay
-from pdftl.commands.update_info import update_info
+from pdftl.operations.chop import chop_pages
+from pdftl.operations.overlay import apply_overlay
+from pdftl.operations.update_info import update_info
 
 # --- CHOP TESTS ---
 

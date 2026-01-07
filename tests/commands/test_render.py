@@ -2,9 +2,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.commands.render import render_cli_hook, render_pdf
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.render import render_cli_hook, render_pdf
 
 # --- Test Core Logic (render_pdf) ---
 
@@ -23,7 +23,7 @@ def test_render_pdf_invalid_args():
         render_pdf(mock_pdf, ["-10"])
 
 
-@patch("pdftl.commands.render.ensure_dependencies")
+@patch("pdftl.operations.render.ensure_dependencies")
 def test_render_pdf_generator_success(mock_ensure):
     """
     Mocks pypdfium2 to verify the generator yields images
@@ -121,7 +121,7 @@ def test_render_pdf_invalid_args():
         render_pdf(mock_pdf, ["-10"])
 
 
-@patch("pdftl.commands.render.ensure_dependencies")
+@patch("pdftl.operations.render.ensure_dependencies")
 def test_render_pdf_generator_success(mock_ensure):
     """
     Mocks pypdfium2 to verify the generator yields images
@@ -169,7 +169,7 @@ def test_render_pdf_generator_success(mock_ensure):
         input_pdf.save.assert_called()
 
 
-@patch("pdftl.commands.render.ensure_dependencies")
+@patch("pdftl.operations.render.ensure_dependencies")
 def test_render_pdf_default_dpi_and_bad_pattern(mock_ensure):
     """
     Covers:

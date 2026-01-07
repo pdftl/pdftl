@@ -1,8 +1,8 @@
 import pikepdf
 import pytest
 
-from pdftl.commands.burst import burst_pdf
 from pdftl.core.types import OpResult
+from pdftl.operations.burst import burst_pdf
 
 
 def test_burst_basic(two_page_pdf):

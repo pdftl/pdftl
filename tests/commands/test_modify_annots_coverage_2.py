@@ -4,13 +4,13 @@ from unittest.mock import MagicMock
 import pytest
 from pikepdf import Array, Dictionary, Name, Pdf
 
-from pdftl.commands.modify_annots import (
+from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.modify_annots import (
     _apply_mods_to_annot,
     _parse_array_value,
     _parse_value_to_python,
     modify_annots,
 )
-from pdftl.exceptions import InvalidArgumentError
 
 
 def test_parse_array_value_edge_cases():
@@ -87,7 +87,7 @@ def test_apply_rule_logic():
     annot = Dictionary(Type=Name.Annot, Subtype=Name.Highlight, C=Array([0, 1, 0]))
     page.Annots = Array([annot])
 
-    from pdftl.commands.parsers.modify_annots_parser import ModificationRule
+    from pdftl.operations.parsers.modify_annots_parser import ModificationRule
 
     rule = ModificationRule(
         page_numbers=[1],
@@ -95,7 +95,7 @@ def test_apply_rule_logic():
         modifications=[("C", "[1 0 0]"), ("T", "(New Title)")],
     )
 
-    from pdftl.commands.modify_annots import _apply_rule
+    from pdftl.operations.modify_annots import _apply_rule
 
     annot_count, prop_count = _apply_rule(pdf, rule, 1)
 
@@ -113,7 +113,7 @@ def test_coverage_mop_up_array_exceptions():
     Targets lines 86-88: The except (ValueError, TypeError) block in _parse_array_value.
     We force this by mocking float() to raise an error during the loop.
     """
-    with patch("pdftl.commands.modify_annots.float") as mock_float:
+    with patch("pdftl.operations.modify_annots.float") as mock_float:
         mock_float.side_effect = ValueError("Forced error")
         # "1.0" will pass the 'if looks like number' check, then hit mock_float
         result = _parse_array_value("[1.0]")
@@ -129,7 +129,7 @@ def test_coverage_mop_up_value_to_python_exceptions():
     """
     # String with a superset of digits that might pass checks but fail conversion
     # Or simply mock float again for this specific scope
-    with patch("pdftl.commands.modify_annots.float") as mock_float:
+    with patch("pdftl.operations.modify_annots.float") as mock_float:
         mock_float.side_effect = TypeError("Forced type error")
         # "123" passes the digit check, then hits the mock
         result = _parse_value_to_python("123")

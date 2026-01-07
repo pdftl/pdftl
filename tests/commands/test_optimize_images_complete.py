@@ -4,9 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Import the logic functions directly for easier testing
-from pdftl.commands.optimize_images import _parse_args_to_options, optimize_images_pdf
 from pdftl.exceptions import InvalidArgumentError, PackageError
+
+# Import the logic functions directly for easier testing
+from pdftl.operations.optimize_images import _parse_args_to_options, optimize_images_pdf
 
 # --- 1. Parameter Parsing Tests (Lines 207-278) ---
 
@@ -104,15 +105,15 @@ def test_optimize_images_success(two_page_pdf):
 
     with patch.dict(sys.modules, {"ocrmypdf": MagicMock(), "ocrmypdf.optimize": mock_lib}):
         # Reload to hit the 'try' block successfully
-        import pdftl.commands.optimize_images
+        import pdftl.operations.optimize_images
 
-        importlib.reload(pdftl.commands.optimize_images)
+        importlib.reload(pdftl.operations.optimize_images)
 
         import pikepdf
 
         with pikepdf.open(two_page_pdf) as pdf:
             # Call the function (args: pdf, operation_args, output_filename)
-            pdftl.commands.optimize_images.optimize_images_pdf(pdf, ["medium"], "out.pdf")
+            pdftl.operations.optimize_images.optimize_images_pdf(pdf, ["medium"], "out.pdf")
 
             # Check that it called the library functions
             mock_lib.extract_images_generic.assert_called()

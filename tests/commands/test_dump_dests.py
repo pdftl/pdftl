@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 # Import the functions and classes to test
-from pdftl.commands.dump_dests import (
+from pdftl.operations.dump_dests import (
     _atomic_obj_to_json,
     _pdf_obj_to_json,
     _write_json_output,
@@ -87,7 +87,7 @@ class MockStream(MockString):
 # ===== Pytest Fixtures ==========================================
 # ================================================================
 
-MODULE_PATH = "pdftl.commands.dump_dests"
+MODULE_PATH = "pdftl.operations.dump_dests"
 
 
 @pytest.fixture(autouse=True)

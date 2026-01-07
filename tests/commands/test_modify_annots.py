@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# tests/commands/test_modify_annots.py
+# tests/operations/test_modify_annots.py
 
 """
 Integration and property-based tests for the modify_annots operation.
@@ -20,7 +20,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'ma'
-import pdftl.commands.modify_annots as ma
+import pdftl.operations.modify_annots as ma
 from pdftl.exceptions import InvalidArgumentError
 
 # --- -----------------------
@@ -187,7 +187,7 @@ def test_modify_annots_page_selector_even(mock_pdf):
 
 
 # Patch the parser to bypass its validation and test the function's own guard
-@patch("pdftl.commands.modify_annots.specs_to_modification_rules")
+@patch("pdftl.operations.modify_annots.specs_to_modification_rules")
 def test_modify_annots_page_selector_out_of_bounds(mock_specs_parser, mock_pdf, caplog):
     """
     Tests that a page selector referencing a page number

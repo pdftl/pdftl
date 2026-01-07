@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.commands.add_text import add_text_pdf
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.add_text import add_text_pdf
 
 from .sandbox import ModuleSandboxMixin
 
@@ -22,7 +22,7 @@ class TestAddTextCoverage(ModuleSandboxMixin):
     def test_add_text_parser_error(self, pdf):
         """Test wrapping of parser ValueError."""
         with patch(
-            "pdftl.commands.parsers.add_text_parser.parse_add_text_specs_to_rules"
+            "pdftl.operations.parsers.add_text_parser.parse_add_text_specs_to_rules"
         ) as mock_parse:
             mock_parse.side_effect = ValueError("Bad syntax")
 
@@ -33,7 +33,7 @@ class TestAddTextCoverage(ModuleSandboxMixin):
         """Test that pages with no rules are skipped."""
         spec = "1/Hello/"
 
-        import pdftl.commands.helpers.text_drawer as drawer_module
+        import pdftl.operations.helpers.text_drawer as drawer_module
 
         with patch.object(drawer_module, "TextDrawer") as MockDrawer:
             add_text_pdf(pdf, [spec])
@@ -48,7 +48,7 @@ class TestAddTextCoverage(ModuleSandboxMixin):
 
         spec = "1/Hello/"
 
-        with patch("pdftl.commands.helpers.text_drawer.TextDrawer") as MockDrawer:
+        with patch("pdftl.operations.helpers.text_drawer.TextDrawer") as MockDrawer:
             instance = MockDrawer.return_value
             instance.save.return_value = b"%PDF-1.0 dummy"
 

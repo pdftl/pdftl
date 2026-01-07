@@ -1,9 +1,9 @@
-# tests/commands/parsers/test_place_parser.py
+# tests/operations/parsers/test_place_parser.py
 
 import pytest
 
-from pdftl.commands.parsers.place_parser import parse_place_args
 from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.parsers.place_parser import parse_place_args
 
 
 def test_parse_simple_shift():

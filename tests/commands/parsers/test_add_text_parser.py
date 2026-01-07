@@ -61,11 +61,11 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
         raise
 
 
-import pdftl.commands.parsers.add_text_parser
+import pdftl.operations.parsers.add_text_parser
 
 # Now, we can import the functions to be tested from the *new* module path
 # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
-from pdftl.commands.parsers.add_text_parser import (  # Import new function for testing
+from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
     _compile_text_renderer,
     _parse_options_string,
     _split_spec_string,
@@ -74,10 +74,10 @@ from pdftl.commands.parsers.add_text_parser import (  # Import new function for 
 
 # # --- Monkey-patching the parser's imports ---
 # # We must replace the imported names *within the parser module*
-# pdftl.commands.parsers.add_text_parser.UNITS = UNITS
-# pdftl.commands.parsers.add_text_parser.parse_sub_page_spec = mock_parse_sub_page_spec
+# pdftl.operations.parsers.add_text_parser.UNITS = UNITS
+# pdftl.operations.parsers.add_text_parser.parse_sub_page_spec = mock_parse_sub_page_spec
 # # We also need to give it the 're' module for the fixed _split_spec_string
-# pdftl.commands.parsers.add_text_parser.re = re
+# pdftl.operations.parsers.add_text_parser.re = re
 
 
 class TestAddTextParser(unittest.TestCase):
@@ -96,7 +96,7 @@ class TestAddTextParser(unittest.TestCase):
                 "Author": "John Doe",
             },
         }
-        self.patcher_units = patch("pdftl.commands.parsers.add_text_parser.UNITS", UNITS)
+        self.patcher_units = patch("pdftl.operations.parsers.add_text_parser.UNITS", UNITS)
         self.patcher_pages = patch(
             "pdftl.utils.page_specs.parse_sub_page_spec", mock_parse_sub_page_spec
         )
@@ -438,7 +438,7 @@ st_rotate = st.builds(
 )
 
 st_pos_preset = st.just(
-    f"position={st.one_of(st.sampled_from(pdftl.commands.parsers.add_text_parser.PRESET_POSITIONS))}"
+    f"position={st.one_of(st.sampled_from(pdftl.operations.parsers.add_text_parser.PRESET_POSITIONS))}"
 )
 
 st_dim_floats = st.floats(min_value=0, max_value=1000, allow_nan=False, allow_infinity=False)

@@ -1,7 +1,7 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-import pdftl.commands.parsers.inject_parser as cp
+import pdftl.operations.parsers.inject_parser as cp
 
 # ---------------------------
 # Reusable Strategies

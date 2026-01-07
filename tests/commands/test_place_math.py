@@ -1,7 +1,7 @@
-# tests/commands/test_place_math.py
+# tests/operations/test_place_math.py
 import pytest
 
-from pdftl.commands.place import _multiply_matrices
+from pdftl.operations.place import _multiply_matrices
 
 
 def apply_matrix(point, matrix):

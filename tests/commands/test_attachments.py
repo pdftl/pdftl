@@ -3,7 +3,7 @@ from pathlib import Path
 import pikepdf
 import pytest
 
-from pdftl.commands.attachments import unpack_files, unpack_files_cli_hook
+from pdftl.operations.attachments import unpack_files, unpack_files_cli_hook
 
 
 @pytest.fixture
@@ -46,8 +46,8 @@ def test_unpack_files(pdf_with_attachment, tmp_path):
         assert expected_file.read_text() == "Hello World"
 
 
-from pdftl.commands.attachments import dump_files_cli_hook
 from pdftl.core.types import OpResult
+from pdftl.operations.attachments import dump_files_cli_hook
 
 
 def test_attachments_hooks_failures():
