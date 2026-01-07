@@ -121,7 +121,7 @@ class TestSetInfo:
             doc_info=[DocInfoEntry("Title", "A")],
             ids=["123", None],
             bookmarks=[BookmarkEntry(level=1, page_number=1, title="Test")],
-            page_media=[PageMediaEntry(number=1)],
+            page_media=[PageMediaEntry(page_number=1)],
             page_labels=[PageLabelEntry(index=1)],
         )
 
@@ -149,7 +149,9 @@ class TestSetInfo:
         """Tests setting page media properties."""
         mock_page = mock_pdf.pages[0]
 
-        entry = PageMediaEntry(number=1, rotation=180, rect=[0, 0, 1, 1], crop_rect=[0, 0, 2, 2])
+        entry = PageMediaEntry(
+            page_number=1, rotation=180, media_rect=[0, 0, 1, 1], crop_rect=[0, 0, 2, 2]
+        )
 
         _set_page_media_entry(mock_pdf, entry)
 
@@ -166,7 +168,7 @@ class TestSetInfo:
         # 1. Non-existent page number
         caplog.clear()
         with caplog.at_level("WARNING"):
-            entry = PageMediaEntry(number=99)
+            entry = PageMediaEntry(page_number=99)
             _set_page_media_entry(mock_pdf, entry)
 
         assert len(caplog.records) == 1
@@ -272,7 +274,9 @@ class TestSetInfo:
             "UppercaseRoman": "/R",
             "LowercaseRoman": "/r",
         }
-        mocker.patch.dict(set_info_module.PAGE_LABEL_STYLE_MAP, mock_map)
+        import pdftl.core.constants
+
+        mocker.patch.dict(pdftl.core.constants.PAGE_LABEL_STYLE_MAP, mock_map)
         mock_indirect = MagicMock()
         mock_pdf.make_indirect.return_value = mock_indirect
 
@@ -311,7 +315,7 @@ class TestSetInfo:
     @patch("pdftl.info.set_info._set_page_media_entry")
     def test_set_page_media_loop(self, mock_entry, mock_pdf):
         """Tests the _set_page_media loop function."""
-        page_media_list = [PageMediaEntry(number=1), PageMediaEntry(number=2)]
+        page_media_list = [PageMediaEntry(page_number=1), PageMediaEntry(page_number=2)]
         set_info_module._set_page_media(mock_pdf, page_media_list)
 
         mock_entry.assert_has_calls(
@@ -325,7 +329,7 @@ class TestSetInfo:
         """Tests the 'elif "Dimensions"' branch of _set_page_media_entry."""
         mock_page = mock_pdf.pages[0]
         # Entry with dimensions but no rect/crop_rect
-        entry = PageMediaEntry(number=1, dimensions=[300, 400])
+        entry = PageMediaEntry(page_number=1, dimensions=[300, 400])
 
         _set_page_media_entry(mock_pdf, entry)
 

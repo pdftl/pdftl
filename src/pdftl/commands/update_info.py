@@ -14,6 +14,7 @@ from pdftl.core.types import OpResult
 from pdftl.exceptions import (
     InvalidArgumentError,
     MissingArgumentError,
+    PdftlConfigError,
     UserCommandLineError,
 )
 
@@ -132,7 +133,7 @@ Here is an example for `update_info`:
   ],
   "PageMediaList": [
     {
-      "Number": 1,
+      "PageNumber": 1,
       "Rotation": 90
     }
   ],
@@ -235,7 +236,7 @@ def update_info(pdf, op_args, get_input, xml_strings=True) -> OpResult:
         else:
             raise TypeError(f"Unexpected result type: {type(result)}")
 
-    except OSError as exc:
+    except (OSError, PdftlConfigError) as exc:
         raise UserCommandLineError(exc) from exc
 
     return execute_update_info(pdf, spec)

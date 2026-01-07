@@ -533,3 +533,30 @@ def test_rebuild_links_empty_context(mock_rebuild_annots):
     # Assert its methods are NOT called
     mock_remapper_instance.set_call_context.assert_not_called()
     mock_rebuild_annots.assert_not_called()
+
+
+from unittest.mock import MagicMock
+
+import pytest
+
+
+def test_links_unconfigured_remapper_guards():
+    from pdftl.pages.link_remapper import LinkRemapper
+    from pdftl.pages.links import _process_annotation, _rebuild_annotations_for_page
+
+    # 1. Satisfy the required 'context' argument with a mock
+    # This creates a remapper where .pdf and .source_pdf default to None
+    mock_context = MagicMock()
+    remapper = LinkRemapper(context=mock_context)
+
+    # 2. Test line 76: _process_annotation returns (None, None) if pdfs are None
+    annot, dest = _process_annotation({}, 0, remapper)
+    assert annot is None
+    assert dest is None
+
+    # 3. Test line 127: _rebuild_annotations_for_page raises ValueError if pdf is None
+    # We pass None for pikepdf and pages because the guard should trip first
+    with pytest.raises(ValueError, match="Internal error: unconfigured LinkRemapper"):
+        _rebuild_annotations_for_page(
+            new_page=None, source_page=None, page_idx=0, remapper=remapper, pikepdf=None
+        )

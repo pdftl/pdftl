@@ -9,8 +9,8 @@ xml_{de,en}code_for_info"""
 
 import itertools
 import re
-from typing import TypeVar
 from collections.abc import Callable
+from typing import TypeVar
 
 from pdftl.utils.whatisit import whatis_guess
 

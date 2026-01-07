@@ -153,8 +153,8 @@ class LinkRemapper:
         Returns:
             Array: A transformed destination array referencing the target page.
         """
-        from typing import Any, cast
         from collections.abc import Iterable
+        from typing import Any, cast
 
         from pikepdf import Array, Name
 

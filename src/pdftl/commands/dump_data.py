@@ -13,12 +13,14 @@ pdf_info
 
 """
 
+import json
 import logging
 
 logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.info.output_info import get_info, write_info
 from pdftl.utils.io_helpers import smart_open_output
 
@@ -58,15 +60,20 @@ specified file).
 
 This operation is the primary way to export data for
 inspection or for later use by the `update_info`
-operation. All string values in the output are processed
-with XML-style escaping (e.g., `<` becomes `&lt;`).
+operation. By default, all string values in the output are
+processed with XML-style escaping (e.g., `<` becomes
+`&lt;`).
 
-### Output Format Details
+Alternatively, passing the `json` parameter will produce a
+structured JSON output, which is often easier for other
+programs to parse.
 
-The output is a plain text, line-based, key-value format. It
-consists of both simple top-level fields and multi-line
-"stanzas". A stanza is a block of related data that begins
-with a line like `InfoBegin` or `BookmarkBegin`.
+### Output Format Details (Stanza Format)
+
+The default output is a plain text, line-based, key-value
+format. It consists of both simple top-level fields and
+multi-line "stanzas". A stanza is a block of related data that
+begins with a line like `InfoBegin` or `BookmarkBegin`.
 
 The data from this command is consumed by `update_info`.
 
@@ -159,6 +166,10 @@ _DUMP_DATA_EXAMPLES = [
         "cmd": "in.pdf dump_data output data.txt",
         "desc": "Save XML-escaped metadata for in.pdf to data.txt",
     },
+    {
+        "cmd": "in.pdf dump_data json",
+        "desc": "Print metadata for in.pdf in JSON format",
+    },
 ]
 
 
@@ -178,13 +189,22 @@ def dump_data_cli_hook(result: OpResult, _stage):
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
     escape_xml = result.meta.get(c.META_ESCAPE_XML, True)
     extra_info = result.meta.get(c.META_EXTRA_INFO, False)
+    json_output = result.meta.get(c.META_JSON_OUTPUT, False)
 
     with smart_open_output(output_file) as file:
+        if json_output:
+            json.dump(result.data.to_dict(), file, indent=2)
+            file.write("\n")
+        else:
 
-        def writer(text):
-            print(text, file=file)
+            def writer(text):
+                print(text, file=file)
 
-        write_info(writer, result.data, escape_xml=escape_xml, extra_info=extra_info)
+            write_info(writer, result.data, escape_xml=escape_xml, extra_info=extra_info)
+
+
+_DUMP_DATA_POS_ARGS = [c.OPERATION_NAME, c.INPUT_PDF, c.INPUT_FILENAME, c.OPERATION_ARGS]
+_DUMP_DATA_KW_ARGS = {"output_file": c.OUTPUT}
 
 
 @register_operation(
@@ -197,8 +217,8 @@ def dump_data_cli_hook(result: OpResult, _stage):
     usage="<input> dump_data_utf8 [output <output>]",
     examples=_DUMP_DATA_UTF8_EXAMPLES,
     args=(
-        [c.INPUT_PDF, c.INPUT_FILENAME],
-        {"output_file": c.OUTPUT},
+        _DUMP_DATA_POS_ARGS,
+        _DUMP_DATA_KW_ARGS,
         {"escape_xml": False},
     ),
 )
@@ -206,16 +226,21 @@ def dump_data_cli_hook(result: OpResult, _stage):
     "dump_data",
     tags=["info", "metadata"],
     type="single input operation",
-    desc=_SHORT_DUMP_DATA_DESC_PREFIX + " (XML-escaped)",
+    desc=_SHORT_DUMP_DATA_DESC_PREFIX + " (XML-escaped or JSON)",
     long_desc=_DUMP_DATA_LONG_DESC,
     cli_hook=dump_data_cli_hook,
-    usage="<input> dump_data [output <output>]",
+    usage="<input> dump_data [output <output>] [json]",
     examples=_DUMP_DATA_EXAMPLES,
-    args=([c.INPUT_PDF, c.INPUT_FILENAME], {"output_file": c.OUTPUT}),
+    args=(
+        _DUMP_DATA_POS_ARGS,
+        _DUMP_DATA_KW_ARGS,
+    ),
 )
 def pdf_info(
+    op_name,
     pdf,
     input_filename,
+    op_args,
     output_file=None,
     escape_xml=True,
     extra_info=False,
@@ -223,6 +248,16 @@ def pdf_info(
     """
     Imitate pdftk's dump_data output, writing to a file or stdout.
     """
+    json_output = False
+    if len(op_args) > 1:
+        raise InvalidArgumentError("Too many arguments for '{op_name}', at most one is allowed.")
+    if len(op_args) == 1:
+        if op_args[0].strip().lower() == "json":
+            json_output = True
+        else:
+            raise InvalidArgumentError(
+                "Invalid '{op_name}' argument. Only valid argument is 'json', to select JSON output."
+            )
 
     info = get_info(pdf, input_filename, extra_info=extra_info)
 
@@ -235,5 +270,6 @@ def pdf_info(
             c.META_OUTPUT_FILE: output_file,
             c.META_ESCAPE_XML: escape_xml,
             c.META_EXTRA_INFO: extra_info,
+            c.META_JSON_OUTPUT: json_output,
         },
     )

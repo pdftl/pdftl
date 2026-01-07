@@ -79,3 +79,43 @@ def test_json_dump_hook_scenarios(capsys, tmp_path):
     # 3. Failure -> No op
     hooks.json_dump_hook(OpResult(success=False), None)
     # Implicit pass if no error raised
+
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from pdftl.core.types import OpResult
+from pdftl.utils.hooks import str_from_result_meta, text_dump_hook
+
+
+def test_text_dump_hook_early_returns():
+    """Test that text_dump_hook returns early on failure or empty data."""
+    stage = MagicMock()
+
+    # Case 1: Failure
+    res_fail = OpResult(success=False, data="Some error")
+    # Should simply return None, not print, not write file
+    assert text_dump_hook(res_fail, stage) is None
+
+    # Case 2: No Data
+    res_no_data = OpResult(success=True, data=None)
+    assert text_dump_hook(res_no_data, stage) is None
+
+
+def test_str_from_result_meta():
+    """Test the meta string extraction utility."""
+    # Case 1: Valid String
+    res = OpResult(success=True, meta={"key": "value"})
+    assert str_from_result_meta(res, "key") == "value"
+
+    # Case 2: Missing Key (AssertionError from from_result_meta or None check)
+    # The code asserts result.meta is not None.
+    # But if key is missing, .get returns None, failing isinstance(None, str)
+    with pytest.raises(AssertionError):
+        str_from_result_meta(res, "missing_key")
+
+    # Case 3: Wrong Type
+    res_int = OpResult(success=True, meta={"key": 123})
+    with pytest.raises(AssertionError):
+        str_from_result_meta(res_int, "key")

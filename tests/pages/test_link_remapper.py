@@ -419,7 +419,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-
 # Mock pikepdf.Name for property access (e.g., Name.XYZ)
 class MockName:
     XYZ = "/XYZ"

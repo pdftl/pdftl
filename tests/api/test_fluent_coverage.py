@@ -143,3 +143,23 @@ def test_apply_metadata_inconsistency(mocker):
         func = p.missing_op
         assert func.__name__ == "missing_op"
         # Verify it didn't crash and returned the function even without docstrings
+
+
+def test_fluent_metadata_attribute_error_silence(monkeypatch):
+    import pikepdf
+
+    from pdftl.core.executor import registry
+    from pdftl.fluent import PdfPipeline
+
+    # 1. Create a dummy PDF
+    pdf = pikepdf.new()
+    pipe = PdfPipeline(pdf)
+
+    # 2. Inject a fake operation into the registry that is NOT in the api module
+    monkeypatch.setitem(registry.operations, "ghost_op", type("Op", (), {"args": ([], {})})())
+
+    # 3. Accessing it should not crash, even though _apply_metadata fails to find api.ghost_op
+    # This triggers the 'except AttributeError: pass' block
+    method = pipe.ghost_op
+    assert callable(method)
+    assert method.__name__ == "ghost_op"

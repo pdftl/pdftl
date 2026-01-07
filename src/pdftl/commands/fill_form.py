@@ -11,8 +11,8 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-from typing import TYPE_CHECKING
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pikepdf import Pdf

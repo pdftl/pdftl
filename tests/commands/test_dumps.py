@@ -10,7 +10,7 @@ from pdftl.commands.dump_text import dump_text
 def test_dump_data_to_file(two_page_pdf, tmp_path):
     output_path = tmp_path / "data.txt"
     with pikepdf.open(two_page_pdf) as pdf:
-        result = pdf_info(pdf, "dummy.pdf", output_file=str(output_path))
+        result = pdf_info("dump_data", pdf, "dummy.pdf", [], output_file=str(output_path))
         dump_data_cli_hook(result, None)
 
     assert output_path.exists()
@@ -31,7 +31,7 @@ def test_dump_annots_to_file(two_page_pdf, tmp_path):
 
 def test_dump_data_to_stdout(two_page_pdf, capsys):
     with pikepdf.open(two_page_pdf) as pdf:
-        result = pdf_info(pdf, "dummy.pdf", output_file=None)
+        result = pdf_info("dump_data", pdf, "dummy.pdf", [], output_file=None)
 
         assert result.success
         assert result.is_discardable

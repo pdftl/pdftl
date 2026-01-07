@@ -196,13 +196,14 @@ PAPER_SIZES = {
 ##################################################
 # Named boxes in PDF files
 
-PAGE_BOXES = [
-    "/MediaBox",
-    "/CropBox",
-    "/TrimBox",
-    "/BleedBox",
-    "/ArtBox",
-]
+INFO_TO_PAGE_BOXES_MAP = OrderedDict(
+    media_rect="MediaBox",
+    crop_rect="CropBox",
+    trim_rect="TrimBox",
+    bleed_rect="BleedBox",
+    art_rect="ArtBox",
+)
+PAGE_BOXES = ["/" + v for k, v in INFO_TO_PAGE_BOXES_MAP.items()]
 
 ##################################################
 # Conversion data for units
@@ -258,6 +259,7 @@ OPENED_PDFS = "opened_pdfs"
 OPERATION_ARGS = "operation_args"
 ALIASES = "aliases"
 OPTIONS = "options"
+OPERATION_NAME = "operation"
 OUTPUT = "output"
 
 # Internal/Resolved context keys for specific command logic
@@ -274,6 +276,7 @@ GET_INPUT = "get_input"
 META_OUTPUT_FILE = "output_file"
 META_ESCAPE_XML = "escape_xml"
 META_EXTRA_INFO = "extra_info"
+META_JSON_OUTPUT = "json_output"
 
 ##################################################
 # Page data key
@@ -288,6 +291,7 @@ __all__ = [
     "ALLOW_PERMISSIONS_L",
     "PAPER_SIZES",
     "PAGE_BOXES",
+    "INFO_TO_PAGE_BOXES_MAP",
     "UNITS",
     "FDF_START",
     "FDF_END",
@@ -296,6 +300,7 @@ __all__ = [
     "OPENED_PDFS",
     "OPERATION_ARGS",
     "ALIASES",
+    "OPERATION_NAME",
     "OPTIONS",
     "OUTPUT",
     "INPUT_FILENAME",

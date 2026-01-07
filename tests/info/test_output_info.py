@@ -42,12 +42,20 @@ def mock_pdf():
     p1.get.return_value = 0  # Rotation
     p1.mediabox = [0, 0, 600, 800]
     p1.cropbox = [0, 0, 600, 800]
+    p1_boxes = {"MediaBox": p1.mediabox, "CropBox": p1.cropbox}
+    p1.__getitem__.side_effect = p1_boxes.__getitem__
+    for k, v in p1_boxes.items():
+        setattr(p1, k, v)
 
     # Page Media (Page 2)
     p2 = pdf.pages[1]
     p2.get.return_value = 90  # Rotation
     p2.mediabox = [0, 0, 500, 500]
     p2.cropbox = [10, 10, 490, 490]
+    p2_boxes = {"MediaBox": p2.mediabox, "CropBox": p2.cropbox}
+    p2.__getitem__.side_effect = p2_boxes.__getitem__
+    for k, v in p2_boxes.items():
+        setattr(p2, k, v)
 
     # IDs
     pdf.trailer = MagicMock()
@@ -82,11 +90,13 @@ def sample_info():
             )
         ],
         page_media=[
-            PageMediaEntry(number=1, rotation=0, rect=[0, 0, 100, 100], dimensions=("100", "100")),
             PageMediaEntry(
-                number=2,
+                page_number=1, rotation=0, media_rect=[0, 0, 100, 100], dimensions=("100", "100")
+            ),
+            PageMediaEntry(
+                page_number=2,
                 rotation=90,
-                rect=[0, 0, 200, 200],
+                media_rect=[0, 0, 200, 200],
                 dimensions=("200", "200"),
                 crop_rect=[10, 10, 190, 190],
             ),
@@ -110,7 +120,7 @@ def mock_writer():
     return writer
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def patch_deps(mocker):
     """Patch external helpers to simplify unit tests."""
     mocker.patch(
@@ -125,6 +135,7 @@ def patch_deps(mocker):
 # ==================================================================
 
 
+@pytest.mark.usefixtures("patch_deps")
 class TestInfoExtraction:
     def test_get_info_basic(self, mock_pdf):
         """Test basic extraction of pages, IDs, and DocInfo."""
@@ -147,13 +158,13 @@ class TestInfoExtraction:
 
         assert len(info.page_media) == 2
         p1 = info.page_media[0]
-        assert p1.number == 1
+        assert p1.page_number == 1
         assert p1.rotation == 0
-        assert p1.rect == [0, 0, 600, 800]
+        assert p1.media_rect == [0, 0, 600, 800]
         assert p1.crop_rect is None  # Equal to mediabox
 
         p2 = info.page_media[1]
-        assert p2.number == 2
+        assert p2.page_number == 2
         assert p2.rotation == 90
         # CropBox was different, but wait - the new code doesn't explicitly store crop_rect
         # unless we check the logic.
@@ -185,6 +196,7 @@ class TestInfoExtraction:
 # ==================================================================
 
 
+@pytest.mark.usefixtures("patch_deps")
 class TestInfoWriting:
     def test_write_info_orchestration(self, mock_writer, sample_info):
         """Tests that write_info calls all sub-writers."""
@@ -255,6 +267,7 @@ class TestInfoWriting:
 # ==============================
 
 
+@pytest.mark.usefixtures("patch_deps")
 def test_get_info_with_page_labels():
     """
     Test extraction of PageLabels logic.
@@ -319,6 +332,7 @@ def test_get_info_with_page_labels():
 # ==================================================================
 
 
+@pytest.mark.usefixtures("patch_deps")
 def test_get_info_corrupt_outline(caplog):
     """
     Test handling of corrupt outlines.
@@ -343,6 +357,7 @@ def test_get_info_corrupt_outline(caplog):
     assert "Corrupt Tree" in caplog.text
 
 
+@pytest.mark.usefixtures("patch_deps")
 def test_extract_bookmarks_nested_and_errors(caplog):
     """
     Test recursive children extraction and page resolution errors.
@@ -386,3 +401,148 @@ def test_extract_bookmarks_nested_and_errors(caplog):
     assert len(info.bookmarks[0].children) == 1
     assert info.bookmarks[0].children[0].title == "Child Node"
     assert info.bookmarks[0].children[0].page_number == 1
+
+
+# ==================================================================
+# === Advanced Page Box Logic Tests
+# ==================================================================
+
+
+@pytest.mark.usefixtures("patch_deps")
+def test_advanced_page_box_logic():
+    """
+    Verifies the PDF spec inheritance rules ("The Waterfall"):
+    1. MediaBox is the root.
+    2. CropBox defaults to MediaBox.
+    3. Trim/Bleed/Art default to CropBox.
+
+    We create 5 scenarios to ensure redundant boxes are suppressed
+    and distinct boxes are captured.
+    """
+
+    # Helper to create a mock page with specific box returns
+    # Helper to create a mock page with specific box returns
+    def make_page(media, crop=None, trim=None, bleed=None, art=None):
+        p = MagicMock()
+
+        # 1. Setup Dictionary Access (page.get("/MediaBox"))
+        def get_side_effect(key, default=None):
+            vals = {
+                "/Rotate": 0,
+                "/MediaBox": media,
+                "/CropBox": crop,
+                "/TrimBox": trim,
+                "/BleedBox": bleed,
+                "/ArtBox": art,
+            }
+            return vals.get(key, default)
+
+        p.get.side_effect = get_side_effect
+
+        # 2. Setup Attribute Access (getattr(page, "MediaBox"))
+        # We must explicitly set these so getattr returns the list, not a new Mock
+        if media is not None:
+            p.MediaBox = media
+        if crop is not None:
+            p.CropBox = crop
+        if trim is not None:
+            p.TrimBox = trim
+        if bleed is not None:
+            p.BleedBox = bleed
+        if art is not None:
+            p.ArtBox = art
+
+        return p
+
+    # Define standard boxes for reuse
+    box_100 = [0, 0, 100, 100]
+    box_90 = [5, 5, 95, 95]
+    box_80 = [10, 10, 90, 90]
+
+    # --- Scenario 1: The "Lazy" PDF (All boxes identical) ---
+    # Result: Should only output MediaBox. Crop implies Media. Trim implies Crop.
+    p1 = make_page(media=box_100, crop=box_100, trim=box_100, bleed=box_100)
+
+    # --- Scenario 2: Explicit Crop (Different from Media) ---
+    # Result: Output Media + Crop. Trim (missing) implies Crop.
+    p2 = make_page(media=box_100, crop=box_90, trim=None)
+
+    # --- Scenario 3: Redundant Trim (Matches Crop) ---
+    # Result: Output Media + Crop. Trim suppressed because it equals Crop.
+    p3 = make_page(media=box_100, crop=box_90, trim=box_90)
+
+    # --- Scenario 4: Implicit Parent (Trim matches Media, Crop missing) ---
+    # Result: Output Media. Crop is implicit (Media). Trim matches implicit Crop.
+    p4 = make_page(media=box_100, crop=None, trim=box_100)
+
+    # --- Scenario 5: Full Hierarchy (All different) ---
+    # Result: Output Media + Crop + Trim.
+    p5 = make_page(media=box_100, crop=box_90, trim=box_80)
+
+    # Setup the PDF
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.pdf_version = "1.7"
+    mock_pdf.is_encrypted = False
+    mock_pdf.docinfo = {}
+    del mock_pdf.Root.PageLabels  # Ensure no label processing
+    mock_pdf.open_outline.return_value.__enter__.return_value.root = []  # No bookmarks
+    mock_pdf.pages = [p1, p2, p3, p4, p5]
+
+    # --- Run Extraction ---
+    # We patch dependencies to ensure strings match our expectations
+    with patch("pdftl.info.output_info.pdf_id_metadata_as_strings", return_value=[]):
+        with patch("pdftl.info.output_info.pdf_rect_to_string", side_effect=lambda x: str(x)):
+            info = get_info(mock_pdf, "boxes.pdf")
+
+    # --- Assertions ---
+
+    # Page 1: Lazy (All Same) -> Only Media
+    res1 = info.page_media[0]
+    assert res1.media_rect == box_100
+    assert res1.crop_rect is None
+    assert res1.trim_rect is None
+
+    # Page 2: Explicit Crop -> Media + Crop
+    res2 = info.page_media[1]
+    assert res2.media_rect == box_100
+    assert res2.crop_rect == box_90
+    assert res2.trim_rect is None  # Missing trim implies crop (inherited)
+
+    # Page 3: Redundant Trim -> Media + Crop (Trim suppressed)
+    res3 = info.page_media[2]
+    assert res3.media_rect == box_100
+    assert res3.crop_rect == box_90
+    assert res3.trim_rect is None  # Trim equals Crop, so it's redundant
+
+    # Page 4: Implicit Parent -> Only Media
+    # (Crop is missing -> defaults to Media. Trim is 100 -> matches Implicit Crop)
+    res4 = info.page_media[3]
+    assert res4.media_rect == box_100
+    assert res4.crop_rect is None
+    assert res4.trim_rect is None
+
+    # Page 5: All Different -> All 3 present
+    res5 = info.page_media[4]
+    assert res5.media_rect == box_100
+    assert res5.crop_rect == box_90
+    assert res5.trim_rect == box_80
+
+
+def test_write_info_rect_coverage():
+    from pdftl.info.info_types import PageMediaEntry, PdfInfo
+    from pdftl.info.output_info import write_info
+
+    # Setup info with rare rects
+    entry = PageMediaEntry(page_number=1, trim_rect=[0, 0, 10, 10], bleed_rect=[0, 0, 15, 15])
+    info = PdfInfo(pages=1, page_media=[entry])
+
+    output = []
+
+    def mock_writer(s):
+        output.append(s)
+
+    write_info(mock_writer, info)
+
+    combined = "\n".join(output)
+    assert "PageMediaTrimRect: 0 0 10 10" in combined
+    assert "PageMediaBleedRect: 0 0 15 15" in combined

@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from pikepdf import OutlineItem
     from pdftl.info.info_types import PdfInfo, BookmarkEntry, PageMediaEntry, PageLabelEntry
 
-from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
+
+import pdftl.core.constants as c
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def _set_page_media(pdf, page_media_list: list["PageMediaEntry"]):
 
 def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
     # entry.number is 1-based index from input
-    page_number = entry.number
+    page_number = entry.page_number
 
     if len(pdf.pages) < page_number:
         logger.warning(
@@ -80,17 +81,15 @@ def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
     if entry.rotation is not None:
         page.rotate(entry.rotation, relative=False)
 
-    if entry.rect is not None:
-        page.mediabox = entry.rect
-
-    if entry.crop_rect is not None:
-        page.cropbox = entry.crop_rect
+    if entry.media_rect is not None:
+        page.mediabox = entry.media_rect
     elif entry.dimensions is not None:
         # Dimensions is a tuple/list, usually [width, height]
         page.mediabox = [0, 0, *entry.dimensions]
 
-    if entry.trim_rect is not None:
-        page.trimbox = entry.trim_rect
+    for rect_name, box_name in c.INFO_TO_PAGE_BOXES_MAP.items():
+        if box_name != "MediaBox" and (box_list := getattr(entry, rect_name, None)) is not None:
+            setattr(page, box_name.lower(), box_list)
 
 
 def _set_bookmarks(pdf, bookmark_list: list["BookmarkEntry"], delete_existing_bookmarks=True):
@@ -200,7 +199,7 @@ def _make_page_label(pdf, entry: "PageLabelEntry"):
         ret["/P"] = entry.prefix
 
     if entry.style:
-        style_name_string = PAGE_LABEL_STYLE_MAP.get(entry.style)
+        style_name_string = c.PAGE_LABEL_STYLE_MAP.get(entry.style)
         if style_name_string:
             ret["/S"] = pikepdf.Name(style_name_string)
 

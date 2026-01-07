@@ -38,7 +38,6 @@ def test_split_escaped_value_error():
         split_escaped("", "ab")
 
 
-
 from pdftl.utils.string import recursive_decode
 
 

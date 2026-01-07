@@ -265,7 +265,7 @@ class PipelineManager:
         output_pattern = stage.options.get(c.OUTPUT, "pg_%04d.pdf")
 
         call_context = {
-            "operation": operation,
+            c.OPERATION_NAME: operation,
             c.INPUTS: stage.inputs,
             c.OPENED_PDFS: opened_pdfs,
             c.INPUT_FILENAME: _first_or_none(stage.inputs),

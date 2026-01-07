@@ -13,13 +13,14 @@ write_info
 """
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterable, cast
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
 
+import pdftl.core.constants as c
 from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
 from pdftl.info.info_types import (
     BookmarkEntry,
@@ -41,6 +42,10 @@ from pdftl.utils.string import (
 
 
 def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
+    from collections import OrderedDict
+
+    import pikepdf
+
     info = PdfInfo(pages=len(pdf.pages), ids=pdf_id_metadata_as_strings(pdf))
     if extra_info:
         info.file_path = input_filename
@@ -53,16 +58,38 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
             info.doc_info.append(DocInfoEntry(key=str(key)[1:], value=str(value)))
     for i, page in enumerate(pdf.pages):
         rotation = int(page.get("/Rotate", 0))
-        mediabox = page.mediabox
-        width_str = pdf_num_to_string(abs(float(mediabox[2] - mediabox[0])))
-        height_str = pdf_num_to_string(abs(float(mediabox[3] - mediabox[1])))
+
         if info.page_media is None:
             info.page_media = []
-        info.page_media.append(
-            PageMediaEntry(
-                number=i + 1, rotation=rotation, rect=mediabox, dimensions=(width_str, height_str)
-            )
-        )
+        page_media_dict: dict[str, Any] = {
+            "page_number": i + 1,
+            "rotation": rotation,
+        }
+        saved_media_box = None
+        saved_crop_box = None
+        for box, key in c.INFO_TO_PAGE_BOXES_MAP.items():
+            box_obj = getattr(page, key, None)
+            if not isinstance(box_obj, (pikepdf.Array, list)):
+                continue
+            box_list = [float(x) for x in cast(Iterable[Any], box_obj)]
+            width_str = pdf_num_to_string(abs(box_list[2] - box_list[0]))
+            height_str = pdf_num_to_string(abs(box_list[3] - box_list[1]))
+            # breakpoint()
+            if box == "media_rect":
+                page_media_dict["dimensions"] = (width_str, height_str)
+                saved_media_box = box_list
+            elif box == "crop_rect":
+                if box_list == saved_media_box:
+                    continue
+                saved_crop_box = box_list
+            else:
+                if box_list == saved_crop_box or (
+                    saved_crop_box is None and box_list == saved_media_box
+                ):
+                    continue
+            page_media_dict[box] = box_list
+
+        info.page_media.append(PageMediaEntry(**page_media_dict))
 
     if hasattr(pdf.Root, "PageLabels"):
         from pikepdf import NumberTree
@@ -126,16 +153,23 @@ def _write_pages_info(writer, info):
 def _write_page_media_info(writer, info):
     """Writes the media box and rotation information for each page."""
     for entry in info.page_media or {}:
+        rot = entry.rotation or 0
         writer(
             "PageMediaBegin\n"
-            f"PageMediaNumber: {entry.number}\n"
-            f"PageMediaRotation: {entry.rotation}\n"
-            f"PageMediaRect: {pdf_rect_to_string(entry.rect)}\n"
-            f"PageMediaDimensions: {entry.dimensions[0]} {entry.dimensions[1]}"
+            f"PageMediaNumber: {entry.page_number}\n"
+            f"PageMediaRotation: {rot}"
         )
-
+        # breakpoint()
+        if entry.media_rect is not None:
+            writer(f"PageMediaRect: {pdf_rect_to_string(entry.media_rect)}")
+        if entry.dimensions is not None:
+            writer(f"PageMediaDimensions: {entry.dimensions[0]} {entry.dimensions[1]}")
         if entry.crop_rect is not None:
             writer(f"PageMediaCropRect: {pdf_rect_to_string(entry.crop_rect)}")
+        if entry.trim_rect is not None:
+            writer(f"PageMediaTrimRect: {pdf_rect_to_string(entry.trim_rect)}")
+        if entry.bleed_rect is not None:
+            writer(f"PageMediaBleedRect: {pdf_rect_to_string(entry.bleed_rect)}")
 
 
 def _write_page_labels(writer, info):

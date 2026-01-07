@@ -11,6 +11,10 @@ class PdftlError(Exception):
     """Base exception for all pdftl errors"""
 
 
+class PdftlConfigError(PdftlError):
+    """Exception raised when required data or configuration is missing."""
+
+
 class PackageError(PdftlError):
     """Exception raised by a feature with a missing required package"""
 

@@ -15,9 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions from a JSON "at-file" using `@filename.json`
   in place of CLI arguments
 
+- `dump_data` gives JSON output via the `json` keyword
+
 ### Fixed
 
 - bug in `add_pages.py` when a page has an integer key-value
+
+- more comprehensive handling of the five PDF page boxes for `dump_data` and `update_info`
 
 ## [0.6.0] - 2026-01-04
 
