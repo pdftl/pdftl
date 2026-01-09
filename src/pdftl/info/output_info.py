@@ -31,10 +31,10 @@ from pdftl.info.info_types import (
     PdfInfo,
 )
 from pdftl.info.read_info import (
-    get_named_destinations,
     pdf_id_metadata_as_strings,
     resolve_page_number,
 )
+from pdftl.utils.destinations import get_named_destinations
 from pdftl.utils.string import (
     pdf_num_to_string,
     pdf_rect_to_string,

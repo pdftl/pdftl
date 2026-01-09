@@ -43,9 +43,13 @@ Australian.
 
 _ROTATE_EXAMPLES = [
     {
-        "cmd": "in.pdf rotate 1-endright output out.pdf",
-        "desc": "Rotate all pages 90 degrees clockwise:",
-    }
+        "cmd": "in.pdf rotate right output out.pdf",
+        "desc": "Rotate all pages 90 degrees clockwise",
+    },
+    {
+        "cmd": "in.pdf rotate 3down output out.pdf",
+        "desc": "Rotate page 3 by 180 degrees",
+    },
 ]
 
 

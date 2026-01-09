@@ -9,10 +9,10 @@ from pikepdf import Array, Dictionary, Name, OutlineItem, String
 # Functions to test
 from pdftl.info.read_info import (
     _get_destination_array,
-    get_named_destinations,
     pdf_id_metadata_as_strings,
     resolve_page_number,
 )
+from pdftl.utils.destinations import get_named_destinations
 
 # --- Fixtures ---
 

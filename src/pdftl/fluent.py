@@ -26,8 +26,36 @@ class PdfPipeline:
         pdf = pikepdf.open(filename, password=password) if password else pikepdf.open(filename)
         return cls(pdf)
 
-    def save(self, filename: str | Path, **kwargs: Any) -> None:
-        self._pdf.save(filename, **kwargs)
+    def save(
+        self,
+        filename: str | Path,
+        input_context: Any = None,
+        set_pdf_id: bytes | None = None,
+        **kwargs: Any,
+    ) -> PdfPipeline:
+        """
+        Save the current PDF to a file, applying pdftl options.
+
+        Args:
+            filename: Output path.
+            input_context: Optional context for handling passwords/prompts.
+            set_pdf_id: Optional byte string to force the PDF ID.
+            **kwargs: Options passed to save_pdf (e.g. flatten=True, encrypt_128bit=True).
+        Returns:
+          self: To allow onward pipeline chaining
+        """
+        from pdftl.output.save import save_pdf
+
+        # We explicitly separate the args that save_pdf defines in its signature
+        # from the general 'options' dictionary.
+        save_pdf(
+            self._pdf,
+            str(filename),
+            input_context=input_context,
+            options=kwargs,  # All other kwargs (flatten, etc) go here
+            set_pdf_id=set_pdf_id,
+        )
+        return self
 
     def __dir__(self):
         """Allow tab completion for dynamic registry operations."""

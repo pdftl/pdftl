@@ -1,9 +1,12 @@
 import dataclasses
-from typing import Any, TypeVar
+from typing import Any, TypeVar, ClassVar, Protocol
 
 from pdftl.exceptions import PdftlConfigError
 
-T = TypeVar("T")
+class DataclassInstance(Protocol):
+    __dataclass_fields__: ClassVar[dict[str, Any]] 
+
+T = TypeVar("T", bound=DataclassInstance)
 
 
 def safe_create(cls: type[T], data: dict[str, Any]) -> T:

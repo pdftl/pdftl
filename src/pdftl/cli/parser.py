@@ -60,16 +60,22 @@ def _parse_value_keyword(arg, args, i, options):
     return 2
 
 
-def _parse_multiple_arguments(option, args, i, argument_q, hint=None):
+def _parse_multiple_arguments(option, args, i, argument_q, allow_no_args=False, hint=None):
     """Parses a keyword which can take multiple values."""
     if i + 1 >= len(args):
-        raise MissingArgumentError(f"Missing value for option '{option}': {args[i]}")
+        if allow_no_args:
+            return (1, i + 1)
+        else:
+            raise MissingArgumentError(f"Missing value for option '{option}': {args[i]}")
     if not argument_q(args[i + 1]):
-        raise InvalidArgumentError(
-            f"Invalid argument '{args[i + 1]}' following '{option}' keyword." + (" " + hint)
-            if hint
-            else ""
-        )
+        if allow_no_args:
+            return (1, i + 1)
+        else:
+            raise InvalidArgumentError(
+                f"Invalid argument '{args[i + 1]}' following '{option}' keyword." + (" " + hint)
+                if hint
+                else ""
+            )
     current_pos = i + 1
     while current_pos < len(args) and argument_q(args[current_pos]):
         current_pos += 1
@@ -101,7 +107,8 @@ def _parse_allow_permissions(args, i, options):
         args,
         i,
         allow_argument_q,
-        hint=f"You must supply at least one of:\n  {allow_kw_list}",
+        allow_no_args=True,
+        hint=f"Value 'allow' arguments are:\n  {allow_kw_list}",
     )
     permissions = options.setdefault(keyword, set())
     for j in range(1, consumed_count):
@@ -265,22 +272,30 @@ def parse_cli_stage(stage_args, is_first_stage):
         pre_op,
         post_op,
     )
+    implicit_op = False
     if not stage_args:
         logger.debug("no stage_args, going to filter mode")
         operation = "filter"
+        implicit_op = True
     elif operation is None:
         logger.debug("no operation, going to filter mode")
         operation = "filter"
+        implicit_op = True
         pre_op = stage_args
         post_op = []
     logger.debug(
-        "after filter block: operation=%s, pre_op=%s, post_op=%s",
+        "after filter block: operation=%s, pre_op=%s, post_op=%s, implicit_op=%s",
         operation,
         pre_op,
         post_op,
+        implicit_op,
     )
     inputs, handles, passwords = _parse_pre_operation_args(pre_op, is_first_stage)
+    logger.debug("inputs=%s, handles=%s, passowrds=%s", inputs, handles, passwords)
     specs, options = parse_options_and_specs(post_op)
+    if implicit_op and len(inputs) > 1:
+        operation = "cat"
+        logging.debug("Changing from filter to cat")
     logger.debug(
         "CliStage(operation=%s, inputs=%s, input_passwords=%s,"
         "handles=%s, operation_args=%s, options=%s",
@@ -313,56 +328,3 @@ def split_args_by_separator(argv, separator="---"):
             current_stage.append(arg)
     stages.append(current_stage)
     return stages
-
-
-def parse_cli_stages(args: list[str]) -> tuple[list[CliStage], dict]:
-    """
-    Parses a list of command-line arguments into a list of CliStage objects
-    and a dictionary of global options.
-    """
-    logger.debug("Parsing CLI stages from args: %s", args)
-
-    raw_stages = split_args_by_separator(args)
-    logger.debug("Split into %d raw stages: %s", len(raw_stages), raw_stages)
-
-    parsed_stages = []
-    global_options = {}
-
-    for i, stage_args in enumerate(raw_stages):
-        is_first = i == 0
-
-        stage = parse_cli_stage(stage_args, is_first_stage=is_first)
-        parsed_stages.append(stage)
-
-        # Aggregate global-like options for backward compatibility
-        # If this is the last stage, 'output' counts as global.
-        is_last = i == len(raw_stages) - 1
-        if is_last and c.OUTPUT in stage.options:
-            global_options[c.OUTPUT] = stage.options[c.OUTPUT]
-
-        # Other globals (verbose, etc.) might be in options too if parsed there
-        for key in [
-            "verbose",
-            "compress",
-            "uncompress",
-            "linearize",
-            "encrypt_128bit",
-            "encrypt_40bit",
-            "encrypt_aes128",
-            "encrypt_aes256",
-            "owner_pw",
-            "user_pw",
-            "drop_info",
-            "drop_xmp",
-            "need_appearances",
-            "flatten",
-            "keep_first_id",
-            "keep_final_id",
-        ]:
-            if key in stage.options:
-                global_options[key] = stage.options[key]
-
-        if "allow" in stage.options:
-            global_options.setdefault("allow", set()).update(stage.options["allow"])
-
-    return parsed_stages, global_options

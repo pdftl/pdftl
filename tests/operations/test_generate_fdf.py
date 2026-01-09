@@ -139,7 +139,7 @@ def test_generate_fdf_hook_failure():
     result = OpResult(success=False)
 
     # Mock smart_open to ensure it is NOT called
-    with patch("pdftl.operations.generate_fdf.smart_open_output") as mock_open:
+    with patch("pdftl.operations.generate_fdf.smart_open") as mock_open:
         generate_fdf_cli_hook(result, "post")
         mock_open.assert_not_called()
 
@@ -163,3 +163,108 @@ def test_write_field_non_string_value():
     content = buffer.getvalue().decode("utf-8")
     assert "/V 999" in content
     assert "/T (AgeField)" in content
+
+
+def test_generate_fdf_choice_field_null_value():
+    """
+    Covers lines 107-108: val = "" if val is None and isinstance(field, ChoiceField)
+    """
+    mock_pdf = MagicMock()
+
+    class MockChoiceField:
+        pass
+
+    with (
+        patch("pikepdf.form.Form") as MockForm,
+        patch("pikepdf.form.ChoiceField", MockChoiceField),
+    ):
+
+        mock_form_instance = MockForm.return_value
+
+        mock_field = MockChoiceField()
+        mock_field.value = None
+        mock_field.default_value = None
+
+        mock_form_instance.items.return_value = [("MyDropdown", mock_field)]
+
+        # Execute the operation
+        result = generate_fdf(mock_pdf, lambda x: "y", "out.fdf")
+
+        assert result.success
+
+        # Verify the raw bytes instead of decoding as utf-8
+        # This avoids the UnicodeDecodeError from the FDF header
+        output_bytes = result.data.getvalue()
+
+        # Check for the expected FDF field structure in the byte stream
+        assert b"/T (MyDropdown)" in output_bytes
+        assert b"/V ()" in output_bytes
+
+
+from unittest.mock import PropertyMock
+
+from pikepdf import Name
+
+
+def test_generate_fdf_radio_button_exception_handling():
+    """Triggers lines 124-128 by forcing an AttributeError on Opt."""
+    mock_pdf = MagicMock()
+
+    class MockRB:
+        pass  # Dummy for isinstance
+
+    with patch("pikepdf.form.Form") as MockForm, patch("pikepdf.form.RadioButtonGroup", MockRB):
+
+        mock_field = MockRB()
+        mock_field.value = Name("/1")
+        mock_field.obj = MagicMock()
+        # Trigger AttributeError when accessing Opt
+        type(mock_field.obj).Opt = PropertyMock(side_effect=AttributeError)
+
+        MockForm.return_value.items.return_value = [("Radio1", mock_field)]
+
+        # This will hit the 'pass' in the except block
+        result = generate_fdf(mock_pdf, lambda x: "y", "out.fdf")
+        assert result.success
+
+
+import unittest
+
+
+class TestFDFFieldEdgeCases(unittest.TestCase):
+    def test_radio_button_index_error_handling(self):
+        """
+        Covers lines 124-128.
+        Simulates a RadioButtonGroup where the value is a Name (e.g., /1)
+        but the underlying object lacks an 'Opt' array, triggering AttributeError.
+        """
+        # 1. Setup mocks
+        # We need to mock specific classes so isinstance checks pass
+        from pikepdf.form import RadioButtonGroup
+
+        mock_field = MagicMock(spec=RadioButtonGroup)
+        mock_field.value = Name("/1")
+
+        # This triggers line 124-128:
+        # When the code tries to access field.obj.Opt, it raises AttributeError
+        mock_field.obj = MagicMock()
+        del mock_field.obj.Opt
+
+        buffer = io.BytesIO()
+
+        # 2. Execute the function
+        # The try/except block on line 124 will catch the AttributeError and 'pass'
+        try:
+            _write_field_as_fdf_to_file("RadioTest", mock_field, buffer)
+        except AttributeError:
+            self.fail("_write_field_as_fdf_to_file failed to catch AttributeError at line 124")
+
+        # 3. Verify output
+        # Because it 'passed', it should fall back to using str(val) which is "/1"
+        output = buffer.getvalue().decode("utf-8")
+        self.assertIn("/V /1", output)
+        self.assertIn("/T (RadioTest)", output)
+
+
+if __name__ == "__main__":
+    unittest.main()

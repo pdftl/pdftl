@@ -17,7 +17,7 @@ CONTRACT_KEYS = {
 
 def get_command_files():
     """Finds all python files in the commands directory."""
-    cmd_dir = os.path.join("src", "pdftl", "commands")
+    cmd_dir = os.path.join("src", "pdftl", "operations")
     if not os.path.exists(cmd_dir):
         return []
     return [os.path.join(cmd_dir, f) for f in os.listdir(cmd_dir) if f.endswith(".py")]

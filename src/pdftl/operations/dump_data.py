@@ -22,7 +22,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.info.output_info import get_info, write_info
-from pdftl.utils.io_helpers import smart_open_output
+from pdftl.utils.io_helpers import smart_open
 
 # BUG: 000301.pdf: rounding errors. Does pdftk just always round? Or
 # do we need Decimal?
@@ -191,7 +191,7 @@ def dump_data_cli_hook(result: OpResult, _stage):
     extra_info = result.meta.get(c.META_EXTRA_INFO, False)
     json_output = result.meta.get(c.META_JSON_OUTPUT, False)
 
-    with smart_open_output(output_file) as file:
+    with smart_open(output_file) as file:
         if json_output:
             json.dump(result.data.to_dict(), file, indent=2)
             file.write("\n")

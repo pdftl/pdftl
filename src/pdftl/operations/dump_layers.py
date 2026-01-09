@@ -8,7 +8,7 @@ import json
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open_output
+from pdftl.utils.io_helpers import smart_open
 
 _DUMP_LAYERS_LONG_DESC = """
 
@@ -120,11 +120,11 @@ def _parse_usage(ocg):
 
 
 def dump_layers_cli_hook(result: OpResult, _stage):
-    # Use smart_open_output to handle stdout vs file correctly
+    # Use smart_open to handle stdout vs file correctly
     from pdftl.utils.hooks import from_result_meta
 
     output_filename = from_result_meta(result, c.META_OUTPUT_FILE)
-    with smart_open_output(output_filename) as f:
+    with smart_open(output_filename) as f:
         json.dump(result.data, f, indent=2)
         print("", file=f)  # Ensure trailing newline
 

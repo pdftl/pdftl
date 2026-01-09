@@ -99,3 +99,58 @@ def test_save_and_sign_default_field(mock_writer_cls, mock_signer_load, mock_sig
     args, _ = mock_sign_pdf.call_args
     # Verify fallback to "Signature1"
     assert args[1].field_name == "Signature1"
+
+
+from unittest.mock import patch
+
+
+@patch("pyhanko.sign.signers.SimpleSigner.load")
+@patch("pyhanko.sign.signers.sign_pdf")
+@patch("pyhanko.pdf_utils.incremental_writer.IncrementalPdfFileWriter")
+def test_save_and_sign_full_flow(mock_writer, mock_sign, mock_load):
+    mock_pdf = MagicMock()
+    mock_save_opts = {"encryption": None}
+    sign_cfg = {"key": "key.pem", "cert": "cert.pem", "passphrase": "password", "field": "MySig"}
+
+    # This ensures line 60-61 in sign.py is executed
+    save_and_sign(mock_pdf, sign_cfg, mock_save_opts, "out.pdf")
+
+    mock_load.assert_called_once_with("key.pem", "cert.pem", key_passphrase=b"password")
+    assert mock_sign.called
+
+
+from unittest.mock import patch
+
+
+def test_save_and_sign_encryption_success_path():
+    """Hits line 42 by simulating a buffer that contains /Encrypt."""
+    mock_pdf = MagicMock()
+
+    # 1. Create a mock encryption object
+    mock_enc = MagicMock()
+    mock_enc.user = "user_pw"
+    mock_enc.owner = "owner_pw"
+
+    save_opts = {"encryption": mock_enc}
+    sign_cfg = {"key": "dummy.pem", "cert": "dummy.pem", "passphrase": "pass", "field": "Sig1"}
+
+    # 2. Define what happens when pdf.save(buffer, ...) is called
+    def side_effect_save(buffer, **kwargs):
+        # Write the specific string required to trigger line 42
+        buffer.write(b"some pdf data /Encrypt more data")
+        return None
+
+    mock_pdf.save.side_effect = side_effect_save
+
+    # 3. Patch the external dependencies and the logger
+    with (
+        patch("pyhanko.pdf_utils.incremental_writer.IncrementalPdfFileWriter"),
+        patch("pyhanko.sign.signers.SimpleSigner.load"),
+        patch("pyhanko.sign.signers.sign_pdf"),
+        patch("pdftl.output.sign.logger") as mock_logger,
+    ):
+
+        save_and_sign(mock_pdf, sign_cfg, save_opts, "out.pdf")
+
+        # Verify line 42 was hit by checking the logger call
+        mock_logger.debug.assert_any_call("SUCCESS: Buffer is now encrypted.")

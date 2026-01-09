@@ -41,17 +41,19 @@ pdftl = "pdftl.cli.main:main"
 [project.optional-dependencies]
 # Feature-specific dependencies
 add-text = ["reportlab"]
-dump-text = ["pypdfium2"]
-optimize-images = ["ocrmypdf"]
 crop-visible = ["pypdfium2"]
+dump-text = ["pypdfium2"]
+flatten = ["pypdfium2"]
+optimize-images = ["ocrmypdf"]
 signing = ["pyhanko"]
 
 # All optional CLI dependencies
 extras = [
     "pdftl[add-text]",
-    "pdftl[dump-text]",
-    "pdftl[optimize-images]",
     "pdftl[crop-visible]",
+    "pdftl[dump-text]",
+    "pdftl[flatten]",
+    "pdftl[optimize-images]",
     "pdftl[signing]",
 ]
 

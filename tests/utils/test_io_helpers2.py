@@ -1,20 +1,20 @@
 import sys
 from unittest.mock import patch
 
-from pdftl.utils.io_helpers import can_read_file, smart_open_output
+from pdftl.utils.io_helpers import can_read_file, smart_open
 
-# --- Tests for smart_open_output ---
+# --- Tests for smart_open ---
 
 
 def test_smart_open_stdout_text():
     """Tests line 23: Opening stdout in text mode."""
-    with smart_open_output(None, mode="w") as f:
+    with smart_open(None, mode="w") as f:
         assert f is sys.stdout
 
 
 def test_smart_open_stdout_binary():
     """Tests line 22: Opening stdout in binary mode."""
-    with smart_open_output(None, mode="wb") as f:
+    with smart_open(None, mode="wb") as f:
         # sys.stdout.buffer is where binary data goes in Python 3
         assert f is sys.stdout.buffer
 
@@ -23,13 +23,13 @@ def test_smart_open_file_writing(tmp_path):
     """Tests lines 25-29: Opening a real file."""
     test_file = tmp_path / "test.txt"
     # Text mode
-    with smart_open_output(str(test_file), mode="w") as f:
+    with smart_open(str(test_file), mode="w") as f:
         f.write("hello")
     assert test_file.read_text() == "hello"
 
     # Binary mode
     bin_file = tmp_path / "test.bin"
-    with smart_open_output(str(bin_file), mode="wb") as f:
+    with smart_open(str(bin_file), mode="wb") as f:
         f.write(b"\x00\x01")
     assert bin_file.read_bytes() == b"\x00\x01"
 
@@ -62,3 +62,38 @@ def test_can_read_file_permission_denied(tmp_path):
 def test_can_read_file_is_directory(tmp_path):
     """Tests line 38: Path is a directory, not a file."""
     assert can_read_file(str(tmp_path)) is False
+
+
+from unittest.mock import MagicMock
+
+
+def test_smart_open_stdin_binary():
+    """
+    Covers lines 24-25: if "b" in mode: return nullcontext(sys.stdin.buffer).
+    """
+    with patch("sys.stdin") as mock_stdin:
+        mock_stdin.buffer = MagicMock()
+
+        # Test binary read from stdin (filename=None, mode='rb')
+        with smart_open(None, "rb") as f:
+            assert f == mock_stdin.buffer
+
+
+def test_smart_open_stdin_text():
+    """
+    Covers line 26: return nullcontext(sys.stdin).
+    """
+    with patch("sys.stdin") as mock_stdin:
+        # Test text read from stdin (filename=None, mode='r')
+        with smart_open(None, "r") as f:
+            assert f == mock_stdin
+
+
+def test_can_read_file_exists(tmp_path):
+    f = tmp_path / "test.txt"
+    f.write_text("content")
+    assert can_read_file(str(f)) is True
+
+
+def test_can_read_file_missing():
+    assert can_read_file("non_existent_file.xyz") is False

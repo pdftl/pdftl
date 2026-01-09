@@ -3,8 +3,9 @@ from pathlib import Path
 import pytest
 from pikepdf import Array, Dictionary, Name, NameTree, OutlineItem, Pdf, String
 
-from pdftl.info.read_info import get_named_destinations, resolve_page_number
+from pdftl.info.read_info import resolve_page_number
 from pdftl.pages.add_pages import add_pages
+from pdftl.utils.destinations import get_named_destinations
 from pdftl.utils.page_specs import PageTransform
 
 # --- Fixtures ---

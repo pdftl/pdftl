@@ -522,3 +522,25 @@ def test_find_remapped_page_invalid_target_ref():
 
     # 4. Verify
     assert result is None
+
+
+import pytest
+
+
+def test_copy_action_unconfigured_raises_error():
+    """Hits link_remapper.py line 110 by calling _copy_action without context."""
+    # Initialize with empty context, but don't call set_call_context()
+    context = RemapperContext(
+        page_map={},
+        rev_maps={},
+        dest_caches={},
+        pdf_to_input_index={},
+        page_transforms={},
+        include_instance=False,
+        include_pdf_id=False,
+    )
+    remapper = LinkRemapper(context)
+
+    # Attempting to copy an action should now trigger the ValueError
+    with pytest.raises(ValueError, match="Unconfigured LinkRemapper"):
+        remapper._copy_action({})

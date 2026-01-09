@@ -22,7 +22,7 @@ def pdf():
 
 def test_fill_form_xfdf_fallback(pdf):
     """
-    Test that if FDF parsing fails, it tries XFDF (which isn't implemented),
+    Test that if FDF parsing fails, it tries XFDF
     and eventually raises UserCommandLineError.
     """
     with patch("pdftl.operations.fill_form._fill_form_from_fdf_data") as mock_fdf:
@@ -31,7 +31,7 @@ def test_fill_form_xfdf_fallback(pdf):
         with patch("builtins.open", new_callable=MagicMock) as mock_open:
             mock_open.return_value.__enter__.return_value.read.return_value = b"JUNK"
 
-            with pytest.raises(UserCommandLineError, match="Error encountered"):
+            with pytest.raises(UserCommandLineError, match="Errors encountered"):
                 fill_form(pdf, ["dummy.xfdf"], lambda x: x)
 
 

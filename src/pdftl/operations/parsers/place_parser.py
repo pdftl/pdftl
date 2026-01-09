@@ -39,9 +39,6 @@ def parse_place_args(args: list[str]) -> list[PlaceCommand]:
         page_spec = match.group(1).strip()
         ops_str = match.group(2).strip()
 
-        if not page_spec:
-            raise UserCommandLineError(f"Missing page specification in command: '{arg}'")
-
         operations = _parse_operations(ops_str)
         commands.append(PlaceCommand(page_spec, operations))
 

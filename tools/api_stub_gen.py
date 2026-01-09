@@ -49,7 +49,7 @@ def generate():
         "    def __init__(self, pdf: pikepdf.Pdf): ...",
         "    @classmethod",
         "    def open(cls, filename: str, password: Optional[str] = None) -> 'PdfPipeline': ...",
-        "    def save(self, output_path: str) -> 'PdfPipeline': ...",
+        "    def save(self, filename: str|Path, input_context: Any = None, set_pdf_id: bytes| None = None, **kwargs: Any) -> 'PdfPipeline': ...",
         "    def get(self) -> pikepdf.Pdf: ...",
         "    def __enter__(self) -> 'PdfPipeline': ...",
         "    def __exit__(self, t: Any, v: Any, tb: Any) -> None: ...",

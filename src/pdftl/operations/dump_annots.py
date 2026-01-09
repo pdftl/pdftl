@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open_output
+from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.json import pdf_obj_to_json
 from pdftl.utils.string import compact_json_string, xml_encode_for_info
 
@@ -53,7 +53,7 @@ def dump_annots_cli_hook(result: OpResult, _stage):
     # Apply custom compaction
     compacted_string = compact_json_string(json_string)
 
-    with smart_open_output(output_file) as f:
+    with smart_open(output_file) as f:
         f.write(compacted_string)
         # Ensure a trailing newline for console output
         f.write("\n")
@@ -129,7 +129,7 @@ def dump_data_annots_cli_hook(result: OpResult, _stage):
 
     text_report = _generate_pdftk_annots_report(result.data)
 
-    with smart_open_output(output_file) as f:
+    with smart_open(output_file) as f:
         f.write(text_report)
         f.write("\n")
 

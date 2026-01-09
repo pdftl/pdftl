@@ -12,7 +12,7 @@ import logging
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open_output
+from pdftl.utils.io_helpers import smart_open
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def dump_signatures_cli_hook(result: OpResult, _stage):
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
     signatures = result.data
 
-    with smart_open_output(output_file) as out:
+    with smart_open(output_file) as out:
         if not signatures:
             print("No signatures found.", file=out)
             return

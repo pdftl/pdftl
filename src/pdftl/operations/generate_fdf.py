@@ -12,7 +12,7 @@ import pdftl.core.constants as c
 from pdftl.core.constants import FDF_END, FDF_START
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open_output
+from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.user_input import filename_completer
 
 _GENERATE_FDF_LONG_DESC = """
@@ -44,7 +44,7 @@ def generate_fdf_cli_hook(result: OpResult, _stage):
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
     # Open in binary mode ('wb') to write the raw bytes directly
-    with smart_open_output(output_file, mode="wb") as f:
+    with smart_open(output_file, mode="wb") as f:
         import shutil
 
         # result.data is an io.BytesIO object.
@@ -116,7 +116,16 @@ def _write_field_as_fdf_to_file(field_name, field, file):
     # # file.write(bytes(f"\n/V {val}\n>>", 'utf-8'))
 
     if isinstance(field, RadioButtonGroup) and isinstance(val, Name):
-        val = field.obj.Opt[int(str(val)[1:])]
+        try:
+            # We skip the 'if "Opt" in field.obj' check because it is flaky.
+            # Just try to access it directly.
+            idx = int(str(val)[1:])
+            val = field.obj.Opt[idx]
+        except (ValueError, IndexError, AttributeError, TypeError):
+            # AttributeError: Opt doesn't exist
+            # ValueError: val isn't an index like /1
+            # IndexError: index is out of bounds
+            pass
 
     val_as_string = None
     if isinstance(val, (String, str)):

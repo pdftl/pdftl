@@ -85,7 +85,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pdftl.core.types import OpResult
 from pdftl.utils.hooks import str_from_result_meta, text_dump_hook
 
 

@@ -15,6 +15,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.output.attach import attach_files
+from pdftl.output.flatten import flatten_pdf
 from pdftl.output.sign import parse_sign_options, save_and_sign
 
 # ---------------------------------------------------------------------------
@@ -84,8 +85,9 @@ Files saved with encryption have various possible permissions.
 The default encryption permissions are to forbid all possible actions.
 Use the `allow` output option to allow permissions selectively.
 
-Arguments `<perm>...` must be one or more permissions from among
-the following. Upper/lowercase characters are treated the same.
+Arguments `<perm>...` must be zero or more permissions from among
+the following. If omitted, the default is to allow all permissions.
+Upper/lowercase characters are treated the same.
 
 |Permission `<perm>`|Allows|
 |-|-|
@@ -107,7 +109,7 @@ regardless of these permissions settings.
 @register_option(
     "allow <perm>...",
     desc="Specify permissions for encrypted files",
-    type="one or more mandatory arguments",
+    type="zero or more arguments",
     long_desc=_ALLOW_LONG_DESC,
     tags=["security", "encryption"],
 )
@@ -133,6 +135,7 @@ def _linearize_option():
 
 @register_option("drop_info", desc="Discard document-level info metadata", type="flag")
 @register_option("drop_xmp", desc="Discard document-level XMP metadata", type="flag")
+@register_option("drop_xfa", desc="Discard form XFA data if present", type="flag")
 def _drop_options():
     pass
 
@@ -203,7 +206,8 @@ def _build_permissions_object(allow_options: list):
     """Builds a pikepdf.Permissions object from the 'allow' options list."""
     import pikepdf
 
-    if "AllFeatures" in allow_options:
+    # default if no options explicitly selected is same as "AllFeatures"
+    if not allow_options or "AllFeatures" in allow_options:
         # The default pikepdf.Permissions constructor seems to allow all
         # except for assembly. So we specify that.
         return pikepdf.Permissions(modify_assembly=True)
@@ -326,17 +330,30 @@ def _save_by_type(item, path, input_context, **kwargs):
 
     # 1. Is it a PIL Image? (from render)
     if hasattr(item, "format") or str(type(item)).find("PIL") != -1:
-        logger.debug("Routing to Image Saver: %s", path)
+        logger.debug("Routing to image saver: %s", path)
         # Note: PIL.save usually doesn't take the same kwargs as pikepdf
         item.save(path)
 
     # 2. Is it a PDF? (from pikepdf)
     elif hasattr(item, "save"):
-        logger.debug("Routing to PDF Saver: %s", path)
+        logger.debug("Routing to PDF saver: %s", path)
         save_pdf(item, path, input_context, **kwargs)
 
     else:
         raise TypeError(f"Unknown content object type: {type(item)}")
+
+
+def _action_drop_flags(pdf, options):
+    if options.get("drop_info"):
+        del pdf.docinfo
+    if options.get("drop_xmp") and "/Metadata" in pdf.Root:
+        del pdf.Root.Metadata
+    if options.get("drop_xfa"):
+        if "/AcroForm" in pdf.Root:
+            acro_form = pdf.Root["/AcroForm"]
+            if "/XFA" in acro_form:
+                # Delete the XFA entry
+                del acro_form["/XFA"]
 
 
 def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None):
@@ -352,8 +369,12 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
     _remove_source_info(pdf)
 
+    _action_drop_flags(pdf, options)
+
     if options.get("flatten"):
-        pdf.flatten_annotations()
+        # breakpoint()
+        # pdf.flatten_annotations()
+        pdf = flatten_pdf(pdf)
 
     attach_files(pdf, options, input_context)
 

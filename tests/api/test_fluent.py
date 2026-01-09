@@ -62,9 +62,17 @@ def test_pipeline_chaining_flow(mock_pdf):
 
 def test_save_terminal_operation(mock_pdf):
     """Verify that .save() triggers the underlying pikepdf save."""
+    import pikepdf
+
     pipeline = PdfPipeline(mock_pdf)
     pipeline.save("out.pdf")
-    mock_pdf.save.assert_called_once_with("out.pdf")
+    mock_pdf.save.assert_called_once_with(
+        "out.pdf",
+        linearize=False,
+        encryption=False,
+        compress_streams=True,
+        object_stream_mode=pikepdf.ObjectStreamMode.generate,
+    )
 
 
 def test_registry_injection():

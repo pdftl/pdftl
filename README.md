@@ -26,7 +26,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 
 ## Key features and `pdftk` compatibility
 
-* **Familiar syntax:** Command-line compatible with `pdftk`. So `sed s/pdftk/pdftl/g` should result in working scripts. _(work in progress but mostly done)_
+* **Familiar syntax:** Command-line compatible with `pdftk`. Verified against [Mike Haertl's php-pdftk test suite][5], so `sed s/pdftk/pdftl/g` should result in working scripts.
 * **Pipelining:** Chain multiple operations in a single command using `---`.
 * **Probably performant:** `pdftl` seems faster than `pdftk` for many operations _(untested hunch; data needed)_. Reason: `pdftl` mostly drives `pikepdf` which drives `qpdf`, a fast C++ library.
 * **Extra/enhanced operations and features** such as zooming pages, smart merging preserving links and outlines, cropping/chopping up pages, text extraction, optimizing images.
@@ -259,3 +259,4 @@ See the **[API Tutorial][4]** for more details.
 [2]: https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md
 [3]: https://pdftl.readthedocs.io
 [4]: https://pdftl.readthedocs.io/en/latest/api_tutorial.html
+[5]: https://github.com/mikehaertl/php-pdftk

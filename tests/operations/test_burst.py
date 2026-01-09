@@ -69,3 +69,28 @@ def test_burst_multiple_inputs(two_page_pdf):
         # Counter should increment continuously
         assert results[0][0] == "pg_0001.pdf"
         assert results[3][0] == "pg_0004.pdf"
+
+
+from unittest.mock import MagicMock, patch
+
+
+def test_burst_pdf_default_pattern():
+    """
+    Covers line 78: pattern = "pg_%04d.pdf" when pattern is None.
+    """
+    # Setup a mock PDF with one page
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+    mock_pdf.pages = [mock_page]
+
+    # We patch pikepdf.Pdf so that Pdf.new() returns a Mock instead of a real object.
+    # This prevents the TypeError when appending our mock_page.
+    with patch("pikepdf.Pdf") as MockPdf:
+        # Call burst with None. This creates the generator.
+        result = burst_pdf([mock_pdf], output_pattern=None)
+
+        # We must iterate the generator to execute the body of the function
+        generated_files = list(result.pdf)
+
+        # Verify the default pattern was applied (pg_0001.pdf)
+        assert generated_files[0][0] == "pg_0001.pdf"

@@ -1,9 +1,7 @@
 # src/pdftl/utils/destinations.py
 
 import logging
-from typing import Any, List, NamedTuple, Optional
-
-import pikepdf
+from typing import Any, NamedTuple, cast, Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +9,7 @@ logger = logging.getLogger(__name__)
 class ResolvedDest(NamedTuple):
     page_num: int
     dest_type: str
-    args: List[str]
+    args: list[str]
 
 
 def get_named_destinations(pdf):
@@ -25,7 +23,7 @@ def get_named_destinations(pdf):
 
 def resolve_dest_to_page_num(
     dest: Any, pdf_pages: Any, named_destinations: Any
-) -> Optional[ResolvedDest]:
+) -> ResolvedDest | None:
     """
     Generalized resolver: Takes a pikepdf Object (Array, Name, String, or Dict)
     and returns a ResolvedDest(page_num, dest_type, args).
@@ -70,7 +68,7 @@ def resolve_dest_to_page_num(
         dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
 
         # Extract remaining arguments as strings (null, 0, 806, etc.)
-        dest_args = list(dest)[2:] if len(dest) > 2 else []
+        dest_args = list(cast(Iterable[Any],dest))[2:] if len(dest) > 2 else []
 
         return ResolvedDest(page_num, dest_type, dest_args)
 

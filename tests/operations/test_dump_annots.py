@@ -139,3 +139,52 @@ def test_dump_annots_filters_and_errors(annot_pdf, capsys, caplog):
 
     # Verify Error Handling
     assert "Expected Failure" in caplog.text
+
+
+def test_lines_from_datum_skips():
+    from pdftl.operations.dump_annots import _lines_from_datum
+
+    # 1. Test missing /Subtype (Line 213)
+    datum_no_subtype = {"Properties": {}, "Page": 1, "AnnotationIndex": 1}
+    assert _lines_from_datum(datum_no_subtype, lambda x: x) == []
+
+    # 2. Test JavaScript skip (Line 226)
+    datum_js = {
+        "Properties": {"/Subtype": "/Widget", "/A": {"/S": "/JavaScript"}},
+        "Page": 1,
+        "AnnotationIndex": 1,
+    }
+    assert _lines_from_datum(datum_js, lambda x: x) == []
+
+    # 3. Test Unknown Subtype (Line 224)
+    datum_unknown = {"Properties": {"/Subtype": "/Unknown"}, "Page": 1}
+    assert _lines_from_datum(datum_unknown, lambda x: x) == []
+
+
+from unittest.mock import MagicMock
+
+from pikepdf import Name
+
+from pdftl.operations.dump_annots import _get_all_annots_data
+
+
+def test_get_all_annots_with_named_destinations():
+    """Hits line 171 by providing a PDF Root with Names and Dests."""
+    mock_pdf = MagicMock()
+    mock_pdf.pages = []
+
+    # Setup the Root structure pikepdf expects
+    mock_names = MagicMock()
+    # Ensure Name.Dests exists in Root.Names
+    mock_names.__contains__.side_effect = lambda key: key == Name.Dests
+
+    mock_pdf.Root.Names = mock_names
+    # This triggers: if Name.Names in pdf.Root and Name.Dests in pdf.Root.Names
+    mock_pdf.Root.__contains__.side_effect = lambda key: key == Name.Names
+
+    with patch("pikepdf.NameTree") as mock_tree:
+        mock_tree.return_value = {"Dest1": "Obj1"}
+        _get_all_annots_data(mock_pdf)
+
+        # Verify NameTree was called, confirming we entered the block at 171
+        mock_tree.assert_called_once()

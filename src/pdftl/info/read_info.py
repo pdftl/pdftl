@@ -9,7 +9,6 @@
 Public:
 
 pdf_id_metadata_as_strings
-get_named_destinations
 resolve_page_number
 """
 
@@ -22,7 +21,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import OutlineItem, NameTree
 
-from pdftl.utils.destinations import get_named_destinations
 from pdftl.utils.whatisit import is_page
 
 

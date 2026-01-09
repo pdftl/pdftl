@@ -446,3 +446,24 @@ class TestSetInfo:
 
         # Check that the original ID was not modified
         assert mock_pdf.trailer.ID[0] == b"original_id"
+
+
+def test_set_page_labels_new_tree():
+    from pdftl.info.set_info import _set_page_labels
+
+    mock_pdf = MagicMock()
+    # Ensure Root exists so we don't get a different AttributeError
+    mock_pdf.Root = MagicMock(spec=["PageLabels"])
+    del mock_pdf.Root.PageLabels
+
+    with patch("pikepdf.NumberTree.new") as mock_new:
+        # Create a mock that acts like a NumberTree
+        mock_tree_instance = MagicMock()
+        mock_tree_instance.obj = MagicMock()  # This satisfies line 171
+        mock_new.return_value = mock_tree_instance
+
+        _set_page_labels(mock_pdf, [], delete_existing=True)
+
+        # Verify the result was assigned back to the PDF Root
+        assert mock_pdf.Root.PageLabels == mock_tree_instance.obj
+        mock_new.assert_called_once_with(mock_pdf)

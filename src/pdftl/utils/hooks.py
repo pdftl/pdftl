@@ -5,7 +5,7 @@ import sys
 from typing import Any
 
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open_output
+from pdftl.utils.io_helpers import smart_open
 
 
 def _get_output_path(stage):
@@ -46,7 +46,7 @@ def text_dump_hook(result, stage):
         print(result.data)
         return
 
-    with smart_open_output(output_path) as f:
+    with smart_open(output_path) as f:
         f.write(str(result.data))
         # Ensure trailing newline for terminal niceness
         if not str(result.data).endswith("\n"):
@@ -64,7 +64,7 @@ def json_dump_hook(result, stage):
     output_path = _get_output_path(stage)
 
     # JSON commands usually print to stdout if no file is given
-    f = smart_open_output(output_path) if output_path else sys.stdout
+    f = smart_open(output_path) if output_path else sys.stdout
 
     try:
         json.dump(result.data, f, indent=2, default=str)

@@ -305,3 +305,17 @@ def test_write_json_output_to_stdout(mock_stdout):
 
     _write_json_output(data, output_file=None)
     assert mock_stdout.getvalue() == compacted_expected
+
+
+import pytest
+
+from pdftl.operations.dump_dests import _compound_obj_to_json
+
+
+def test_compound_obj_to_json_unknown_type():
+    """Triggers line 64 by passing an object that is neither Dict nor Array."""
+    # We need to mock the classes so isinstance checks can be manipulated
+    with patch("pikepdf.Dictionary", tuple), patch("pikepdf.Array", list):
+        # Pass a set() - it's not a list or tuple
+        with pytest.raises(ValueError, match="Unknown compound PDF object"):
+            _compound_obj_to_json({"not": "a_pikepdf_obj"}, {}, set())

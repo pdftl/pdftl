@@ -159,7 +159,7 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
     target = "pyhanko.sign.validation.validate_pdf_signature"
 
     with patch(target, return_value=mock_status):
-        with patch("pdftl.operations.dump_signatures.smart_open_output") as mock_open:
+        with patch("pdftl.operations.dump_signatures.smart_open") as mock_open:
             mock_open.return_value.__enter__.return_value = output
             result = dump_signatures(signed_pdf_path, None, None)
             dump_signatures_cli_hook(result, None)
@@ -205,13 +205,13 @@ def test_dump_signatures_hook_multiple_sigs():
     )
 
     # 2. Capture stdout
-    # We patch smart_open_output or just capture stdout if output_file is None.
-    # The hook uses smart_open_output(None) which usually defaults to sys.stdout.
-    # We will assume smart_open_output handles None by yielding sys.stdout,
+    # We patch smart_open or just capture stdout if output_file is None.
+    # The hook uses smart_open(None) which usually defaults to sys.stdout.
+    # We will assume smart_open handles None by yielding sys.stdout,
     # so we can use capsys.
 
-    # Actually, let's mock smart_open_output to be safe and independent of IO implementation
-    with patch("pdftl.operations.dump_signatures.smart_open_output") as mock_open:
+    # Actually, let's mock smart_open to be safe and independent of IO implementation
+    with patch("pdftl.operations.dump_signatures.smart_open") as mock_open:
         # Create a StringIO to capture output
         mock_buffer = io.StringIO()
         mock_open.return_value.__enter__.return_value = mock_buffer

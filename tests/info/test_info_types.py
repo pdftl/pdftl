@@ -63,7 +63,7 @@ def test_bookmark_entry_lowercase_children():
 
 import pytest
 
-from pdftl.info.info_types import BookmarkEntry, PdfInfo, _fuzzy_create
+from pdftl.info.info_types import _fuzzy_create
 
 
 def test_pdf_info_from_dict_complex():
@@ -105,19 +105,9 @@ def test_fuzzy_create_guard():
     assert _fuzzy_create(PdfInfo, "not-a-dict") == "not-a-dict"
 
 
-from dataclasses import asdict
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from pdftl.info import output_info
-from pdftl.info.info_types import (
-    BookmarkEntry,
-    DocInfoEntry,
-    PageLabelEntry,
-    PageMediaEntry,
-    PdfInfo,
-)
 
 # --- Part 1: Test info_types.py (Serialization/Deserialization) ---
 
@@ -274,10 +264,7 @@ def test_get_info_mocked():
         assert info.pages == 2
 
 
-import pytest
-
 from pdftl.exceptions import PdftlConfigError  # Assuming this is where it lives
-from pdftl.info.info_types import PageLabelEntry, PageMediaEntry, _fuzzy_create
 
 # --- Tests for PageMediaEntry (Missing page_number) ---
 

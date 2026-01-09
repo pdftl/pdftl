@@ -1,12 +1,11 @@
 import json
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 import pdftl.core.constants as c
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.info.info_types import PdfInfo
 from pdftl.operations.dump_data import dump_data_cli_hook, pdf_info
 
 
@@ -52,3 +51,17 @@ def test_pdf_info_argument_validation():
     # Case 2: Invalid argument (not 'json')
     with pytest.raises(InvalidArgumentError, match="Only valid argument is 'json'"):
         pdf_info("dump_data", mock_pdf, "in.pdf", ["xml"])
+
+
+def test_dump_data_json_argument():
+    mock_pdf = MagicMock()
+    # Mock basic attributes to avoid deep pikepdf initialization
+    mock_pdf.pages = []
+    mock_pdf.docinfo = None
+    # Ensure Root doesn't appear to have PageLabels to avoid the TypeError
+    del mock_pdf.Root.PageLabels
+
+    result = pdf_info("dump_data", mock_pdf, "in.pdf", ["json"])
+
+    assert result.success
+    assert result.meta[c.META_JSON_OUTPUT] is True

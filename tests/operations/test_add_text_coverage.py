@@ -59,3 +59,51 @@ class TestAddTextCoverage(ModuleSandboxMixin):
                 add_text_pdf(pdf, [spec])
 
         assert "Failed to apply overlay" in caplog.text
+
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from pdftl.operations.add_text import _process_page
+
+
+def test_process_page_empty_overlay_log():
+    """Triggers line 340: Overlay PDF exists but has no pages."""
+    mock_page = MagicMock()
+    mock_page.trimbox = [0, 0, 100, 100]
+
+    mock_drawer_instance = MagicMock()
+    # Provide a valid-looking PDF header but no actual page objects
+    mock_drawer_instance.save.return_value = b"%PDF-1.7\n%%EOF"
+    mock_drawer_class = MagicMock(return_value=mock_drawer_instance)
+
+    with patch("pikepdf.Pdf.open") as mock_pdf_open:
+        # Mock a PDF object that has 0 pages
+        mock_pdf_open.return_value.__enter__.return_value.pages = []
+
+        _process_page(0, mock_page, {0: [MagicMock()]}, {}, mock_drawer_class)
+        # Line 340 is now hit (logger.debug for empty overlay)
+
+
+import pdftl.core.constants as c
+
+
+def test_process_page_with_source_meta():
+    mock_page = MagicMock()
+    mock_page.trimbox = [0, 0, 100, 100]
+
+    # Ensure the attribute name matches exactly what the code looks for
+    source_data = {"/source_filename": "old.pdf", "/source_page": 5}
+    setattr(mock_page, c.PDFTL_SOURCE_INFO_KEY, source_data)
+
+    mock_drawer_instance = MagicMock()
+    mock_drawer_instance.save.return_value = b"some_pdf_bytes"
+    mock_drawer_class = MagicMock(return_value=mock_drawer_instance)
+
+    mock_rule = MagicMock()
+    # Pass a dummy static_context to avoid fallthrough issues
+    _process_page(0, mock_page, {0: [mock_rule]}, {"filename": "new.pdf"}, mock_drawer_class)
+
+    args, _ = mock_drawer_instance.draw_rule.call_args
+    assert args[1]["source_filename"] == "old.pdf"

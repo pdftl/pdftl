@@ -626,3 +626,45 @@ class TestAddTextParserHypothesis(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+import unittest
+
+
+class TestAddTextFiltering(unittest.TestCase):
+
+    def test_line_131_external_odd_qualifier(self):
+        """Tests filtering via the external 'odd' keyword (Line 131)."""
+        # Format: [qualifier, spec]
+        specs = ["odd", "1-4/Hello/"]
+        total_pages = 10
+
+        # Result should only contain indices for pages 1 and 3
+        # indices: 0, 2
+        rules = parse_add_text_specs_to_rules(specs, total_pages)
+
+        self.assertIn(0, rules)
+        self.assertIn(2, rules)
+        self.assertNotIn(1, rules)  # Page 2 (even)
+        self.assertNotIn(3, rules)  # Page 4 (even)
+        self.assertEqual(len(rules), 2)
+
+    def test_line_135_omissions(self):
+        """Tests filtering via page range omissions '~' (Line 135)."""
+        # Spec: range 1 to 5, but omit page 3
+        specs = ["1-5~3/Omit Test/"]
+        total_pages = 10
+
+        # Result should contain 0, 1, 3, 4 (Pages 1, 2, 4, 5)
+        # 2 (Page 3) should be missing
+        rules = parse_add_text_specs_to_rules(specs, total_pages)
+
+        self.assertIn(0, rules)
+        self.assertIn(1, rules)
+        self.assertNotIn(2, rules)  # Page 3 omitted
+        self.assertIn(3, rules)
+        self.assertIn(4, rules)
+        self.assertEqual(len(rules), 4)
+
+
+if __name__ == "__main__":
+    unittest.main()

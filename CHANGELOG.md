@@ -5,13 +5,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.7.0] - 2026-01-11
 
 ### Added
 
+- automated `pdftk` compatibility testing using third party
+  php test suite.
+
+- `drop_xfa` output option to drop XFA form data (pdftk compatibility)
+
 - `render` operation: rasterize pages
 
-- `move`, `update_info`, `update_info_utf8` can now
+- `move`, `update_info`, `update_info_utf8` now accept
   instructions from a JSON "at-file" using `@filename.json`
   in place of CLI arguments
 
@@ -21,7 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - bug in `add_pages.py` when a page has an integer key-value
 
-- more comprehensive handling of the five PDF page boxes for `dump_data` and `update_info`
+- more comprehensive handling of the five PDF page boxes for
+  `dump_data` and `update_info`
+
+- `drop_info` and `drop_xmp` output options should now work
+  as claimed
+
+- `flatten` reimplemented for robustness
 
 ## [0.6.0] - 2026-01-04
 

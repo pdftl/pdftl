@@ -42,3 +42,26 @@ def test_flatten_spec_list_ignores_none():
     specs = ["1", None, "2,3"]
     result = _flatten_spec_list(specs)
     assert result == ["1", "2", "3"]
+
+
+import unittest
+
+
+class TestPageSpecs(unittest.TestCase):
+    def test_expand_square_brackets_with_none(self):
+        # Input list containing a valid spec and a None value
+        specs = ["[1,2]x2", None, "5"]
+
+        # The expected behavior is that None is skipped,
+        # and the valid specs are processed normally.
+        expected = ["1x2", "2x2", "5"]
+
+        try:
+            result = _expand_square_brackets(specs)
+            self.assertEqual(result, expected)
+        except AttributeError:
+            self.fail("_expand_square_brackets() raised AttributeError on None value!")
+
+
+if __name__ == "__main__":
+    unittest.main()

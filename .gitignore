@@ -69,3 +69,5 @@ tests/assets/Form.pdf
 complexipy*.json
 *.lprof
 .github/assets/pdftl.png
+vendor_tests/
+scratch/

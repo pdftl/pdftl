@@ -36,22 +36,24 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    _, args_for_parsing = _is_verbose_and_setup_logging(argv[1:])
+    found_flags, args_for_parsing = _get_flags_and_setup_logging(argv[1:])
     initialize_registry()
     _handle_special_flags(argv[1:])
 
     if not args_for_parsing:
         _print_help_and_exit(None)
 
-    pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
-
     try:
+        pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
         pipeline.run()
 
     except (UserCommandLineError, PackageError) as e:
-        print(f"Error: {e}", file=sys.stderr)
-        logger.debug("A user command line error occurred", exc_info=True)
-        sys.exit(1)
+        if "debug" in found_flags:
+            raise
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+            logger.debug("A user command line error occurred", exc_info=True)
+            sys.exit(1)
 
 
 ##################################################
@@ -125,12 +127,18 @@ def _find_help_command(cli_args):
     )
 
 
-def _is_verbose_and_setup_logging(cli_args) -> tuple[bool, list[str]]:
+def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
     """Initializes the root logger based on quiet and/or verbose
     flags. Returns the verbose flag and a list of remaining
     arguments, with all verbose flags removed."""
+    found_flags = set()
+
     debug = any(arg in DEBUG_FLAGS for arg in cli_args)
+    if debug:
+        found_flags.add("debug")
     verbose = debug or any(arg in VERBOSE_FLAGS for arg in cli_args)
+    if verbose:
+        found_flags.add("verbose")
     level = logging.DEBUG if debug else logging.INFO if verbose else logging.WARN
 
     # Use a simpler format for info, detailed format for debug
@@ -151,7 +159,7 @@ def _is_verbose_and_setup_logging(cli_args) -> tuple[bool, list[str]]:
     logging.getLogger("pdftl").setLevel(level)
     flags_to_remove = VERBOSE_FLAGS.union(DEBUG_FLAGS)
     remaining_args = [x for x in cli_args if x not in flags_to_remove]
-    return verbose, remaining_args
+    return found_flags, remaining_args
 
 
 def _handle_special_flags(nonverbose_cli_args):
@@ -166,7 +174,3 @@ def _handle_special_flags(nonverbose_cli_args):
     if any(arg in HELP_FLAGS for arg in nonverbose_cli_args):
         command = _find_help_command(nonverbose_cli_args)
         _print_help_and_exit(command)
-
-
-if __name__ == "__main__":
-    main()

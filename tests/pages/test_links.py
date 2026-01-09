@@ -535,8 +535,6 @@ def test_rebuild_links_empty_context(mock_rebuild_annots):
     mock_rebuild_annots.assert_not_called()
 
 
-from unittest.mock import MagicMock
-
 import pytest
 
 

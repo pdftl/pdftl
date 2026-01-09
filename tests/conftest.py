@@ -552,3 +552,52 @@ def minimal_pdf():
     with pikepdf.new() as pdf:
         pdf.add_blank_page(page_size=(100, 100))
         yield pdf
+
+
+from unittest.mock import MagicMock
+
+
+@pytest.fixture
+def mock_pdf():
+    """
+    Standard mock for a pikepdf.Pdf object.
+    Defined here (or move to conftest.py if shared widely).
+    """
+    import pikepdf
+
+    pdf = MagicMock(spec=pikepdf.Pdf)
+    pdf.Root = MagicMock()
+    # Default behavior: simulate a clean structure unless test overrides
+    pdf.Root.__contains__.return_value = False
+    return pdf
+
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def clean_logging_state():
+    """
+    Ruthlessly reset the logging state for the entire 'pdftl' namespace
+    before each test. This fixes the "Missing Logs" intermittent failures
+    caused by other tests disabling propagation.
+    """
+    # 1. Get the manager's dictionary of ALL existing loggers
+    logger_dict = logging.Logger.manager.loggerDict
+
+    # 2. Iterate and reset anything starting with 'pdftl'
+    for name, logger in logger_dict.items():
+        if name.startswith("pdftl") and isinstance(logger, logging.Logger):
+            logger.setLevel(logging.NOTSET)
+            logger.propagate = True
+            logger.disabled = False
+            # Optional: Clear handlers if you have tests adding them
+            # logger.handlers.clear()
+
+    # 3. Also reset the top-level 'pdftl' logger specifically
+    pdftl_logger = logging.getLogger("pdftl")
+    pdftl_logger.propagate = True
+    pdftl_logger.setLevel(logging.NOTSET)
+
+    yield

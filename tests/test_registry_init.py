@@ -31,7 +31,9 @@ def test_discover_modules_imports_all(monkeypatch):
     """_discover_modules() should import all submodules under fake packages."""
 
     # Create fake packages
-    fake_commands = make_fake_module("pdftl.commands", is_pkg=True, submodules=["mod_a", "mod_b"])
+    fake_operations = make_fake_module(
+        "pdftl.operations", is_pkg=True, submodules=["mod_a", "mod_b"]
+    )
     fake_core = make_fake_module("pdftl.core", is_pkg=True, submodules=["mod_a", "mod_b"])
 
     # Patch iter_modules to yield submodules
@@ -50,7 +52,7 @@ def test_discover_modules_imports_all(monkeypatch):
     monkeypatch.setattr(reg_init.importlib, "import_module", fake_import_module)
 
     # Call _discover_modules with our fake modules
-    result = reg_init._discover_modules([fake_commands, fake_core], "operation")
+    result = reg_init._discover_modules([fake_operations, fake_core], "operation")
 
     expected_imports = {
         "pdftl.operations.mod_a",
@@ -101,7 +103,7 @@ def test_initialize_registry_idempotent(monkeypatch):
 def test_discover_modules_logs_debug(monkeypatch, caplog):
     """Ensure _discover_modules emits debug logs listing loaded modules."""
 
-    fake_pkg = make_fake_module("pdftl.commands", is_pkg=True)
+    fake_pkg = make_fake_module("pdftl.operations", is_pkg=True)
     monkeypatch.setattr(
         reg_init.pkgutil,
         "iter_modules",
@@ -115,7 +117,7 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
     assert any("Loaded" in msg for msg in caplog.messages)
     assert any("pdftl.operations.alpha" in msg for msg in caplog.messages)
     assert isinstance(loaded, list)
-    assert set(loaded) == {"pdftl.operations.alpha", "pdftl.commands.beta"}
+    assert set(loaded) == {"pdftl.operations.alpha", "pdftl.operations.beta"}
 
 
 def test_discover_modules_skips_no_path(caplog):

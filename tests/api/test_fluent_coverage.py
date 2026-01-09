@@ -37,6 +37,8 @@ class TestFluentApi:
 
     def test_fluent_properties_and_save(self):
         """Hit lines 30, 57, 60: save, native property, and get()."""
+        import pikepdf
+
         mock_pdf = MagicMock(spec=pikepdf.Pdf)
         pipe = PdfPipeline(mock_pdf)
 
@@ -46,8 +48,14 @@ class TestFluentApi:
         assert pipe.get() == mock_pdf
 
         # Test .save() (line 30)
-        pipe.save("out.pdf", static=True)
-        mock_pdf.save.assert_called_once_with("out.pdf", static=True)
+        pipe.save("out.pdf")
+        mock_pdf.save.assert_called_once_with(
+            "out.pdf",
+            linearize=False,
+            encryption=False,
+            compress_streams=True,
+            object_stream_mode=pikepdf.ObjectStreamMode.generate,
+        )
 
     def test_getattr_attribute_error(self):
         """Hit line 53: AttributeError for unknown operations."""

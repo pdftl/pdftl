@@ -454,8 +454,9 @@ class TestParserIntegration:
 
     def test_parse_cli_stage_allow_followed_by_keyword(self, mock_registry, mock_constants):
         args = ["in.pdf", "cat", "allow", "output", "out.pdf"]
-        with pytest.raises(InvalidArgumentError, match="Invalid argument 'output'"):
-            parse_cli_stage(args, is_first_stage=True)
+        p = parse_cli_stage(args, is_first_stage=True)
+        assert p.operation == "cat"
+        assert p.options["allow"] == set()
 
     def test_parse_cli_stage_attach_files_stops_at_keyword(self, mock_registry, mock_constants):
         args = [

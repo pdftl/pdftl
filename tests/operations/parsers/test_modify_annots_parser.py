@@ -11,7 +11,6 @@ from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'map'
 import pdftl.operations.parsers.modify_annots_parser as map
-from pdftl.operations.parsers.modify_annots_parser import ModificationRule
 
 # --- -----------------------
 # Tests for _unquote_string
@@ -132,11 +131,11 @@ def test_parser_success_simple():
 
     assert len(rules) == 1
     rule = rules[0]
-    assert isinstance(rule, ModificationRule)
 
+    assert type(rule).__name__ == "ModificationRule"
     assert rule.page_numbers == [1, 2, 3, 4]
-
     assert rule.type_selector == "/Link"
+    assert ("Border", "null") in rule.modifications
     assert rule.modifications == [("Border", "null"), ("Foo", "bar")]
 
 
