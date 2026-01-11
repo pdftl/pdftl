@@ -321,7 +321,9 @@ def _extract_field_data_high_level(field, extra_info=False) -> dict[str, Any]:
     return data
 
 
-def _process_node_recursive(raw_obj, parent_name, smart_fields_map, output_list: list[dict[str, Any]], extra_info):
+def _process_node_recursive(
+    raw_obj, parent_name, smart_fields_map, output_list: list[dict[str, Any]], extra_info
+):
     """
     Recursively walks the tree.
     Crucial Rule: If we find a High-Level Field, we Dump it and STOP recursing.
@@ -403,7 +405,7 @@ def dump_data_fields(
             smart_fields_map[field.obj.objgen] = field
 
     # 2. Prepare for Walk
-    all_fields_data: list[dict[str,Any]] = []
+    all_fields_data: list[dict[str, Any]] = []
 
     try:
         acroform = pdf.Root.AcroForm

@@ -45,6 +45,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 | **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
 | **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
 | **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
+| **Help** | ⚠️ Basic (manpage) | ✅ **Self-documenting: [`pdftl help <operation/option/topic/tag>`][7]** |
 
 ## Installation
 
@@ -56,38 +57,45 @@ pipx install pdftl[full]
 
 A simple `pip install pdftl[full]` install is also supported.
 
-**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, and [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction. Omit `[full]` to omit those features and dependencies.
+**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction and robust flattening, and [`pyHanko`][6] for cryptographic signature functionality. Omit `[full]` to omit those features and dependencies.
 
 ## Key features
 
 ### 📄 Standard operations
 
-* **Combine:** `cat`, `shuffle` (interleave pages from multiple docs).
-* **Split:** `burst` (split into single pages), `delete` pages.
-* **Metadata:** `dump_data`, `update_info`, `attach_files`, `unpack_files`.
-* **Watermarking:** `stamp` / `background` (single page), `multistamp` / `multibackground`.
+* **Combine:** [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html) (interleave pages from multiple docs).
+* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages.
+* **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html).
+* **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html) (single page), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
 
 ### ✂️ Geometry & splitting
 
-* **Rotate:** `rotate` pages (absolute or relative).
-* **Crop:** `crop` to margins or standard paper sizes (e.g., "A4").
-* **Chop:** `chop` pages into grids or rows (e.g., split a scanned spread into two pages).
-* **Spin:** `spin` content *inside* the page boundaries without changing page orientation.
+* **Rotate:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages (absolute or relative).
+* **Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) to margins or standard paper sizes (e.g., "A4").
+* **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows (e.g., split a scanned spread into two pages).
+* **Shift, scale and spin** page content *inside* the page boundaries using [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
 
 ### 📝 Forms & annotations
 
-* **Forms:** `fill_form`, `generate_fdf`, `dump_data_fields`.
-* **Annotations:** `modify_annots` (surgical edits to link properties, colors, borders), `delete_annots`, `dump_annots`.
+* **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
+* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html).
+
+### 🔐 Security
+* **Decryption:** using [`input_pw`](https://pdftl.readthedocs.io/en/latest/general/input.html).
+* **Encryption:** using [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw) and [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), optionally setting permissions with [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm).
+* **Signatures:** add secure signatures using [`sign_key`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file) and [`sign_cert`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file). List and verify signatures using [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html) (powered by [`pyHanko`][6]).
 
 ### 🛠️ Advanced
 
-* **Text replacement:** `replace` text in content streams using regular expressions (experimental).
-* **Code injection:** `inject` raw PDF operators at the head/tail of content streams.
-* **Optimization:** `optimize_images` (smart compression via OCRmyPDF).
-* **Dynamic text:** `add_text` supports Bates stamping and can add page numbers, filenames, timestamps, etc.
-* **Cleanup:** `normalize` content streams, `linearize` for web viewing.
+* **Text replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) text in content streams using regular expressions (experimental).
+* **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
+* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF).
+* **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
+* **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 
 ## Examples
+
+For more than 100 other examples: `pdftl help examples`.
 
 ### Concatenation
 
@@ -227,6 +235,7 @@ See the **[API Tutorial][4]** for more details.
 | [`attach_files <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#attach-files-file) | Attach files to the output PDF                    |
 | [`compress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#compress)                     | Compress output file streams (default)            |
 | [`drop_info`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-info)                   | Discard document-level info metadata              |
+| [`drop_xfa`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xfa)                     | Discard form XFA data if present                  |
 | [`drop_xmp`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xmp)                     | Discard document-level XMP metadata               |
 | [`encrypt_128bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-128bit)         | Use 128 bit encryption (obsolete, maybe insecure) |
 | [`encrypt_40bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-40bit)           | Use 40 bit encryption (obsolete, highly insecure) |
@@ -260,3 +269,5 @@ See the **[API Tutorial][4]** for more details.
 [3]: https://pdftl.readthedocs.io
 [4]: https://pdftl.readthedocs.io/en/latest/api_tutorial.html
 [5]: https://github.com/mikehaertl/php-pdftk
+[6]: https://github.com/MatthiasValvekens/pyHanko
+[7]: https://pdftl.readthedocs.io/en/latest/general/help.html

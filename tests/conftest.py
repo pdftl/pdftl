@@ -572,7 +572,6 @@ def mock_pdf():
     return pdf
 
 
-
 import pytest
 
 

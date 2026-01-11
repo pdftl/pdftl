@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: ["main", "master"]
   pull_request:
 
 env:
@@ -12,7 +13,6 @@ jobs:
   tests:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +56,30 @@ jobs:
           name: coverage
           path: coverage.xml
 
+  phptests:
+    name: php-pdftk test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e .[dev-all]
+
+      - name: Install php prereqs
+        run: bash tools/install_php_ci_prereqs.sh
+
+      - name: Setup php tests
+        run: bash tools/setup_php_tests.sh
+
+      - name: Run php-pdftk test suite via pytest
+        run: pytest tests/test_php_compat.py
+
   codecov:
     name: Upload coverage (Linux 3.12)
     needs: tests
@@ -63,7 +87,6 @@ jobs:
     if: success()
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

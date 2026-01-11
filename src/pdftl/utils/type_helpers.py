@@ -1,10 +1,12 @@
 import dataclasses
-from typing import Any, TypeVar, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol, TypeVar
 
 from pdftl.exceptions import PdftlConfigError
 
+
 class DataclassInstance(Protocol):
-    __dataclass_fields__: ClassVar[dict[str, Any]] 
+    __dataclass_fields__: ClassVar[dict[str, Any]]
+
 
 T = TypeVar("T", bound=DataclassInstance)
 
