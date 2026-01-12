@@ -7,6 +7,7 @@
 """Dump annotations info, in JSON"""
 
 import logging
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
@@ -76,7 +77,7 @@ def dump_annots(pdf, output_file=None) -> OpResult:
     """
 
     logger.debug("Dumping annotations for PDF with %s pages.", len(pdf.pages))
-    all_annots_data = _get_all_annots_data(pdf)
+    all_annots_data = _get_all_annots_data(pdf, compat=False)
 
     return OpResult(success=True, data=all_annots_data, meta={c.META_OUTPUT_FILE: output_file})
 
@@ -100,7 +101,7 @@ _DUMP_DATA_ANNOTS_EXAMPLES = [
 def _generate_pdftk_annots_report(data, string_convert=xml_encode_for_info):
     """Helper to generate the text report from the structured data dict"""
     annots = data.get("Annotations", [])
-    data_strings = _data_to_strings(annots, string_convert)
+    data_strings = _data_to_strings(annots, string_convert, compat=True)
 
     uri_line = ""
     if "PdfUriBase" in data:
@@ -150,7 +151,7 @@ def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info) 
     Dumps annotation data from a PDF in pdftk style
     """
     logger.debug("Dumping pdftk-style annotations data for PDF with %s pages.", len(pdf.pages))
-    all_annots_data = _get_all_annots_data(pdf)
+    all_annots_data = _get_all_annots_data(pdf, compat=True)
     data = {"NumberOfPages": len(pdf.pages), "Annotations": all_annots_data}
     # Extract URI Base if present in the PDF Root
     if hasattr(pdf.Root, "URI") and hasattr(pdf.Root.URI, "Base"):
@@ -161,7 +162,7 @@ def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info) 
 ##################################################
 
 
-def _get_all_annots_data(pdf: "Pdf"):
+def _get_all_annots_data(pdf: "Pdf", compat=True):
     """Get all annotations data for a PDF"""
     from pikepdf import Name, NameTree
 
@@ -172,17 +173,17 @@ def _get_all_annots_data(pdf: "Pdf"):
     all_annots_data = []
     for page_num, page in enumerate(pdf.pages, 1):
         all_annots_data.extend(
-            _annots_json_for_page(page, page_num, page_object_to_num_map, named_dests)
+            _annots_json_for_page(page, page_num, page_object_to_num_map, named_dests, compat)
         )
     return all_annots_data
 
 
-def _data_to_strings(data, string_convert):
+def _data_to_strings(data, string_convert, compat=False):
     """Convert data to strings for dump_data"""
     logger.debug(data)
     data_strings = []
     for datum in data:
-        new_lines = _lines_from_datum(datum, string_convert)
+        new_lines = _lines_from_datum(datum, string_convert, compat)
         data_strings.append("\n".join(new_lines))
     return data_strings
 
@@ -190,25 +191,24 @@ def _data_to_strings(data, string_convert):
 ##################################################
 
 
-def _annots_json_for_page(page, page_num, page_object_to_num_map, named_dests):
+def _annots_json_for_page(page, page_num, page_object_to_num_map, named_dests, compat=False):
     """Return annotations info for one page, in JSON"""
     return [
         {
             "Page": page_num,
             "AnnotationIndex": i + 1,
-            "Properties": pdf_obj_to_json(annot, page_object_to_num_map, named_dests),
+            "Properties": pdf_obj_to_json(annot, page_object_to_num_map, named_dests, compat),
         }
         for i, annot in enumerate(getattr(page, "Annots", []))
     ]
 
 
-def _lines_from_datum(datum, string_convert):
-    """Get lines from one data entry, for dump_annots"""
+def _lines_from_datum(datum, string_convert, compat=False):
+    """Get lines from one data entry, for dump_annots. If compat is True, only output pdftk compatible lines."""
     new_lines = []
-    props = datum["Properties"]
     prefix = "Annot"
+    props = datum["Properties"]
     # if 'JavaScript' in str(props):
-    #     breakpoint()
     if "/Subtype" not in props:
         return []
     if props["/Subtype"][1:] not in (
@@ -224,37 +224,48 @@ def _lines_from_datum(datum, string_convert):
         return []
     if "/A" in props and "/S" in props["/A"] and props["/A"]["/S"][1:] == "JavaScript":
         return []
+    props_lines = []
     for key, value in props.items():
-        new_lines.extend(_key_value_lines(key, value, prefix, string_convert))
-    new_lines.extend(
-        [
-            _data_item_to_string_helper("PageNumber", datum["Page"], prefix, string_convert),
+        if not compat or key in (
+            "/Subtype",
+            "/Rect",
+        ):
+            props_lines.extend(_key_value_lines(key, value, prefix, string_convert, compat))
+    props_lines.sort()
+    props_lines.reverse()
+    new_lines.extend(props_lines)
+
+    new_lines.append(
+        _data_item_to_string_helper("PageNumber", datum["Page"], prefix, string_convert)
+    )
+    if not compat:
+        new_lines.append(
             _data_item_to_string_helper(
                 "IndexInPage", datum["AnnotationIndex"], prefix, string_convert
-            ),
-        ]
-    )
+            )
+        )
     return new_lines
 
 
-def _key_value_lines(key, value, prefix, string_convert):
+def _key_value_lines(key, value, prefix, string_convert, compat=False):
     """Convert a key-value pair to strings for dump_annots"""
     if key == "/A":
         return [
-            _data_item_to_string_helper(key2, value2, prefix + "Action", string_convert)
+            _data_item_to_string_helper(key2, value2, prefix + "Action", string_convert, compat)
             for key2, value2 in value.items()
         ]
     if key in ("/Type", "/Border") or len(key) < 4:
         return []
     try:
-        return [_data_item_to_string_helper(key, value, prefix, string_convert)]
+        return [_data_item_to_string_helper(key, value, prefix, string_convert, compat)]
     except NotImplementedError as exc:
         logger.warning(exc)
         return []
 
 
-def _data_item_to_string_helper(key, value, prefix, string_convert):
+def _data_item_to_string_helper(key, value, prefix, string_convert, compat=False):
     """Helper method to convert a data item to a string"""
+
     if string_convert is None:
 
         def string_convert(x):
@@ -266,9 +277,9 @@ def _data_item_to_string_helper(key, value, prefix, string_convert):
         key = key[1:]
     if key == "S":
         key = "Subtype"
-    # if isinstance(value, Object):
-    #     value_string = pdf_obj_to_string(value)
-    # else:
+
     value_string = str(value)
-    value_string = value_string.replace("'", "").replace("[", "").replace("]", "")
+    value_string = (
+        value_string.replace("'", "").replace("[", "").replace("]", "").replace(", ", " ")
+    )
     return f"{prefix}{key}: {string_convert(value_string)}"

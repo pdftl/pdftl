@@ -1,0 +1,30 @@
+%FDF-1.2
+%‚„œ”
+1 0 obj
+
+<<
+/FDF 
+<<
+/Fields [
+<<
+/T (CheckBox1)
+/V /Off
+>> 
+<<
+/T (Radio1)
+/V /Off
+>> 
+<<
+/T (TextBox1)
+/V (DefaultValue1)
+>>]
+>>
+>>
+endobj
+
+trailer
+
+<<
+/Root 1 0 R
+>>
+%%EOF

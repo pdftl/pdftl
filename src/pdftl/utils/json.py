@@ -26,13 +26,13 @@ ACTION_GOTO = "/GoTo"
 KEY_RESOLVED_DESTINATION = "ResolvedDestination"
 
 
-def pdf_obj_to_json(obj, page_object_to_num_map=None, named_dests=None):
+def pdf_obj_to_json(obj, page_object_to_num_map=None, named_dests=None, compat=False):
     """
     Recursively converts a pikepdf object into a JSON-serializable type.
 
     This is a convenience wrapper around the PdfToJsonConverter class.
     """
-    converter = PdfToJsonConverter(page_object_to_num_map, named_dests)
+    converter = PdfToJsonConverter(page_object_to_num_map, named_dests, compat)
     return converter.convert(obj)
 
 
@@ -45,9 +45,10 @@ class PdfToJsonConverter:
     destinations, and recursion tracking to prevent infinite loops.
     """
 
-    def __init__(self, page_object_to_num_map=None, named_dests=None):
+    def __init__(self, page_object_to_num_map=None, named_dests=None, compat=False):
         self.page_object_to_num_map = page_object_to_num_map or {}
         self.named_dests = named_dests or {}
+        self.compat = compat
 
     def convert(self, obj):
         """
@@ -136,7 +137,13 @@ class PdfToJsonConverter:
         return f"Ref({obj.objgen[0]}, {obj.objgen[1]})"
 
     def _handle_unknown(self, obj, depth, _ancestors):
-        ret = str(obj)
+        if isinstance(obj, (float, decimal.Decimal)) and self.compat:
+            rounded = round(obj, 4)
+            if isinstance(rounded, decimal.Decimal):
+                rounded = rounded.normalize()
+            ret = str(rounded)
+        else:
+            ret = str(obj)
         if not isinstance(obj, (float, int, str, decimal.Decimal)):
             logger.debug(
                 "%sUnknown object of type %s. This may be a bug.",

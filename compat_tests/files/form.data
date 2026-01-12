@@ -1,0 +1,26 @@
+---
+FieldType: Text
+FieldName: TextBox1
+FieldFlags: 0
+FieldValue: DefaultValue1
+FieldValueDefault: DefaultValue1
+FieldJustification: Left
+---
+FieldType: Button
+FieldName: CheckBox1
+FieldFlags: 0
+FieldValue: Off
+FieldValueDefault: Off
+FieldJustification: Left
+FieldStateOption: Off
+FieldStateOption: Yes
+---
+FieldType: Button
+FieldName: Radio1
+FieldFlags: 49152
+FieldValue: Off
+FieldValueDefault: Off
+FieldJustification: Left
+FieldStateOption: 1
+FieldStateOption: Off
+FieldStateOption: 2

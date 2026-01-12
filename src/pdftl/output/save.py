@@ -7,8 +7,14 @@
 """Methods for saving PDF files (and other files), with options registered for CLI."""
 
 import inspect
+import io
 import logging
+import sys
 from collections import OrderedDict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pikepdf
 
 logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
@@ -56,25 +62,31 @@ def _user_pw_option():
     "encrypt_40bit",
     desc="Use 40 bit encryption (obsolete, highly insecure)",
     type="flag",
-    tags=["obselete"],
+    tags=["security", "encryption", "obselete"],
 )
 @register_option(
     "encrypt_128bit",
-    desc="Use 128 bit encryption (obsolete, maybe insecure)",
+    desc="Use 128 bit encryption (obsolete and insecure)",
     type="flag",
-    tags=["obselete"],
+    tags=["security", "encryption", "obselete"],
 )
 @register_option(
     "encrypt_aes128",
-    desc="Use 128 bit AES encryption (maybe obsolete)",
+    desc="Use 128 bit AES encryption (default)",
     type="flag",
-    tags=["obselete"],
+    tags=["security", "encryption", "legacy"],
 )
 @register_option(
     "encrypt_aes256",
     desc="Use 256 bit AES encryption",
     type="flag",
     tags=["security", "encryption"],
+)
+@register_option(
+    "no_encrypt_metadata",
+    desc="Leave metadata unencrypted (allowing search engines to read title/author)",
+    type="flag",
+    tags=["encryption", "metadata"],
 )
 def _encrypt_options():
     pass
@@ -175,7 +187,7 @@ def _get_passwords_from_options(options, input_context):
             )
             pw = input_context.get_pass(prompt=prompt)
             if len(pw) > 32:
-                print("Warning: Password was over 32 characters and will be truncated.")
+                logger.warning("Password was over 32 characters and will be truncated.")
                 pw = pw[:32]
         if pw is not None:
             passwords[pw_type] = pw
@@ -224,37 +236,54 @@ def _build_permissions_object(allow_options: list):
 def _build_encryption_object(options, input_context):
     """Constructs the pikepdf.Encryption object from all related options."""
     passwords = _get_passwords_from_options(options, input_context)
+    default_method_key = "encrypt_aes128"
 
     encryption_methods = OrderedDict(
         [
-            ("encrypt_aes256", {"R": 6}),
-            ("encrypt_aes128", {"aes": True, "R": 4}),
-            ("encrypt_128bit", {"aes": False, "metadata": False, "R": 3}),
-            ("encrypt_40bit", {"R": 2, "metadata": False, "aes": False}),
+            # AES-256 (PDF 2.0 / Extension Level 3)
+            ("encrypt_aes256", {"R": 6, "aes": True, "metadata": True}),
+            # AES-128 (PDF 1.6 Standard)
+            # default
+            ("encrypt_aes128", {"R": 4, "aes": True, "metadata": True}),
+            # RC4-128 (Legacy / PDF 1.4)
+            # despite having to set metadata=False, pikepdf DOES (and CAN ONLY) encrypt metadata when R < 4
+            ("encrypt_128bit", {"R": 3, "aes": False, "metadata": False}),
+            # RC4-40 (Ancient / PDF 1.1)
+            # despite having to set metadata=False, pikepdf DOES (and CAN ONLY) encrypt metadata when R < 4
+            ("encrypt_40bit", {"R": 2, "aes": False, "metadata": False}),
         ]
     )
 
-    chosen_methods = [opt for opt in options if opt in encryption_methods]
-    if len(chosen_methods) > 1:
+    chosen_method_keys = [opt for opt in options if opt in encryption_methods]
+    if len(chosen_method_keys) > 1:
         raise InvalidArgumentError(
-            f"Too many encryption options given: {chosen_methods}. Choose one."
+            f"Too many encryption options given: {chosen_method_keys}. Choose one."
         )
 
-    if not chosen_methods and not passwords:
+    if not chosen_method_keys and not passwords:
         return False
+
+    chosen_encryption_method_name = (
+        chosen_method_keys[0] if chosen_method_keys else default_method_key
+    )
+    chosen_encryption_method = encryption_methods[chosen_encryption_method_name].copy()
+    if options.get("no_encrypt_metadata"):
+        if chosen_encryption_method["aes"]:
+            chosen_encryption_method["metadata"] = False
+        else:
+            logger.warning(
+                "Ignoring 'no_encrypt_metadata': this requires an AES encryption method, but '%s' is selected.",
+                chosen_encryption_method_name,
+            )
 
     encrypt_opts = {
         "user": passwords.get("user", ""),
         "owner": passwords.get("owner", ""),
     }
-    if chosen_methods:
-        encrypt_opts.update(encryption_methods[chosen_methods[0]])
+    encrypt_opts.update(chosen_encryption_method)
 
     allow_options = options.get("allow")
-    if allow_options:
-        encrypt_opts["allow"] = _build_permissions_object(allow_options)
-    elif passwords or chosen_methods:
-        encrypt_opts["allow"] = _build_permissions_object([])
+    encrypt_opts["allow"] = _build_permissions_object(allow_options or [])
 
     logger.debug("Final encryption options: %s", encrypt_opts)
 
@@ -395,7 +424,35 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
     is_signing = any(k.startswith("sign_") for k in options)
     if is_signing:
+        if output_filename == "-":
+            raise NotImplementedError("Signing and saving to stdout is not yet implemented")
         sign_cfg = parse_sign_options(options, input_context)
         save_and_sign(pdf, sign_cfg, save_opts, output_filename)
     else:
-        pdf.save(output_filename, **save_opts)
+        if output_filename == "-":
+            save_to_stdout(pdf, save_opts)
+
+        else:
+            pdf.save(output_filename, **save_opts)
+
+
+def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
+    import pikepdf
+
+    # 1. Create an in-memory bytes buffer
+    with io.BytesIO() as buffer:
+        # 2. Save the pikepdf object into the buffer
+        pdf.save(buffer, **save_opts)
+
+        # 3. Get the raw bytes content
+        pdf_bytes = buffer.getvalue()
+
+        # 4. Write raw bytes to the stdout buffer
+        # 'sys.stdout' expects text (str), but 'sys.stdout.buffer' expects bytes.
+        try:
+            sys.stdout.buffer.write(pdf_bytes)
+            sys.stdout.buffer.flush()
+        except BrokenPipeError:
+            # Handle the case where the consumer (e.g., 'head') closes the pipe early
+            # This prevents ugly tracebacks in your CLI tool
+            sys.stderr.close()

@@ -1,0 +1,638 @@
+%FDF-1.2
+%‚„œ”
+1 0 obj
+
+<<
+/FDF 
+<<
+/Fields [
+<<
+/T (CHK_ALTRO_SETTORE)
+/V /
+>> 
+<<
+/T (FIRMATARIO1_COMUNE)
+/V (-)
+>> 
+<<
+/T (FIRMATARIO1_CF)
+/V ()
+>> 
+<<
+/T (AZIENDA_MEDIA)
+/V /
+>> 
+<<
+/T (CHK_ALTRO)
+/V /
+>> 
+<<
+/T (SETTOREAGRICOLTURA_MOTIVO_ART14)
+/V /
+>> 
+<<
+/T (AZIENDA_IBANCONTO)
+/V ()
+>> 
+<<
+/T (ALTRO_NUMERODECRETO2B)
+/V ()
+>> 
+<<
+/T (SEDEOPERATIVA_COMUNE)
+/V (-)
+>> 
+<<
+/T (CHK_AGRICOLTURA)
+/V /
+>> 
+<<
+/T (SETTOREAGRICOLTURA_MOTIVO_ART17)
+/V /
+>> 
+<<
+/T (FIRMATARIO1_PROVINCIA_TMP)
+/V (-)
+>> 
+<<
+/T (CHK_AGRICOLTURA_REQUISITI)
+/V /
+>> 
+<<
+/T (ALTRO_IMPORTOINVESTIMENTO1)
+/V ()
+>> 
+<<
+/T (ALTRO_IMPORTOINVESTIMENTO2)
+/V ()
+>> 
+<<
+/T (INVESTIMENTO_TOT)
+/V ()
+>> 
+<<
+/T (ALTRO_IMPORTOINVESTIMENTO3)
+/V ()
+>> 
+<<
+/T (SEDELEGALE_COMUNE_ESTERO)
+/V ()
+>> 
+<<
+/T (ALTRO_DATADECRETO2B)
+/V ()
+>> 
+<<
+/T (ALLEGATO_AM)
+/V /
+>> 
+<<
+/T (CHK_ALTREAGEVOLAZIONI)
+/V /
+>> 
+<<
+/T (AZIENDA_PIVA)
+/V ()
+>> 
+<<
+/T (SETTOREPESCA_MOTIVO)
+/V /
+>> 
+<<
+/T (FIRMATARIO1_DOC)
+/V (-)
+>> 
+<<
+/T (BtnTotaleTecDigit)
+/V /
+>> 
+<<
+/T (SETTOREPESCA_MOTIVO_ART41)
+/V /
+>> 
+<<
+/T (%)
+/V (%)
+>> 
+<<
+/T (SETTOREALTRO_MOTIVO_AMPLIARE)
+/V /
+>> 
+<<
+/T (SETTOREPESCA_MOTIVO_ART42)
+/V /
+>> 
+<<
+/T (BtnChiudi)
+/V /
+>> 
+<<
+/T (INVESTIMENTI_ORDINARI)
+/V ()
+>> 
+<<
+/T (ALTRO_NUMERODECRETO3B)
+/V ()
+>> 
+<<
+/T (BANCA_DENOMINAZIONE)
+/V (test)
+>> 
+<<
+/T (BANCA_PEC)
+/V ()
+>> 
+<<
+/T (FINANZIAMENTO_TIPOLEASING)
+/V /
+>> 
+<<
+/T (REFERENTE_NOME)
+/V ()
+>> 
+<<
+/T (ALTRO_IMPORTOCONCESSO1B)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_NOME)
+/V ()
+>> 
+<<
+/T (AZIENDA_INTESTATARIOCONTO)
+/V ()
+>> 
+<<
+/T (REFERENTE_TEL)
+/V ()
+>> 
+<<
+/T (REFERENTE_FAX)
+/V ()
+>> 
+<<
+/T (AZIENDA_DATAPROCURA)
+/V ()
+>> 
+<<
+/T (TECNOLOGIE_DIGIT_TOT)
+/V ()
+>> 
+<<
+/T (ALTRO_DATADECRETO1B)
+/V ()
+>> 
+<<
+/T (FINANZIAMENTO_TIPOBANCARIO)
+/V /
+>> 
+<<
+/T (DOMANDA_DATA)
+/V ()
+>> 
+<<
+/T (AZIENDA_SETTORE)
+/V (-)
+>> 
+<<
+/T (AZIENDA_NATURA)
+/V (-)
+>> 
+<<
+/T (AZIENDA_PEC)
+/V ()
+>> 
+<<
+/T (AZIENDA_PICCOLA)
+/V /
+>> 
+<<
+/T (SEDEOPERATIVA_STATO)
+/V (-)
+>> 
+<<
+/T (SEDELEGALE_TEL)
+/V ()
+>> 
+<<
+/T (SETTOREPESCA_MOTIVO_ART31)
+/V /
+>> 
+<<
+/T (FIN_INVESTIMENTO_TECN)
+/V ()
+>> 
+<<
+/T (ALTRO_IMPORTOINVESTIMENTO2B)
+/V ()
+>> 
+<<
+/T (AZIENDA_REGIMPRESEDI)
+/V ()
+>> 
+<<
+/T (ALTRO_BENEAGEVOLATO2)
+/V (-)
+>> 
+<<
+/T (ALTRO_BENEAGEVOLATO1)
+/V (-)
+>> 
+<<
+/T (SETTOREALTRO_MOTIVO_NUOVA)
+/V /
+>> 
+<<
+/T (TxtFirmatarioEstero)
+/V (Nato all'estero:)
+>> 
+<<
+/T (FINANZIAMENTO_IMPORTO)
+/V ()
+>> 
+<<
+/T (ALTRO_BENEAGEVOLATO3)
+/V (-)
+>> 
+<<
+/T (AZIENDA_NREGIMPRESE)
+/V ()
+>> 
+<<
+/T (CHK_PESCA_REQUISITI)
+/V /
+>> 
+<<
+/T (AZIENDA_AUTONOMA)
+/V /
+>> 
+<<
+/T (SEDELEGALE_SEDE)
+/V ()
+>> 
+<<
+/T (SEDELEGALE_PROVINCIA_TMP)
+/V (-)
+>> 
+<<
+/T (SEDEOPERATIVA_SEDE)
+/V ()
+>> 
+<<
+/T (SEDEOPERATIVA_ESTERA)
+/V /off
+>> 
+<<
+/T (ChkAziendaEstera)
+/V /
+>> 
+<<
+/T (IMMOBILIZAZ_IMMATERIALI)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_STATO_ESTERO)
+/V ()
+>> 
+<<
+/T (ChkFirmatarioEstero)
+/V /
+>> 
+<<
+/T (AZIENDA_CODATECO2)
+/V (-)
+>> 
+<<
+/T (ALTRO_NUMERODECRETO1B)
+/V ()
+>> 
+<<
+/T (SETTOREPESCA_MOTIVO_ART26)
+/V /
+>> 
+<<
+/T (SETTOREPESCA_MOTIVO_ART28)
+/V /
+>> 
+<<
+/T (AZIENDA_MICRO)
+/V /
+>> 
+<<
+/T (SEDELEGALE_PROVINCIA)
+/V (-)
+>> 
+<<
+/T (ALTRO_IMPORTOINVESTIMENTO3B)
+/V ()
+>> 
+<<
+/T (SEDEOPERATIVA_PROVINCIA)
+/V (-)
+>> 
+<<
+/T (AZIENDA_CODICEBOLLO)
+/V ()
+>> 
+<<
+/T (ALTRO_DATADECRETO3B)
+/V ()
+>> 
+<<
+/T (AZIENDA_ASSOCIATA_BILANCIO)
+/V ()
+>> 
+<<
+/T (DOMANDA_LUOGO)
+/V ()
+>> 
+<<
+/T (AZIENDA_BANCACONTO)
+/V ()
+>> 
+<<
+/T (INVESTIMENTO_ATTR)
+/V ()
+>> 
+<<
+/T (AZIENDA_AUTONOMA_ULA)
+/V ()
+>> 
+<<
+/T (TxtCopriNumero)
+/V (N.)
+>> 
+<<
+/T (ALLEGATO_ASSOCIATA)
+/V /
+>> 
+<<
+/T (txtVersione)
+/V (Release 6.2)
+>> 
+<<
+/T (SETTOREALTRO_MOTIVO)
+/V /
+>> 
+<<
+/T (ALTRO_LEGGERELATIVA1B)
+/V ()
+>> 
+<<
+/T (SEDELEGALE_CAP)
+/V ()
+>> 
+<<
+/T (INVESTIMENTO_MACC)
+/V ()
+>> 
+<<
+/T (AZIENDA_BICCONTO)
+/V ()
+>> 
+<<
+/T (AZIENDA_DATAREGIMPRESE)
+/V ()
+>> 
+<<
+/T (ALTRO_BENEAGEVOLATO2B)
+/V (-)
+>> 
+<<
+/T (IMMOBILIZAZ_MATERIALI)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_COGNOME)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_DATAATTO)
+/V ()
+>> 
+<<
+/T (ALTRO_ESL1B)
+/V ()
+>> 
+<<
+/T (SETTOREAGRICOLTURA_MOTIVO)
+/V /
+>> 
+<<
+/T (SETTOREALTRO_MOTIVO_INVESTITORE)
+/V /
+>> 
+<<
+/T (INVESTIMENTI_TECNO_DIGIT)
+/V ()
+>> 
+<<
+/T (REFERENTE_EMAIL)
+/V ()
+>> 
+<<
+/T (SEDEOPERATIVA_TEL)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_PROVINCIA)
+/V (-)
+>> 
+<<
+/T (FIN_INVESTIMENTI_ORD)
+/V ()
+>> 
+<<
+/T (ALTRO_IMPORTOINVESTIMENTO1B)
+/V ()
+>> 
+<<
+/T (ALTRO_LEGGERELATIVA2B)
+/V ()
+>> 
+<<
+/T (REFERENTE_COGNOME)
+/V ()
+>> 
+<<
+/T (ALTRO_BENEAGEVOLATO1B)
+/V (-)
+>> 
+<<
+/T (CHK_PESCA)
+/V /
+>> 
+<<
+/T (TxtAziendaEstera)
+/V (Sede all'estero:)
+>> 
+<<
+/T (SEDELEGALE_COMUNE)
+/V (-)
+>> 
+<<
+/T (AZIENDA_AUTONOMA_FATTURATO)
+/V ()
+>> 
+<<
+/T (ALTRO_ESL2B)
+/V ()
+>> 
+<<
+/T (AZIENDA_DENOMINAZIONE)
+/V ()
+>> 
+<<
+/T (SEDEOPERATIVA_PROVINCIA_TMP)
+/V (-)
+>> 
+<<
+/T (BtnTotInvStim)
+/V /
+>> 
+<<
+/T (AZIENDA_CF)
+/V ()
+>> 
+<<
+/T (CHK_DEMINIMIS)
+/V /
+>> 
+<<
+/T (REFERENTE_RUOLO)
+/V ()
+>> 
+<<
+/T (AZIENDA_ASSOCIATA)
+/V /
+>> 
+<<
+/T (ALTRO_LEGGERELATIVA3B)
+/V ()
+>> 
+<<
+/T (ALTRO_IMPORTOCONCESSO2B)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_RUOLO)
+/V (-)
+>> 
+<<
+/T (CHK_ALTRO_REQUISITI)
+/V /
+>> 
+<<
+/T (FIRMATARIO1_DOCN)
+/V ()
+>> 
+<<
+/T (INVESTIMENTO_ALTRBENI)
+/V ()
+>> 
+<<
+/T (ALTRO_LEGGERELATIVA3)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_COMUNE_ESTERO)
+/V ()
+>> 
+<<
+/T (SEDELEGALE_STATO_ESTERO)
+/V ()
+>> 
+<<
+/T (SETTOREALTRO_MOTIVO_DIVERSIFICARE)
+/V /
+>> 
+<<
+/T (chkChiuso)
+/V /
+>> 
+<<
+/T (ALTRO_LEGGERELATIVA2)
+/V ()
+>> 
+<<
+/T (ALTRO_ESL3B)
+/V ()
+>> 
+<<
+/T (ALTRO_LEGGERELATIVA1)
+/V ()
+>> 
+<<
+/T (AZIENDA_ASSOCIATA_ULA)
+/V ()
+>> 
+<<
+/T (INVESTIMENTO_DATA_AVVIO)
+/V ()
+>> 
+<<
+/T (FINANZIAMENTO_DURATA)
+/V (-)
+>> 
+<<
+/T (INVESTIMENTO_DATA_ULTIMAZIONE)
+/V ()
+>> 
+<<
+/T (AZIENDA_AUTONOMA_BILANCIO)
+/V ()
+>> 
+<<
+/T (REFERENTE_CEL)
+/V ()
+>> 
+<<
+/T (SEDEOPERATIVA_CAP)
+/V ()
+>> 
+<<
+/T (SETTOREALTRO_MOTIVO_CAMBIARE)
+/V /
+>> 
+<<
+/T (ALTRO_BENEAGEVOLATO3B)
+/V (-)
+>> 
+<<
+/T (INVESTIMENTO_IMPORTO)
+/V ()
+>> 
+<<
+/T (FIRMATARIO1_DATANASCITA)
+/V ()
+>> 
+<<
+/T (AZIENDA_ASSOCIATA_FATTURATO)
+/V ()
+>> 
+<<
+/T (BtnCopriFirma)
+/V /
+>> 
+<<
+/T (ALTRO_IMPORTOCONCESSO3B)
+/V ()
+>> 
+<<
+/T (AZIENDA_DIMENSIONE)
+/V (-)
+>> 
+<<
+/T (BtnChk)
+/V /
+>>]
+>>
+>>
+endobj
+
+trailer
+
+<<
+/Root 1 0 R
+>>
+%%EOF

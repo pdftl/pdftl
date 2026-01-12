@@ -17,10 +17,14 @@ recursive-include tests *.py
 recursive-include tests/assets *.pdf *.fdf *.txt
 recursive-include tests *.cnf *.csr *.pem
 
+# Exclude GPL compatibility tests
+prune tests/compat_pdftk
+
 # --- Documentation ---
 include docs/Makefile
 include docs/README*.md
 include docs/*.py
+include docs *.md
 
 # --- Tools/Scripts ---
 recursive-include tools *.py

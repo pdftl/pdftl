@@ -1,0 +1,25 @@
+---
+FieldType: Button
+FieldName: Radio Button
+FieldFlags: 49152
+FieldValue: Off
+FieldJustification: Left
+FieldStateOption: Açò
+FieldStateOption: Off
+FieldStateOption: Allò
+---
+FieldType: Choice
+FieldName: List Box
+FieldFlags: 0
+FieldValue: Någonting
+FieldJustification: Left
+FieldStateOption: Någonting
+FieldStateOptionDisplay: Någonting
+---
+FieldType: Choice
+FieldName: Combo Box
+FieldFlags: 131072
+FieldValue: Någonting
+FieldJustification: Left
+FieldStateOption: Någonting
+FieldStateOptionDisplay: Någonting

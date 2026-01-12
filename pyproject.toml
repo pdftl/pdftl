@@ -120,6 +120,7 @@ filterwarnings = [
 
 markers = [
     "serial: marks tests to be run serially and in isolation",
+    "pdftk_compat: integration tests ported from pdftk-java",
 ]
 
 log_cli = true

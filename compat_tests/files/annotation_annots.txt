@@ -1,0 +1,9 @@
+NumberOfPages: 1
+---
+AnnotSubtype: Text
+AnnotRect: 104.1789 712.1865 128.1789 736.1865
+AnnotPageNumber: 1
+---
+AnnotSubtype: Popup
+AnnotRect: 128.1789 562.1865 328.1789 712.1865
+AnnotPageNumber: 1

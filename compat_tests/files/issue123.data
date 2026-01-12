@@ -1,0 +1,59 @@
+InfoBegin
+InfoKey: Creator
+InfoValue: wkhtmltopdf 0.12.6
+InfoBegin
+InfoKey: CreationDate
+InfoValue: D:20211231172637+01'00'
+InfoBegin
+InfoKey: Producer
+InfoValue: Qt 4.8.7
+InfoBegin
+InfoKey: Title
+InfoValue: QLatin1Char Class | Qt 4.8
+NumberOfPages: 2
+BookmarkBegin
+BookmarkTitle: Qt Documentation
+BookmarkLevel: 1
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: Contents
+BookmarkLevel: 2
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: QLatin1Char Class
+BookmarkLevel: 1
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: Public Functions
+BookmarkLevel: 2
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: Detailed Description
+BookmarkLevel: 2
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: Member Function Documentation
+BookmarkLevel: 2
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: QLatin1Char::QLatin1Char(char c)
+BookmarkLevel: 3
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: char QLatin1Char::toLatin1() const
+BookmarkLevel: 3
+BookmarkPageNumber: 1
+BookmarkBegin
+BookmarkTitle: ushort QLatin1Char::unicode() const
+BookmarkLevel: 3
+BookmarkPageNumber: 1
+PageMediaBegin
+PageMediaNumber: 1
+PageMediaRotation: 0
+PageMediaRect: 0 0 595 842
+PageMediaDimensions: 595 842
+PageMediaBegin
+PageMediaNumber: 2
+PageMediaRotation: 0
+PageMediaRect: 0 0 595 842
+PageMediaDimensions: 595 842

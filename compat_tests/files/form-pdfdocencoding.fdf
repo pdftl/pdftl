@@ -1,0 +1,30 @@
+%FDF-1.2
+%‚„œ”
+1 0 obj
+
+<<
+/FDF 
+<<
+/Fields [
+<<
+/T (Combo Box)
+/V (NÂgonting)
+>> 
+<<
+/T (Radio Button)
+/V /Off
+>> 
+<<
+/T (List Box)
+/V (NÂgonting)
+>>]
+>>
+>>
+endobj
+
+trailer
+
+<<
+/Root 1 0 R
+>>
+%%EOF
