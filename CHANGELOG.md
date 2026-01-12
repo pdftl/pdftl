@@ -5,6 +5,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.8.0] - Unreleased
+
+### Added
+
+- More comprehensive `compat_pdftk` test suite, from
+  `pdftk-java`. Licensed under the GPL 2.
+
+- `no_encrypt_metadata` option: do not encrypt
+  metadata. Requires an AES encryption method.
+
+### Changed
+
+- Encryption method now defaults to `encrypt_aes128` if
+  `user_pw` or `owner_pw` are passed, instead of not
+  encrypting. This is more similar to `pdftk`.
+
+
 ## [0.7.0] - 2026-01-11
 
 ### Added
