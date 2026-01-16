@@ -62,6 +62,16 @@ def _parse_value_keyword(arg, args, i, options):
     return 2
 
 
+def _raise_unknown_arg_error(arg, just_slurped_allow_index):
+    """Generates and raises a detailed error for an unknown argument."""
+    msg = f"Unknown argument in <option>... section: {arg}"
+    if just_slurped_allow_index:
+        allow_kw_list = ", ".join(sorted(ALLOW_PERMISSIONS))
+        msg += "\n  Maybe you wanted to give an additional 'allow' permission?"
+        msg += f" Valid permissions are:\n  {allow_kw_list}"
+    raise InvalidArgumentError(msg)
+
+
 def _parse_multiple_arguments(option, args, i, argument_q, allow_no_args=False, hint=None):
     """Parses a keyword which can take multiple values."""
     if i + 1 >= len(args):
@@ -83,16 +93,6 @@ def _parse_multiple_arguments(option, args, i, argument_q, allow_no_args=False, 
         current_pos += 1
     consumed_count = current_pos - i
     return (consumed_count, current_pos)
-
-
-def _raise_unknown_arg_error(arg, just_slurped_allow_index):
-    """Generates and raises a detailed error for an unknown argument."""
-    msg = f"Unknown argument in <option>... section: {arg}"
-    if just_slurped_allow_index:
-        allow_kw_list = ", ".join(sorted(ALLOW_PERMISSIONS))
-        msg += "\n  Maybe you wanted to give an additional 'allow' permission?"
-        msg += f" Valid permissions are:\n  {allow_kw_list}"
-    raise InvalidArgumentError(msg)
 
 
 def _parse_allow_permissions(args, i, options):
@@ -118,22 +118,6 @@ def _parse_allow_permissions(args, i, options):
     return (consumed_count, current_pos)
 
 
-def _parse_attach_files(args, i, options):
-    """Parse arguments following the 'attach_files' option keyword"""
-    keyword = "attach_files"
-
-    def filename_q(x):
-        """Is x a valid filename for attach_files? Equivalently: is x
-        not an options keyword?"""
-        return not (x in _get_value_keywords() or x in _get_flag_keywords())
-
-    consumed_count, current_pos = _parse_multiple_arguments("attach_files", args, i, filename_q)
-    files = options.setdefault(keyword, [])
-    for j in range(1, consumed_count):
-        files.append(args[i + j])
-    return (consumed_count, current_pos)
-
-
 def parse_options_and_specs(args):
     """
     Parses arguments into specifications and keyword options.
@@ -154,9 +138,7 @@ def parse_options_and_specs(args):
             just_slurped_allow_index = end_index
             continue
 
-        if arg_lower == "attach_files":
-            i += _parse_attach_files(args, i, options)[0]
-        elif arg_lower == c.OUTPUT or arg_lower in _get_value_keywords():
+        if arg_lower == c.OUTPUT or arg_lower in _get_value_keywords():
             i += _parse_value_keyword(arg, args, i, options)
         elif arg_lower in _get_flag_keywords():
             i += _parse_flag_keyword(arg, options)

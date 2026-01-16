@@ -6,7 +6,7 @@ from hypothesis import strategies as st
 from pdftl.exceptions import MissingArgumentError
 
 # --- Import the parser and its data class ---
-from pdftl.output.attach import _parse_attach_specs_to_intent
+from pdftl.operations.attach_files import _parse_attach_specs_to_intent
 
 # ---------------------------
 # Reusable Strategies

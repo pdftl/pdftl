@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
-from pdftl.output.attach import attach_files
 from pdftl.output.flatten import flatten_pdf
 from pdftl.output.sign import parse_sign_options, save_and_sign
 
@@ -402,8 +401,6 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         # breakpoint()
         # pdf.flatten_annotations()
         pdf = flatten_pdf(pdf)
-
-    attach_files(pdf, options, input_context)
 
     if options.get("need_appearances"):
         import pikepdf

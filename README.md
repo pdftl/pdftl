@@ -193,6 +193,7 @@ See the **[API Tutorial][4]** for more details.
 | Operation                                                                                               | Description                                          |
 |---------------------------------------------------------------------------------------------------------|------------------------------------------------------|
 | [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages         |
+| [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                       |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page     |
 | [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into individual page files        |
 | [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF     |
@@ -235,7 +236,6 @@ See the **[API Tutorial][4]** for more details.
 | Option                                                                                                     | Description                                       |
 |------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
 | [`allow <perm>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm)               | Specify permissions for encrypted files           |
-| [`attach_files <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#attach-files-file) | Attach files to the output PDF                    |
 | [`compress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#compress)                     | Compress output file streams (default)            |
 | [`drop_info`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-info)                   | Discard document-level info metadata              |
 | [`drop_xfa`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xfa)                     | Discard form XFA data if present                  |

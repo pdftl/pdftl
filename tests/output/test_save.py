@@ -459,9 +459,9 @@ def test_build_save_options_with_encryption(mock_build_enc, mock_input_context):
 ## save_pdf ##
 
 
-@patch("pdftl.output.save.attach_files")
+@patch("pdftl.operations.attach_files.attach_files")
 @patch("pdftl.output.save._build_save_options")
-@patch("pdftl.output.save.flatten_pdf")  # <--- NEW PATCH
+@patch("pdftl.output.save.flatten_pdf")
 def test_save_pdf_orchestration(
     mock_flatten, mock_build_save, mock_attach, mock_pdf, mock_input_context
 ):
@@ -487,7 +487,7 @@ def test_save_pdf_orchestration(
 
     # 2. Verify other standard calls
     mock_build_save.assert_called_once()
-    mock_attach.assert_called_once()
+    mock_attach.assert_not_called()
 
     # 3. Verify final save
     mock_pdf.save.assert_called_with(output_file, linearize=False, encryption=False)
@@ -501,7 +501,7 @@ def test_save_pdf_no_output_file(mock_pdf, mock_input_context):
         save_pdf(mock_pdf, None, mock_input_context)
 
 
-@patch("pdftl.output.save.attach_files")
+@patch("pdftl.operations.attach_files.attach_files")
 @patch("pdftl.output.save._build_save_options")
 def test_save_pdf_set_pdf_id(mock_build_save, mock_attach, mock_pdf, mock_input_context):
     """Tests the 'set_pdf_id' option."""
@@ -511,7 +511,7 @@ def test_save_pdf_set_pdf_id(mock_build_save, mock_attach, mock_pdf, mock_input_
     assert mock_pdf.trailer.ID == pdf_id_val
 
 
-@patch("pdftl.output.save.attach_files")
+@patch("pdftl.operations.attach_files.attach_files")
 @patch("pdftl.output.save._build_save_options")
 def test_save_pdf_need_appearances_fails(
     mock_build_save, mock_attach, mock_pdf, mock_input_context, caplog

@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# src/pdftl/output/attach.py
+# src/pdftl/operations/attach_files.py
 
 """Methods for parsing attach_file arguments and attaching files to
 PDF files"""
@@ -15,13 +15,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
-from pdftl.core.registry import register_option
+import pdftl.core.constants as c
+from pdftl.core.registry import register_operation
+from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.utils.io_helpers import can_read_file
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.user_input import UserInputContext, filename_completer
 
-_ATTACH_LONG_DESC = """Attach one or more files to the PDF, either
+_ATTACH_FILES_LONG_DESC = """Attach one or more files to the PDF, either
 at the document level or associated with specific pages.
 
 The command works by reading a list of arguments from left to
@@ -103,17 +105,6 @@ pdftl in.pdf attach_files PROMPT to_page PROMPT output out.pdf
 """
 
 
-@register_option(
-    "attach_files <file>...",
-    desc="Attach files to the output PDF",
-    type="one or more mandatory arguments",
-    long_desc=_ATTACH_LONG_DESC,
-    # FIXME: examples here that work with the tests!
-)
-def _attach_files_option():
-    pass
-
-
 @dataclass
 class Attachment:
     """Simple data class for PDF file attachments"""
@@ -141,11 +132,10 @@ ATTACHMENT_RELATIONSHIPS = {
 }
 
 
-def _get_attachments_from_options(options, num_pages, input_context):
+def _get_attachments_from_args(args, num_pages, get_input):
     """Handles filename retrieval, including interactive prompts."""
-    args = options.get("attach_files", [])
     parsed_items = _parse_attach_specs_to_intent(args)
-    return _resolve_attachments(parsed_items, num_pages, input_context)
+    return _resolve_attachments(parsed_items, num_pages, get_input)
 
 
 def _parse_attach_specs_to_intent(args: list[str]) -> list[ParsedAttachment]:
@@ -205,7 +195,7 @@ def _set_page_specs_in_parsed_attachments(page_spec, parsed_attachments_to_set):
 def _resolve_attachments(
     parsed_items: list[ParsedAttachment],
     num_pages: int,
-    input_context: UserInputContext,
+    get_input: UserInputContext,
 ) -> list[Attachment]:
     from pathlib import Path
 
@@ -213,7 +203,7 @@ def _resolve_attachments(
     for parsed in parsed_items:
         final_filename = parsed.path
         if final_filename == "PROMPT":
-            final_filename = _resolve_prompt_to_filename(input_context, len(resolved_list) + 1)
+            final_filename = _resolve_prompt_to_filename(get_input, len(resolved_list) + 1)
 
         if not can_read_file(final_filename):
             logger.warning("Cannot read attachment '%s'. Skipping.", final_filename)
@@ -248,9 +238,9 @@ def _get_relationship(parsed):
     return relationship
 
 
-def _resolve_prompt_to_filename(input_context, attachment_num):
+def _resolve_prompt_to_filename(get_input, attachment_num):
     def get_filename(prefix=""):
-        filename = input_context.get_input(
+        filename = get_input(
             f"{prefix}Enter a filename for attachment {attachment_num}: ",
             completer=filename_completer,
         )
@@ -360,9 +350,39 @@ def _attach_attachment_to_page(pdf, attachment, page_num, num_previous_attachmen
     page.Annots.append(new_annotation.obj)
 
 
-def attach_files(pdf, options, input_context):
+@register_operation(
+    "attach_files",
+    tags=["in_place", "attachments"],
+    type="single input operation",
+    desc="Attach files to the output PDF",
+    long_desc=_ATTACH_FILES_LONG_DESC,
+    usage="<args> output <file> [<option>...]",
+    # examples=_ATTACH_FILES_EXAMPLES # FIXME: examples here that work with the tests!
+    args=([c.INPUT_PDF, c.OPERATION_ARGS, c.GET_INPUT], {}),
+)
+def attach_files(pdf, op_args, get_input) -> OpResult:
     """Attach files to a PDF document, according to the specified options"""
     num_pages = len(pdf.pages)
     num_attached_by_page = [0] * num_pages
-    for attachment in _get_attachments_from_options(options, num_pages, input_context):
+    for attachment in _get_attachments_from_args(op_args, num_pages, get_input):
         _attach_attachment(pdf, attachment, num_attached_by_page)
+    return OpResult(success=True, pdf=pdf)
+
+
+# def _parse_attach_files(args, i, options):
+#     """Parse arguments following the 'attach_files' option keyword"""
+#     keyword = "attach_files"
+
+#     def filename_q(x):
+#         # """Is x a valid filename for attach_files? Equivalently: is x
+#         # not an options keyword?"""
+#         # return not (x in _get_value_keywords() or x in _get_flag_keywords())
+#         return True
+
+#     consumed_count, current_pos = parse_keyword_with_multiple_arguments(
+#         "attach_files", args, i, filename_q
+#     )
+#     files = options.setdefault(keyword, [])
+#     for j in range(1, consumed_count):
+#         files.append(args[i + j])
+#     return (consumed_count, current_pos)

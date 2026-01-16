@@ -9,11 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- More comprehensive `compat_pdftk` test suite, from
-  `pdftk-java`. Licensed under the GPL 2.
+- More comprehensive `vendor_tests/pdftk-java` test suite,
+  from `pdftk-java`. This test suite only is licensed under
+  the GPL 2, see NOTICE.md.
 
 - `no_encrypt_metadata` option: do not encrypt
-  metadata. Requires an AES encryption method.
+  metadata. Only supported by AES encryption methods.
 
 ### Changed
 
@@ -21,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `user_pw` or `owner_pw` are passed, instead of not
   encrypting. This is more similar to `pdftk`.
 
+- `attach_files` is now an operation, not an output option
+  (pdftk compatibility)
+
+- exit codes better aligned with pdftk's exit codes
 
 ## [0.7.0] - 2026-01-11
 

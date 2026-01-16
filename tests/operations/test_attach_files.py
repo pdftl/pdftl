@@ -7,17 +7,16 @@ import pytest
 # --- Import Exceptions ---
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 
-# --- Import module and functions to test (UPDATED) ---
-from pdftl.output.attach import ParsedAttachment  # New "dumb" data class
-from pdftl.output.attach import _resolve_attachments  # The new "impure" resolver
-from pdftl.output.attach import _set_page_specs_in_parsed_attachments  # New helper
-from pdftl.output.attach import (  # This is the main pipeline; The pure parser (tested by hypothesis)
+# --- Import module and functions to test ---
+from pdftl.operations.attach_files import (
     Attachment,
+    ParsedAttachment,
     _attach_attachment,
     _attach_attachment_to_page,
     _attachment_rect,
-    _get_attachments_from_options,
     _raise_exception_if_invalid_after_keyword,
+    _resolve_attachments,
+    _set_page_specs_in_parsed_attachments,
     _validate_topage_and_convert_to_ints,
     attach_files,
 )
@@ -48,7 +47,7 @@ def mock_pdf():
 @pytest.fixture(autouse=True)
 def patch_logging(mocker):
     """Patch logging for all tests in this module."""
-    mocker.patch("pdftl.output.attach.logging")
+    mocker.patch("pdftl.operations.attach_files.logging")
 
 
 # --- Test Cases ---
@@ -84,19 +83,19 @@ def test_set_page_specs_in_parsed_attachments():
 ## _validate_topage_and_convert_to_ints ##
 
 
-@patch("pdftl.output.attach.page_numbers_matching_page_spec", return_value=[1, 3, 5])
+@patch("pdftl.operations.attach_files.page_numbers_matching_page_spec", return_value=[1, 3, 5])
 def test_validate_topage_and_convert_to_ints_success(mock_page_numbers):
     assert _validate_topage_and_convert_to_ints("1,3,5", 5) == [1, 3, 5]
 
 
-@patch("pdftl.output.attach.page_numbers_matching_page_spec", return_value=[])
+@patch("pdftl.operations.attach_files.page_numbers_matching_page_spec", return_value=[])
 def test_validate_topage_and_convert_to_ints_no_matches(mock_page_numbers):
     with pytest.raises(InvalidArgumentError, match="did not yield any pages"):
         _validate_topage_and_convert_to_ints("99", 5)
 
 
 @patch(
-    "pdftl.output.attach.page_numbers_matching_page_spec",
+    "pdftl.operations.attach_files.page_numbers_matching_page_spec",
     side_effect=ValueError("bad spec"),
 )
 def test_validate_topage_and_convert_to_ints_parser_error(mock_page_numbers):
@@ -107,8 +106,8 @@ def test_validate_topage_and_convert_to_ints_parser_error(mock_page_numbers):
 ## _resolve_attachments ##
 
 
-@patch("pdftl.output.attach.can_read_file", return_value=True)
-@patch("pdftl.output.attach._validate_topage_and_convert_to_ints", return_value=[1, 2])
+@patch("pdftl.operations.attach_files.can_read_file", return_value=True)
+@patch("pdftl.operations.attach_files._validate_topage_and_convert_to_ints", return_value=[1, 2])
 def test_resolve_attachments_happy_path(mock_validate, mock_can_read, mock_input_context):
     parsed_items = [
         ParsedAttachment(path="a.pdf", page_spec="1-2"),
@@ -128,16 +127,19 @@ def test_resolve_attachments_happy_path(mock_validate, mock_can_read, mock_input
     assert resolved[1].relationship == "Source"
 
 
-@patch("pdftl.output.attach.can_read_file", side_effect=[True, True])  # Needs two True values now
+@patch(
+    "pdftl.operations.attach_files.can_read_file", side_effect=[True, True]
+)  # Needs two True values now
 def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
     """
     Tests that a 'PROMPT' path triggers the interactive prompter.
     """
-    mock_input_context.get_input.return_value = "prompted.pdf"
+    mock_get_input = MagicMock()
+    mock_get_input.return_value = "prompted.pdf"
 
     parsed_items = [ParsedAttachment(path="PROMPT")]
 
-    resolved = _resolve_attachments(parsed_items, 5, mock_input_context)
+    resolved = _resolve_attachments(parsed_items, 5, mock_get_input)
 
     # Check that _can_read_file was called twice
     assert mock_can_read.call_count == 2
@@ -148,13 +150,13 @@ def test_resolve_attachments_file_prompt(mock_can_read, mock_input_context):
         ]
     )
 
-    mock_input_context.get_input.assert_called_once()
+    mock_get_input.assert_called_once()
 
     assert len(resolved) == 1
     assert resolved[0].path == Path("prompted.pdf")
 
 
-@patch("pdftl.output.attach.can_read_file", return_value=True)
+@patch("pdftl.operations.attach_files.can_read_file", return_value=True)
 def test_resolve_attachments_invalid_relation(mock_can_read, mock_input_context):
     parsed_items = [ParsedAttachment(path="a.pdf", relationship="Friend")]
 
@@ -162,26 +164,7 @@ def test_resolve_attachments_invalid_relation(mock_can_read, mock_input_context)
         _resolve_attachments(parsed_items, 5, mock_input_context)
 
 
-@patch("pdftl.output.attach._resolve_attachments")
-@patch("pdftl.output.attach._parse_attach_specs_to_intent")
-def test_get_attachments_from_options_pipeline(mock_parse, mock_resolve, mock_input_context):
-    options = {"attach_files": ["a.pdf", "to_page", "1"]}
-    num_pages = 5
-
-    mock_parsed_items = [ParsedAttachment(path="a.pdf", page_spec="1")]
-    mock_parse.return_value = mock_parsed_items
-
-    mock_resolved_items = [Attachment(path=Path("a.pdf"), pages=[1])]
-    mock_resolve.return_value = mock_resolved_items
-
-    result = _get_attachments_from_options(options, num_pages, mock_input_context)
-
-    mock_parse.assert_called_once_with(options["attach_files"])
-    mock_resolve.assert_called_once_with(mock_parsed_items, num_pages, mock_input_context)
-    assert result == mock_resolved_items
-
-
-@patch("pdftl.output.attach._attach_attachment_to_page")
+@patch("pdftl.operations.attach_files._attach_attachment_to_page")
 def test_attach_attachment_to_pages(mock_attach_to_page, mock_pdf):
     att = Attachment(Path("f.txt"), pages=[1, 3])
     num_attached = [0, 0, 0]
@@ -237,8 +220,8 @@ def test_attach_attachment_to_page_existing_spec(mock_Dict, mock_Annotation, moc
     mock_page.Annots.append.assert_called_once_with(mock_Annotation.return_value.obj)
 
 
-@patch("pdftl.output.attach._attach_attachment")
-@patch("pdftl.output.attach._get_attachments_from_options")
+@patch("pdftl.operations.attach_files._attach_attachment")
+@patch("pdftl.operations.attach_files._get_attachments_from_args")
 def test_attach_files_orchestration(mock_get_options, mock_attach, mock_input_context, mock_pdf):
     mock_pdf.pages = [MagicMock(), MagicMock(), MagicMock()]
     num_pages = len(mock_pdf.pages)
@@ -277,19 +260,11 @@ def test_page_attachment_with_relationship(
     mock_page.Annots.append.assert_called_once()
 
 
-from pdftl.output.attach import _attach_files_option
-
-
-def test_attach_files_option_registration():
-    # Covers line 114
-    _attach_files_option()
-
-
 def test_unreadable_attachment_warning(caplog):
     # Covers lines 219-220
     parsed = [ParsedAttachment(path="non_existent_file.pdf")]
     ctx = MagicMock()
-    with patch("pdftl.output.attach.can_read_file", return_value=False):
+    with patch("pdftl.operations.attach_files.can_read_file", return_value=False):
         results = _resolve_attachments(parsed, 10, ctx)
         assert len(results) == 0
         assert "Cannot read attachment" in caplog.text
@@ -297,14 +272,14 @@ def test_unreadable_attachment_warning(caplog):
 
 def test_recursive_prompt_on_invalid_file():
     # Covers line 258
-    ctx = MagicMock()
+    mock_get_input = MagicMock()
     # First side effect: invalid file, Second side effect: valid file
-    ctx.get_input.side_effect = ["invalid.pdf", "valid.pdf"]
+    mock_get_input.side_effect = ["invalid.pdf", "valid.pdf"]
 
-    with patch("pdftl.output.attach.can_read_file") as mock_read:
+    with patch("pdftl.operations.attach_files.can_read_file") as mock_read:
         mock_read.side_effect = [False, True, True]
         parsed = [ParsedAttachment(path="PROMPT")]
-        results = _resolve_attachments(parsed, 10, ctx)
+        results = _resolve_attachments(parsed, 10, mock_get_input)
 
         assert len(results) == 1
-        assert ctx.get_input.call_count == 2
+        assert mock_get_input.call_count == 2

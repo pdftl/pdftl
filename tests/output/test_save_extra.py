@@ -193,7 +193,7 @@ def test_save_pdf_flatten_and_attach(mock_pdf, mock_input_context):
 
     with (
         patch("pdftl.output.save.flatten_pdf") as mock_flat,
-        patch("pdftl.output.save.attach_files") as mock_attach,
+        patch("pdftl.operations.attach_files.attach_files") as mock_attach,
         patch("pdftl.output.save._build_save_options", return_value={}),
     ):
 
@@ -202,7 +202,7 @@ def test_save_pdf_flatten_and_attach(mock_pdf, mock_input_context):
         save_pdf(mock_pdf, "out.pdf", mock_input_context, options)
 
         mock_flat.assert_called_once()
-        mock_attach.assert_called_once()
+        mock_attach.assert_not_called()
         mock_pdf.save.assert_called_with("out.pdf")
 
 

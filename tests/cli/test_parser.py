@@ -9,7 +9,6 @@ from pdftl.cli.parser import (
     _find_operation_and_split,
     _handle_pipeline_input,
     _parse_allow_permissions,
-    _parse_attach_files,
     _parse_file_handles,
     _parse_flag_keyword,
     _parse_multiple_arguments,
@@ -219,19 +218,7 @@ class TestPrivateHelpers:
         assert options == {"allow": {"Printing", "Copying"}}  # Values are capitalized
         mock_parse_multi.assert_called_once()
 
-    @patch("pdftl.cli.parser._parse_multiple_arguments", return_value=(3, 3))
-    def test_parse_attach_files(self, mock_parse_multi, mock_constants):
-        options = {}
-        args = ["attach_files", "file1.txt", "file2.pdf"]
-
-        consumed, end_pos = _parse_attach_files(args, 0, options)
-
-        assert consumed == 3
-        assert end_pos == 3
-        assert options == {"attach_files": ["file1.txt", "file2.pdf"]}
-        mock_parse_multi.assert_called_once()
-
-    def testparse_options_and_specs(self, mock_constants):
+    def testparse_options_and_specs_attach_error(self, mock_constants):
         """Integration test for the main options parser."""
         args = [
             "1-end",
@@ -245,6 +232,21 @@ class TestPrivateHelpers:
             "f1.txt",
         ]
 
+        with pytest.raises(InvalidArgumentError, match="Unknown argument.*attach_files"):
+            specs, options = parse_options_and_specs(args)
+
+    def testparse_options_and_specs(self, mock_constants):
+        """Integration test for the main options parser."""
+        args = [
+            "1-end",
+            "A=2",
+            "allow",
+            "Printing",
+            "uncompress",
+            "output",
+            "out.pdf",
+        ]
+
         specs, options = parse_options_and_specs(args)
 
         assert specs == ["1-end", "A=2"]  # Specs stop at first keyword
@@ -252,7 +254,6 @@ class TestPrivateHelpers:
             "allow": {"Printing"},
             "uncompress": True,
             "output": "out.pdf",
-            "attach_files": ["f1.txt"],
         }
 
     def testparse_options_and_specs_unknown_arg(self, mock_constants):
@@ -458,22 +459,22 @@ class TestParserIntegration:
         assert p.operation == "cat"
         assert p.options["allow"] == set()
 
-    def test_parse_cli_stage_attach_files_stops_at_keyword(self, mock_registry, mock_constants):
+    def test_parse_cli_stage_attach_files_not_option(self, mock_registry, mock_constants):
         args = [
             "in.pdf",
             "cat",
             "attach_files",
             "file1.txt",
             "file2.pdf",  # These are for attach_files
-            "uncompress",  # This is a new keyword
             "output",
             "out.pdf",
+            "uncompress",  # This is a new keyword
         ]
 
         stage = parse_cli_stage(args, is_first_stage=True)
 
-        # Check that attach_files ended correctly
-        assert stage.options["attach_files"] == ["file1.txt", "file2.pdf"]
+        # Check that attach_files not parsed as an output option
+        assert "attach_files" not in stage.options
         # Check that the other keywords were also parsed
         assert stage.options["uncompress"] is True
         assert stage.options["output"] == "out.pdf"
