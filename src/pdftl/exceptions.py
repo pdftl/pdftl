@@ -31,6 +31,10 @@ class InvalidArgumentError(UserCommandLineError):
     """Exception for invalid argument(s)"""
 
 
+class DuplicateArgumentError(InvalidArgumentError):
+    """Exception for duplicate argument(s)"""
+
+
 class InvalidCommandError(UserCommandLineError):
     """Exception for an invalid command"""
 

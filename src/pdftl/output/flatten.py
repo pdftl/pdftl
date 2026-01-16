@@ -5,9 +5,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pikepdf
 
+from pdftl.core.registry import register_option
+
 logger = logging.getLogger(__name__)
 
 
+@register_option("flatten", desc="Flatten annotations and form fields", type="flag")
 def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
     """
     Flattens a pikepdf object.
@@ -64,7 +67,7 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
             # This catches the RuntimeError from pypdfium2 when init_forms()
             # "bails out" on weird PDFs.
             logger.warning(
-                f"pypdfium2 flattening failed (falling back to structural flattening): {e}"
+                "pypdfium2 flattening failed (falling back to structural flattening): %s", e
             )
 
     # 3. Strategy B: Fallback (Structural Flattening)
@@ -80,7 +83,7 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
         try:
             pikepdf_doc.generate_appearance_streams()
         except pikepdf.PdfError as e:
-            logger.warning(f"Could not generate appearance streams: {e}")
+            logger.warning("Could not generate appearance streams: %s", e)
 
     # Flatten annotations
     pikepdf_doc.flatten_annotations(mode="all")

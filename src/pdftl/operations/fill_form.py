@@ -198,7 +198,7 @@ def _fill_form_from_xfdf_data(form, data):
 
         if fq_name in xfdf_data:
             value = xfdf_data[fq_name]
-            logger.debug(f"Filling {fq_name} = {value}")
+            logger.debug("Filling %s = %s", fq_name, value)
             _set_form_field_value(field, value)
 
 

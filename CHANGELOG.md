@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_data` gives JSON output via the `json` keyword
 
+- extensibility: add custom operations by putting Python
+  files in `~/.config/pdftl/operations` (*nix) or
+  `%APPDATA%\pdftl\config` (windows)
+
 ### Fixed
 
 - bug in `add_pages.py` when a page has an integer key-value

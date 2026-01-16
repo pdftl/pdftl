@@ -66,30 +66,42 @@ def _set_page_media(pdf, page_media_list: list["PageMediaEntry"]):
 
 
 def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
+    import pikepdf
+
     # entry.number is 1-based index from input
     page_number = entry.page_number
 
     if len(pdf.pages) < page_number:
-        logger.warning(
-            "Nonexistent page %s requested for PageMedia metadata. Skipping.",
-            page_number,
-        )
+        raise ValueError(f"Nonexistent page {page_number} requested for PageMedia metadata.")
         return
 
     page = pdf.pages[page_number - 1]
 
-    if entry.rotation is not None:
-        page.rotate(entry.rotation, relative=False)
+    warning_template = "Failed to set %s to %s on page %s. Skipping. Details: %s"
 
+    if entry.rotation is not None:
+        try:
+            page.rotate(entry.rotation, relative=False)
+        except (pikepdf.PdfError, RuntimeError) as exc:
+            logger.warning(warning_template, "Rotation", entry.rotation, page_number, exc)
+    new_media_box = None
     if entry.media_rect is not None:
-        page.mediabox = entry.media_rect
+        new_media_box = entry.media_rect
     elif entry.dimensions is not None:
         # Dimensions is a tuple/list, usually [width, height]
-        page.mediabox = [0, 0, *entry.dimensions]
+        new_media_box = [0, 0, *entry.dimensions]
+    if new_media_box is not None:
+        try:
+            page.mediabox = new_media_box
+        except ValueError as exc:
+            logger.warning(warning_template, "MediaBox", new_media_box, page_number, exc)
 
     for rect_name, box_name in c.INFO_TO_PAGE_BOXES_MAP.items():
         if box_name != "MediaBox" and (box_list := getattr(entry, rect_name, None)) is not None:
-            setattr(page, box_name.lower(), box_list)
+            try:
+                setattr(page, box_name.lower(), box_list)
+            except ValueError as exc:
+                logger.warning(warning_template, box_name, box_list, page_number, exc)
 
 
 def _set_bookmarks(pdf, bookmark_list: list["BookmarkEntry"], delete_existing_bookmarks=True):
@@ -166,7 +178,8 @@ def _set_page_labels(pdf, label_list: list["PageLabelEntry"], delete_existing=Tr
 
     for entry in label_list:
         index, page_label = _make_page_label(pdf, entry)
-        page_labels[index] = page_label
+        if index is not None:
+            page_labels[index] = page_label
 
     pdf.Root.PageLabels = page_labels.obj
 
@@ -190,18 +203,42 @@ def _make_page_label(pdf, entry: "PageLabelEntry"):
     """Return a page label object and its index."""
     import pikepdf
 
-    # entry.index is user-facing 1-based index
-    idx = entry.index - 1
+    skip_warning_template = "Skipping PageLabel with invalid PageLabel%s: '%s'. %s."
+
+    # entry.new_index is user-facing 1-based index
+    idx = entry.new_index - 1
+    if not isinstance(idx, int) or idx < 0:
+        logger.warning(
+            skip_warning_template, "NewIndex", entry.new_index, "Must be a positive integer"
+        )
+        return None, None
 
     ret: dict[str, Any] = {}
 
     if entry.prefix is not None:
         ret["/P"] = entry.prefix
 
-    if entry.style:
-        style_name_string = c.PAGE_LABEL_STYLE_MAP.get(entry.style)
+    if entry.num_style:
+        style_name_string = c.PAGE_LABEL_STYLE_MAP.get(entry.num_style)
         if style_name_string:
             ret["/S"] = pikepdf.Name(style_name_string)
+        else:
+            logger.warning(
+                skip_warning_template,
+                "NumStyle",
+                entry.num_style,
+                "Use one of: " + str(list(c.PAGE_LABEL_STYLE_MAP.keys())).strip("[]"),
+            )
+            return None, None
+
+    if entry.start is not None:
+        try:
+            assert isinstance(entry.start, int)
+            assert entry.start >= 1
+        except AssertionError:
+            logger.warning(
+                skip_warning_template, "Start", entry.start, "Must be a positive integer"
+            )
 
     if entry.start is not None and entry.start != 1:
         ret["/St"] = entry.start

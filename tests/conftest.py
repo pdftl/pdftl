@@ -486,7 +486,7 @@ def pytest_runtest_makereport(item, call):
 
 
 # --- PART 2: Autouse Fixture to check status and Dump ---
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=False)
 def forensic_dump_on_fail(request):
     """
     Runs automatically for every test.

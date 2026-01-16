@@ -54,8 +54,20 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
     if pdf.docinfo:
         if info.doc_info is None:
             info.doc_info = []
-        for key, value in pdf.docinfo.items():
-            info.doc_info.append(DocInfoEntry(key=str(key)[1:], value=str(value)))
+        docinfo_keys_sorted = list(pdf.docinfo.keys())
+        docinfo_keys_sorted.sort()
+        for key in docinfo_keys_sorted:
+            key_str = str(key)[1:]
+            value = pdf.docinfo[key]
+            if not isinstance(value, (str, pikepdf.String)):
+                logger.warning(
+                    "Skipping non-string InfoValue '%s' (type: %s) for InfoKey '%s'",
+                    value,
+                    type(value),
+                    key_str,
+                )
+                continue
+            info.doc_info.append(DocInfoEntry(key=key_str, value=str(value)))
     for i, page in enumerate(pdf.pages):
         rotation = int(page.get("/Rotate", 0))
 
@@ -107,10 +119,10 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
                 info.page_labels = []
             info.page_labels.append(
                 PageLabelEntry(
-                    index=int(page_idx) + 1,
+                    new_index=int(page_idx) + 1,
                     start=int(getattr(entry, "St", 1)),
                     prefix=str(getattr(entry, "P", "")) or None,
-                    style=found_style,
+                    num_style=found_style,
                 )
             )
 
@@ -177,12 +189,12 @@ def _write_page_labels(writer, info):
     for entry in info.page_labels or {}:
         writer(
             f"PageLabelBegin\n"
-            f"PageLabelNewIndex: {entry.index}\n"
+            f"PageLabelNewIndex: {entry.new_index}\n"
             f"PageLabelStart: {entry.start}"
         )
         if entry.prefix:
             writer(f"PageLabelPrefix: {entry.prefix}")
-        writer(f"PageLabelNumStyle: {entry.style}")
+        writer(f"PageLabelNumStyle: {entry.num_style}")
 
 
 def _write_id_info(writer, info):
@@ -198,6 +210,7 @@ def _write_extra_info(writer, info):
 
 def _write_docinfo(writer, info, escape_xml):
     """Writes the document's Info dictionary (DocInfo) to the output."""
+
     for entry in info.doc_info or {}:
         key, value = entry.key, entry.value
         value_str = xml_encode_for_info(value) if escape_xml else value

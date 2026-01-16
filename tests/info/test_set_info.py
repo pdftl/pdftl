@@ -122,7 +122,7 @@ class TestSetInfo:
             ids=["123", None],
             bookmarks=[BookmarkEntry(level=1, page_number=1, title="Test")],
             page_media=[PageMediaEntry(page_number=1)],
-            page_labels=[PageLabelEntry(index=1)],
+            page_labels=[PageLabelEntry(new_index=1)],
         )
 
         set_metadata_in_pdf(mock_pdf, info)
@@ -159,21 +159,12 @@ class TestSetInfo:
         assert mock_page.mediabox == [0, 0, 1, 1]
         assert mock_page.cropbox == [0, 0, 2, 2]
 
-    def test_set_page_media_entry_errors(self, mock_pdf, caplog):
+    def test_set_page_media_entry_errors(self, mock_pdf):
         """Tests error handling for _set_page_media_entry."""
-        # Case 1: "Missing page number" is no longer possible because
-        # PageMediaEntry.number is required/present on the object.
-        # We only test logic errors now.
-
         # 1. Non-existent page number
-        caplog.clear()
-        with caplog.at_level("WARNING"):
+        with pytest.raises(ValueError, match="Nonexistent page 99"):
             entry = PageMediaEntry(page_number=99)
             _set_page_media_entry(mock_pdf, entry)
-
-        assert len(caplog.records) == 1
-        record = caplog.records[0]
-        assert record.message == "Nonexistent page 99 requested for PageMedia metadata. Skipping."
 
     @patch("pikepdf.OutlineItem")
     def test_add_bookmark_logic(self, mock_OutlineItem, mock_pdf):
@@ -256,14 +247,14 @@ class TestSetInfo:
     @pytest.mark.parametrize(
         "label_entry, expected_dict, expected_index",
         [
-            (PageLabelEntry(index=1), {}, 0),  # Simplest case
+            (PageLabelEntry(new_index=1), {}, 0),  # Simplest case
             (
-                PageLabelEntry(index=3, prefix="A-", start=5, style="UppercaseRoman"),
+                PageLabelEntry(new_index=3, prefix="A-", start=5, num_style="UppercaseRoman"),
                 {"/P": "A-", "/St": 5, "/S": Name("/R")},
                 2,
             ),
             (
-                PageLabelEntry(index=1, prefix="Intro", style="LowercaseRoman"),
+                PageLabelEntry(new_index=1, prefix="Intro", num_style="LowercaseRoman"),
                 {"/P": "Intro", "/S": Name("/r")},
                 0,
             ),
@@ -414,7 +405,7 @@ class TestSetInfo:
         mock_pdf.Root.PageLabels = Dictionary()
         mock_nt_instance = mock_NumberTree.return_value
 
-        label_list = [PageLabelEntry(index=1)]
+        label_list = [PageLabelEntry(new_index=1)]
 
         # 2. Act: Call with delete_existing=False
         set_info_module._set_page_labels(mock_pdf, label_list, delete_existing=False)

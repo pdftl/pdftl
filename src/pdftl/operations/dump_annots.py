@@ -7,7 +7,6 @@
 """Dump annotations info, in JSON"""
 
 import logging
-from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
@@ -204,7 +203,8 @@ def _annots_json_for_page(page, page_num, page_object_to_num_map, named_dests, c
 
 
 def _lines_from_datum(datum, string_convert, compat=False):
-    """Get lines from one data entry, for dump_annots. If compat is True, only output pdftk compatible lines."""
+    """Get lines from one data entry, for dump_annots. If compat
+    is True, only output pdftk compatible lines."""
     new_lines = []
     prefix = "Annot"
     props = datum["Properties"]
@@ -251,15 +251,17 @@ def _key_value_lines(key, value, prefix, string_convert, compat=False):
     """Convert a key-value pair to strings for dump_annots"""
     if key == "/A":
         return [
-            _data_item_to_string_helper(key2, value2, prefix + "Action", string_convert, compat)
+            _data_item_to_string_helper(
+                key2, value2, prefix + "Action", string_convert, compat=compat
+            )
             for key2, value2 in value.items()
         ]
     if key in ("/Type", "/Border") or len(key) < 4:
         return []
     try:
-        return [_data_item_to_string_helper(key, value, prefix, string_convert, compat)]
+        return [_data_item_to_string_helper(key, value, prefix, string_convert, compat=compat)]
     except NotImplementedError as exc:
-        logger.warning(exc)
+        logger.warning("Skipping unsupported annotation key '{%s}' due to: {%s}", key, exc)
         return []
 
 

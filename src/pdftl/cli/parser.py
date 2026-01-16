@@ -14,7 +14,7 @@ import pdftl.core.constants as c
 from pdftl.cli.pipeline import CliStage
 from pdftl.core.constants import ALLOW_PERMISSIONS, ALLOW_PERMISSIONS_L
 from pdftl.core.registry import registry
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
 
 def _get_registry_data_entries(main_key, sub_key, test, transform=None):
@@ -54,6 +54,8 @@ def _parse_flag_keyword(arg, options):
 
 def _parse_value_keyword(arg, args, i, options):
     """Parses a keyword that requires a single following value."""
+    if arg.lower() in options:
+        raise DuplicateArgumentError(f"Duplicate keyword: {arg}")
     if i + 1 >= len(args):
         raise MissingArgumentError(f"Missing value for keyword: {arg}")
     options[arg.lower()] = args[i + 1]
@@ -154,14 +156,7 @@ def parse_options_and_specs(args):
 
         if arg_lower == "attach_files":
             i += _parse_attach_files(args, i, options)[0]
-        elif arg_lower == c.OUTPUT:
-            # Handle 'output' as a local option
-            if i + 1 >= len(args):
-                raise MissingArgumentError(f"Missing value for keyword: {arg}")
-            val = args[i + 1]
-            options[arg_lower] = val
-            i += 2
-        elif arg_lower in _get_value_keywords():
+        elif arg_lower == c.OUTPUT or arg_lower in _get_value_keywords():
             i += _parse_value_keyword(arg, args, i, options)
         elif arg_lower in _get_flag_keywords():
             i += _parse_flag_keyword(arg, options)

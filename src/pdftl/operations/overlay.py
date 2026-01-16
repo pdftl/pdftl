@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.utils.io_helpers import smart_pikepdf_open
 
 # Shared implementation for stamp, multistamp, background, multibackground
 
@@ -143,7 +144,11 @@ def apply_overlay(
         f"scale_to_fit={scale_to_fit}"
     )
 
-    overlay_pdf = pikepdf.open(overlay_filename)
+    # FIXME password for overlay_pdf? we don't yet support this
+    source: str | None = overlay_filename
+    if source == "-":
+        source = None
+    overlay_pdf = smart_pikepdf_open(source)
     base_pages = input_pdf.pages
     overlay_pages_all = overlay_pdf.pages
     if not overlay_pages_all:

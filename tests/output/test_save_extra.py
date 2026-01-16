@@ -56,7 +56,7 @@ def test_get_passwords_prompt(mock_input_context):
     mock_input_context.get_pass.assert_called_once()
 
 
-def test_get_passwords_truncate(mock_input_context, capsys):
+def test_get_passwords_truncate(mock_input_context, caplog):
     """Test truncation of long passwords."""
     long_pw = "a" * 40
     mock_input_context.get_pass.return_value = long_pw
@@ -64,7 +64,7 @@ def test_get_passwords_truncate(mock_input_context, capsys):
 
     pws = _get_passwords_from_options(options, mock_input_context)
     assert len(pws["owner"]) == 32
-    assert "Warning: Password was over 32 characters" in capsys.readouterr().out
+    assert "Password was over 32 characters" in caplog.text
 
 
 def test_build_encryption_conflict(mock_input_context):

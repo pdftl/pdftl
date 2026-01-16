@@ -7,6 +7,7 @@
 """Dump form data from a PDF file"""
 
 import logging
+from collections import OrderedDict
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -137,12 +138,16 @@ def _write_field_stanza(file_handle, field: dict, escape_xml: bool):
         print(f"FieldSubType: {fmt(field['FieldSubType'])}", file=file_handle)
 
     print(f"FieldName: {fmt(field.get('FieldName', ''))}", file=file_handle)
+    if "FieldNameAlt" in field and field["FieldNameAlt"]:
+        print(f"FieldNameAlt: {fmt(field.get('FieldNameAlt', ''))}", file=file_handle)
 
     # 2. Simple Attributes
     print(f"FieldFlags: {field.get('FieldFlags', 0)}", file=file_handle)
 
     if "FieldValue" in field and field["FieldValue"] is not None:
         print(f"FieldValue: {fmt(field['FieldValue'])}", file=file_handle)
+    if "FieldValueDefault" in field and field["FieldValueDefault"] is not None:
+        print(f"FieldValueDefault: {fmt(field['FieldValueDefault'])}", file=file_handle)
 
     # 3. Layout
     if "FieldJustification" in field:
@@ -155,14 +160,29 @@ def _write_field_stanza(file_handle, field: dict, escape_xml: bool):
 
 def _write_field_options(file_handle, options: list, fmt_func):
     """Handles the unique dual-printing of PDF field options."""
+    lines: list[str | tuple] = []
     for opt in options:
         if isinstance(opt, (list, tuple)) and len(opt) == 2:
             # Case: (export_value, display_name)
-            print(f"FieldStateOption: {fmt_func(opt[0])}", file=file_handle)
-            print(f"FieldStateOptionDisplay: {fmt_func(opt[1])}", file=file_handle)
+            lines.append(
+                (
+                    f"FieldStateOption: {fmt_func(opt[0])}",
+                    f"FieldStateOptionDisplay: {fmt_func(opt[1])}",
+                )
+            )
         else:
             # Case: Simple string option
-            print(f"FieldStateOption: {fmt_func(opt)}", file=file_handle)
+            lines.append(f"FieldStateOption: {fmt_func(opt)}")
+
+    # sorting breaks the strict PHP test, so let's not do it
+    # lines.sort(key=lambda x: x[0] if isinstance(x, tuple) else x)
+
+    for line in lines:
+        if isinstance(line, tuple):
+            print(line[0], file=file_handle)
+            print(line[1], file=file_handle)
+        else:
+            print(line, file=file_handle)
 
 
 # --- Extraction Logic ---
@@ -181,19 +201,23 @@ def _get_field_type_strings(field):
     return type_string_in, type_string_out
 
 
-def _extract_field_value(field) -> str | None:
-    """Extracts the current value or appearance state of a field."""
+def _extract_field_value(field, use_key=None) -> str | None:
+    """Extracts the current value or appearance state of a field.
+
+    use_key defaults to 'V', for the value.
+    """
     import pikepdf
 
     # Standard value
-    if hasattr(field.obj, "V"):
-        val = field.obj.V
+    first_key = use_key or "V"
+    if hasattr(field.obj, first_key):
+        val = field.obj.get("/" + first_key)
         if isinstance(val, pikepdf.Name):
             return str(val).lstrip("/")
         return str(val)
 
     # Checkbox/Radio appearance fallback
-    if hasattr(field.obj, "AS"):
+    if hasattr(field.obj, "AS") and use_key is None:
         return str(field.obj.AS).lstrip("/")
 
     return None
@@ -282,18 +306,20 @@ def _extract_field_justification(field, field_type_out: str | None = None) -> st
     return "Left"
 
 
-def _extract_field_data_high_level(field, extra_info=False) -> dict[str, Any]:
+def _extract_field_data_high_level(field, extra_info=False) -> OrderedDict[str, Any]:
     """
     Extracts data using pikepdf's high-level Form API.
     Used when we recognize the field object as a valid widget.
     """
-    logger.debug(f"Extracting high level from {field}")
+    logger.debug("Extracting high level from %s", field)
     # 1. Basic Identity
     ts_in, ts_out = _get_field_type_strings(field)
-    data = {
-        "FieldName": field.fully_qualified_name,
-        "FieldType": ts_out,
-    }
+    data = OrderedDict()
+    data["FieldName"] = field.fully_qualified_name
+    if hasattr(field.obj, "TU"):
+        data["FieldNameAlt"] = field.obj.TU
+
+    data["FieldType"] = ts_out
 
     if extra_info:
         data["FieldSubType"] = ts_in
@@ -304,6 +330,8 @@ def _extract_field_data_high_level(field, extra_info=False) -> dict[str, Any]:
 
     # 3. Value
     data["FieldValue"] = _extract_field_value(field)
+    if hasattr(field.obj, "DV"):
+        data["FieldValueDefault"] = _extract_field_value(field, use_key="DV")
 
     # 4. Options (Logic depends on type)
     if hasattr(field.obj, "Opt"):

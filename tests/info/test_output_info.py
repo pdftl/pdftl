@@ -30,12 +30,20 @@ def mock_pdf():
     pdf.is_encrypted = False
     pdf.pages = [MagicMock(), MagicMock()]  # 2 pages
 
-    # DocInfo
-    pdf.docinfo = MagicMock(spec=pikepdf.Dictionary)
-    pdf.docinfo.items.return_value = [
-        (Name("/Title"), String("Test Title")),
-        (Name("/Author"), String("Test Author")),
-    ]
+    # --- FIX: Use loose MagicMock for docinfo to avoid C-extension spec issues ---
+    pdf.docinfo = MagicMock()
+    # Define the data we want to expose
+    doc_data = {"/Title": String("Test Title"), "/Author": String("Test Author")}
+
+    # Wire up the Mapping protocol methods to the real dict
+    pdf.docinfo.items.side_effect = doc_data.items
+    pdf.docinfo.keys.side_effect = doc_data.keys
+    pdf.docinfo.values.side_effect = doc_data.values
+    pdf.docinfo.__getitem__.side_effect = doc_data.__getitem__
+    pdf.docinfo.__iter__.side_effect = doc_data.__iter__
+    pdf.docinfo.__contains__.side_effect = doc_data.__contains__
+    pdf.docinfo.get.side_effect = doc_data.get
+    # -----------------------------------------------------------------------------
 
     # Page Media (Page 1)
     p1 = pdf.pages[0]
@@ -101,7 +109,7 @@ def sample_info():
                 crop_rect=[10, 10, 190, 190],
             ),
         ],
-        page_labels=[PageLabelEntry(index=1, start=1, style="D", prefix="P-")],
+        page_labels=[PageLabelEntry(new_index=1, start=1, num_style="D", prefix="P-")],
         file_path="test.pdf",
         version="1.7",
         encrypted=False,
@@ -149,8 +157,8 @@ class TestInfoExtraction:
 
         # Check DocInfo
         assert len(info.doc_info) == 2
-        assert info.doc_info[0].key == "Title"
-        assert info.doc_info[0].value == "Test Title"
+        assert any(x.key == "Title" and x.value == "Test Title" for x in info.doc_info)
+        assert any(x.key == "Author" and x.value == "Test Author" for x in info.doc_info)
 
     def test_get_info_page_media(self, mock_pdf):
         """Test extraction of page media data."""
@@ -314,17 +322,17 @@ def test_get_info_with_page_labels():
 
     # Verify Roman Label
     l1 = info.page_labels[0]
-    assert l1.index == 1
+    assert l1.new_index == 1
     # The map lookup works, checking the key associated with /R
     # If this fails with a specific string, we just match that string.
     # Based on your log: 'UppercaseRomanNumerals'
-    assert l1.style == "UppercaseRomanNumerals"
+    assert l1.num_style == "UppercaseRomanNumerals"
     assert l1.prefix == "ix"
 
     # Verify Fallback Label (Hits StopIteration block)
     l2 = info.page_labels[1]
-    assert l2.index == 6
-    assert l2.style == "NoNumber"
+    assert l2.new_index == 6
+    assert l2.num_style == "NoNumber"
 
 
 # ==================================================================

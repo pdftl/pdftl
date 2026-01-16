@@ -111,7 +111,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 minversion = "6.0"
-addopts = "-v -s --strict-markers"
+addopts = "-s --strict-markers"
 testpaths = ["tests"]
 
 filterwarnings = [
@@ -123,9 +123,9 @@ markers = [
     "pdftk_compat: integration tests ported from pdftk-java",
 ]
 
-log_cli = true
-log_cli_level = "CRITICAL"
-log_cli_format = "%(message)s"
+# log_cli = true
+# log_cli_level = "CRITICAL"
+# log_cli_format = "%(message)s"
 
 log_file = "pytest.log"
 log_file_level = "DEBUG"

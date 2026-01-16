@@ -42,6 +42,8 @@ def generate_fdf_cli_hook(result: OpResult, _stage):
     from pdftl.utils.hooks import from_result_meta
 
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
+    if output_file == "-":
+        output_file = None
 
     # Open in binary mode ('wb') to write the raw bytes directly
     with smart_open(output_file, mode="wb") as f:

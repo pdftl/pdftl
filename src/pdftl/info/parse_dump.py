@@ -42,6 +42,9 @@ def parse_dump_data(lines, string_decoder):
     for line in lines:
         _handle_line(line, pdf_data, state, string_decoder)
 
+    # check if we got EOF while waiting for a value
+    if (last := state["last_info_key"]) is not None:
+        logger.warning("data info record not valid: '%s' ended prematurely", last)
     return pdf_data
 
 
@@ -88,6 +91,13 @@ def _handle_line(line, pdf_data, state, string_decoder):
 
 def _handle_begin_tag(key, pdf_data, state, _string_decoder):
     """Resets the parser state when a '...Begin' tag is found."""
+    # check if we are interrupting a Key/Value pair
+    if (last := state.get("last_info_key")) is not None:
+        logger.warning(
+            "data info record not valid: key/value pair '%s' interrupted by Begin", last
+        )
+        state["last_info_key"] = None
+
     _reset_state(state, state_type=key)
     if key == "Info":
         pass
@@ -175,6 +185,13 @@ def _parse_info_field(key, value, info_dict, state, string_decoder):
     """Parses InfoKey/InfoValue pairs, which are state-dependent. The
     key must be either InfoKey or InfoValue."""
     if key == "InfoKey":
+        # ensure we aren't overwriting a previous key that had no value
+        if (last := state["last_info_key"]) is not None:
+            logger.warning(
+                "data info record not valid: "
+                "key without value before InfoKey (last: '%s'). Skipping.",
+                last,
+            )
         state["last_info_key"] = value
     elif key == "InfoValue":
         if state["last_info_key"] is not None:

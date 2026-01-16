@@ -13,6 +13,7 @@ from pdftl.core.types import OpResult
 from pdftl.exceptions import (
     InvalidArgumentError,
     MissingArgumentError,
+    OperationError,
     PdftlConfigError,
     UserCommandLineError,
 )
@@ -236,10 +237,12 @@ def update_info(pdf, op_args, get_input, xml_strings=True) -> OpResult:
         else:
             raise TypeError(f"Unexpected result type: {type(result)}")
 
+        return execute_update_info(pdf, spec)
+
+    except ValueError as exc:
+        raise OperationError(exc) from exc
     except (OSError, PdftlConfigError) as exc:
         raise UserCommandLineError(exc) from exc
-
-    return execute_update_info(pdf, spec)
 
 
 def execute_update_info(pdf, spec):

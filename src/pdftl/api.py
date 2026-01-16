@@ -59,11 +59,13 @@ def _normalize_inputs(
 
 
 def _process_user_input(i, item, password, final_inputs, final_opened):
+    import pathlib
+
     import pikepdf
 
     if i in final_opened:
         final_inputs.append(f"<explicit-obj-{i}>")
-    elif isinstance(item, (str, bytes)):
+    elif isinstance(item, (str, bytes, pathlib.Path, pathlib.PosixPath)):
         try:
             pdf = pikepdf.open(item, password=password) if password else pikepdf.open(item)
             final_opened[i] = pdf

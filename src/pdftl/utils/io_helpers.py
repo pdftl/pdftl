@@ -8,6 +8,27 @@
 
 import sys
 from contextlib import nullcontext
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pikepdf
+
+
+def smart_pikepdf_open(filename: str | None, password: str | None = None) -> "pikepdf.Pdf":
+
+    import io
+    import sys
+
+    import pikepdf
+
+    if filename is None:
+        data = sys.stdin.buffer.read()
+        source = io.BytesIO(data)
+    else:
+        source = filename
+    if password:
+        return pikepdf.open(source, password=password)
+    return pikepdf.open(source)
 
 
 def smart_open(filename: str | None, mode="w", encoding="utf-8"):

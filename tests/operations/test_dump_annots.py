@@ -85,62 +85,6 @@ def test_dump_annots_json(annot_pdf, capsys):
     assert '"Page": 1' in out
 
 
-def test_dump_annots_filters_and_errors(annot_pdf, capsys, caplog):
-    """Test filtering logic and error handling in dump_data_annots."""
-    caplog.set_level(logging.DEBUG)
-
-    # 1. Annotation without Subtype (Line 152 coverage)
-    no_subtype = pikepdf.Dictionary(Type=pikepdf.Name.Annot, Rect=[0, 0, 10, 10])
-
-    # 2. JavaScript Action (Line 165 coverage)
-    js_action = pikepdf.Dictionary(
-        Type=pikepdf.Name.Annot,
-        Subtype=pikepdf.Name.Link,
-        Rect=[0, 0, 10, 10],
-        A=pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String("alert('hi')")),
-    )
-
-    # 3. Ignored Keys /Border (Lines 192-194 coverage)
-    # 4. Trigger for NotImplementedError (Lines 201-202 coverage)
-    # We add a custom key "FailMe" that falls through to the try/except block.
-    border_annot = pikepdf.Dictionary(
-        Type=pikepdf.Name.Annot,
-        Subtype=pikepdf.Name.Link,
-        Rect=[0, 0, 10, 10],
-        Border=[0, 0, 1],
-        FailMe=pikepdf.String("Trigger"),
-    )
-
-    annot_pdf.add_blank_page()
-    annot_pdf.pages[1].Annots = annot_pdf.make_indirect([no_subtype, js_action, border_annot])
-
-    # Define a side effect that ONLY raises for our specific trigger key.
-    def side_effect(key, value, prefix, convert):
-        if key == "FailMe" or key == "/FailMe":
-            raise NotImplementedError("Expected Failure")
-        return f"{prefix}{key}: {value}"
-
-    # Get the raw result first
-    result = dump_data_annots(annot_pdf, output_file=None)
-
-    # Now patch the helper used by the HOOK (since that's where formatting happens)
-    with patch(
-        "pdftl.operations.dump_annots._data_item_to_string_helper",
-        side_effect=side_effect,
-    ):
-        # Invoke formatting logic via the hook
-        dump_data_annots_cli_hook(result, None)
-
-    out = capsys.readouterr().out
-
-    # Verify Filters
-    assert "JavaScript" not in out
-    assert "AnnotBorder" not in out
-
-    # Verify Error Handling
-    assert "Expected Failure" in caplog.text
-
-
 def test_lines_from_datum_skips():
     from pdftl.operations.dump_annots import _lines_from_datum
 
@@ -188,3 +132,82 @@ def test_get_all_annots_with_named_destinations():
 
         # Verify NameTree was called, confirming we entered the block at 171
         mock_tree.assert_called_once()
+
+
+import logging
+from unittest.mock import Mock, patch
+
+import pikepdf
+import pytest
+
+# Import the internal function directly for the unit test
+from pdftl.operations.dump_annots import (
+    _key_value_lines,
+    dump_data_annots,
+    dump_data_annots_cli_hook,
+)
+
+
+def test_dump_annots_pdftk_filters(annot_pdf, capsys):
+    """
+    Integration Test: Verify that dump_data_annots (compat=True) correctly
+    filters out 'noise' like /Type, /Border, and /JavaScript actions.
+    """
+    # 1. Annotation with /Type (should be filtered)
+    # 2. Annotation with /Border (should be filtered)
+    # 3. Javascript Action (should be filtered)
+    js_action = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Link,
+        Rect=[0, 0, 10, 10],
+        Border=[0, 0, 1],
+        A=pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String("alert('hi')")),
+    )
+
+    annot_pdf.add_blank_page()
+    annot_pdf.pages[1].Annots = annot_pdf.make_indirect([js_action])
+
+    # Run the operation
+    result = dump_data_annots(annot_pdf, output_file=None)
+
+    # Run the CLI hook (which does the formatting)
+    dump_data_annots_cli_hook(result, None)
+
+    out = capsys.readouterr().out
+
+    # Assertions: 'noise' keys should NOT be present
+    assert "JavaScript" not in out
+    assert "AnnotBorder" not in out
+    assert "AnnotType" not in out
+    # Valid keys SHOULD be present
+    assert "AnnotSubtype: Link" in out
+
+
+def test_dump_annots_error_handling(caplog):
+    """
+    Unit Test: Verify that _key_value_lines catches NotImplementedError
+    and logs a warning instead of crashing.
+    """
+    caplog.set_level(logging.WARNING)
+
+    # We mock the helper to raise the error we want to catch
+    def side_effect(*args, **kwargs):
+        raise NotImplementedError("Simulated Failure")
+
+    with patch(
+        "pdftl.operations.dump_annots._data_item_to_string_helper", side_effect=side_effect
+    ):
+        # We call the internal function directly.
+        # We can use any key (like "FailMe") because we aren't restricted by the
+        # CLI's 'compat=True' filter here.
+        result = _key_value_lines(
+            key="/FailMe", value="Trigger", prefix="Annot", string_convert=str
+        )
+
+    # 1. Result should be empty (it swallowed the error and returned [])
+    assert result == []
+
+    # 2. It should have logged the warning with our key and error message
+    assert "Skipping unsupported annotation key" in caplog.text
+    assert "/FailMe" in caplog.text
+    assert "Simulated Failure" in caplog.text

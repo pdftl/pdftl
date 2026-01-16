@@ -15,7 +15,6 @@ from pdftl.output.save import (
     _default_permissions_object,
     _drop_options,
     _encrypt_options,
-    _flatten_option,
     _get_passwords_from_options,
     _keep_id_options,
     _linearize_option,
@@ -49,7 +48,6 @@ class TestSaveOptionsRegistration:
         _compress_options()
         _drop_options()
         _encrypt_options()
-        _flatten_option()
         _keep_id_options()
         _linearize_option()
         _need_appearances_option()
@@ -148,7 +146,7 @@ def test_get_passwords_from_options_prompt(mock_input_context):
     assert passwords == {"user": "from_prompt"}
 
 
-def test_get_passwords_from_options_prompt_truncate(mock_input_context, capsys):
+def test_get_passwords_from_options_prompt_truncate(mock_input_context, caplog):
     """Tests that prompted passwords over 32 chars are truncated."""
     options = {"owner_pw": "PROMPT"}
     long_pass = "a" * 40
@@ -158,7 +156,7 @@ def test_get_passwords_from_options_prompt_truncate(mock_input_context, capsys):
     passwords = _get_passwords_from_options(options, mock_input_context)
 
     assert passwords == {"owner": truncated_pass}
-    assert "Warning: Password was over 32 characters" in capsys.readouterr().out
+    assert "Password was over 32 characters" in caplog.text
 
 
 def test_get_passwords_from_options_none():
@@ -331,6 +329,8 @@ def test_build_encryption_object_by_method_only(
     expected_encrypt_opts = {
         "user": "",
         "owner": "",
+        "aes": True,
+        "metadata": True,
         "R": 6,  # From encrypt_aes256
         "allow": mock_default_perms,
     }
@@ -355,6 +355,9 @@ def test_build_encryption_object_by_password_only(
     mock_build_perms.assert_called_once_with([])
 
     expected_encrypt_opts = {
+        "R": 4,
+        "aes": True,
+        "metadata": True,
         "user": "123",
         "owner": "",  # default
         "allow": mock_default_perms,

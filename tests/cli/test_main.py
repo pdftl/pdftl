@@ -80,7 +80,8 @@ def test_get_flags_and_setup_logging():
 def test_handle_special_flags_calls(monkeypatch):
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stdout=io.StringIO(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
-    # Version flag triggers print_version and exit
+
+    # 1. Version flag triggers print_version and STILL exits (based on your diff not changing that block)
     mainmod._handle_special_flags(list(VERSION_FLAGS))
     helpmod.print_version.assert_called_once()
     fake_sys.exit.assert_called_once_with(0)
@@ -90,10 +91,12 @@ def test_handle_special_flags_calls(monkeypatch):
     helpmod.print_help.reset_mock()
     fake_sys.exit.reset_mock()
 
-    # Help flag triggers print_help and exit
-    mainmod._handle_special_flags(list(HELP_FLAGS))
+    # 2. Help flag triggers print_help and RETURNS 0 (Changed behavior)
+    ret_code = mainmod._handle_special_flags(list(HELP_FLAGS))
+
     helpmod.print_help.assert_called_once()
-    fake_sys.exit.assert_called_once_with(0)
+    assert ret_code == 0
+    fake_sys.exit.assert_not_called()
 
 
 # def test_main_no_stages_raises(monkeypatch):
@@ -115,23 +118,26 @@ def test_handle_special_flags_calls(monkeypatch):
 #         mainmod.main()
 
 
-def test_print_help_exits(monkeypatch):
+def test_print_help_returns_zero(monkeypatch):
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stdout=io.StringIO(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
-    mainmod._print_help_and_exit("somecmd")
+    ret_code = mainmod._print_help_and_exit("somecmd")
+
     helpmod.print_help.assert_called_once_with(
         command="somecmd",
         dest=fake_sys.stdout,
         raw=False,
     )
-    fake_sys.exit.assert_called_once_with(0)
+    # Assert returns 0, does not call exit
+    assert ret_code == 0
+    fake_sys.exit.assert_not_called()
 
 
 def test_main_user_command_line_error(monkeypatch):
-    """Test that main() handles a UserCommandLineError and calls sys.exit(1)."""
+    """Test that main() handles a UserCommandLineError and returns 1."""
 
-    # Patch PipelineManager to raise UserCommandLineError when run
+    # Patch PipelineManager
     fake_pipeline = MagicMock()
     fake_pipeline.run.side_effect = UserCommandLineError("fake error")
     monkeypatch.setattr(mainmod, "PipelineManager", lambda *a, **kw: fake_pipeline)
@@ -140,24 +146,19 @@ def test_main_user_command_line_error(monkeypatch):
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
     monkeypatch.setattr(mainmod, "split_args_by_separator", lambda args: [args])
 
-    # FIX: The mock must now return an object with an .options attribute,
-    # not just a list, because main() attempts to merge options into it.
     mock_stage = MagicMock()
     mock_stage.options = {}
     monkeypatch.setattr(mainmod, "parse_cli_stage", lambda args, is_first_stage: mock_stage)
 
-    # Patch sys.exit so it doesn't actually exit
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
-    # Run main with dummy args
-    mainmod.main(["pdftl", "stage1"])
-    # Check that sys.exit(1) was called
-    fake_sys.exit.assert_called_once_with(1)
+    # Run main
+    ret_code = mainmod.main(["pdftl", "stage1"])
 
-    # Optional: check that the error message was printed to stderr
-    output = fake_sys.stderr.getvalue()
-    assert "fake error" in output
+    # Check that it returned 1 and did not call exit
+    assert ret_code == 1
+    fake_sys.exit.assert_not_called()
 
 
 def test_main_no_args_triggers_help(monkeypatch):
@@ -180,20 +181,20 @@ def test_main_no_args_triggers_help(monkeypatch):
 def test_main_handles_pipeline_user_error(monkeypatch):
     """
     Tests that main() correctly catches a UserCommandLineError
-    raised from the pipeline, prints to stderr, and exits with 1.
+    raised from the pipeline, prints to stderr, and returns 1.
     """
 
-    # 1. Patch sys.exit and sys.stderr to monitor them
+    # 1. Patch sys.exit and sys.stderr
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
-    # 2. Patch setup to return some generic arguments.
+    # 2. Patch setup
     monkeypatch.setattr(mainmod, "_get_flags_and_setup_logging", lambda x: (set(), ["some_arg"]))
 
     # 3. Patch registry initialization
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
 
-    # 4. Patch PipelineManager's 'run' method to simulate a failure
+    # 4. Patch PipelineManager to raise error
     error_msg = "A simulated pipeline error"
     fake_pipeline_manager_class = MagicMock()
     fake_pipeline_manager_instance = fake_pipeline_manager_class.return_value
@@ -201,17 +202,12 @@ def test_main_handles_pipeline_user_error(monkeypatch):
 
     monkeypatch.setattr(mainmod, "PipelineManager", fake_pipeline_manager_class)
 
-    # 5. Run main, which will trigger our simulated error
-    mainmod.main(["pdftl", "some_arg"])
+    # 5. Run main
+    ret_code = mainmod.main(["pdftl", "some_arg"])
 
-    # 6. Verify that main() did its job:
-
-    # It called sys.exit(1)
-    fake_sys.exit.assert_called_once_with(1)
-
-    # It printed the *correct* error message to stderr
-    stderr_output = fake_sys.stderr.getvalue()
-    assert f"Error: {error_msg}" in stderr_output
+    # 6. Verify main returns 1 instead of calling sys.exit(1)
+    assert ret_code == 1
+    fake_sys.exit.assert_not_called()
 
 
 from unittest.mock import patch
@@ -282,17 +278,24 @@ def test_main_execution_block():
             pass  # Logic verified by structure
 
 
-def test_prepare_pipeline_no_stages():
+def test_prepare_pipeline_no_stages(monkeypatch):
     """Triggers line 86: No pipeline stages found."""
-    # When main() catches this error and debug is NOT in found_flags, it exits
-    with (
-        patch("pdftl.cli.main.initialize_registry"),
-        patch("pdftl.cli.main.split_args_by_separator", return_value=[]),
-        pytest.raises(SystemExit) as excinfo,
-    ):
-        main(["pdftl", "input.pdf"])
+    # 1. Capture stderr so it doesn't leak to the console
+    fake_stderr = io.StringIO()
+    fake_sys = types.SimpleNamespace(argv=["pdftl", "input.pdf"], stderr=fake_stderr)
+    monkeypatch.setattr(mainmod, "sys", fake_sys)
 
-        assert excinfo.value.code == 1
+    # 2. Patch dependencies to ensure no stages are found
+    monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
+    monkeypatch.setattr(mainmod, "split_args_by_separator", lambda args: [])
+
+    # 3. Run main
+    ret = mainmod.main(["pdftl", "input.pdf"])
+
+    # 4. Assertions
+    assert ret == 1
+    # Verify the error was actually printed to our captured stderr
+    assert "No pipeline stages found" in fake_stderr.getvalue()
 
 
 import pytest

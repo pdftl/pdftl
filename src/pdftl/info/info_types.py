@@ -91,10 +91,10 @@ def _fuzzy_create(cls, data: dict):
 class PageLabelEntry:
     # If the dump key is "NewIndex" or "Index", adjust this name to match fuzzily.
     # If dump has "Start", 'start' matches.
-    index: int
+    new_index: int
     start: int = 1
     prefix: str | None = None
-    style: str | None = None
+    num_style: str | None = None
 
     def to_dict(self):
         return asdict(self, dict_factory=camel_case_dict_factory)

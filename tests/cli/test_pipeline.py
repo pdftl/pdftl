@@ -64,12 +64,12 @@ def test_open_pdf_from_special_input(monkeypatch):
     # stdin is a TTY -> should raise error
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     with pytest.raises(UserCommandLineError):
-        manager._open_pdf_from_special_input(is_first=True)
+        manager._open_pdf_from_special_input(password=None, is_first=True)
 
     # '_' input when pipeline_pdf is None
     manager.pipeline_pdf = None
     with pytest.raises(UserCommandLineError):
-        manager._open_pdf_from_special_input(is_first=False)
+        manager._open_pdf_from_special_input(password=None, is_first=False)
 
 
 # -----------------------------

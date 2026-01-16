@@ -154,7 +154,9 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
 
     # --- Step 3: Run the Command ---
     # CRITICAL: We run inside work_dir. The tool sees "a.pdf" and finds it locally.
-    result = subprocess.run(command_to_run, capture_output=True, text=True, cwd=work_dir)
+    result = subprocess.run(command_to_run, capture_output=True, text=False, cwd=work_dir)
+    stdout_str = result.stdout.decode("utf-8", errors="replace")
+    stderr_str = result.stderr.decode("utf-8", errors="replace")
 
     # --- Step 4: Assert Success ---
     assert result.returncode == 0, (
@@ -166,7 +168,7 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     )
 
     # --- Step 5: Verify Output ---
-    if output_target:
+    if output_target and output_target.parts[-1] != "-":
         if is_template:
             # Check for the first file of the sequence (e.g., page_1.pdf)
             # We reconstruct the likely path using the python string format

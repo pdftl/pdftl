@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from pdftl.cli import parser
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
 
 def test_missing_multiple_arguments_error():
@@ -122,3 +122,59 @@ def test_parse_multiple_args_allow_no_args():
     assert specs == ["input.pdf"]
     assert "allow" in options
     assert options["allow"] == set()  # Should be an empty set
+
+
+import pytest
+
+from pdftl.cli.parser import parse_options_and_specs
+from pdftl.exceptions import DuplicateArgumentError
+
+
+def test_duplicate_argument_raises_error():
+    """
+    Test that providing the same keyword argument twice throws a DuplicateArgumentError.
+
+    We use 'owner_pw' (Owner Password) here because it is a value-taking option.
+    Flags (like 'compress') do not currently trigger this error if repeated.
+    """
+    args = [
+        "output",
+        "out.pdf",
+        "owner_pw",
+        "secret123",
+        "allow",
+        "owner_pw",
+        "overwrite_attempt",
+    ]
+
+    with pytest.raises(DuplicateArgumentError) as excinfo:
+        specs, options = parse_options_and_specs(args)
+
+    # Verify the error message mentions the correct keyword
+    assert "Duplicate keyword: owner_pw" in str(excinfo.value)
+
+
+def test_duplicate_flags_are_accepted_and_deduplicated():
+    """
+    Verify that flags (which take no value) can be repeated without error,
+    or mixed with standard options.
+    """
+    # 'compress' and 'flatten' are flags. We pass 'flatten' twice.
+    # We also use 'owner_pw' to ensure mixing flags and value-options works.
+    args = [
+        "output",
+        "out.pdf",
+        "compress",
+        "flatten",
+        "owner_pw",
+        "my_password",
+        "flatten",  # Duplicate flag should be harmless/ignored
+    ]
+
+    _, options = parse_options_and_specs(args)
+    # Check flags are set
+    assert options["compress"] is True
+    assert options["flatten"] is True
+
+    # Check value option is captured
+    assert options["owner_pw"] == "my_password"

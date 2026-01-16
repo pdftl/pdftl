@@ -84,7 +84,8 @@ def _user_pw_option():
 )
 @register_option(
     "no_encrypt_metadata",
-    desc="Leave metadata unencrypted (allowing search engines to read title/author)",
+    desc="Leave metadata unencrypted",
+    long_desc="This allows search engines to read metadata such as title/author, etc.",
     type="flag",
     tags=["encryption", "metadata"],
 )
@@ -149,11 +150,6 @@ def _linearize_option():
 @register_option("drop_xmp", desc="Discard document-level XMP metadata", type="flag")
 @register_option("drop_xfa", desc="Discard form XFA data if present", type="flag")
 def _drop_options():
-    pass
-
-
-@register_option("flatten", desc="Flatten all annotations", type="flag")
-def _flatten_option():
     pass
 
 
@@ -246,10 +242,12 @@ def _build_encryption_object(options, input_context):
             # default
             ("encrypt_aes128", {"R": 4, "aes": True, "metadata": True}),
             # RC4-128 (Legacy / PDF 1.4)
-            # despite having to set metadata=False, pikepdf DOES (and CAN ONLY) encrypt metadata when R < 4
+            # despite having to set metadata=False,
+            # pikepdf DOES (and CAN ONLY) encrypt metadata when R < 4
             ("encrypt_128bit", {"R": 3, "aes": False, "metadata": False}),
             # RC4-40 (Ancient / PDF 1.1)
-            # despite having to set metadata=False, pikepdf DOES (and CAN ONLY) encrypt metadata when R < 4
+            # despite having to set metadata=False,
+            # pikepdf DOES (and CAN ONLY) encrypt metadata when R < 4
             ("encrypt_40bit", {"R": 2, "aes": False, "metadata": False}),
         ]
     )
@@ -272,7 +270,7 @@ def _build_encryption_object(options, input_context):
             chosen_encryption_method["metadata"] = False
         else:
             logger.warning(
-                "Ignoring 'no_encrypt_metadata': this requires an AES encryption method, but '%s' is selected.",
+                "Ignoring 'no_encrypt_metadata': that requires AES encryption, not '%s'.",
                 chosen_encryption_method_name,
             )
 
@@ -437,7 +435,6 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
 
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
-    import pikepdf
 
     # 1. Create an in-memory bytes buffer
     with io.BytesIO() as buffer:

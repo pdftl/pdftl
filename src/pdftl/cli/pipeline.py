@@ -2,7 +2,6 @@
 
 """Manage a pipeline of operations"""
 
-import io
 import logging
 import sys
 import types
@@ -20,6 +19,7 @@ from pdftl.core.registry import register_help_topic, registry
 from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_content
+from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.user_input import pdf_filename_completer
 
 
@@ -152,12 +152,13 @@ class PipelineManager:
 
         logger.debug("--- PIPELINE: STAGE %d ---", i + 1)
         logger.debug("Parsed stage: %s", stage)
-
+        # fixme: resolve - here for stdin! or fix validation
         self._validate_stage_args(stage, is_first, is_last)
         self._execute_stage(stage, is_first)
 
     def _execute_stage(self, stage, is_first):
         """Opens PDFs and runs the operation for a single stage."""
+        logger.debug("_execute_stage")
         opened_pdfs = self._open_input_pdfs(stage, is_first)
 
         if self.pipeline_pdf and self.pipeline_pdf not in opened_pdfs:
@@ -232,7 +233,7 @@ class PipelineManager:
                 f"The '{stage.operation}' operation requires 'output <file>' in the final stage."
             )
 
-        num_explicit = len([i for i in stage.inputs if i not in ["-", "_"]])
+        num_explicit = len([i for i in stage.inputs if i != "_"])
         effective_inputs = num_explicit + (0 if is_first else 1)
 
         self._validate_number_of_effective_inputs(stage.operation, effective_inputs)
@@ -291,7 +292,7 @@ class PipelineManager:
         kw_args.update(kw_const_arg_map)
         return pos_args, kw_args
 
-    def _open_pdf_from_special_input(self, is_first: bool):
+    def _open_pdf_from_special_input(self, password: str | None, is_first: bool):
         """
         Handles opening a PDF from a special input source (stdin or a
         previous pipeline stage).
@@ -300,10 +301,22 @@ class PipelineManager:
             logger.debug("Reading PDF from stdin for first stage")
             if sys.stdin.isatty():
                 raise UserCommandLineError("Expected PDF data from stdin, but none was provided.")
-            data = sys.stdin.buffer.read()
-            import pikepdf
+            # data = sys.stdin.buffer.read()
+            # import pikepdf
 
-            return pikepdf.open(io.BytesIO(data))
+            try:
+                # if password:
+                #     return pikepdf.open(io.BytesIO(data), password=password)
+                # return pikepdf.open(io.BytesIO(data))
+                return smart_pikepdf_open(None, password)
+            except pikepdf.PasswordError as exc:
+                msg = (
+                    str(exc)
+                    if password
+                    else f"PDF data on stdin is encrypted and requires a password. "
+                    f"For help: {WHOAMI} help inputs"
+                )
+                raise UserCommandLineError(msg) from exc
 
         logger.debug("Using PDF from previous stage for input '_'")
         if not self.pipeline_pdf:
@@ -320,9 +333,7 @@ class PipelineManager:
 
         try:
             logger.debug("Opening file '%s'", filename)
-            if password:
-                return pikepdf.open(filename, password=password)
-            return pikepdf.open(filename)
+            return smart_pikepdf_open(filename, password)
         except pikepdf.PasswordError as exc:
             msg = (
                 str(exc)
@@ -336,16 +347,17 @@ class PipelineManager:
 
     def _open_input_pdfs(self, stage, is_first):
         """Opens all PDF inputs required for a stage."""
+        logger.debug("_open_input_pdfs")
         opened_pdfs = []
 
         # We assume global/final options (like keep_first_id) are attached to the LAST stage.
         final_stage_options = self.stages[-1].options if self.stages else {}
 
         for i, filename in enumerate(stage.inputs):
+            password = stage.input_passwords[i]
             if filename in ["-", "_"]:
-                pdf_obj = self._open_pdf_from_special_input(is_first)
+                pdf_obj = self._open_pdf_from_special_input(password, is_first)
             else:
-                password = stage.input_passwords[i]
                 pdf_obj = self._open_pdf_from_file(filename, password)
             opened_pdfs.append(pdf_obj)
             if (

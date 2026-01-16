@@ -74,7 +74,7 @@ def render_cli_hook(result: OpResult, _stage):
 
         count += 1
 
-    logger.info(f"Rendered {count} images.")
+    logger.info("Rendered %s images.", count)
 
 
 @register_operation(

@@ -21,7 +21,7 @@ from pdftl.cli.parser import (
 from pdftl.cli.pipeline import PipelineManager
 from pdftl.cli.whoami import WHOAMI
 from pdftl.core.registry import register_option
-from pdftl.exceptions import PackageError, UserCommandLineError
+from pdftl.exceptions import OperationError, PackageError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
 from pdftl.utils.user_input import UserInputContext, get_input
 
@@ -38,22 +38,26 @@ def main(argv=None):
 
     found_flags, args_for_parsing = _get_flags_and_setup_logging(argv[1:])
     initialize_registry()
-    _handle_special_flags(argv[1:])
+    if (ret := _handle_special_flags(argv[1:])) is not None:
+        return ret
 
     if not args_for_parsing:
-        _print_help_and_exit(None)
+        return _print_help_and_exit(None)
 
     try:
         pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
         pipeline.run()
+        return 0
 
-    except (UserCommandLineError, PackageError) as e:
+    except (UserCommandLineError, PackageError, OperationError) as e:
         if "debug" in found_flags:
             raise
         else:
             print(f"Error: {e}", file=sys.stderr)
             logger.debug("A user command line error occurred", exc_info=True)
-            sys.exit(1)
+            if isinstance(e, OperationError):
+                return 3
+            return 1
 
 
 ##################################################
@@ -98,7 +102,7 @@ def _print_help_and_exit(command, raw=False):
     from pdftl.cli.help import print_help
 
     print_help(command=command, dest=sys.stdout, raw=raw)
-    sys.exit(0)
+    return 0
 
 
 def _find_help_command(cli_args):
@@ -173,4 +177,6 @@ def _handle_special_flags(nonverbose_cli_args):
         sys.exit(0)
     if any(arg in HELP_FLAGS for arg in nonverbose_cli_args):
         command = _find_help_command(nonverbose_cli_args)
-        _print_help_and_exit(command)
+        return _print_help_and_exit(command)
+
+    return None

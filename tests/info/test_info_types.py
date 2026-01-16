@@ -13,8 +13,8 @@ def test_info_types_serialization():
     """Cover .to_dict() and .to_json() methods."""
 
     # 1. PageLabelEntry to_dict
-    pl = PageLabelEntry(index=1, style="RomanUpper")
-    assert pl.to_dict() == {"Index": 1, "Style": "RomanUpper", "Start": 1}
+    pl = PageLabelEntry(new_index=1, num_style="RomanUpper")
+    assert pl.to_dict() == {"NewIndex": 1, "NumStyle": "RomanUpper", "Start": 1}
 
     # 2. PageMediaEntry to_dict
     pm = PageMediaEntry(page_number=1, rotation=90, media_rect=[0, 0, 100, 100])
@@ -124,7 +124,7 @@ def test_pdf_info_round_trip():
         doc_info=[DocInfoEntry("Title", "Test Doc")],
         bookmarks=[BookmarkEntry("Chapter 1", 1, 1, children=[BookmarkEntry("Sec 1.1", 2, 2)])],
         page_media=[PageMediaEntry(page_number=1, rotation=90, media_rect=[0, 0, 100, 100])],
-        page_labels=[PageLabelEntry(index=1, start=1, prefix="A-", style="D")],
+        page_labels=[PageLabelEntry(new_index=1, start=1, prefix="A-", num_style="D")],
     )
 
     # 1. Test to_dict (Serialization)
@@ -199,7 +199,9 @@ def test_write_info_full_coverage():
             )
         ],
         page_labels=[
-            PageLabelEntry(index=1, start=1, prefix="ix", style="r")  # Triggers prefix logic
+            PageLabelEntry(
+                new_index=1, start=1, prefix="ix", num_style="r"
+            )  # Triggers prefix logic
         ],
     )
 
@@ -259,7 +261,7 @@ def test_get_info_mocked():
 
         # Verify
         # "D" maps to "DecimalArabicNumerals" in pdftl constants
-        assert info.page_labels[0].style == "DecimalArabicNumerals"
+        assert info.page_labels[0].num_style == "DecimalArabicNumerals"
         assert info.page_labels[0].prefix == "Page-"
         assert info.pages == 2
 

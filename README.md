@@ -42,6 +42,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 | **Syntax** | Standard | ✅ **Compatible Extension** |
 | **Page Geometry** | ❌ | ✅ **Crop to fit, Zoom, & Chop** |
 | **Pipelined Logic** | ❌ | ✅ **Rotate + Stamp in one command** |
+| **Extensible** | ❌ | ✅ **Custom operations written in Python** |
 | **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
 | **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
 | **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
@@ -92,6 +93,8 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
+* **Extensibility:** write your own custom operation in Python, save to `~/.config/pdftl/operations` (*nix) or
+  `%APPDATA%\pdftl\config` (windows)` and you can use it in pdftl, just like the built-in operations.
 
 ## Examples
 
