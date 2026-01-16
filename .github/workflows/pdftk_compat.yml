@@ -1,0 +1,45 @@
+name: PDFtk Compatibility
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  checks: write  # Required for the stats line item
+  pull-requests: write
+
+jobs:
+  pdftk-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils  # for pdftocairo
+          pip install .[dev]
+
+      - name: Run PDFtk Vendor Tests
+        # We run ONLY the pdftk-java folder here.
+        continue-on-error: true  # workflow green even if this is red
+        run: |
+          pytest -ra vendor_tests/pdftk-java --junitxml=test-results.xml
+
+      - name: Publish PDFtk Stats
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          check_name: "PDFtk Compat Stats"
+          files: test-results.xml
+          check_run: false
+          job_summary: true
+          action_fail: false # Keeps the check green/neutral even if tests fail

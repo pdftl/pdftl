@@ -28,9 +28,6 @@ pdftkpy*.zip
 # misc
 /bugreports/
 /attic/
-*.tex
-*.sty
-*.log
 github*
 imagediff*
 dist/

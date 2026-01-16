@@ -12,7 +12,9 @@ So the questions are:
 
 2. What is Just Working?
 
-We don't really know the answers. Our approach is to take existing integration tests for various pdftk implementations and to check that pdftl passes them.
+We don't really know the answers. Our approach is to take existing integration tests for various pdftk implementations and to check whether or not pdftl passes them.
+
+Getting pdftl to pass them all is work in progress.
 
 ## Known compatibility bugs
 
@@ -35,4 +37,4 @@ E             RuntimeError: Multiple fields with same name: %
 
 - Order of lines in `dump_data` etc may differ from pdftk, where not semantically important.
 
-- `cat` breaks forms at the moment
+- `cat` breaks forms at the moment :-(
