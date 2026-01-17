@@ -233,32 +233,33 @@ See the **[API Tutorial][4]** for more details.
 | [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html)                     | Update PDF metadata from dump_data instructions      |
 | [`update_info_utf8`](https://pdftl.readthedocs.io/en/latest/operations/update_info_utf8.html)           | Update PDF metadata from dump_data_utf8 instructions |
 
-| Option                                                                                                     | Description                                       |
-|------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
-| [`allow <perm>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm)               | Specify permissions for encrypted files           |
-| [`compress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#compress)                     | Compress output file streams (default)            |
-| [`drop_info`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-info)                   | Discard document-level info metadata              |
-| [`drop_xfa`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xfa)                     | Discard form XFA data if present                  |
-| [`drop_xmp`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xmp)                     | Discard document-level XMP metadata               |
-| [`encrypt_128bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-128bit)         | Use 128 bit encryption (obsolete, maybe insecure) |
-| [`encrypt_40bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-40bit)           | Use 40 bit encryption (obsolete, highly insecure) |
-| [`encrypt_aes128`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes128)         | Use 128 bit AES encryption (maybe obsolete)       |
-| [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256)         | Use 256 bit AES encryption                        |
-| [`flatten`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#flatten)                       | Flatten all annotations                           |
-| [`keep_final_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-final-id)           | Copy final input PDF's ID metadata to output      |
-| [`keep_first_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-first-id)           | Copy first input PDF's ID metadata to output      |
-| [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize)                   | Linearize output file(s)                          |
-| [`need_appearances`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#need-appearances)     | Set a form rendering flag in the output PDF       |
-| [`output <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#output-file)             | The output file path, or a template for burst     |
-| [`owner_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw)             | Set owner password and encrypt output             |
-| [`sign_cert <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file)       | Path to certificate PEM                           |
-| [`sign_field <name>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-field-name)     | Signature field name (default: Signature1)        |
-| [`sign_key <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file)         | Path to private key PEM                           |
-| [`sign_pass_env <var>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-env-var) | Environment variable with sign_cert passphrase    |
-| [`sign_pass_prompt`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-prompt)     | Prompt for sign_cert passphrase                   |
-| [`uncompress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#uncompress)                 | Disable compression of output file streams        |
-| [`user_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw)               | Set user password and encrypt output              |
-| [`verbose`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#verbose)                       | Turn on verbose output                            |
+| Option                                                                                                       | Description                                       |
+|--------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+| [`allow <perm>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm)                 | Specify permissions for encrypted files           |
+| [`compress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#compress)                       | Compress output file streams (default)            |
+| [`drop_info`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-info)                     | Discard document-level info metadata              |
+| [`drop_xfa`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xfa)                       | Discard form XFA data if present                  |
+| [`drop_xmp`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xmp)                       | Discard document-level XMP metadata               |
+| [`encrypt_128bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-128bit)           | Use 128 bit encryption (obsolete, maybe insecure) |
+| [`encrypt_40bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-40bit)             | Use 40 bit encryption (obsolete, highly insecure) |
+| [`encrypt_aes128`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes128)           | Use 128 bit AES encryption (maybe obsolete)       |
+| [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256)           | Use 256 bit AES encryption                        |
+| [`flatten`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#flatten)                         | Flatten all annotations                           |
+| [`keep_final_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-final-id)             | Copy final input PDF's ID metadata to output      |
+| [`keep_first_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-first-id)             | Copy first input PDF's ID metadata to output      |
+| [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize)                     | Linearize output file(s)                          |
+| [`no_encrypt_metadata`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#no-encrypt-metadata) | Leave metadata unencrypted                        |
+| [`need_appearances`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#need-appearances)       | Set a form rendering flag in the output PDF       |
+| [`output <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#output-file)               | The output file path, or a template for burst     |
+| [`owner_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw)               | Set owner password and encrypt output             |
+| [`sign_cert <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file)         | Path to certificate PEM                           |
+| [`sign_field <name>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-field-name)       | Signature field name (default: Signature1)        |
+| [`sign_key <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file)           | Path to private key PEM                           |
+| [`sign_pass_env <var>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-env-var)   | Environment variable with sign_cert passphrase    |
+| [`sign_pass_prompt`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-prompt)       | Prompt for sign_cert passphrase                   |
+| [`uncompress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#uncompress)                   | Disable compression of output file streams        |
+| [`user_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw)                 | Set user password and encrypt output              |
+| [`verbose`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#verbose)                         | Turn on verbose output                            |
 
 
 ## Links
