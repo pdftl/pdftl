@@ -122,3 +122,134 @@ def test_fill_form_radio_button_index(pdf, tmp_path):
     fill_form(pdf, [str(fdf_path)], None)
 
     assert str(pdf.Root.AcroForm.Fields[0].V) == "/1"
+
+
+import pikepdf
+import pytest
+from pikepdf.form import Form
+
+from pdftl.operations.fill_form import _set_form_field_value
+
+# Bit 16 (Radio) + Bit 15 (NoToggleToOff)
+# We need NoToggleToOff to force pikepdf to raise ValueError when we try to set "/Off",
+# which ensures our "except ValueError" block is actually tested.
+RADIO_FLAG = 32768 | 16384
+
+
+@pytest.fixture
+def radio_no_kids(tmp_path):
+    """
+    Creates a standalone Radio Button field (No /Kids array).
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    obj = pdf.make_indirect(
+        pikepdf.Dictionary(
+            FT=pikepdf.Name.Btn,
+            Ff=RADIO_FLAG,
+            T="RadioNoKids",
+            V=pikepdf.Name.Yes,
+            AS=pikepdf.Name.Yes,
+            AP=pikepdf.Dictionary(N=pikepdf.Dictionary(Yes=pikepdf.Stream(pdf, b""))),
+        )
+    )
+
+    pdf.pages[0].Annots = pdf.make_indirect(pikepdf.Array([obj]))
+    pdf.Root.AcroForm = pikepdf.Dictionary(Fields=pikepdf.Array([obj]))
+
+    form_field = Form(pdf)["RadioNoKids"]
+    return form_field, obj
+
+
+@pytest.fixture
+def radio_with_kids(tmp_path):
+    """
+    Creates a standard Radio Button Group with Kids using Indirect Objects.
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    parent = pdf.make_indirect(
+        pikepdf.Dictionary(
+            FT=pikepdf.Name.Btn, Ff=RADIO_FLAG, T="RadioGroup", V=pikepdf.Name.Choice1, Kids=[]
+        )
+    )
+
+    c1 = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Parent=parent,
+            AS=pikepdf.Name.Choice1,
+            AP=pikepdf.Dictionary(N=pikepdf.Dictionary(Choice1=pikepdf.Stream(pdf, b""))),
+        )
+    )
+    c2 = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Parent=parent,
+            AS=pikepdf.Name.Off,
+            AP=pikepdf.Dictionary(N=pikepdf.Dictionary(Choice2=pikepdf.Stream(pdf, b""))),
+        )
+    )
+
+    parent.Kids = pikepdf.Array([c1, c2])
+
+    pdf.pages[0].Annots = pdf.make_indirect(pikepdf.Array([c1, c2]))
+    pdf.Root.AcroForm = pikepdf.Dictionary(Fields=pikepdf.Array([parent]))
+
+    form_field = Form(pdf)["RadioGroup"]
+    return form_field, parent
+
+
+def test_radio_no_kids_clear_off(radio_no_kids):
+    field, obj = radio_no_kids
+    _set_form_field_value(field, "/Off")
+    assert "/V" not in obj
+    assert "/AS" not in obj
+
+
+def test_radio_no_kids_set_value(radio_no_kids):
+    field, obj = radio_no_kids
+    _set_form_field_value(field, "/NewVal")
+    assert str(obj.V) == "/NewVal"
+
+
+def test_radio_with_kids_exception_handling(radio_with_kids):
+    """
+    Tests that when pikepdf raises ValueError for unchecking (due to NoToggleToOff),
+    we catch it and manually clear the field.
+    """
+    field, obj = radio_with_kids
+    _set_form_field_value(field, "/Off")
+    assert "/V" not in obj
+
+
+def test_radio_exception_reraise_real_error():
+    """
+    Coverage for Line 258: ensure generic ValueErrors are re-raised.
+    Uses a Dummy class to force a ValueError reliably without relying on
+    pikepdf internal validation logic.
+    """
+
+    class DummyField:
+        is_text = False
+        is_checkbox = False
+        is_radio_button = True
+        # Emulate having kids so we hit the try/except block
+        obj = {"/Kids": ["fake_kid"]}
+
+        @property
+        def value(self):
+            return None
+
+        @value.setter
+        def value(self, val):
+            # This simulates a "real" error (e.g. corruption, weird state)
+            # that is NOT the "uncheck a radio button" error.
+            raise ValueError("Some catastrophic failure")
+
+    field = DummyField()
+
+    # We expect the function to try setting value, catch the error,
+    # realize it's not the "uncheck" error, and re-raise it.
+    with pytest.raises(ValueError, match="Some catastrophic failure"):
+        _set_form_field_value(field, "/AnyValue")

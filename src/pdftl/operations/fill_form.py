@@ -230,16 +230,32 @@ def _set_form_field_value(field, value):
 
     elif field.is_radio_button:
         # Existing logic for radio buttons...
-        # (You might want to apply similar try/except here if you encounter issues)
         val_str = str(value)
         if not val_str.startswith("/"):
             val_str = "/" + val_str
+
+        # Helper to safely clear the field (handle "/Off")
+        def _clear_radio():
+            if "/V" in field.obj:
+                del field.obj["/V"]
+            if "/AS" in field.obj:
+                del field.obj["/AS"]
+
         # Workaround for pikepdf/qpdf crash on RadioGroups without /Kids
-        # Maybe related? Not sure. https://github.com/qpdf/qpdf/issues/1449
         if "/Kids" not in field.obj:
-            field.obj.V = Name(val_str)
+            if val_str.lower() == "/off":
+                _clear_radio()
+            else:
+                field.obj.V = Name(val_str)
         else:
-            field.value = Name(val_str)
+            try:
+                field.value = Name(val_str)
+            except ValueError as e:
+                # Catch "Off" values and map them to manual deletion
+                if "uncheck a radio button" in str(e) and val_str.lower() == "/off":
+                    _clear_radio()
+                else:
+                    raise e
 
     else:
         # Fallback for other types
