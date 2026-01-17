@@ -283,3 +283,40 @@ def test_recursive_prompt_on_invalid_file():
 
         assert len(results) == 1
         assert mock_get_input.call_count == 2
+
+
+# tests/test_attach_files_coverage.py
+
+from unittest.mock import MagicMock, patch
+
+from pdftl.operations.attach_files import _get_attachments_from_args
+
+
+def test_get_attachments_from_args_coverage():
+    """
+    Directly tests _get_attachments_from_args to ensure lines 137-138 are executed.
+    These lines handle parsing specs to intent and resolving them.
+    """
+    # Setup dummy arguments
+    args = ["dummy_file.txt", "to_page", "1"]
+    num_pages = 5
+    mock_input_context = MagicMock()
+
+    # We patch the internal calls to isolate just the flow of 137-138
+    # 1. patch _parse_attach_specs_to_intent (Line 137)
+    # 2. patch _resolve_attachments (Line 138)
+    with (
+        patch("pdftl.operations.attach_files._parse_attach_specs_to_intent") as mock_parse,
+        patch("pdftl.operations.attach_files._resolve_attachments") as mock_resolve,
+    ):
+
+        # Setup return values
+        mock_parsed_items = [MagicMock()]
+        mock_parse.return_value = mock_parsed_items
+
+        # Execute the function
+        _get_attachments_from_args(args, num_pages, mock_input_context)
+
+        # Assertions to prove lines were hit
+        mock_parse.assert_called_once_with(args)
+        mock_resolve.assert_called_once_with(mock_parsed_items, num_pages, mock_input_context)

@@ -211,3 +211,82 @@ def test_dump_annots_error_handling(caplog):
     assert "Skipping unsupported annotation key" in caplog.text
     assert "/FailMe" in caplog.text
     assert "Simulated Failure" in caplog.text
+
+
+# tests/test_dump_annots_coverage.py
+
+import pytest
+
+from pdftl.operations.dump_annots import _key_value_lines, _lines_from_datum
+
+
+def test_lines_from_datum_compat_false():
+    """
+    Covers Line 242: _lines_from_datum with compat=False.
+    The logic adds 'IndexInPage' which is normally suppressed in compat mode.
+    """
+    # Setup a datum dict that mimics what comes out of _annots_json_for_page
+    datum = {
+        "Page": 1,
+        "AnnotationIndex": 99,
+        "Properties": {
+            "/Subtype": "/Text",  # Required to pass the subtype check
+            "/Contents": "Test Annotation",
+        },
+    }
+
+    # Helper for string conversion
+    def simple_str(x):
+        return str(x)
+
+    # Execute with compat=False
+    lines = _lines_from_datum(datum, simple_str, compat=False)
+
+    # Verify line 242 logic execution
+    # It should have added "AnnotIndexInPage: 99"
+    assert any("AnnotIndexInPage: 99" in line for line in lines)
+
+
+def test_key_value_lines_action_handling():
+    """
+    Covers Line 253 (Key == '/A') and Line 281 (Key == 'S' -> 'Subtype').
+    """
+    prefix = "Annot"
+
+    def simple_str(x):
+        return str(x)
+
+    # Dictionary representing an Action (/A) with a Subtype (/S)
+    # This structure triggers the recursion in line 253
+    action_value = {"/S": "/URI", "/URI": "http://example.com"}
+
+    # Execute
+    lines = _key_value_lines("/A", action_value, prefix, simple_str, compat=True)
+
+    # Verify Line 253 was entered (processing /A)
+    # Verify Line 281 was executed (The 'S' key inside the action dict becomes 'Subtype')
+    # Expected output string: "AnnotActionSubtype: URI"
+    assert any("AnnotActionSubtype: URI" in line for line in lines)
+    assert any("AnnotActionURI: http://example.com" in line for line in lines)
+
+
+def test_key_value_lines_ignored_keys():
+    """
+    Covers Line 260: Keys that are ignored (/Type, /Border, or len < 4).
+    """
+    prefix = "Annot"
+
+    def simple_str(x):
+        return str(x)
+
+    # Case 1: /Border (Explicitly ignored)
+    lines_border = _key_value_lines("/Border", [0, 0, 0], prefix, simple_str)
+    assert lines_border == []
+
+    # Case 2: /Type (Explicitly ignored)
+    lines_type = _key_value_lines("/Type", "/Annot", prefix, simple_str)
+    assert lines_type == []
+
+    # Case 3: Short keys (len < 4), e.g., /C (Color)
+    lines_short = _key_value_lines("/C", [1, 0, 0], prefix, simple_str)
+    assert lines_short == []

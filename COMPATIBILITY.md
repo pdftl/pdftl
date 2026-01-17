@@ -4,7 +4,7 @@ pdftl aspires to be CLI compatible with pdftk and this is an attempt to explain 
 
 ## What is CLI compatibility?
 
-The vague idea is clear: `s/pdftk/pdftl/g' should Just Work.
+The vague idea is clear: `s/pdftk/pdftl/g` should Just Work.
 
 So the questions are:
 

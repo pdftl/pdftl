@@ -5,7 +5,7 @@ import pytest
 from pikepdf import Array, Dictionary, Name, Stream, String
 
 # --- Import the function to test
-from pdftl.utils.json import KEY_RESOLVED_DESTINATION, pdf_obj_to_json
+from pdftl.utils.json import KEY_RESOLVED_DESTINATION, PdfToJsonConverter, pdf_obj_to_json
 
 # --- Import this helper, as it's needed to test a specific code path
 # (Assuming it's importable from your test environment)
@@ -254,3 +254,23 @@ def test_json_goto_action_not_modified(pdf_mocks):
     action_no_dests = Dictionary({"/S": Name("/GoTo"), "/D": String("MyDest")})
     result_no_dests = pdf_obj_to_json(action_no_dests, page_map, named_dests=None)
     assert KEY_RESOLVED_DESTINATION not in result_no_dests
+
+
+def test_json_compat_rounding():
+    """
+    Covers utils/json.py lines 141-144:
+    Checks that floats and Decimals are rounded when compat=True.
+    """
+    converter = PdfToJsonConverter(compat=True)
+
+    # Case 1: Decimal normalization and rounding
+    # 3.14159 -> 3.1416
+    d_val = decimal.Decimal("3.14159")
+    result_d = converter._handle_unknown(d_val, 0, [])
+    assert result_d == "3.1416"
+
+    # Case 2: Float rounding
+    # 1.2345678 -> 1.2346
+    f_val = 1.2345678
+    result_f = converter._handle_unknown(f_val, 0, [])
+    assert result_f == "1.2346"

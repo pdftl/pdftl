@@ -326,3 +326,60 @@ def test_main_uses_sys_argv_if_none_provided():
 
             # This assertion still works because the mock was called before it raised the exception
             assert mock_special.called
+
+
+# tests/cli/test_main.py
+import sys
+
+import pytest
+
+from pdftl.cli.main import main
+from pdftl.exceptions import OperationError
+
+
+def test_main_special_flags_returns_early(mocker):
+    """
+    Covers line 42: if (ret := _handle_special_flags(argv[1:])) is not None: return ret
+    """
+    # Mock sys.argv to simulate a help command
+    mocker.patch.object(sys, "argv", ["pdftl", "help"])
+
+    # Mock _handle_special_flags to return a specific exit code (e.g., 0)
+    # This simulates _print_help_and_exit returning 0
+    mocker.patch("pdftl.cli.main._handle_special_flags", return_value=0)
+
+    # Ensure initialize_registry doesn't actually run/fail during test
+    mocker.patch("pdftl.cli.main.initialize_registry")
+
+    # The function should return 0 immediately without parsing pipeline
+    assert main() == 0
+
+
+def test_main_operation_error_exit_code(mocker):
+    """
+    Covers line 59: if isinstance(e, OperationError): return 3
+    """
+    # Mock sys.argv with valid args to get past flag checks
+    mocker.patch.object(sys, "argv", ["pdftl", "input.pdf", "rotate", "90"])
+
+    mocker.patch("pdftl.cli.main.initialize_registry")
+    mocker.patch("pdftl.cli.main._handle_special_flags", return_value=None)
+    mocker.patch("pdftl.cli.main._get_flags_and_setup_logging", return_value=(set(), ["args"]))
+
+    # Mock the pipeline preparation to return a mock object
+    mock_pipeline = mocker.Mock()
+    mocker.patch(
+        "pdftl.cli.main._prepare_pipeline_from_remaining_args", return_value=mock_pipeline
+    )
+
+    # Force the pipeline.run() to raise an OperationError
+    mock_pipeline.run.side_effect = OperationError("Something went wrong during processing")
+
+    # Capture stderr to keep the test clean (optional validation of error message)
+    capsys = mocker.patch("sys.stderr")
+
+    # Run main
+    exit_code = main()
+
+    # Assert that OperationError results in exit code 3
+    assert exit_code == 3

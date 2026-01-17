@@ -297,6 +297,8 @@ class PipelineManager:
         Handles opening a PDF from a special input source (stdin or a
         previous pipeline stage).
         """
+        import pikepdf
+
         if is_first:
             logger.debug("Reading PDF from stdin for first stage")
             if sys.stdin.isatty():

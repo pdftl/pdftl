@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `no_encrypt_metadata` option: do not encrypt
   metadata. Only supported by AES encryption methods.
 
+- `COMPATIBILITY.md`: compatibility notes
+
 ### Changed
 
 - Encryption method now defaults to `encrypt_aes128` if

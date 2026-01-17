@@ -1,6 +1,10 @@
+import decimal
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from pdftl.utils.string import split_escaped
+from pdftl.utils.string import fix_mojibake, sensible_decode, split_escaped
 
 
 def test_split_escaped():
@@ -374,3 +378,39 @@ def test_empty_structures():
 
     messy_obj = "{\n\n}"
     assert compact_json_string(messy_obj) == "{}"
+
+
+def test_sensible_decode_fallback_safety():
+    """
+    Covers utils/string.py lines 231-236:
+    Forces the loop to exhaust candidates (utf-8, cp1252, latin-1) to hit the
+    fallback return statement.
+    """
+    mock_bytes = MagicMock()
+
+    # sensible_decode tries 3 codecs in a loop.
+    # We need .decode() to raise UnicodeDecodeError 3 times,
+    # then succeed (or return the fallback) on the 4th call (lines 236).
+    mock_bytes.decode.side_effect = [
+        UnicodeDecodeError("utf-8", b"", 0, 1, ""),  # Fail 1
+        UnicodeDecodeError("cp1252", b"", 0, 1, ""),  # Fail 2
+        UnicodeDecodeError(
+            "latin-1", b"", 0, 1, ""
+        ),  # Fail 3 (theoretically impossible for latin-1, but required to test the loop exit)
+        "fallback_success",  # Line 236 call
+    ]
+
+    result = sensible_decode(mock_bytes)
+    assert result == "fallback_success"
+
+
+def test_fix_mojibake_exception():
+    """
+    Covers utils/string.py lines 245-246:
+    Checks that fix_mojibake returns original text if a UnicodeError occurs.
+    """
+    # Patch sensible_decode to raise a UnicodeError to trigger the except block
+    with patch("pdftl.utils.string.sensible_decode", side_effect=UnicodeError("Boom")):
+        original_text = "problematic_string"
+        result = fix_mojibake(original_text)
+        assert result == original_text

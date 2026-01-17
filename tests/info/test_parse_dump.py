@@ -395,3 +395,184 @@ class TestParseDump:
         # Check PageLabels
         assert len(result["PageLabelList"]) == 1
         assert result["PageLabelList"][0] == {"NewIndex": 1, "Prefix": "A-"}
+
+
+import logging
+
+import pytest
+
+from pdftl.info.parse_dump import parse_dump_data
+
+
+# Simple identity decoder for tests
+def dummy_decoder(x):
+    return x
+
+
+def test_parse_simple_metadata():
+    """Test parsing simple key-value pairs and ID."""
+    lines = [
+        "PdfID0: <123>",
+        "NumberOfPages: 10",
+        "InfoBegin",
+        "InfoKey: Title",
+        "InfoValue: My Document",
+    ]
+
+    data = parse_dump_data(lines, dummy_decoder)
+
+    assert data["PdfID0"] == "<123>"
+    assert data["NumberOfPages"] == 10
+    assert data["Info"]["Title"] == "My Document"
+
+
+def test_parse_bookmarks():
+    """Test parsing bookmark blocks."""
+    lines = [
+        "BookmarkBegin",
+        "BookmarkTitle: Chapter 1",
+        "BookmarkLevel: 1",
+        "BookmarkPageNumber: 1",
+        "BookmarkBegin",
+        "BookmarkTitle: Section 1.1",
+        "BookmarkLevel: 2",
+        "BookmarkPageNumber: 5",
+    ]
+
+    data = parse_dump_data(lines, dummy_decoder)
+    bookmarks = data["BookmarkList"]
+
+    assert len(bookmarks) == 2
+    assert bookmarks[0]["Title"] == "Chapter 1"
+    assert bookmarks[0]["Level"] == 1
+    assert bookmarks[1]["Title"] == "Section 1.1"
+    assert bookmarks[1]["PageNumber"] == 5
+
+
+def test_parse_page_media_types():
+    """Test that numbers and rects are converted to correct types."""
+    lines = [
+        "PageMediaBegin",
+        "PageMediaNumber: 1",
+        "PageMediaRotation: 90",
+        "PageMediaRect: 0 0 595.28 841.89",
+    ]
+
+    data = parse_dump_data(lines, dummy_decoder)
+    media = data["PageMediaList"][0]
+
+    assert isinstance(media["Number"], int)
+    assert media["Number"] == 1
+    assert isinstance(media["Rotation"], int)
+    assert media["Rotation"] == 90
+    assert isinstance(media["Rect"], list)
+    assert media["Rect"] == [0.0, 0.0, 595.28, 841.89]
+
+
+def test_parse_errors_interrupted_info(caplog):
+    """Test warning when InfoKey is provided but followed immediately by Begin without Value."""
+    lines = [
+        "InfoBegin",
+        "InfoKey: Author",
+        "InfoBegin",  # Interruption
+        "InfoKey: Title",
+        "InfoValue: Test",
+    ]
+
+    data = parse_dump_data(lines, dummy_decoder)
+
+    # The 'Author' key should be discarded/warned about
+    assert "Author" not in data["Info"]
+    assert data["Info"]["Title"] == "Test"
+
+    # Check for warning logs
+    assert "key/value pair 'Author' interrupted" in caplog.text
+
+
+def test_parse_errors_value_without_key(caplog):
+    """Test warning when InfoValue appears without InfoKey."""
+    lines = ["InfoBegin", "InfoValue: Orphan Value"]
+
+    parse_dump_data(lines, dummy_decoder)
+    assert "Got InfoValue without a preceding InfoKey" in caplog.text
+
+
+def test_parse_errors_unknown_key_in_block(caplog):
+    """Test warning when a block contains a key that doesn't match the block type."""
+    lines = [
+        "PageMediaBegin",
+        "PageMediaNumber: 1",
+        "BookmarkTitle: Wrong Place",  # Starts with Bookmark, inside PageMedia
+    ]
+
+    data = parse_dump_data(lines, dummy_decoder)
+
+    media = data["PageMediaList"][0]
+    assert media["Number"] == 1
+    # The wrong key should be ignored
+    assert "Title" not in media
+    assert (
+        "key 'BookmarkTitle' in PageMediaBegin block should start with 'PageMedia'" in caplog.text
+    )
+
+
+def test_parse_eof_during_info(caplog):
+    """Test warning if stream ends while waiting for InfoValue."""
+    lines = ["InfoBegin", "InfoKey: Pending"]
+    # No InfoValue following
+
+    data = parse_dump_data(lines, dummy_decoder)
+
+    assert "Pending" not in data["Info"]
+    assert "data info record not valid: 'Pending' ended prematurely" in caplog.text
+
+
+def test_parse_page_labels():
+    """Test parsing page label specific fields."""
+    lines = [
+        "PageLabelBegin",
+        "PageLabelNewIndex: 1",
+        "PageLabelStart: 1",
+        "PageLabelPrefix: A-",
+        "PageLabelNumStyle: Roman",
+    ]
+
+    data = parse_dump_data(lines, dummy_decoder)
+    label = data["PageLabelList"][0]
+
+    assert label["NewIndex"] == 1
+    assert label["Start"] == 1
+    assert label["Prefix"] == "A-"
+    assert label["NumStyle"] == "Roman"
+
+
+import logging
+
+from pdftl.info.parse_dump import parse_dump_data
+
+
+def test_parse_dump_data_consecutive_info_keys(caplog):
+    """
+    Covers parse_dump.py line 190:
+    Checks that a warning is logged when an InfoKey is followed immediately
+    by another InfoKey (missing InfoValue).
+    """
+    lines = [
+        "InfoKey: FirstKey",
+        # This second key triggers the warning because 'FirstKey' was never consumed
+        "InfoKey: SecondKey",
+        "InfoValue: ValidValue",
+    ]
+
+    # Use a simple identity lambda for the string decoder
+    identity_decoder = lambda x: x
+
+    with caplog.at_level(logging.WARNING):
+        result = parse_dump_data(lines, identity_decoder)
+
+    # 1. Verify the warning was logged (Line 190)
+    assert "key without value before InfoKey (last: 'FirstKey')" in caplog.text
+
+    # 2. Verify the dictionary state: 'FirstKey' should be dropped, 'SecondKey' kept
+    assert "FirstKey" not in result["Info"]
+    assert result["Info"]["SecondKey"] == "ValidValue"

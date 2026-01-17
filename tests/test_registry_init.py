@@ -1,10 +1,12 @@
 import logging
+import sys
 import types
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import pdftl.registry_init as reg_init
-from pdftl.registry_init import _discover_modules
+from pdftl.registry_init import _discover_external_operations, _discover_modules
 
 
 @pytest.fixture(autouse=True)
@@ -137,3 +139,70 @@ def test_discover_modules_skips_no_path(caplog):
     assert len(loaded) == 0
     # Now this will match exactly because types.ModuleType respects the name we gave it.
     assert "Skipping discovery for mock_file_module" in caplog.text
+
+
+def test_registry_syntax_error():
+    """
+    Covers registry_init.py line 56:
+    Checks that a SyntaxError during external module import is caught and logged,
+    rather than crashing the application.
+    """
+    # We mock the Path object to simulate finding a file
+    mock_path_obj = MagicMock()
+    mock_plugin = MagicMock()
+    mock_plugin.stem = "broken_plugin"
+
+    # Setup the mock to look like a directory containing one python file
+    mock_path_obj.exists.return_value = True
+    mock_path_obj.glob.return_value = [mock_plugin]
+
+    # Make division (the / operator) always return self.
+    # This allows chains of any length: Path.home() / ".config" / "pdftl" / ...
+    # to all resolve to this same configured mock_path_obj.
+    mock_path_obj.__truediv__.return_value = mock_path_obj
+
+    # Patch pathlib to return our mock path
+    with patch("pdftl.registry_init.pathlib.Path") as mock_path_cls:
+        # Handle both Windows (env var) and Linux (home dir) logic in the source
+        mock_path_cls.return_value = mock_path_obj
+        mock_path_cls.home.return_value.__truediv__.return_value.__truediv__.return_value = (
+            mock_path_obj
+        )
+
+        # Patch import_module to raise SyntaxError when called
+        with patch("pdftl.registry_init.importlib.import_module") as mock_import:
+            mock_import.side_effect = SyntaxError(
+                "Invalid Syntax", ("broken_plugin.py", 1, 1, "bad code")
+            )
+
+            # Patch sys.path so we don't actually mess up the test runner's path
+            with patch.object(sys, "path", []):
+                # Execute
+                _discover_external_operations()
+
+            # If we reached here without a crash, the try/except block worked.
+            # We can verify import was attempted
+            mock_import.assert_called()
+
+
+def test_registry_no_config_dir():
+    """
+    Covers registry_init.py line 36:
+    Checks that the function returns early if the operations directory does not exist.
+    """
+    mock_path_obj = MagicMock()
+    # CRITICAL: This forces the early return at line 36
+    mock_path_obj.exists.return_value = False
+
+    # Ensure path chaining works so we reach the .exists() check without crashing
+    mock_path_obj.__truediv__.return_value = mock_path_obj
+
+    with patch("pdftl.registry_init.pathlib.Path") as mock_path_cls:
+        mock_path_cls.return_value = mock_path_obj
+        mock_path_cls.home.return_value = mock_path_obj
+
+        # We verify the early return by checking that sys.path was NOT modified
+        with patch("pdftl.registry_init.sys.path", []) as mock_sys_path:
+            _discover_external_operations()
+
+            assert len(mock_sys_path) == 0

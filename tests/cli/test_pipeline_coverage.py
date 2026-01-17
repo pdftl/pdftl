@@ -321,3 +321,77 @@ class TestPipelineManagerCoverage:
 
         # Check line 253: The function returned the pre-existing pipeline PDF
         assert result_pdf is expected_pdf
+
+
+import pikepdf
+
+# tests/cli/test_pipeline.py
+import pytest
+
+from pdftl.cli.pipeline import CliStage, PipelineManager
+from pdftl.exceptions import UserCommandLineError
+from pdftl.utils.user_input import UserInputContext
+
+
+@pytest.fixture
+def mock_input_context(mocker):
+    return mocker.Mock(spec=UserInputContext)
+
+
+def test_open_pdf_from_stdin_password_error(mocker, mock_input_context):
+    """
+    Covers Lines 312-319: Exception handling when stdin input is encrypted
+    but no password is provided.
+    """
+    import pikepdf
+
+    # Setup PipelineManager
+    manager = PipelineManager([], mock_input_context)
+
+    # Mock smart_pikepdf_open to raise PasswordError
+    # We patch it where it is imported in pipeline.py
+    mocker.patch(
+        "pdftl.cli.pipeline.smart_pikepdf_open", side_effect=pikepdf.PasswordError("Encrypted")
+    )
+
+    # We need to simulate isatty returning False (meaning data is piped in)
+    mocker.patch("sys.stdin.isatty", return_value=False)
+
+    # Call the method expecting the custom UserCommandLineError
+    with pytest.raises(UserCommandLineError) as excinfo:
+        # is_first=True forces it to try reading from stdin
+        manager._open_pdf_from_special_input(password=None, is_first=True)
+
+    # Verify the error message contains the helpful hint defined in lines 316-317
+    assert "data on stdin is encrypted and requires a password" in str(excinfo.value)
+
+
+def test_open_input_pdfs_dispatches_special_inputs(mocker, mock_input_context):
+    """
+    Covers Line 359: if filename in ["-", "_"]: ...
+
+    This verifies that the loop correctly identifies '-' or '_'
+    and routes them to _open_pdf_from_special_input.
+    """
+    # Setup a stage with a special input char "-" (stdin) and a normal file
+    stage = CliStage(inputs=["-", "normal.pdf"], input_passwords=[None, None])
+
+    manager = PipelineManager([stage], mock_input_context)
+
+    # Mock the two internal opening methods
+    mock_special = mocker.patch.object(
+        manager, "_open_pdf_from_special_input", return_value="PDF_SPECIAL"
+    )
+    mock_file = mocker.patch.object(manager, "_open_pdf_from_file", return_value="PDF_FILE")
+
+    # Execute
+    results = manager._open_input_pdfs(stage, is_first=True)
+
+    # Assertions
+    assert results == ["PDF_SPECIAL", "PDF_FILE"]
+
+    # Verify line 359 logic: The special handler was called for the first input
+    mock_special.assert_called_once_with(None, True)
+
+    # Verify the normal handler was called for the second
+    mock_file.assert_called_once_with("normal.pdf", None)
