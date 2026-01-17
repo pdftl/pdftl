@@ -36,5 +36,3 @@ E             RuntimeError: Multiple fields with same name: %
 ## Caveats
 
 - Order of lines in `dump_data` etc may differ from pdftk, where not semantically important.
-
-- `cat` breaks forms at the moment :-(

@@ -158,7 +158,7 @@ def test_process_source_pages_full():
         patch("pdftl.pages.add_pages._apply_rotation") as mock_rot,
     ):
         # 2. Act
-        ctx = process_source_pages(new_pdf, page_transforms)
+        ctx, _ = process_source_pages(new_pdf, page_transforms)
 
         # 3. Assert
 
@@ -224,18 +224,21 @@ def test_process_source_pages_full():
 
 def test_process_source_pages_empty(mock_new_pdf):
     """Tests that processing an empty list does nothing."""
-    ctx = process_source_pages(mock_new_pdf, [])
+    ctx, queue = process_source_pages(mock_new_pdf, [])
 
     assert len(mock_new_pdf.pages) == 0
     assert isinstance(ctx, RebuildLinksPartialContext)
     assert ctx.page_map == {}
     assert ctx.processed_page_info == []
     assert ctx.unique_source_pdfs == set()
+    assert queue == []
 
 
 ## add_pages ##
 
 
+@patch("pdftl.pages.add_pages.handle_page_widgets")
+@patch("pdftl.pages.add_pages.rebuild_acroform_index")
 @patch("pdftl.pages.add_pages.write_named_dests")
 @patch("pdftl.pages.add_pages.rebuild_outlines")
 @patch("pdftl.pages.add_pages.rebuild_links")
@@ -247,6 +250,8 @@ def test_add_pages_orchestration(
     mock_rebuild_links,
     mock_rebuild_outlines,
     mock_write_named_dests,
+    mock_rebuild_acroform,
+    mock_handle_widgets,
     mock_new_pdf,  # Fixture
 ):
     """Tests that add_pages correctly orchestrates its helper functions."""
@@ -256,7 +261,9 @@ def test_add_pages_orchestration(
     mock_context.page_transforms = {"transforms_key": "transforms_val"}
     mock_context.processed_page_info = ["page_info_1"]
     mock_context.unique_source_pdfs = {"pdf_a", "pdf_b"}
-    mock_process_source_pages.return_value = mock_context
+    # UPDATED: Mock return value must be a tuple (ctx, queue)
+    mock_queue = [("item1"), ("item2")]
+    mock_process_source_pages.return_value = (mock_context, mock_queue)
 
     # Mock the remapper that the factory will return
     mock_remapper = MagicMock(spec=LinkRemapper)
@@ -308,6 +315,10 @@ def test_add_pages_orchestration(
     mock_write_named_dests.assert_called_once_with(
         mock_new_pdf, ["link_dest_1", "outline_dest_1"]  # Check dests are combined
     )
+
+    # PASS 3
+    assert mock_handle_widgets.call_count == len(mock_queue)
+    mock_rebuild_acroform.assert_called_once_with(mock_new_pdf)
 
 
 def test_add_page_rotated_dimensions(tmp_path):

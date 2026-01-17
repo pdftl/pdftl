@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
+from pdftl.pages.forms import handle_page_widgets, rebuild_acroform_index
 from pdftl.pages.link_remapper import create_link_remapper
 from pdftl.pages.links import (
     RebuildLinksPartialContext,
@@ -61,7 +62,7 @@ def add_pages(
     """
     # --- PASS 1: Copy page structure, content, and apply transformations. ---
     logger.debug("--- PASS 1: Assembling %s pages... ---", len(source_pages_to_process))
-    rebuild_context = process_source_pages(new_pdf, source_pages_to_process)
+    rebuild_context, widget_queue = process_source_pages(new_pdf, source_pages_to_process)
 
     # --- PASS 2: Rebuild links and destinations. ---
     logger.debug("--- PASS 2: Rebuilding links and destinations... ---")
@@ -88,6 +89,12 @@ def add_pages(
     # Pass 2c: Write all collected destinations to the NameTree
     if all_dests:
         write_named_dests(new_pdf, all_dests)
+
+    logger.debug("--- PASS 3: widget wrangling ---")
+    for args in widget_queue:
+        handle_page_widgets(*args)
+
+    rebuild_acroform_index(new_pdf)
 
 
 def process_source_pages(
@@ -123,6 +130,7 @@ def process_source_pages(
     import pikepdf
 
     ret = RebuildLinksPartialContext()
+    widget_queue = []
 
     instance_counts: dict[tuple, int] = {}
     seen_pages = set()
@@ -203,6 +211,8 @@ def process_source_pages(
 
         _stash_page_source_data(new_page, source_page, page_data, instance_num)
 
+        widget_queue.append((new_pdf, new_page, source_page, instance_num))
+
         # Store metadata for PASS 2
         ret.page_map[(*page_key, instance_num)] = new_page
         ret.processed_page_info.append((*page_identity, instance_num))
@@ -214,7 +224,7 @@ def process_source_pages(
         _apply_rotation(new_page, source_page, page_data.rotation)
         apply_scaling(new_page, page_data.scale)
 
-    return ret
+    return ret, widget_queue
 
 
 def _stash_page_source_data(new_page, source_page, page_data, instance_num):
