@@ -23,11 +23,13 @@ jobs:
             python: "3.11"
           - os: ubuntu-latest
             python: "3.12"
-            coverage: true
           - os: ubuntu-latest
             python: "3.13"
+            coverage: true
+          - os: ubuntu-latest
+            python: "3.14"
           - os: windows-latest
-            python: "3.12"
+            python: "3.13"
 
     steps:
       - name: Checkout repository

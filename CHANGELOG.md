@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Official support for Python 3.14
+
 - More comprehensive `vendor_tests/pdftk-java` test suite,
   from `pdftk-java`. This test suite only is licensed under
   the GPL 2, see NOTICE.md.
@@ -17,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata. Only supported by AES encryption methods.
 
 - `COMPATIBILITY.md`: compatibility notes
+
+- `dump_data_fields` now extracts tooltips (FieldNameAlt)
+  and default values (FieldValueDefault).
+
+- API: inputs now support pathlib.Path objects directly.
 
 ### Changed
 
@@ -29,10 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - exit codes better aligned with pdftk's exit codes
 
+- CLI: stricter argument parsing now raises
+  `DuplicateArgumentError` if keywords are repeated.
 
 ### Fixed
 
-- `cat` should now properly handle forms
+- `cat` should now properly handle forms.
+
+- `fill_form` compatibility fixes
+
+- `dump_data_fields_utf8`: fixed crash/output issues.
+
+- `set_info`: added validation for page label indices and
+  better error handling for rotation/mediabox.
 
 ## [0.7.0] - 2026-01-11
 
