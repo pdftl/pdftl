@@ -217,3 +217,30 @@ def compact_json_string(json_string):
     for regex_str in [r"(\[)\s*([^\[\]]*?)\s*(\])", r"(\{)\s*([^\{\}]*?)\s*(\})"]:
         ret = re.sub(regex_str, compact_simple_array, ret)
     return ret
+
+
+def sensible_decode(data: bytes) -> str:
+    # 1. UTF-8 (Strict) - Standard for modern data
+    # 2. CP1252 - Common legacy Windows encoding (covers most Western Euro)
+    # 3. Latin-1 - Fallback that maps 1-to-1 bytes to chars (never fails)
+    candidates = ["utf-8", "cp1252", "latin-1"]
+
+    for enc in candidates:
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            continue
+
+    # Should be unreachable because latin-1 never raises,
+    # but good for safety in case latin-1 is removed from the list.
+    return data.decode("utf-8", errors="replace")
+
+
+def fix_mojibake(text: str) -> str:
+    try:
+        # 1. Smash it back to bytes, preserving the raw 'bad' bytes (0xE7, 0xF2)
+        raw_bytes = text.encode("utf-8", "surrogateescape")
+        # 2. Decode properly
+        return sensible_decode(raw_bytes)
+    except UnicodeError:
+        return text

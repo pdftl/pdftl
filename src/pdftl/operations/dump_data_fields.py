@@ -16,7 +16,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open
-from pdftl.utils.string import xml_encode_for_info
+from pdftl.utils.string import fix_mojibake, xml_encode_for_info
 
 _DUMP_DATA_FIELDS_UTF8_LONG_DESC = """
 
@@ -104,7 +104,11 @@ def dump_fields_cli_hook(result, stage):
         return
 
     output_file = stage.options.get("output_file")
-    escape_xml = stage.options.get("escape_xml", True)
+    if result.meta is not None:
+        escape_xml = result.meta.get("escape_xml", True)
+    else:
+        escape_xml = True
+    logger.debug("escape_xml=%s", escape_xml)
 
     with smart_open(output_file) as f:
         for idx, field in enumerate(result.data):
@@ -126,34 +130,36 @@ def _write_field_stanza(file_handle, field: dict, escape_xml: bool):
 
     def fmt(val):
         """Internal formatter to handle XML escaping."""
-        s_val = str(val) if val is not None else ""
+        s_val = fix_mojibake(str(val)) if val is not None else ""
         return xml_encode_for_info(s_val) if escape_xml else s_val
 
+    def print_value_line(key_suffix, absent_value=None, only_if_truthy=False):
+        key = "Field" + key_suffix
+        if absent_value is None and key not in field:
+            return
+        val = field.get(key, absent_value)
+        val_str = fmt(val)
+        if val_str:
+            print(f"{key}: {val_str}", file=file_handle)
+
     # 1. Identity & Names
-    print(
-        f"FieldType: {fmt(_map_type_to_pdftk_compat(field.get('FieldType', '')))}",
-        file=file_handle,
-    )
-    if "FieldSubType" in field:
-        print(f"FieldSubType: {fmt(field['FieldSubType'])}", file=file_handle)
 
-    print(f"FieldName: {fmt(field.get('FieldName', ''))}", file=file_handle)
-    if "FieldNameAlt" in field and field["FieldNameAlt"]:
-        print(f"FieldNameAlt: {fmt(field.get('FieldNameAlt', ''))}", file=file_handle)
+    field_type = fmt(_map_type_to_pdftk_compat(field.get("FieldType", "")))
+    print(f"FieldType: {field_type}", file=file_handle)
 
-    # 2. Simple Attributes
-    print(f"FieldFlags: {field.get('FieldFlags', 0)}", file=file_handle)
+    simple_attributes = {
+        "SubType": None,
+        "Name": "",
+        "NameAlt": None,
+        "Flags": 0,
+        "Value": None,
+        "ValueDefault": None,
+        "Justification": None,
+    }
+    for k, v in simple_attributes.items():
+        print_value_line(k, absent_value=v)
 
-    if "FieldValue" in field and field["FieldValue"] is not None:
-        print(f"FieldValue: {fmt(field['FieldValue'])}", file=file_handle)
-    if "FieldValueDefault" in field and field["FieldValueDefault"] is not None:
-        print(f"FieldValueDefault: {fmt(field['FieldValueDefault'])}", file=file_handle)
-
-    # 3. Layout
-    if "FieldJustification" in field:
-        print(f"FieldJustification: {fmt(field['FieldJustification'])}", file=file_handle)
-
-    # 4. Complex List Attributes (Options)
+    # Complex List Attributes (Options)
     if "FieldStateOption" in field:
         _write_field_options(file_handle, field["FieldStateOption"], fmt)
 
@@ -203,7 +209,6 @@ def _get_field_type_strings(field):
 
 def _extract_field_value(field, use_key=None) -> str | None:
     """Extracts the current value or appearance state of a field.
-
     use_key defaults to 'V', for the value.
     """
     import pikepdf
@@ -313,23 +318,30 @@ def _extract_field_data_high_level(field, extra_info=False) -> OrderedDict[str, 
     """
     logger.debug("Extracting high level from %s", field)
     # 1. Basic Identity
-    ts_in, ts_out = _get_field_type_strings(field)
+    pike_type_str, tk_type_str = _get_field_type_strings(field)
     data = OrderedDict()
     data["FieldName"] = field.fully_qualified_name
     if hasattr(field.obj, "TU"):
         data["FieldNameAlt"] = field.obj.TU
 
-    data["FieldType"] = ts_out
+    data["FieldType"] = tk_type_str
 
     if extra_info:
-        data["FieldSubType"] = ts_in
+        data["FieldSubType"] = pike_type_str
 
     # 2. Add Optional Attributes
     if hasattr(field.obj, "Ff"):
         data["FieldFlags"] = int(field.obj.Ff)
 
     # 3. Value
-    data["FieldValue"] = _extract_field_value(field)
+    val = _extract_field_value(field)
+
+    # Checkboxes/Radios default to "Off" if /V is missing (None)
+    if pike_type_str in ("RadioButtonGroup", "Checkbox") and val is None:
+        val = "Off"
+
+    data["FieldValue"] = val
+
     if hasattr(field.obj, "DV"):
         data["FieldValueDefault"] = _extract_field_value(field, use_key="DV")
 
@@ -337,14 +349,14 @@ def _extract_field_data_high_level(field, extra_info=False) -> OrderedDict[str, 
     if hasattr(field.obj, "Opt"):
         # Choice Fields (Combo/List) use explicit /Opt array
         data["FieldStateOption"] = _extract_field_options(field.obj.Opt)
-    elif ts_out in ("Button", "Checkbox"):
+    elif tk_type_str in ("Button", "Checkbox"):
         # Checkboxes/Radios use Appearance states
         btn_opts = _extract_button_options(field)
         if btn_opts:
             data["FieldStateOption"] = btn_opts
 
     # 5. Justification
-    data["FieldJustification"] = _extract_field_justification(field, ts_out)
+    data["FieldJustification"] = _extract_field_justification(field, tk_type_str)
 
     return data
 
@@ -422,6 +434,7 @@ def dump_data_fields(
     """
     Extracts form field data from the PDF using a Hybrid Tree Walk.
     """
+    logger.debug("escape_xml=%s", escape_xml)
     from pikepdf.form import Form
 
     # 1. Initialize High-Level Map
@@ -439,7 +452,7 @@ def dump_data_fields(
         acroform = pdf.Root.AcroForm
         fields_root = acroform.Fields
     except AttributeError:
-        # No form data
+        # No form data; success = True as we successfully report no data
         return OpResult(success=True, data=[], pdf=pdf, is_discardable=True)
 
     # 3. Start Recursive Walk (DFS)
@@ -459,4 +472,5 @@ def dump_data_fields(
         data=all_fields_data,
         pdf=pdf,
         is_discardable=True,
+        meta={"escape_xml": escape_xml},
     )
