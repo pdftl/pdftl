@@ -12,6 +12,8 @@ import logging
 import sys
 from datetime import date
 
+from packaging.requirements import Requirement
+
 logger = logging.getLogger(__name__)
 
 from pdftl.cli.console import get_console
@@ -60,10 +62,61 @@ def get_project_version():
         return "unknown-dev-version"
 
 
+def get_optional_dependencies_status():
+    try:
+        raw_reqs = importlib.metadata.requires("pdftl") or []
+    except importlib.metadata.PackageNotFoundError:
+        return []
+
+    optional_pkgs = set()
+
+    # We will ignore dependencies that ONLY exist for these extras
+    IGNORED_GROUPS = {"dev", "docs", "test", "dev-all"}
+
+    for req_str in raw_reqs:
+        req = Requirement(req_str)
+
+        # 1. Must be optional
+        if not req.marker:
+            continue
+
+        # 2. Ignore self-references
+        if req.name == "pdftl":
+            continue
+
+        # 3. FILTER: Check if this requirement belongs to a "ignored" extra.
+        # The marker string usually looks like: 'extra == "dev"'
+        marker_str = str(req.marker)
+
+        # If the marker explicitly restricts this to a banned group, skip it.
+        # (This simplistic string check is effective for standard metadata)
+        is_dev_tool = any(
+            f"extra == '{g}'" in marker_str or f'extra == "{g}"' in marker_str
+            for g in IGNORED_GROUPS
+        )
+
+        if is_dev_tool:
+            continue
+
+        optional_pkgs.add(req.name)
+
+    # Check status of each identified package
+    results = []
+    for pkg in sorted(optional_pkgs):
+        try:
+            ver = importlib.metadata.version(pkg)
+            results.append((pkg, ver))
+        except importlib.metadata.PackageNotFoundError:
+            results.append((pkg, None))
+
+    return results
+
+
 def print_version(dest=None):
-    """Prints detailed version information for the package and its core dependencies."""
+    """Prints detailed version information for the package, core, and optional deps."""
     import pikepdf
 
+    # --- 1. Core Dependencies ---
     dependencies = "\n".join(
         [
             f"  - {name} {version}"
@@ -77,6 +130,7 @@ def print_version(dest=None):
 
     start_year = 2025
     current_year = date.today().year
+
     output = VERSION_TEMPLATE.strip().format(
         whoami=WHOAMI,
         package=PACKAGE,
@@ -86,10 +140,26 @@ def print_version(dest=None):
         dependencies=dependencies,
     )
 
-    if dest is None or dest is sys.stdout or dest is sys.stderr:
-        get_console().print(output)
-    else:
+    # Plain text append for optional deps
+    opts = get_optional_dependencies_status()
+    if opts:
+        output += "\n\nOptional dependencies:\n"
+        for name, ver in opts:
+            status = ver if ver else "(not found)"
+            output += f"  - {name}: {status}\n"
+
+    output = output.rstrip()
+
+    # --- 2. Print Output ---
+    console = get_console()
+
+    # If writing to file/string, strip rich formatting
+    if dest is not None and dest is not sys.stdout and dest is not sys.stderr:
         print(output, file=dest)
+        return
+
+    # If writing to terminal, use Rich
+    console.print(output)
 
 
 def _format_examples_block(examples, show_topics=False):

@@ -94,7 +94,7 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Extensibility:** write your own custom operation in Python, save to `~/.config/pdftl/operations` (*nix) or
-  `%APPDATA%\pdftl\config` (windows)` and you can use it in pdftl, just like the built-in operations.
+  `%APPDATA%\pdftl\config` (Windows) and you can use it in pdftl, just like the built-in operations.
 
 ## Examples
 

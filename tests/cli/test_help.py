@@ -13,7 +13,7 @@ import pdftl.cli.help as helpmod
 from pdftl.core.types import HelpExample
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def patch_environment(monkeypatch, tmp_path):
     """Patch core globals so all help functions run cleanly."""
     monkeypatch.setattr(helpmod, "WHOAMI", "pdftl")
@@ -78,18 +78,18 @@ def patch_environment(monkeypatch, tmp_path):
     monkeypatch.setattr(helpmod, "__file__", str(dummy_py))
 
 
-def test_get_synopsis():
+def test_get_synopsis(patch_environment):
     result = helpmod.get_synopsis()
     assert "pdftl" in result
     assert "i" in result  # from SPECIAL_HELP_TOPICS_MAP key tuple
 
 
-def test_get_project_version_success(monkeypatch):
+def test_get_project_version_success(monkeypatch, patch_environment):
     monkeypatch.setattr(helpmod.importlib.metadata, "version", lambda pkg: "1.2.3")
     assert helpmod.get_project_version() == "1.2.3"
 
 
-def test_get_project_version_fallback(monkeypatch):
+def test_get_project_version_fallback(monkeypatch, patch_environment):
     # Force metadata failure
     def fake_version(_):
         raise importlib.metadata.PackageNotFoundError
@@ -103,7 +103,7 @@ def test_get_project_version_fallback(monkeypatch):
     assert helpmod.get_project_version() == "2.5.0-dev"
 
 
-def test_get_project_version_no_pyproject(monkeypatch):
+def test_get_project_version_no_pyproject(monkeypatch, patch_environment):
     # 1. Force metadata failure
     def fake_version(_):
         raise importlib.metadata.PackageNotFoundError
@@ -128,7 +128,7 @@ def test_get_project_version_no_pyproject(monkeypatch):
     assert helpmod.get_project_version() == "unknown-dev-version"
 
 
-def test_print_version_to_console(monkeypatch):
+def test_print_version_to_console(monkeypatch, patch_environment):
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -145,7 +145,7 @@ def test_print_version_to_console(monkeypatch):
     assert buf_err.getvalue() == ""
 
 
-def test_print_version_to_file(monkeypatch):
+def test_print_version_to_file(monkeypatch, patch_environment):
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -158,7 +158,7 @@ def test_print_version_to_file(monkeypatch):
 
 
 @pytest.mark.parametrize("cmd", [None, "combine", "output_options", "examples", "all", "nonsense"])
-def test_print_help_variants(monkeypatch, cmd):
+def test_print_help_variants(monkeypatch, cmd, patch_environment):
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
     buf_out, buf_err = io.StringIO(), io.StringIO()
     with redirect_stdout(buf_out), redirect_stderr(buf_err):
@@ -168,7 +168,7 @@ def test_print_help_variants(monkeypatch, cmd):
     assert "pdftl" in output
 
 
-def test_print_version_to_console(monkeypatch):
+def test_print_version_to_console(monkeypatch, patch_environment):
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -195,7 +195,7 @@ def test_print_version_to_console(monkeypatch):
         assert "pikepdf 10.0" in printed_content
 
 
-def test_print_version_to_file(monkeypatch):
+def test_print_version_to_file(monkeypatch, patch_environment):
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -212,14 +212,137 @@ def test_print_version_to_file(monkeypatch):
     assert "libqpdf 11.0" in output
 
 
-def test_find_special_topic_command():
+def test_find_special_topic_command(patch_environment):
     assert helpmod.find_special_topic_command("input") == "help input"
     assert helpmod.find_special_topic_command("unknown") is None
 
 
-def test_find_operator_topic_command():
+def test_find_operator_topic_command(patch_environment):
     assert helpmod.find_operator_topic_command(["combine", "merge"]) == "combine"
 
 
-def test_find_option_topic_command():
+def test_find_option_topic_command(patch_environment):
     assert helpmod.find_option_topic_command(["output"]) == "output"
+
+
+##################################################
+
+
+import pytest
+
+from pdftl.cli import help as cli_help
+
+# --- Fixtures & Mocks ---
+
+
+@pytest.fixture
+def mock_metadata(mocker):
+    """
+    Mocks the importlib.metadata functions to simulate a specific
+    dependency tree without reading the real system.
+    """
+    # 1. Mock 'requires' to return a mix of core, feature, and dev deps
+    mocker.patch(
+        "importlib.metadata.requires",
+        return_value=[
+            "pikepdf>=10.0.0",  # Core (no marker)
+            "reportlab ; extra == 'add-text'",  # Feature (keep)
+            'pypdfium2 ; extra == "crop-visible"',  # Feature (keep, double quotes)
+            "pytest ; extra == 'dev'",  # Dev (ignore)
+            "sphinx ; extra == 'docs'",  # Docs (ignore)
+            "pdftl[extras] ; extra == 'full'",  # Self-ref (ignore)
+        ],
+    )
+
+    # 2. Mock 'version' to simulate some packages installed, others missing
+    def fake_version(package_name):
+        versions = {
+            "pdftl": "0.9.9",
+            "pikepdf": "10.0.0",
+            "reportlab": "4.0.0",
+            # pypdfium2 is missing in this fake env
+        }
+        if package_name in versions:
+            return versions[package_name]
+        raise importlib.metadata.PackageNotFoundError(package_name)
+
+    mocker.patch("importlib.metadata.version", side_effect=fake_version)
+
+
+# --- Tests ---
+
+
+def test_get_optional_dependencies_filtering(mock_metadata):
+    """
+    Verifies that dev tools and self-references are filtered out,
+    and only 'feature' extras remain.
+    """
+    results = cli_help.get_optional_dependencies_status()
+
+    # Extract just the names for easy assertion
+    pkg_names = {r[0] for r in results}
+
+    # Assertions
+    assert "reportlab" in pkg_names, "Should include standard feature extras"
+    assert "pypdfium2" in pkg_names, "Should include feature extras with double-quotes"
+
+    assert "pytest" not in pkg_names, "Should ignore 'dev' extras"
+    assert "sphinx" not in pkg_names, "Should ignore 'docs' extras"
+    assert "pdftl" not in pkg_names, "Should ignore self-reference"
+    assert "pikepdf" not in pkg_names, "Should ignore core deps (no marker)"
+
+
+def test_get_optional_dependencies_status_detection(mock_metadata):
+    """
+    Verifies that installed packages return their version,
+    and missing packages return None.
+    """
+    results = dict(cli_help.get_optional_dependencies_status())
+
+    assert results["reportlab"] == "4.0.0", "Should return version for installed pkg"
+    assert results["pypdfium2"] is None, "Should return None for missing pkg"
+
+
+def test_print_version_output_format(mock_metadata):
+    """
+    Verifies the actual string output to stdout.
+    """
+    capture = io.StringIO()
+    cli_help.print_version(dest=capture)
+
+    stdout = capture.getvalue()
+
+    # 1. Check Core output
+    assert "pdftl" in stdout
+    assert "Core dependencies:" in stdout
+    assert "pikepdf" in stdout
+
+    # 2. Check Optional Section Header
+    assert "Optional dependencies:" in stdout
+
+    # 3. Check status formatting
+    assert "reportlab: 4.0.0" in stdout
+    assert "pypdfium2: (not found)" in stdout
+
+    # 4. Ensure filtered items are NOT present
+    assert "pytest" not in stdout
+
+
+def test_print_version_no_metadata_crash(mocker):
+    """
+    Edge case: If importlib.metadata throws PackageNotFoundError
+    (e.g. running from a raw .py file without install), it should not crash.
+    """
+    capture = io.StringIO()
+
+    mocker.patch(
+        "importlib.metadata.requires", side_effect=importlib.metadata.PackageNotFoundError
+    )
+
+    # Should run without error
+    cli_help.print_version(dest=capture)
+    stdout = capture.getvalue()
+
+    # Should still print core info, just no optional block
+    assert "pdftl" in stdout
+    assert "Optional dependencies:" not in stdout

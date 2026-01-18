@@ -124,10 +124,7 @@ def test_parse_multiple_args_allow_no_args():
     assert options["allow"] == set()  # Should be an empty set
 
 
-import pytest
 
-from pdftl.cli.parser import parse_options_and_specs
-from pdftl.exceptions import DuplicateArgumentError
 
 
 def test_duplicate_argument_raises_error():

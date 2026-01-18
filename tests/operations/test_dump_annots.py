@@ -134,17 +134,12 @@ def test_get_all_annots_with_named_destinations():
         mock_tree.assert_called_once()
 
 
-import logging
-from unittest.mock import Mock, patch
 
-import pikepdf
 import pytest
 
 # Import the internal function directly for the unit test
 from pdftl.operations.dump_annots import (
     _key_value_lines,
-    dump_data_annots,
-    dump_data_annots_cli_hook,
 )
 
 
@@ -217,7 +212,7 @@ def test_dump_annots_error_handling(caplog):
 
 import pytest
 
-from pdftl.operations.dump_annots import _key_value_lines, _lines_from_datum
+from pdftl.operations.dump_annots import _lines_from_datum
 
 
 def test_lines_from_datum_compat_false():

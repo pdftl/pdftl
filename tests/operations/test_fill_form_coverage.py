@@ -124,7 +124,6 @@ def test_fill_form_radio_button_index(pdf, tmp_path):
     assert str(pdf.Root.AcroForm.Fields[0].V) == "/1"
 
 
-import pikepdf
 import pytest
 from pikepdf.form import Form
 

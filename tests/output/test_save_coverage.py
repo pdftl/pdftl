@@ -1,4 +1,3 @@
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -47,11 +46,8 @@ def test_save_to_stdout_broken_pipe(minimal_pdf):
 
 
 import logging
-from unittest.mock import MagicMock, patch
 
-import pytest
 
-from pdftl.output.save import save_pdf
 
 
 def test_save_encryption_metadata_aes_flag(minimal_pdf):

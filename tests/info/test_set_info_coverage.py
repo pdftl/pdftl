@@ -1,6 +1,5 @@
 import logging
 
-import pytest
 
 # Import the PROPER datatypes
 from pdftl.info.info_types import PageLabelEntry, PageMediaEntry

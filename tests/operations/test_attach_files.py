@@ -287,7 +287,7 @@ def test_recursive_prompt_on_invalid_file():
 
 # tests/test_attach_files_coverage.py
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from pdftl.operations.attach_files import _get_attachments_from_args
 

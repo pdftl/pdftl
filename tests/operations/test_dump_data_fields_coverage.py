@@ -204,7 +204,6 @@ def test_dump_fields_no_acroform():
 
 from unittest.mock import MagicMock, mock_open, patch
 
-import pytest
 
 from pdftl.core.types import OpResult
 from pdftl.operations.dump_data_fields import _extract_field_data_high_level, dump_fields_cli_hook

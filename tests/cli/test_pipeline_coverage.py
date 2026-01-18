@@ -328,7 +328,6 @@ import pikepdf
 # tests/cli/test_pipeline.py
 import pytest
 
-from pdftl.cli.pipeline import CliStage, PipelineManager
 from pdftl.exceptions import UserCommandLineError
 from pdftl.utils.user_input import UserInputContext
 
@@ -343,7 +342,6 @@ def test_open_pdf_from_stdin_password_error(mocker, mock_input_context):
     Covers Lines 312-319: Exception handling when stdin input is encrypted
     but no password is provided.
     """
-    import pikepdf
 
     # Setup PipelineManager
     manager = PipelineManager([], mock_input_context)

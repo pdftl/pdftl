@@ -401,7 +401,6 @@ import logging
 
 import pytest
 
-from pdftl.info.parse_dump import parse_dump_data
 
 
 # Simple identity decoder for tests
@@ -546,9 +545,7 @@ def test_parse_page_labels():
     assert label["NumStyle"] == "Roman"
 
 
-import logging
 
-from pdftl.info.parse_dump import parse_dump_data
 
 
 def test_parse_dump_data_consecutive_info_keys(caplog):

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
-from pikepdf import Name, String
+from pikepdf import String
 
 # --- Import SUT ---
 from pdftl.info.output_info import (
@@ -560,9 +560,8 @@ def test_write_info_rect_coverage():
     assert "PageMediaBleedRect: 0 0 15 15" in combined
 
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
-import pikepdf
 import pytest
 
 from pdftl.info.info_types import (
@@ -572,7 +571,6 @@ from pdftl.info.info_types import (
     PageMediaEntry,
     PdfInfo,
 )
-from pdftl.info.output_info import get_info, write_info
 
 # --- Fixtures & Mocks ---
 

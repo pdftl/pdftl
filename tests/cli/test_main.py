@@ -329,11 +329,9 @@ def test_main_uses_sys_argv_if_none_provided():
 
 
 # tests/cli/test_main.py
-import sys
 
 import pytest
 
-from pdftl.cli.main import main
 from pdftl.exceptions import OperationError
 
 
