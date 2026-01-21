@@ -12,7 +12,6 @@ which are then applied to the target pages.
 
 import io
 import logging
-from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -217,6 +216,8 @@ def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
         filename_base = p.stem
         filepath = str(p)
 
+    from datetime import datetime
+
     now = datetime.now()
     return {
         "total": total_pages,
@@ -249,8 +250,8 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
     """
     from pikepdf import Rectangle
 
-    from .helpers.text_drawer import TextDrawer
-    from .parsers.add_text_parser import parse_add_text_specs_to_rules
+    from pdftl.operations.helpers.text_drawer import TextDrawer
+    from pdftl.operations.parsers.add_text_parser import parse_add_text_specs_to_rules
 
     total_pages = len(pdf.pages)
 

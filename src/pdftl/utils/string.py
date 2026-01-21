@@ -7,32 +7,34 @@
 """String processing utilities, including before_space and
 xml_{de,en}code_for_info"""
 
-import itertools
-import re
-from collections.abc import Callable
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from pdftl.utils.whatisit import whatis_guess
 
-IGNORED_NONPRINTING_CHAR_RE = re.compile(
-    "["
-    + "".join(
-        map(
-            chr,
-            itertools.chain(
-                range(0x00, 0x0A),
-                range(0x0B, 0x0D),
-                range(0x0E, 0x20),
-                range(0x80, 0xA0),
-            ),
-        )
-    )
-    + "]"
-)
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def remove_ignored_nonprinting_chars(s):
     """Remove ignored non-printing characters from a string"""
+    import itertools
+    import re
+
+    IGNORED_NONPRINTING_CHAR_RE = re.compile(
+        "["
+        + "".join(
+            map(
+                chr,
+                itertools.chain(
+                    range(0x00, 0x0A),
+                    range(0x0B, 0x0D),
+                    range(0x0E, 0x20),
+                    range(0x80, 0xA0),
+                ),
+            )
+        )
+        + "]"
+    )
     return IGNORED_NONPRINTING_CHAR_RE.sub("", s)
 
 
@@ -105,7 +107,7 @@ def xml_decode_for_info(x):
 T = TypeVar("T")
 
 
-def recursive_decode(data: T, decoder: Callable[[str], str]) -> T:
+def recursive_decode(data: T, decoder: "Callable[[str], str]") -> T:
     """Recursively 'decode' using the given str to str decoder"""
     # Note: type ignore directives are due to mypy limitations
     if isinstance(data, str):
@@ -214,6 +216,8 @@ def compact_json_string(json_string):
         return f"{match.group(1)}{compacted_content}{match.group(3)}"
 
     ret = json_string
+    import re
+
     for regex_str in [r"(\[)\s*([^\[\]]*?)\s*(\])", r"(\{)\s*([^\{\}]*?)\s*(\})"]:
         ret = re.sub(regex_str, compact_simple_array, ret)
     return ret

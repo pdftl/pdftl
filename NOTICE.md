@@ -56,6 +56,14 @@ Portions of the `optimize_images` operation are adapted from [**OCRmyPDF**](http
 
 The original source code can be found at <https://github.com/ocrmypdf/OCRmyPDF>.
 
+### swapfont
+
+Portions of the font replacement logic (specifically `src/pdftl/fonts/font_{embedding,utils}.py`) are adapted from [**swapfont**](https://github.com/qooxzuub/swapfont).
+
+* **Original author:** qooxzuub
+* **License:** Mozilla Public License 2.0
+* **Source:** <https://github.com/qooxzuub/swapfont>
+
 ### pikepdf/qpdf
 
 This project relies heavily on **pikepdf** (© 2022-2024 James R. Barlow, MPL 2.0) and **qpdf** (MPL 2.0). While not directly "adapted" code, they are core dependencies that make this tool possible.

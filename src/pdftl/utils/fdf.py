@@ -8,7 +8,6 @@
 
 import io
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,8 @@ def extract_main_fdf_dict(data):
 
 def add_fdf_to_catalog(pdf_bytes, fdf_obj_num):
     """Update Catalog to reference the new FDF object"""
+    import re
+
     catalog_match = re.search(rb"(\d+) 0 obj\s*<<.*?/Type\s*/Catalog.*?>>", pdf_bytes, re.DOTALL)
     if not catalog_match:
         raise ValueError("Could not find catalog object in PDF")
@@ -62,6 +63,8 @@ def wrap_fdf_data_in_pdf_bytes(data):
     file at 'fdf_path') at 'pdf.Root.FDF'.
 
     """
+    import re
+
     import pikepdf
 
     fdf_bytes = extract_main_fdf_dict(data)

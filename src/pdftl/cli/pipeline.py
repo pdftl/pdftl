@@ -97,6 +97,7 @@ class PipelineManager:
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
                 self._validate_and_execute_numbered_stage(i, stage)
                 stage_output = stage.options.get(c.OUTPUT)
+                logger.debug("stage_output=%s", stage_output)
 
                 # Check if we have an output file AND a PDF to save.
                 # Some operations (like dump_text) handle output themselves via hooks
@@ -126,10 +127,11 @@ class PipelineManager:
             # last stage had no 'output' option.
 
         finally:
-            import pikepdf
+            if self.pipeline_pdf is not None:
+                import pikepdf
 
-            if isinstance(self.pipeline_pdf, pikepdf.Pdf):
-                self.pipeline_pdf.close()
+                if isinstance(self.pipeline_pdf, pikepdf.Pdf):
+                    self.pipeline_pdf.close()
 
     def _save_kw_options(self, override_options=None):
         """
@@ -193,6 +195,9 @@ class PipelineManager:
         else:
             self.result_discardable = False
             result_val = result
+
+        if not result_val and opened_pdfs:
+            result_val = opened_pdfs[0]
 
         # 2. Update the Pipeline State Variable
         self.pipeline_pdf = result_val

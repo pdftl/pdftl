@@ -6,7 +6,6 @@
 
 """Define pdf_obj_to_json, to convert a pikepdf object to JSON"""
 
-import decimal
 import logging
 
 logger = logging.getLogger(__name__)
@@ -137,6 +136,8 @@ class PdfToJsonConverter:
         return f"Ref({obj.objgen[0]}, {obj.objgen[1]})"
 
     def _handle_unknown(self, obj, depth, _ancestors):
+        import decimal
+
         if isinstance(obj, (float, decimal.Decimal)) and self.compat:
             rounded = round(obj, 4)
             if isinstance(rounded, decimal.Decimal):

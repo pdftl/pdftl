@@ -134,7 +134,6 @@ def test_get_all_annots_with_named_destinations():
         mock_tree.assert_called_once()
 
 
-
 import pytest
 
 # Import the internal function directly for the unit test

@@ -6,9 +6,7 @@
 
 """Dump information about destinations in a PDF file"""
 
-import json
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
@@ -180,6 +178,9 @@ def dump_dests(pdf, output_file=None) -> OpResult:
 
 def _write_json_output(output_data, output_file):
     """Helper function to format and write the final JSON output."""
+    import json
+    import re
+
     # Generate the standard indented JSON string
     json_string = json.dumps(output_data, indent=2)
 

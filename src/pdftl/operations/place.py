@@ -6,7 +6,6 @@
 
 """Apply affine transformations to content on specific pages."""
 
-import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -138,6 +137,8 @@ def _calculate_transformation_matrix(
             op_matrix = _multiply_matrices(m1, _multiply_matrices(m2, m3))
 
         elif op.name == "spin":
+            import math
+
             angle_deg = float(op.params["value"])
             ax, ay = _resolve_anchor(op.params, rect)
             rad = math.radians(angle_deg)

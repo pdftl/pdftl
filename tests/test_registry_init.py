@@ -43,7 +43,7 @@ def test_discover_modules_imports_all(monkeypatch):
         for sub in ["mod_a", "mod_b"]:
             yield (None, sub, False)  # False -> not a nested package
 
-    monkeypatch.setattr(reg_init.pkgutil, "iter_modules", fake_iter_modules)
+    monkeypatch.setattr("pkgutil.iter_modules", fake_iter_modules)
 
     imported = []
 
@@ -51,7 +51,7 @@ def test_discover_modules_imports_all(monkeypatch):
         imported.append(name)
         return types.ModuleType(name)
 
-    monkeypatch.setattr(reg_init.importlib, "import_module", fake_import_module)
+    monkeypatch.setattr("importlib.import_module", fake_import_module)
 
     # Call _discover_modules with our fake modules
     result = reg_init._discover_modules([fake_operations, fake_core], "operation")
@@ -107,11 +107,10 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
 
     fake_pkg = make_fake_module("pdftl.operations", is_pkg=True)
     monkeypatch.setattr(
-        reg_init.pkgutil,
-        "iter_modules",
+        "pkgutil.iter_modules",
         lambda path: [(None, "alpha", False), (None, "beta", False)],
     )
-    monkeypatch.setattr(reg_init.importlib, "import_module", lambda name: types.ModuleType(name))
+    monkeypatch.setattr("importlib.import_module", lambda name: types.ModuleType(name))
 
     caplog.set_level(logging.DEBUG, logger="pdftl.registry_init")
     loaded = reg_init._discover_modules([fake_pkg], "operation")
@@ -170,7 +169,7 @@ def test_registry_syntax_error():
         )
 
         # Patch import_module to raise SyntaxError when called
-        with patch("pdftl.registry_init.importlib.import_module") as mock_import:
+        with patch("importlib.import_module") as mock_import:
             mock_import.side_effect = SyntaxError(
                 "Invalid Syntax", ("broken_plugin.py", 1, 1, "bad code")
             )

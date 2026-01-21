@@ -77,13 +77,12 @@ class TestHelpRichRendering(unittest.TestCase):
 
         print_help(command=None, dest=None, raw=False)
 
-        # FIX: inspect call_args_list[0] (the first call), not call_args (the last call)
-        # print_help calls print() multiple times. The header is in the first call.
+        # Inspect the first call to print()
         first_call_args = mock_console_instance.print.call_args_list[0]
         renderable = first_call_args[0][0]  # args[0]
 
-        self.assertEqual(type(renderable).__name__, "HelpMarkdown")
-        self.assertIn("# **pdftl**", str(renderable))
+        # FIX: The first item printed is now the Title Panel, not HelpMarkdown
+        self.assertEqual(type(renderable).__name__, "Panel")
 
     def test_raw_mode_bypass(self):
         buffer = io.StringIO()

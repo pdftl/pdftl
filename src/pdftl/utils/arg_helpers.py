@@ -6,18 +6,9 @@
 
 """Utilities to help operations gather arguments in different formats"""
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
-
-# Optional: Support YAML if PyYAML is installed
-try:
-    import yaml
-
-    HAS_YAML = True
-except ImportError:
-    HAS_YAML = False
 
 T = TypeVar("T")
 
@@ -81,6 +72,14 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     """
     Loads JSON (or YAML) from disk and converts it to model_class.
     """
+    # Optional: Support YAML if PyYAML is installed
+    try:
+        import yaml
+
+        HAS_YAML = True
+    except ImportError:
+        HAS_YAML = False
+
     path = Path(path_str)
     if not path.exists():
         raise FileNotFoundError(f"Argument file not found: {path}")
@@ -95,6 +94,8 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
             data = yaml.safe_load(f)
         else:
             # Default to JSON
+            import json
+
             data = json.load(f)
 
     # If no model class provided, return raw dict

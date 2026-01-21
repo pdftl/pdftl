@@ -402,7 +402,6 @@ import logging
 import pytest
 
 
-
 # Simple identity decoder for tests
 def dummy_decoder(x):
     return x
@@ -543,9 +542,6 @@ def test_parse_page_labels():
     assert label["Start"] == 1
     assert label["Prefix"] == "A-"
     assert label["NumStyle"] == "Roman"
-
-
-
 
 
 def test_parse_dump_data_consecutive_info_keys(caplog):

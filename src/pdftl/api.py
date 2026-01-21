@@ -12,7 +12,6 @@ CLI-specific exceptions into standard Python exceptions.
 
 from __future__ import annotations
 
-import inspect
 import logging
 import types
 from typing import TYPE_CHECKING, Any
@@ -203,6 +202,8 @@ def _create_signature(op_name):
     Helper to generate a proper signature for dynamic functions.
     This allows help() to show useful arguments instead of just **kwargs.
     """
+    import inspect
+
     import pikepdf
 
     from pdftl.core import executor

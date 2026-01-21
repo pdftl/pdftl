@@ -25,6 +25,7 @@ from pdftl.info.set_info import (
     _make_page_label,
     _set_docinfo,
     _set_id_info,
+    _set_ids,
     _set_page_media_entry,
     set_metadata_in_pdf,
 )
@@ -277,31 +278,51 @@ class TestSetInfo:
         assert label_obj == mock_indirect
         mock_pdf.make_indirect.assert_called_once_with(Dictionary(expected_dict))
 
+    def test_set_ids(self, mock_pdf, caplog):
+        # 1. Set ID 0
+        _set_ids(mock_pdf, ["68656c6c6f"])  # "hello"
+        assert mock_pdf.trailer.ID[0] == b"hello"
+
+        caplog.clear()
+        # 2. Set ID 1 (should log warning)
+        with caplog.at_level("WARNING"):
+            _set_ids(mock_pdf, ["68656c6c6f", "fff"])
+        assert CANNOT_SET_PDFID1 in [rec.message for rec in caplog.records]
+
+        caplog.clear()
+        # 3. Bad hex string
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            _set_ids(mock_pdf, ["not hex"])
+        expected = "Could not set PDFID%s to '%s'; invalid hex string?" % (0, "not hex")
+        assert expected in [rec.message for rec in caplog.records]
+
+        caplog.clear()
+        # 3. Bad hex string
+        caplog.clear()
+        with caplog.at_level("INFO"):
+            _set_ids(mock_pdf, ["ReSet"])
+        expected = "PdfID0: RESET"
+        assert any([expected in rec.message for rec in caplog.records])
+
     def test_set_id_info(self, mock_pdf, caplog):
         # 1. Set ID 0
         _set_id_info(mock_pdf, 0, "68656c6c6f")  # "hello"
         assert mock_pdf.trailer.ID[0] == b"hello"
 
-        # 2. Set ID 1 (should log warning)
-        with caplog.at_level("WARNING"):
-            _set_id_info(mock_pdf, 1, "world")
-        assert CANNOT_SET_PDFID1 in [rec.message for rec in caplog.records]
-
-        # 3. Bad hex string
-        caplog.clear()
-        with caplog.at_level("WARNING"):
-            _set_id_info(mock_pdf, 0, "not hex")
-        expected = "Could not set PDFID%s to '%s'; invalid hex string?" % (0, "not hex")
-        assert expected in [rec.message for rec in caplog.records]
-
     @patch("pdftl.info.set_info._set_id_info")
-    def test_set_metadata_in_pdf_id1(self, mock_id, mock_pdf):
-        """Tests that 'PdfID1' is correctly handled in the orchestrator."""
-        # New code expects id[1]
+    @patch("pdftl.info.set_info.logger")  # Mock the logger
+    def test_set_metadata_in_pdf_id1(self, mock_logger, mock_id, mock_pdf):
+        """Tests that 'PdfID1' updates are ignored and generate a warning."""
         info = PdfInfo(ids=[None, "abc"])
         set_metadata_in_pdf(mock_pdf, info)
 
-        mock_id.assert_called_with(mock_pdf, 1, "abc")
+        mock_id.assert_not_called()
+
+        # Verify we warned the user
+        assert mock_logger.warning.called
+        args, _ = mock_logger.warning.call_args
+        assert "Ignoring PdfID1 update" in args[0]
 
     @patch("pdftl.info.set_info._set_page_media_entry")
     def test_set_page_media_loop(self, mock_entry, mock_pdf):

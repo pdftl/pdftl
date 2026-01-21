@@ -18,13 +18,12 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.operations.helpers.crop_fit import FitCropContext
-from pdftl.utils.affix_content import affix_content
-from pdftl.utils.dimensions import get_visible_page_dimensions
-
-from .parsers.crop_parser import (
+from pdftl.operations.parsers.crop_parser import (
     parse_crop_content,
     specs_to_page_rules,
 )
+from pdftl.utils.affix_content import affix_content
+from pdftl.utils.dimensions import get_visible_page_dimensions
 
 _CROP_LONG_DESC = """
 

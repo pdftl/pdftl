@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main"]
   pull_request:
 
 env:
@@ -30,6 +30,8 @@ jobs:
             python: "3.14"
           - os: windows-latest
             python: "3.13"
+          - os: macos-latest
+            python: "3.13"
 
     steps:
       - name: Checkout repository
@@ -49,7 +51,8 @@ jobs:
       - name: Run tests
         working-directory: ${{ github.workspace }}
         run: |
-            python -X utf8 -m pytest ${{ matrix.coverage && matrix.os == 'ubuntu-latest' && '-nauto --dist loadfile --cov=pdftl --cov-report=xml' || '' }}
+            # Always run in parallel (-n auto), only run coverage on one Linux job
+            python -X utf8 -m pytest -n auto --dist loadfile ${{ matrix.coverage && matrix.os == 'ubuntu-latest' && '--cov=pdftl --cov-report=xml' || '' }}
 
       - name: Upload coverage artifact
         if: matrix.coverage && matrix.os == 'ubuntu-latest'
@@ -83,7 +86,7 @@ jobs:
         run: pytest tests/test_php_compat.py
 
   codecov:
-    name: Upload coverage (Linux 3.12)
+    name: Upload coverage (Linux 3.13)
     needs: tests
     runs-on: ubuntu-latest
     if: success()

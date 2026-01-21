@@ -7,7 +7,6 @@
 """Fill in forms in a PDF"""
 
 import logging
-import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +157,8 @@ def _fill_form_value_from_fdf_field(form, fdf_field, ancestors):
 
 def _fill_form_from_xfdf_data(form, data):
     """Fill in a form, using given XFDF data"""
+    import xml.etree.ElementTree as ET
+
     try:
         root = ET.fromstring(data)
     except ET.ParseError as e:

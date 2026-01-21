@@ -12,6 +12,7 @@ import pdftl.core.constants as c
 from pdftl.core.constants import FDF_END, FDF_START
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.utils.hooks import consume_output_option, from_result_meta
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.user_input import filename_completer
 
@@ -31,15 +32,16 @@ _GENERATE_FDF_EXAMPLES = [
 ]
 
 
-def generate_fdf_cli_hook(result: OpResult, _stage):
+def generate_fdf_cli_hook(result: OpResult, stage):
     """
     CLI Hook for generate_fdf.
     Writes the FDF data bytes to the output file.
     """
+    # prevent automatic overwriting by pipeline
+    consume_output_option(stage)
+
     if not result.success:
         return
-
-    from pdftl.utils.hooks import from_result_meta
 
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
     if output_file == "-":
@@ -90,11 +92,23 @@ def generate_fdf(pdf, get_input, output_file) -> OpResult:
     return OpResult(success=True, data=buffer, meta={c.META_OUTPUT_FILE: output_file})
 
 
+def _write_string_to_binary_file(x, file):
+    """
+    Encodes as latin-1 to match pdftk's default behavior.
+    Fails over to utf-8 only if absolutely necessary.
+    """
+    try:
+        file.write(x.encode("latin-1"))
+    except UnicodeEncodeError:
+        # If the string contains chars latin-1 can't handle,
+        # pdftk usually uses UTF-16BE with a BOM, but UTF-8 is a safer fallback
+        file.write(x.encode("utf-8"))
+
+
 def _write_field_as_fdf_to_file(field_name, field, file):
     """Write FDF data for a single field to a file"""
-
     from pikepdf import Name, String
-    from pikepdf.form import ChoiceField, RadioButtonGroup
+    from pikepdf.form import CheckboxField, RadioButtonGroup
 
     def _write(x):
         _write_string_to_binary_file(x, file)
@@ -103,47 +117,49 @@ def _write_field_as_fdf_to_file(field_name, field, file):
     _write("\n  <<")
     _write(f"\n    /T ({field_name})")
 
-    val = field.value
-    if val is None:
-        val = field.default_value
-    if val is None and isinstance(field, ChoiceField):
-        val = ""
-
-    # pdftk seems to take an omitted value and insert '/V /'.
-    # This feels like a bug...? Let's not do that.
-    # # if val is None:
-    # #     val = '/'
-    # # else:
-    # #     val = f"({val})"
-    # # file.write(bytes(f"\n/V {val}\n>>", 'utf-8'))
-
-    if isinstance(field, RadioButtonGroup) and isinstance(val, Name):
-        try:
-            # We skip the 'if "Opt" in field.obj' check because it is flaky.
-            # Just try to access it directly.
-            idx = int(str(val)[1:])
-            val = field.obj.Opt[idx]
-        except (ValueError, IndexError, AttributeError, TypeError):
-            # AttributeError: Opt doesn't exist
-            # ValueError: val isn't an index like /1
-            # IndexError: index is out of bounds
-            pass
-
+    # Resolve the value to use
+    val = field.value if field.value is not None else field.default_value
     val_as_string = None
-    if isinstance(val, (String, str)):
+
+    if val is None:
+        # Robustness: getattr protects against mocks or non-standard objects
+        field_obj = getattr(field, "obj", {})
+        is_radio = isinstance(field, RadioButtonGroup)
+        is_merged_widget = field_obj.get("/Subtype") == "/Widget"
+
+        if is_radio and not is_merged_widget:
+            val_as_string = "/Off"
+        else:
+            val_as_string = "/"
+
+    elif isinstance(field, (RadioButtonGroup, CheckboxField)):
+        # State-based fields use Name format (/Value)
+        s_val = str(val)
+        val_as_string = s_val if s_val.startswith("/") else f"/{s_val}"
+
+    elif isinstance(val, (String, Name)):
+        # Robustness: try/except catches binary data that can't be stringified
         try:
-            val_as_string = "(" + str(val) + ")"
-        except ValueError:
+            s_val = str(val)
+            # Maintain pdftk style: Strings get parens, Names get slashes
+            if isinstance(val, String):
+                val_as_string = f"({s_val})"
+            elif isinstance(val, Name):
+                # Ensure we don't double up slashes (e.g. //Yes)
+                val_as_string = s_val if s_val.startswith("/") else f"/{s_val}"
+            else:
+                # Fallback for the theoretical edge case where the tuple check passed
+                # but individual checks failed (defensive coding)
+                val_as_string = f"({val})"
+        except (ValueError, UnicodeDecodeError):
+            # Fallback to pikepdf's hex encoding <...> for binary safety
             val_as_string = val.unparse()
-    elif val is not None:
-        val_as_string = str(val)
+
+    else:
+        # Standard fallback for basic types
+        val_as_string = f"({val})"
 
     if val_as_string is not None:
         _write(f"\n    /V {val_as_string}")
 
     _write("\n  >>")
-
-
-def _write_string_to_binary_file(x, file):
-    """Write a string to a binary file"""
-    file.write(bytes(x, "utf-8"))

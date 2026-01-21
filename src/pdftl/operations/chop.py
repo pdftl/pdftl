@@ -26,8 +26,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-
-from .parsers.chop_parser import parse_chop_spec, parse_chop_specs_to_rules
+from pdftl.operations.parsers.chop_parser import parse_chop_spec, parse_chop_specs_to_rules
 
 _CHOP_LONG_DESC = """
 

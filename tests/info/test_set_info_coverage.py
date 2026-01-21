@@ -1,6 +1,5 @@
 import logging
 
-
 # Import the PROPER datatypes
 from pdftl.info.info_types import PageLabelEntry, PageMediaEntry
 from pdftl.info.set_info import _make_page_label, _set_page_media_entry

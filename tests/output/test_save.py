@@ -21,6 +21,7 @@ from pdftl.output.save import (
     _need_appearances_option,
     _output_option,
     _owner_pw_option,
+    _replacement_font_option,
     _set_permission_or_raise_error,
     _user_pw_option,
     save_pdf,
@@ -53,6 +54,7 @@ class TestSaveOptionsRegistration:
         _need_appearances_option()
         _output_option()
         _owner_pw_option()
+        _replacement_font_option()
         _sign_cert_option()
         _sign_field_option()
         _sign_key_option()

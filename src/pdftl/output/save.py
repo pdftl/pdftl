@@ -6,11 +6,9 @@
 
 """Methods for saving PDF files (and other files), with options registered for CLI."""
 
-import inspect
 import io
 import logging
 import sys
-from collections import OrderedDict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,6 +18,7 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.fonts.form_font_replacer import replace_form_fonts
 from pdftl.output.flatten import flatten_pdf
 from pdftl.output.sign import parse_sign_options, save_and_sign
 
@@ -61,13 +60,13 @@ def _user_pw_option():
     "encrypt_40bit",
     desc="Use 40 bit encryption (obsolete, highly insecure)",
     type="flag",
-    tags=["security", "encryption", "obselete"],
+    tags=["security", "encryption", "obsolete"],
 )
 @register_option(
     "encrypt_128bit",
     desc="Use 128 bit encryption (obsolete and insecure)",
     type="flag",
-    tags=["security", "encryption", "obselete"],
+    tags=["security", "encryption", "obsolete"],
 )
 @register_option(
     "encrypt_aes128",
@@ -165,6 +164,16 @@ def _need_appearances_option():
     pass
 
 
+@register_option(
+    "replacement_font <file>",
+    desc="Replace the font used for all form fields with a TTF file",
+    type="one mandatory argument",
+    tags=["form", "font"],
+)
+def _replacement_font_option():
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers for saving
 # ---------------------------------------------------------------------------
@@ -191,6 +200,8 @@ def _get_passwords_from_options(options, input_context):
 
 def _default_permissions_object():
     """Return default permission flags: all False (permission denied)"""
+    import inspect
+
     import pikepdf
 
     return {
@@ -230,6 +241,8 @@ def _build_permissions_object(allow_options: list):
 
 def _build_encryption_object(options, input_context):
     """Constructs the pikepdf.Encryption object from all related options."""
+    from collections import OrderedDict
+
     passwords = _get_passwords_from_options(options, input_context)
     default_method_key = "encrypt_aes128"
 
@@ -396,6 +409,10 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     _remove_source_info(pdf)
 
     _action_drop_flags(pdf, options)
+
+    # Add the font replacement trigger here
+    if options.get("replacement_font"):
+        replace_form_fonts(pdf, options.get("replacement_font"))
 
     if options.get("flatten"):
         # breakpoint()

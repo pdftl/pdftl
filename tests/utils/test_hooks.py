@@ -11,18 +11,6 @@ def test_get_output_path_priorities():
     stage = SimpleNamespace(options={"output": "path1"})
     assert hooks._get_output_path(stage) == "path1"
 
-    # 1b. stage.options['output_file'] (alias)
-    stage = SimpleNamespace(options={"output_file": "path2"})
-    assert hooks._get_output_path(stage) == "path2"
-
-    # 2. stage.global_options['output'] (Legacy/Architecture fix)
-    stage = SimpleNamespace(options={}, global_options={"output": "path3"})
-    assert hooks._get_output_path(stage) == "path3"
-
-    # 3. stage.context['output']
-    stage = SimpleNamespace(options={}, context={"output": "path4"})
-    assert hooks._get_output_path(stage) == "path4"
-
     # 4. None
     stage = SimpleNamespace(options={})
     assert hooks._get_output_path(stage) is None
@@ -31,12 +19,13 @@ def test_get_output_path_priorities():
 def test_text_dump_hook_scenarios(capsys, tmp_path):
     """Test text_dump_hook behavior (Lines 37-51)."""
 
+    stage = SimpleNamespace(options={})
     # 1. Failure or empty data -> Return early
-    hooks.text_dump_hook(OpResult(success=False), None)
+    hooks.text_dump_hook(OpResult(success=False), stage)
     out, _ = capsys.readouterr()
     assert out == ""
 
-    hooks.text_dump_hook(OpResult(success=True, data=""), None)
+    hooks.text_dump_hook(OpResult(success=True, data=""), stage)
     out, _ = capsys.readouterr()
     assert out == ""
 

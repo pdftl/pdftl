@@ -18,8 +18,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-
-from .parsers.modify_annots_parser import specs_to_modification_rules
+from pdftl.operations.parsers.modify_annots_parser import specs_to_modification_rules
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,6 @@ pdf_info
 
 """
 
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,8 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.info.output_info import get_info, write_info
-from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.hooks import consume_output_option
+from pdftl.utils.io_helpers import smart_open_maybe_dash
 
 # BUG: 000301.pdf: rounding errors. Does pdftk just always round? Or
 # do we need Decimal?
@@ -91,19 +91,6 @@ These fields appear as simple `Key: Value` lines.
 
 * `NumberOfPages: <integer>`
     * The total number of pages in the document.
-    * *Read-only. Not used by `update_info`.*
-
-* `PdfVersion: <string>`
-    * The PDF version string (e.g., `1.7`).
-    * *Read-only. Not used by `update_info`.*
-
-* `Encrypted: <Yes|No>`
-    * Indicates if the document is encrypted.
-    * *Read-only. Not used by `update_info`.*
-
-* `InputFile: <path>`
-    * The local path of the file being processed.
-    * *Read-only. Not used by `update_info`.*
 
 #### Stanzas
 
@@ -112,15 +99,13 @@ These can all be updated by `update_info`.
 
 ##### 1. Info Stanza (Document Metadata)
 
-Represents a single entry in the PDF's `DocInfo` metadata dictionary.
+Each metadata entry (e.g., Title, Author) gets its own stanza.
 
 * `InfoBegin`
-* `InfoKey: <key_name>` - a standard PDF metadata field
-    (like `Title`, `Author`, `Subject`, `Keywords`,
-    `Creator`, `Producer`, `CreationDate`, `ModDate`) or any
-    custom key.
+* `InfoKey: <key_name>`
+    Standard keys include `Title`, `Author`, `Subject`, `Keywords`,
+    `Creator`, `Producer`, `CreationDate`, `ModDate`.
 * `InfoValue: <value_string>`
-
 
 ##### 2. Bookmark Stanza
 
@@ -128,36 +113,43 @@ Represents a single bookmark (outline) item.
 
 * `BookmarkBegin`
 * `BookmarkTitle: <title_string>`
-* `BookmarkLevel: <integer>` - the nesting depth (1 is top level)
-* `BookmarkPageNumber: <integer>` - 1-indexed target page number
-
+* `BookmarkLevel: <integer>` (1 is top level)
+* `BookmarkPageNumber: <integer>`
+    The 1-indexed target page number.
 
 ##### 3. PageMedia Stanza (Page-level Boxes)
 
-Describes the various geometry boxes for a specific page,
-identified by `PageMediaNumber`. All coordinates are given
-in PDF points.
+Describes geometry boxes for a page. Coordinates are in PDF points,
+space-separated (e.g., `0 0 595 842`).
 
 * `PageMediaBegin`
-* `PageMediaNumber: <integer>` - 1-indexed page number
+* `PageMediaNumber: <integer>`
+    The 1-indexed page number.
 * `PageMediaRotation: <0|90|180|270>`
-* `PageMediaRect: [x1 y1 x2 y2]`
-* `PageMediaCropRect: [x1 y1 x2 y2]`
-* `PageMediaTrimRect: [x1 y1 x2 y2]`
-
+* `PageMediaRect: <x1> <y1> <x2> <y2>` (MediaBox)
+    Always present.
+* `PageMediaDimensions: <width> <height>`
+* `PageMediaCropRect: <x1> <y1> <x2> <y2>`
+    Omitted if identical to `PageMediaRect`.
+* `PageMediaBleedRect: <x1> <y1> <x2> <y2>`
+    Omitted if identical to `PageMediaCropRect` (or `PageMediaRect` if no crop).
+* `PageMediaTrimRect: <x1> <y1> <x2> <y2>`
+    Omitted if identical to `PageMediaCropRect` (or `PageMediaRect` if no crop).
 
 ##### 4. PageLabel Stanza (Logical Page Numbers)
 
-Defines a page labelling style.
+Defines a page numbering style range.
 
 * `PageLabelBegin`
 * `PageLabelNewIndex: <integer>`
-   The 1-indexed physical starting page for this numbering
-* `PageLabelPrefix: <string>`
-   String to prepend to page label (e.g., `A-` for labels A-1, A-2 etc.)
-* `PageLabelNumStyle: <Decimal|RomanUpper|RomanLower|AlphaUpper|AlphaLower>`
+    The 1-indexed physical starting page for this numbering.
 * `PageLabelStart: <integer>`
-   The starting number for this labelling (e.g., 4)
+    The starting number for this labelling (e.g., 1).
+* `PageLabelPrefix: <string>`
+    String to prepend to page label (e.g., `A-`).
+* `PageLabelNumStyle: <Style>`
+    Standard styles: `DecimalArabic`, `UppercaseRoman`, `LowercaseRoman`,
+    `UppercaseLetters`, `LowercaseLetters`, `NoNumber`.
 """
 
 _DUMP_DATA_EXAMPLES = [
@@ -176,7 +168,7 @@ _DUMP_DATA_EXAMPLES = [
 _SHORT_DUMP_DATA_DESC_PREFIX = "Metadata, page and bookmark info"
 
 
-def dump_data_cli_hook(result: OpResult, _stage):
+def dump_data_cli_hook(result: OpResult, stage):
     """
     CLI-specific side effect: Writes the snapshot to stdout or a file.
     This function is only called by the CLI pipeline.
@@ -191,8 +183,10 @@ def dump_data_cli_hook(result: OpResult, _stage):
     extra_info = result.meta.get(c.META_EXTRA_INFO, False)
     json_output = result.meta.get(c.META_JSON_OUTPUT, False)
 
-    with smart_open(output_file) as file:
+    with smart_open_maybe_dash(output_file) as file:
         if json_output:
+            import json
+
             json.dump(result.data.to_dict(), file, indent=2)
             file.write("\n")
         else:
@@ -201,6 +195,8 @@ def dump_data_cli_hook(result: OpResult, _stage):
                 print(text, file=file)
 
             write_info(writer, result.data, escape_xml=escape_xml, extra_info=extra_info)
+
+    consume_output_option(stage)
 
 
 _DUMP_DATA_POS_ARGS = [c.OPERATION_NAME, c.INPUT_PDF, c.INPUT_FILENAME, c.OPERATION_ARGS]

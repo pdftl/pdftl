@@ -6,13 +6,8 @@
 
 """Help for CLI interface"""
 
-import importlib.metadata
-import itertools
 import logging
 import sys
-from datetime import date
-
-from packaging.requirements import Requirement
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +38,8 @@ def get_project_version():
     Gets the project version from installed package metadata or the
     setuptools_scm generated _version.py file.
     """
+    import importlib.metadata
+
     # 1. Try standard package metadata (Best for pip-installed users)
     try:
         return importlib.metadata.version("pdftl")
@@ -63,6 +60,10 @@ def get_project_version():
 
 
 def get_optional_dependencies_status():
+    import importlib.metadata
+
+    from packaging.requirements import Requirement
+
     try:
         raw_reqs = importlib.metadata.requires("pdftl") or []
     except importlib.metadata.PackageNotFoundError:
@@ -114,6 +115,8 @@ def get_optional_dependencies_status():
 
 def print_version(dest=None):
     """Prints detailed version information for the package, core, and optional deps."""
+    from datetime import date
+
     import pikepdf
 
     # --- 1. Core Dependencies ---
@@ -237,24 +240,110 @@ def _format_tags(tags):
     return f"\n\n**Tags**: {', '.join(tags)}"
 
 
-def print_main_help(hprint):
-    """Prints the main, default help screen."""
+def print_main_help(dest=None, raw=False):
+    """
+    Prints the main help screen using either the Fast Path (Rich)
+    or the Doc Path (Raw Markdown).
+    """
+    if raw:
+        # --- Strategy 1: Raw Markdown (For docs/grep) ---
+        # Uses built-in print, outputs Markdown syntax
+        target = dest if dest is not None else sys.stdout
 
-    hprint(f"# **{WHOAMI}** - PDF tackle {get_project_version()}")
-    hprint("_A wannabe CLI compatible clone/extension of pdftk_")
+        def print_title(main, sub):
+            print(f"# **{main}**\n_{sub}_", file=target)
 
-    hprint("## Usage")
-    hprint("\n```\n" + get_synopsis().strip() + "\n```")
+        def print_usage(text):
+            print(f"## Usage\n\n```\n{text.strip()}\n```", file=target)
 
-    _print_desc_table(hprint, "Operations", registry.operations)
-    _print_desc_table(hprint, "Options", registry.options)
+        def print_table(title, data):
+            # Reuses the original markdown table logic
+            out = f"|{title}||\n|-|-|\n"
+            for op, info in sorted(data.items()):
+                out += f"|`{op}`|{info.get('desc', '')}|\n"
+            print(out, file=target)
 
+    else:
+        # --- Strategy 2: Fast Rich (Restored Visuals) ---
+        import re
 
-def _print_desc_table(hprint, title, container):
-    table = f"|{title}||\n|-|-|\n"
-    for operation, info in sorted(list(container.items())):
-        table += f"|`{operation}`|{info.get('desc','')}|\n"
-    hprint(table)
+        from rich import box  # Low cost import for styling
+        from rich.console import Console
+        from rich.markup import escape
+        from rich.padding import Padding
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        # Setup console
+        if dest is None or dest is sys.stdout or dest is sys.stderr:
+            console = get_console()
+        else:
+            console = Console(file=dest, width=80, force_terminal=False)
+
+        def print_title(main, sub):
+            # 1. Restore the Heavy Box around the title
+            console.print(
+                Panel(
+                    Text(main, justify="left", style="bold"),
+                    box=box.HEAVY,
+                    style="white",
+                    expand=True,
+                )
+            )
+            # 2. Subtitle
+            console.print(Text(sub, style="dim"))  # 'dim' often looks cleaner than italic
+            console.print()
+
+        def print_usage(text):
+            console.print(Text("Usage", style="bold underline"))
+            usage_raw = f"\n{text.strip()}\n"
+            usage_styled = Text(usage_raw)
+
+            # # next style is probably orthodox (c.f. man pages)
+            # # but it looks vile, so let's omit it
+            # usage_styled.highlight_regex(r"<[^>]+>", "underline")
+
+            usage_styled.highlight_regex(
+                r"((\b(pdftl|help|all|sign|filter|pages|example|output)|--version)\b|---|[^<]input[^>])",
+                "bold cyan",
+            )
+            usage_styled.highlight_regex(r"\[|\]", "dim")
+
+            # Indent the synopsis slightly for readability
+            console.print(Padding(usage_styled, (0, 0, 1, 2)))
+
+        def print_table(title, data):
+            # 3. Restore the "Markdown Table" look
+            # box.HEAVY_HEAD puts a thick line (━) under the header, matching old output
+            # show_edge=False removes the outer side borders
+            t = Table(box=box.SIMPLE_HEAVY, show_edge=False, pad_edge=False, show_lines=False)
+
+            # The header becomes the section title ("Operations", "Options")
+            t.add_column(f" {title}", style="bold cyan", no_wrap=True)
+            t.add_column("")  # Empty string or 'Description' for 2nd col
+
+            for op, info in sorted(data.items()):
+                description_string = info.get("desc", "")
+                safe_desc = escape(description_string)
+                formatted_desc = re.sub(r"`(.*?)`", r"[cyan]\1[/cyan]", safe_desc)
+                # Add a leading space to operation name for breathing room
+                t.add_row(f" {op}", formatted_desc)
+
+            console.print(Padding(t, (0, 2, 0, 2)))
+            console.print()
+
+    # We define the layout and content ONCE here.
+
+    print_title(
+        f"{WHOAMI} - PDF tackle {get_project_version()}",
+        "A wannabe CLI compatible clone/extension of pdftk",
+    )
+
+    print_usage(get_synopsis())
+
+    print_table("Operations", registry.operations)
+    print_table("Options", registry.options)
 
 
 def _print_output_options_help(hprint):
@@ -284,6 +373,8 @@ def _print_examples_help(hprint):
 def _discover_examples():
     """Find all known CLI examples."""
     all_examples = []
+    import itertools
+
     for topic, topic_data in itertools.chain(
         registry.operations.items(),
         registry.options.items(),
@@ -298,6 +389,8 @@ def _discover_examples():
 
 def _print_help_dispatch_table():
     """Return a dispatch table for print_help"""
+    import itertools
+
     dispatch_table = {
         before_space(op): (
             lambda hprint, op_info=info, op_name=op: _print_topic_help(hprint, op_info, op_name)
@@ -358,9 +451,9 @@ def _load_help_markdown():
 
 
 def _load_hprint(dest, raw):
-    HelpMarkdown = _load_help_markdown()
 
     def hprint(x):
+        HelpMarkdown = _load_help_markdown()
         use_rich_console = not raw and (dest is None or dest is sys.stdout or dest is sys.stderr)
         if use_rich_console:
             get_console().print(HelpMarkdown(x))
@@ -397,8 +490,10 @@ def print_help(command=None, dest=None, raw=False):
     safe_command = command.lower() if command else None
 
     if safe_command is None:
-        print_main_help(hprint)
+        print_main_help(dest=dest, raw=raw)
     elif safe_command.startswith(TAG_PREFIX):
+        import itertools
+
         tag = safe_command[len(TAG_PREFIX) :]
         taggable_topics = itertools.chain(
             registry.operations.items(),

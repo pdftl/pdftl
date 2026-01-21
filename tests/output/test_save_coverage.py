@@ -48,8 +48,6 @@ def test_save_to_stdout_broken_pipe(minimal_pdf):
 import logging
 
 
-
-
 def test_save_encryption_metadata_aes_flag(minimal_pdf):
     """
     Covers lines 267-268:
@@ -106,3 +104,63 @@ def test_save_sign_to_stdout_error(minimal_pdf):
         NotImplementedError, match="Signing and saving to stdout is not yet implemented"
     ):
         save_pdf(minimal_pdf, output_filename="-", input_context=mock_ctx, options=options)
+
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from pdftl.output.save import _get_passwords_from_options, save_pdf
+
+
+def test_password_prompt_truncation():
+    """
+    Covers lines 192-195: Interactive password prompt handling.
+    Verifies that passwords > 32 chars are truncated and a warning is logged.
+    """
+    # Setup
+    options = {"user_pw": "PROMPT"}
+    mock_input_context = MagicMock()
+
+    # Return a 33-character string
+    long_password = "x" * 33
+    mock_input_context.get_pass.return_value = long_password
+
+    # Mock the logger to verify the warning
+    with patch("pdftl.output.save.logger") as mock_logger:
+        passwords = _get_passwords_from_options(options, mock_input_context)
+
+    # Assertions
+    # 1. Password should be truncated to 32 chars
+    expected_password = "x" * 32
+    assert passwords["user"] == expected_password
+    assert len(passwords["user"]) == 32
+
+    # 2. Warning should be logged
+    mock_logger.warning.assert_called_once()
+    assert "truncated" in mock_logger.warning.call_args[0][0]
+
+
+def test_save_pdf_triggers_font_replacement():
+    """
+    Covers line 415: save_pdf calling replace_form_fonts.
+    """
+    # Setup
+    mock_pdf = MagicMock()
+    options = {"replacement_font": "/path/to/custom_font.ttf"}
+    output_filename = "output.pdf"
+    mock_context = MagicMock()
+
+    # We need to patch the external dependency functions so save_pdf can run
+    with (
+        patch("pdftl.output.save.replace_form_fonts") as mock_replace,
+        patch("pdftl.output.save._build_save_options", return_value={}),
+        patch("pdftl.output.save._remove_source_info"),
+        patch("pdftl.output.save._action_drop_flags"),
+    ):
+
+        # Execute
+        save_pdf(mock_pdf, output_filename, mock_context, options=options)
+
+        # Assertion
+        mock_replace.assert_called_once_with(mock_pdf, "/path/to/custom_font.ttf")

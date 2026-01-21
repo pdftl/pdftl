@@ -124,9 +124,6 @@ def test_parse_multiple_args_allow_no_args():
     assert options["allow"] == set()  # Should be an empty set
 
 
-
-
-
 def test_duplicate_argument_raises_error():
     """
     Test that providing the same keyword argument twice throws a DuplicateArgumentError.

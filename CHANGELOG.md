@@ -5,11 +5,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.9.0] - Unreleased
+
+### Added
+
+- `mutate_content` operation: mutate page content streams
+  using a user-supplied Python script
+
+- `update_info`: Support setting `PdfID0` to "RESET" to force valid
+  ID regeneration on save.
+
+- `replacement_font` option: change the font used for user
+  text in forms
 
 ### Changed
 
 - `--version` includes optional dependency versions
+
+- Documentation updated for `dump_data`, `dump_annots`, and
+  `dump_data_fields` to better explain output formats and
+  pdftk compatibility.
+
+### Fixed
+
+- Compatibility: `generate_fdf` fixed and `replacement_font`
+  implemented. Now passes the pdftk-java tests using
+  bleeding edge `pikepdf`.
+
+- startup performance improvements: lazy loading, and
+  working around heavy Rich formatting for default help text
+
+- Pipeline: Read-only operations (like `dump_text`) now
+  implicitly pass the input PDF to the next stage, fixing
+  chained commands (e.g., `dump_text --- cat`).
+
+- Handling of features with missing dependencies should be
+  more consistent.
 
 ## [0.8.0] - 2026-17-01
 

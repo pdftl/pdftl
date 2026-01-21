@@ -204,7 +204,6 @@ def test_dump_fields_no_acroform():
 
 from unittest.mock import MagicMock, mock_open, patch
 
-
 from pdftl.core.types import OpResult
 from pdftl.operations.dump_data_fields import _extract_field_data_high_level, dump_fields_cli_hook
 
@@ -262,12 +261,12 @@ def test_dump_fields_cli_hook_meta_none():
 
     # Mock stage options
     mock_stage = MagicMock()
-    mock_stage.options = {"output_file": "dummy.txt"}
+    mock_stage.options = {"output": "dummy.txt"}
 
-    # Mock smart_open to capture file operations
+    # Mock smart_open_maybe_dash to capture file operations
     m_open = mock_open()
 
-    with patch("pdftl.operations.dump_data_fields.smart_open", m_open):
+    with patch("pdftl.operations.dump_data_fields.smart_open_maybe_dash", m_open):
         dump_fields_cli_hook(result, mock_stage)
 
     # Assert file was opened (proving execution reached past line 110)

@@ -46,6 +46,7 @@ crop-visible = ["pypdfium2"]
 dump-text = ["pypdfium2"]
 flatten = ["pypdfium2"]
 optimize-images = ["ocrmypdf"]
+replacement-font = [ "fonttools>=4.0,<5.0" ]
 signing = ["pyhanko"]
 
 # All optional CLI dependencies
@@ -55,6 +56,7 @@ extras = [
     "pdftl[dump-text]",
     "pdftl[flatten]",
     "pdftl[optimize-images]",
+    "pdftl[replacement-font]",
     "pdftl[signing]",
 ]
 

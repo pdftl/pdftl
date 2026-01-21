@@ -6,7 +6,6 @@
 
 """Registry for various data, loaded at runtime"""
 
-import inspect
 from collections import OrderedDict
 from dataclasses import fields
 
@@ -106,6 +105,8 @@ class Registry:
         """Decorator to register a command."""
 
         def decorator(func):
+            import inspect
+
             if "examples" in metadata:
                 safe_examples = [_to_help_example_helper(ex, name) for ex in metadata["examples"]]
 
@@ -132,6 +133,8 @@ class Registry:
         """Decorator to register an option."""
 
         def decorator(func):
+            import inspect
+
             full_metadata = {
                 **metadata,
                 **caller_dict(inspect.currentframe()),
@@ -161,6 +164,8 @@ class Registry:
                 raise ValueError(f"Invalid example format in topic '{name}'")
 
         def decorator(func):
+            import inspect
+
             long_desc = inspect.getdoc(func) or ""
 
             topic = HelpTopic(

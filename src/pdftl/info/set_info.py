@@ -12,13 +12,14 @@ if TYPE_CHECKING:
     from pikepdf import OutlineItem
     from pdftl.info.info_types import PdfInfo, BookmarkEntry, PageMediaEntry, PageLabelEntry
 
-
 import pdftl.core.constants as c
 
 logger = logging.getLogger(__name__)
 
 CANNOT_SET_PDFID1 = (
-    "Cannot set PdfID1. This is a limitation of pikepdf."
+    "Ignoring PdfID1 update. The PDF specification requires the "
+    "library to manage the Modification ID automatically on save.\n"
+    "To force a complete ID reset (fresh bake), set PdfID0 to 'RESET'."
     " See also PDF 32000-1:2008 section 14.4."
 )
 
@@ -32,10 +33,7 @@ def set_metadata_in_pdf(pdf: "pikepdf.Pdf", info: "PdfInfo"):
 
     # 2. IDs
     if info.ids:
-        if len(info.ids) > 0 and info.ids[0]:
-            _set_id_info(pdf, 0, info.ids[0])
-        if len(info.ids) > 1 and info.ids[1]:
-            _set_id_info(pdf, 1, info.ids[1])
+        _set_ids(pdf, info.ids)
 
     # 3. Bookmarks
     if info.bookmarks:
@@ -57,6 +55,35 @@ def _set_docinfo(pdf, doc_info_list):
     # We iterate the list to preserve the user's input order
     for entry in doc_info_list:
         pdf.docinfo[Name("/" + entry.key)] = entry.value
+
+
+def _set_ids(pdf, ids_list):
+    """Handle ID updates with safeguards and RESET logic."""
+    import pikepdf
+
+    # 1. Handle PdfID1 (Modification ID)
+    if len(ids_list) > 1 and ids_list[1]:
+        logger.warning(CANNOT_SET_PDFID1)
+
+    # 2. Handle PdfID0 (Creation ID)
+    if len(ids_list) > 0 and ids_list[0]:
+        val = ids_list[0].strip()
+
+        # Case A: Explicit Reset Request
+        if val.upper() == "RESET":
+            # We set IDs to empty bytes. This preserves the structure (preventing
+            # KeyErrors in downstream in-memory steps) but forces the library
+            # to regenerate valid, matching IDs on the next save.
+            if pdf.trailer:
+                pdf.trailer.ID = pikepdf.Array([b"", b""])
+                logger.info(
+                    "PdfID0: RESET => Fresh Bake. IDs cleared. "
+                    "A new, matching ID pair will be generated on save."
+                )
+
+        # Case B: Standard Hex Update
+        else:
+            _set_id_info(pdf, 0, val)
 
 
 def _set_page_media(pdf, page_media_list: list["PageMediaEntry"]):
@@ -185,9 +212,6 @@ def _set_page_labels(pdf, label_list: list["PageLabelEntry"], delete_existing=Tr
 
 
 def _set_id_info(pdf, id_index, hex_string):
-    assert id_index in (0, 1)
-    if id_index == 1:
-        logger.warning(CANNOT_SET_PDFID1)
     if pdf.trailer and hasattr(pdf.trailer, "ID"):
         try:
             pdf.trailer.ID[id_index] = bytes.fromhex(hex_string)

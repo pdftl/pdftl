@@ -12,11 +12,16 @@ import os
 
 from pdftl.core.registry import register_help_topic, register_option
 from pdftl.exceptions import UserCommandLineError
+from pdftl.utils.dependencies import ensure_dependencies
 
 logger = logging.getLogger(__name__)
 
 
 def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
+    ensure_dependencies(
+        feature_name="signing", dependencies={"pyhanko": "pyhanko"}, extra_tag="signing"
+    )
+
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     from pyhanko.sign import signers
 
@@ -136,7 +141,7 @@ def _sign_field_option():
     "sign_pass_env <var>",
     desc="Environment variable with `sign_cert` passphrase",
     long_desc=""" The name of an environment variable containing the
-    passphrase for your public signing certificate, as specificed by
+    passphrase for your public signing certificate, as specified by
     `sign_cert`.  """,
     type="one mandatory argument",
     tags=["security", "signatures"],

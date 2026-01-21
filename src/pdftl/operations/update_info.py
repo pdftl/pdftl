@@ -77,18 +77,31 @@ the output PDF:
 
 * **Bookmarks:** Deletes all existing bookmarks and replaces
   them with the `Bookmark` stanzas from the input file.
+  Target page numbers are 1-indexed.
 
 * **PageMedia:** Applies page-level settings (Rotation,
   CropBox, TrimBox) as defined in `PageMedia` stanzas.
+  Page numbers are 1-indexed.
 
-* **PageLabels:** Replaces the document's page labelleling
+* **PageLabels:** Replaces the document's page labelling
   scheme (e.g., "i, ii, iii") using the `PageLabel` stanzas
-  from the input file.
+  from the input file. Indices are 1-indexed.
 
-* **PdfID:** Updates the `PdfID0` top-level field. The
-  `PdfID1` is not updated: this is a design limitation in
-  the underlying PDF library, presumably in order to comply
-  with the PDF specification.
+* **PdfID:** Updates the `PdfID0` top-level field (the
+  creation ID).
+  * You may provide a 32-character hex string to set a
+      PdfID0. For example, `PdfID0: 1234abcd1234abcd1234abcd1234abcd`
+  * **Fresh Bake:** If you set `PdfID0` to the string
+      `RESET` (case-insensitive), the tool will remove
+      the existing ID array. The underlying library will
+      generate a brand new, matching ID pair (ID0=ID1)
+      when saving.
+  * `PdfID1` (the modification ID) is **not** updatable;
+      it is automatically managed by the underlying PDF
+      library to ensure specification compliance.
+
+    Providing a `PdfID1` value in the input will result
+    in a warning. It will otherwise be ignored.
 
 For a complete description of the stanza-based input format
 this command expects, see the help for `dump_data`.
@@ -153,8 +166,8 @@ Here is an example for `update_info`:
 }
 ```
 
-Where it makes sense, you should be to omit keys in order to
-perform a partial update.
+Where it makes sense, you can omit keys in order to perform
+a partial update.
 
 """
 

@@ -278,9 +278,10 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="module")
 def dummy_pdfs(tmp_path_factory, assets_dir):
-    """
-    A pytest fixture that creates a set of dummy PDF files with enough pages
-    to satisfy all example commands.
+    """A pytest fixture that creates a set of dummy PDF files
+    with enough pages and any other files (e.g., python
+    scripts) to satisfy all example commands.
+
     """
     import pikepdf
 
@@ -355,6 +356,16 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
 
     # 2. Ensure Form.pdf is copied to the test working directory
     shutil.copy(assets_dir / "Form.pdf", tmp_path / "Form.pdf")
+
+    # 3. Copy python scripts from tests/files/python/ to the temp dir
+    #    and register them in 'paths' so tests can use dummy_pdfs['script.py']
+    scripts_source = Path(__file__).parent / "files" / "python"
+    if scripts_source.exists():
+        for script in scripts_source.glob("*.py"):
+            target = tmp_path / script.name
+            shutil.copy(script, target)
+            paths[script.name] = target
+
     return paths
 
 

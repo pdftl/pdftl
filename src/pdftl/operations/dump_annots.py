@@ -23,8 +23,17 @@ from pdftl.utils.string import compact_json_string, xml_encode_for_info
 
 _DUMP_ANNOTS_LONG_DESC = """
 
-The `dump_annots` operation extracts and prints information about
-annotations within the PDF file.
+Extracts all annotations from the PDF and dumps them in a
+structured JSON format.
+
+Unlike `dump_data_annots`, this operation provides a raw,
+comprehensive view of the annotation dictionaries, including
+all properties (e.g., Rect, Contents, Colors, Flags).
+
+The output is a JSON list where each entry represents an
+annotation, grouped by page. This is useful for debugging,
+analysis, or processing annotation data in other tools that
+consume JSON.
 
 """
 
@@ -83,9 +92,23 @@ def dump_annots(pdf, output_file=None) -> OpResult:
 
 _DUMP_DATA_ANNOTS_LONG_DESC = """
 
-The `dump_data_annots` operation extracts and prints
-information about annotations within the PDF file in the style of
-`pdftk`.
+Extracts annotations and prints them in a text-based stanza
+format, designed to be compatible with `pdftk`'s output.
+
+This operation **filters** the output to standard annotation
+types (Link, Text, Widget, Popup, FreeText, Square, URI,
+FileAttachment). It explicitly excludes JavaScript actions.
+
+### Stanza Format
+
+Entries are separated by `---`. Common keys include:
+
+* `AnnotSubtype`: The type of annotation (e.g., Link, Text).
+* `AnnotRect`: The bounding box [x y w h].
+* `AnnotPageNumber`: The page number containing the annotation.
+
+Use this operation for legacy compatibility or simple textual
+analysis. For a complete dataset, use `dump_annots`.
 
 """
 

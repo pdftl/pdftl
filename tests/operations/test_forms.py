@@ -64,7 +64,7 @@ def test_dump_data_fields(pdf_with_form, tmp_path):
     """Test dumping form fields to a file."""
     output = tmp_path / "fields.txt"
     result = dump_data_fields(pdf_with_form, output_file=str(output))
-    mock_stage = SimpleNamespace(options={"output_file": str(output), "escape_xml": True})
+    mock_stage = SimpleNamespace(options={"output": str(output), "escape_xml": True})
     dump_fields_cli_hook(result, mock_stage)
 
     content = output.read_text(encoding="utf-8")

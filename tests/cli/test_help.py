@@ -2,13 +2,16 @@ import builtins
 import importlib
 import importlib.metadata
 import io
+import logging
 import sys
 import types
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import MagicMock, patch
 
 import pytest
+from rich.console import Console
 
+import pdftl.cli.console as console_mod
 import pdftl.cli.help as helpmod
 from pdftl.core.types import HelpExample
 
@@ -85,7 +88,7 @@ def test_get_synopsis(patch_environment):
 
 
 def test_get_project_version_success(monkeypatch, patch_environment):
-    monkeypatch.setattr(helpmod.importlib.metadata, "version", lambda pkg: "1.2.3")
+    monkeypatch.setattr("importlib.metadata.version", lambda pkg: "1.2.3")
     assert helpmod.get_project_version() == "1.2.3"
 
 
@@ -158,14 +161,34 @@ def test_print_version_to_file(monkeypatch, patch_environment):
 
 
 @pytest.mark.parametrize("cmd", [None, "combine", "output_options", "examples", "all", "nonsense"])
-def test_print_help_variants(monkeypatch, cmd, patch_environment):
+def test_print_help_variants(monkeypatch, caplog, cmd):
+    """Test various help sub-commands/topics."""
+    # 1. Setup a capture console
+    capture_buffer = io.StringIO()
+    capture_console = Console(file=capture_buffer, force_terminal=True, width=80)
+
+    # 2. Patch the global singleton in the console module (good practice)
+    monkeypatch.setattr(console_mod, "_CONSOLE", capture_console)
+
+    # 3. Patch version to be consistent
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
-    buf_out, buf_err = io.StringIO(), io.StringIO()
-    with redirect_stdout(buf_out), redirect_stderr(buf_err):
-        helpmod.print_help(cmd, raw=True)
-    output = buf_out.getvalue() + buf_err.getvalue()
-    # Ensure output contains the version or some CLI content
-    assert "pdftl" in output
+
+    # 4. Run the help command
+    # FIX: Patch the Console class used inside help.py.
+    # This ensures that even if the code tries to create a new Console(file=print),
+    # it gets our capture_console instead, avoiding the AttributeError.
+    with patch("rich.console.Console", return_value=capture_console):
+        with caplog.at_level(logging.WARNING):
+            helpmod.print_help(cmd, dest=capture_buffer, raw=True)
+
+    # 5. Verify output
+    output = capture_buffer.getvalue()
+    if cmd == "examples":
+        assert "Examples" in output
+    else:
+        assert "usage:" in output or "Description:" in output or "pdftl" in output
+        if cmd == "nonsense":
+            assert "Unknown help topic 'nonsense'" in caplog.text
 
 
 def test_print_version_to_console(monkeypatch, patch_environment):

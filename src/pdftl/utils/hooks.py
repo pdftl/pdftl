@@ -1,86 +1,73 @@
-# src/pdftl/utils/hooks.py
-
-import json
+import logging
 import sys
 from typing import Any
 
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.io_helpers import smart_open_maybe_dash
+
+logger = logging.getLogger(__name__)
+
+
+def consume_output_option(stage):
+    """
+    Unconditionally removes the 'output' option from the stage.
+    Call this ONLY if your hook has successfully written an output file
+    and you want to prevent the pipeline from saving the PDF there.
+    """
+    logger.debug("consume_output_option")
+    if hasattr(stage, "options"):
+        logger.debug("consuming")
+        stage.options.pop("output", None)
 
 
 def _get_output_path(stage):
+    """Simple lookup: checks stage options."""
+    return stage.options.get("output", None)
+
+
+def text_dump_hook(result: OpResult, stage):
     """
-    Helper to resolve the output path from a stage.
-    Prioritizes stage-specific options, then falls back to global options
-    if the stage object has access to them.
+    Writes text to file (and consumes output option) or stdout.
     """
-    # 1. Check specific stage options (e.g., from 'output_file' arg mapping)
-    path = stage.options.get("output") or stage.options.get("output_file")
-    if path:
-        return path
-
-    # 2. Check for global options attached to the stage (Architecture Fix)
-    # If the parser/pipeline attaches global_options to the stage, use it.
-    if hasattr(stage, "global_options") and stage.global_options:
-        return stage.global_options.get("output")
-
-    # 3. Check for a context object
-    if hasattr(stage, "context") and stage.context:
-        return stage.context.get("output")
-
-    return None
-
-
-def text_dump_hook(result, stage):
-    """
-    Hook for text-based commands (dump_text, list_files).
-    Writes result.data (str) to the configured output file or stdout.
-    """
-    if not result.success or not result.data:
+    logger.debug("text_dump_hook")
+    if not result.success or result.data is None:
         return
 
     output_path = _get_output_path(stage)
+    logger.debug("output_path=%s", output_path)
+    data_str = str(result.data)
 
-    # If no output file is found, default to stdout (Legacy behavior)
-    if not output_path:
-        print(result.data)
-        return
-
-    with smart_open(output_path) as f:
-        f.write(str(result.data))
-        # Ensure trailing newline for terminal niceness
-        if not str(result.data).endswith("\n"):
+    with smart_open_maybe_dash(output_path) as f:
+        f.write(data_str)
+        if len(data_str) > 0 and not str(result.data).endswith("\n"):
             f.write("\n")
 
+    consume_output_option(stage)
 
-def json_dump_hook(result, stage):
+
+def json_dump_hook(result: OpResult, stage):
     """
-    Hook for data-structure commands (dump_data, dump_layers).
-    Writes result.data (dict/list) as formatted JSON.
+    Writes JSON to file (and consumes output option) or stdout.
     """
+    import json
+
     if not result.success or result.data is None:
         return
 
     output_path = _get_output_path(stage)
 
-    # JSON commands usually print to stdout if no file is given
-    f = smart_open(output_path) if output_path else sys.stdout
-
-    try:
+    with smart_open_maybe_dash(output_path) as f:
         json.dump(result.data, f, indent=2, default=str)
         f.write("\n")
-    finally:
-        if output_path:
-            f.close()
+
+    consume_output_option(stage)
 
 
 def from_result_meta(result: OpResult, attrib: str) -> Any:
-    """Utility to get a value from result.meta or error out if impossible"""
     assert result.meta is not None
     return result.meta.get(attrib)
 
 
 def str_from_result_meta(result: OpResult, attrib: str) -> str:
-    """Utility to get a value from result.meta, asserting that it is a string"""
     assert isinstance(ret := from_result_meta(result, attrib), str)
     return ret

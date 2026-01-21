@@ -26,7 +26,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 
 ## Key features and `pdftk` compatibility
 
-* **Familiar syntax:** Command-line compatible with `pdftk`. Verified against [Mike Haertl's php-pdftk test suite][5], so `sed s/pdftk/pdftl/g` should result in working scripts.
+* **Familiar syntax:** Command-line compatible with `pdftk`. Verified against [Mike Haertl's php-pdftk test suite][5] and the [pdftk-java][8] test suite logic, so `sed s/pdftk/pdftl/g` should result in working scripts.
 * **Pipelining:** Chain multiple operations in a single command using `---`.
 * **Probably performant:** `pdftl` seems faster than `pdftk` for many operations _(untested hunch; data needed)_. Reason: `pdftl` mostly drives `pikepdf` which drives `qpdf`, a fast C++ library.
 * **Extra/enhanced operations and features** such as zooming pages, smart merging preserving links and outlines, cropping/chopping up pages, text extraction, optimizing images.
@@ -42,7 +42,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 | **Syntax** | Standard | ✅ **Compatible Extension** |
 | **Page Geometry** | ❌ | ✅ **Crop to fit, Zoom, & Chop** |
 | **Pipelined Logic** | ❌ | ✅ **Rotate + Stamp in one command** |
-| **Extensible** | ❌ | ✅ **Custom operations written in Python** |
+| **Plugins** | ❌ | ✅ **Custom operations/mutation scripts written in Python** |
 | **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
 | **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
 | **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
@@ -93,8 +93,8 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
-* **Extensibility:** write your own custom operation in Python, save to `~/.config/pdftl/operations` (*nix) or
-  `%APPDATA%\pdftl\config` (Windows) and you can use it in pdftl, just like the built-in operations.
+* **Plugins:** write your own custom operation in Python, save to `~/.config/pdftl/operations` (*nix) or
+ `%APPDATA%\pdftl\config` (Windows) and you can use it in pdftl, just like the built-in operations. And you can [`mutate_content`](https://pdftl.readthedocs.io/en/latest/operations/mutate_content.html) using simple Python scripts.
 
 ## Examples
 
@@ -275,3 +275,4 @@ See the **[API Tutorial][4]** for more details.
 [5]: https://github.com/mikehaertl/php-pdftk
 [6]: https://github.com/MatthiasValvekens/pyHanko
 [7]: https://pdftl.readthedocs.io/en/latest/general/help.html
+[8]: https://gitlab.com/pdftk-java/pdftk

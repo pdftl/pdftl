@@ -31,6 +31,10 @@ def smart_pikepdf_open(filename: str | None, password: str | None = None) -> "pi
     return pikepdf.open(source)
 
 
+def smart_open_maybe_dash(filename: str | None, mode="w", encoding="utf-8"):
+    return smart_open(filename if filename != "-" else None, mode, encoding)
+
+
 def smart_open(filename: str | None, mode="w", encoding="utf-8"):
     """
     Context manager that opens a filename or stdout (if the

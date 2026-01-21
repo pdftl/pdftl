@@ -393,3 +393,45 @@ def test_open_input_pdfs_dispatches_special_inputs(mocker, mock_input_context):
 
     # Verify the normal handler was called for the second
     mock_file.assert_called_once_with("normal.pdf", None)
+
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from pdftl.cli.pipeline import CliStage, PipelineManager
+from pdftl.core.types import OpResult
+
+
+def test_process_result_implicit_passthrough():
+    """
+    Test covering line 199 in pipeline.py:
+    Ensures that if an operation returns no PDF (result.pdf is None),
+    the pipeline defaults to passing the first input PDF forward.
+    """
+    # 1. Setup minimal PipelineManager
+    # We set is_api=True to skip CLI hook lookup logic for simplicity
+    input_context = MagicMock()
+    input_context.is_api = True
+
+    stage = CliStage(operation="mock_read_only_op")
+    pipeline = PipelineManager(stages=[stage], input_context=input_context)
+
+    # 2. Prepare the specific conditions for line 199
+    # Condition A: opened_pdfs is not empty
+    mock_input_pdf = MagicMock(name="InputPDF")
+    opened_pdfs = [mock_input_pdf]
+
+    # Condition B: Result has NO pdf (simulating dump_text/dump_data)
+    op_result = OpResult(success=True, pdf=None, data="some text output")
+
+    # 3. Execution
+    pipeline._process_result(op_result, stage, opened_pdfs)
+
+    # 4. Assertion
+    # Verify that pipeline_pdf was set to the input PDF (pass-through)
+    assert pipeline.pipeline_pdf == mock_input_pdf
+
+    # Verify we didn't accidentally close the input PDF inside _process_result
+    # (The cleanup logic only closes inputs that *aren't* the result)
+    mock_input_pdf.close.assert_not_called()

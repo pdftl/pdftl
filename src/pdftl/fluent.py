@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pathlib import Path
     from pikepdf import Pdf
+    from collections.abc import Callable
 
 import pdftl.api as api
 import pdftl.core.constants as c
@@ -117,7 +117,7 @@ class PdfPipeline:
         kwargs[c.OPERATION_ARGS] = mapped_op_args
         return kwargs
 
-    def _apply_metadata(self, func: Callable, name: str) -> Callable:
+    def _apply_metadata(self, func: "Callable", name: str) -> "Callable":
         """Copies docstrings and signatures from the API function to the wrapper."""
         func.__name__ = name
         try:

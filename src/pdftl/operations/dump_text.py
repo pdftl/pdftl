@@ -95,4 +95,5 @@ def dump_text(input_filename, input_password, output_file=None) -> OpResult:
             _extract_text_from_pdf(input_filename, pypdfium2, input_password),
         )
     )
+
     return OpResult(success=True, data=output_text)

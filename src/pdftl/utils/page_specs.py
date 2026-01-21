@@ -25,7 +25,6 @@ page_numbers_matching_page_specs(specs, total_pages) -> [int]
 """
 
 import logging
-import math
 import re
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -38,6 +37,23 @@ from pdftl.core.registry import register_help_topic
 from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
 
 logger = logging.getLogger(__name__)
+
+SPEC_REGEX = re.compile(
+    r"""
+    ^                     # Anchor to the start of the string
+    (?:                   # Start optional non-capturing group for whole range
+        (r(?!ight))?      # CAPTURE GROUP 1: Optional 'r', reverse start page
+        (end|\d+)?        # CAPTURE GROUP 2: The start page number or 'end'
+        (?:               # Start optional non-capturing group for end of range
+            -             # literal hyphen separator
+            (r(?!ight))?  # CAPTURE GROUP 3: Optional 'r' for reverse end page
+            (end|\d+)?    # CAPTURE GROUP 4: end page number or 'end'
+        )?                # End of optional end-of-range group
+    )?                    # End of optional page-range group
+    (.*)                  # CAPTURE GROUP 5: Greedily capture rest as modifiers
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 
 
 @dataclass
@@ -85,23 +101,6 @@ ROTATION_MAP = {
 
 # Set of supported page qualifiers.
 QUALIFIER_MAP = {"even", "odd"}
-
-SPEC_REGEX = re.compile(
-    r"""
-    ^                     # Anchor to the start of the string
-    (?:                   # Start optional non-capturing group for whole range
-        (r(?!ight))?      # CAPTURE GROUP 1: Optional 'r', reverse start page
-        (end|\d+)?        # CAPTURE GROUP 2: The start page number or 'end'
-        (?:               # Start optional non-capturing group for end of range
-            -             # literal hyphen separator
-            (r(?!ight))?  # CAPTURE GROUP 3: Optional 'r' for reverse end page
-            (end|\d+)?    # CAPTURE GROUP 4: end page number or 'end'
-        )?                # End of optional end-of-range group
-    )?                    # End of optional page-range group
-    (.*)                  # CAPTURE GROUP 5: Greedily capture rest as modifiers
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
 
 
 # --- Internal Parsing Helpers ---
@@ -221,6 +220,8 @@ def _parse_rotation(modifier_str):
 
 
 def _parse_scaling(modifier_str):
+    import re
+
     scale = 1.0
     # Find 'x' scaling
     scale_re = re.compile(r"x([+-]?\d*\.?\d+)")
@@ -236,6 +237,8 @@ def _parse_scaling(modifier_str):
     zoom_re = re.compile(r"z([+-]?\d*\.?\d+)")
     zoom_match = zoom_re.search(modifier_str)
     if zoom_match:
+        import math
+
         zoom_val = float(zoom_match.group(1))
         scale *= math.pow(math.sqrt(2), zoom_val)
         modifier_str = zoom_re.sub("", modifier_str, 1)
@@ -244,6 +247,8 @@ def _parse_scaling(modifier_str):
 
 
 def _parse_omissions(modifier_str, total_pages):
+    import re
+
     omissions = []
     omit_re = re.compile(r"^(~([^~]*))")
 

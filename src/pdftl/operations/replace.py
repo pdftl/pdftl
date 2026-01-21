@@ -7,7 +7,6 @@
 """Perform replacements in page content streams"""
 
 import logging
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -96,6 +95,8 @@ def _apply_replace_spec_in_content_streams(pdf, spec, normalize_input, normalize
 
 
 def _parse_replace_spec(pdf, spec, normalize_input, normalize_output):
+    import re
+
     count_match = re.match("^(.*?)([0-9]*)$", spec)
     count = int(count_match[2] or 0)
     countless_spec = count_match[1]
@@ -126,6 +127,8 @@ class RegexReplaceContentStream:
 
     def apply(self, page_num: int):
         """Apply the replacement"""
+        import re
+
         page = self.pdf.pages[page_num - 1]
         if self.normalize_input:
             content_stream = get_normalized_page_content_stream(page)

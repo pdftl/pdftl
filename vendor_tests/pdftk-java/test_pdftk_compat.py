@@ -565,7 +565,7 @@ class TestData:
 # ==========================================
 class TestForm:
 
-    def compare_fdf_strings(self, fdf1, fdf2):
+    def compare_fdf_byte_strings(self, fdf1, fdf2):
         """
         Compares two FDF strings, treating them as equal even if:
         1. Whitespace/Newlines differ.
@@ -574,11 +574,11 @@ class TestForm:
 
         def canonicalize(text):
             # 1. Normalize whitespace: collapse newlines/spaces to a single space
-            text = re.sub(r"\s+", " ", text).strip()
+            text = re.sub(b"\s+", b" ", text).strip()
 
             # 2. Find the /Fields [...] block
             #    Matches '/Fields [' followed by content, ending with ']'
-            match = re.search(r"/Fields\s*\[(.*?)\]", text)
+            match = re.search(b"/Fields\s*\[(.*?)\]", text)
 
             if match:
                 # Get the content inside the brackets
@@ -586,13 +586,13 @@ class TestForm:
 
                 # 3. Extract individual dictionaries: << ... >>
                 #    re.findall retrieves them as a list of strings
-                items = re.findall(r"<<.*?>>", content_inside_brackets)
+                items = re.findall(b"<<.*?>>", content_inside_brackets)
 
                 # 4. Sort the items (making the list order irrelevant)
                 items.sort()
 
                 # 5. Rebuild the string with the sorted items
-                sorted_content = " ".join(items)
+                sorted_content = b" ".join(items)
 
                 # Splice the sorted content back into the normalized text
                 start, end = match.span(1)
@@ -600,7 +600,9 @@ class TestForm:
 
             return text
 
-        return canonicalize(fdf1) == canonicalize(fdf2)
+        c_fdf1 = canonicalize(fdf1)
+        c_fdf2 = canonicalize(fdf2)
+        return c_fdf1, c_fdf2
 
     def test_dump_data_fields(self, run_pdftl, get_test_file):
         pdf = get_test_file("test/files/form.pdf")
@@ -611,11 +613,13 @@ class TestForm:
         )
         assert_blocky_equal(expected_lines, actual_lines)
 
-    def test_generate_fdf(self, run_pdftl, get_test_file):
+    def generate_fdf_test_runner(
+        self, test_pdf_filename, expected_fdf_filename, run_pdftl, get_test_file
+    ):
         import re
 
-        pdf = get_test_file("test/files/form.pdf")
-        expected = slurp_bytes(get_test_file("test/files/form.fdf"))
+        pdf = get_test_file(test_pdf_filename)
+        expected = slurp_bytes(get_test_file(expected_fdf_filename))
         res = run_pdftl([pdf, "generate_fdf", "output", "-"])
         result = res.stdout
         assert expected[:15] == res.stdout[:15]
@@ -623,13 +627,25 @@ class TestForm:
         result = result[15:]
         result = re.sub(b"\n *", b"\n", result)
         result = re.sub(b"\n%%%[^\n]*", b"", result)
-        assert self.compare_fdf_strings(expected.decode(), result.decode())
+        return self.compare_fdf_byte_strings(expected, result)
+
+    def test_generate_fdf(self, run_pdftl, get_test_file):
+        expected, result = self.generate_fdf_test_runner(
+            "test/files/form.pdf", "test/files/form.fdf", run_pdftl, get_test_file
+        )
+        assert expected == result
 
     def test_generate_fdf_issue88(self, run_pdftl, get_test_file):
-        pdf = get_test_file("test/files/issue88.pdf")
-        expected = slurp_bytes(get_test_file("test/files/issue88.fdf"))
-        res = run_pdftl([pdf, "generate_fdf", "output", "-"])
-        assert expected == res.stdout
+        expected, result = self.generate_fdf_test_runner(
+            "test/files/issue88.pdf", "test/files/issue88.fdf", run_pdftl, get_test_file
+        )
+        assert expected == result
+
+    def test_generate_fdf_utf8_options(self, run_pdftl, get_test_file):
+        expected, result = self.generate_fdf_test_runner(
+            "test/files/form-utf8.pdf", "test/files/form-utf8.fdf", run_pdftl, get_test_file
+        )
+        assert expected == result
 
     def test_fill_from_fdf(self, run_pdftl, get_test_file):
         pdf = get_test_file("test/files/form.pdf")
@@ -644,12 +660,6 @@ class TestForm:
             res.stdout.decode("utf-8", errors="replace").replace("\r\n", "\n").split("\n")
         )
         assert_blocky_equal(expected_lines, actual_lines)
-
-    def test_generate_fdf_utf8_options(self, run_pdftl, get_test_file):
-        pdf = get_test_file("test/files/form-utf8.pdf")
-        expected = slurp_bytes(get_test_file("test/files/form-utf8.fdf"))
-        res = run_pdftl([pdf, "generate_fdf", "output", "-"])
-        assert expected == res.stdout
 
     def test_fill_from_fdf_utf8_options(self, run_pdftl, get_test_file):
         pdf = get_test_file("test/files/form-utf8.pdf")

@@ -3,7 +3,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """Dump Layer (Optional Content Group) information"""
-import json
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -121,6 +120,8 @@ def _parse_usage(ocg):
 
 def dump_layers_cli_hook(result: OpResult, _stage):
     # Use smart_open to handle stdout vs file correctly
+    import json
+
     from pdftl.utils.hooks import from_result_meta
 
     output_filename = from_result_meta(result, c.META_OUTPUT_FILE)

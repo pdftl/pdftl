@@ -105,7 +105,7 @@ def test_get_input_with_completer(mocker):
 def test_get_all_filename_matches(mocker):
     """Tests the filesystem-matching helper function."""
     # Patch the functions that touch the filesystem
-    mock_glob = mocker.patch("pdftl.utils.user_input.glob.glob")
+    mock_glob = mocker.patch("glob.glob")
     mock_isdir = mocker.patch("pdftl.utils.user_input.os.path.isdir")
     mock_expanduser = mocker.patch("pdftl.utils.user_input.os.path.expanduser")
 

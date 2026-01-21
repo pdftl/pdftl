@@ -9,15 +9,12 @@ Single entry point for initializing the application registry.
 This function populates registry options and discovers all operations.
 """
 
-import importlib
 import logging
-import pkgutil
 
 import pdftl
 
 logger = logging.getLogger(__name__)
 
-import importlib.util
 import os
 import pathlib
 import sys
@@ -25,6 +22,8 @@ import sys
 
 def _discover_external_operations():
     """Discover user-provided operations in the config directory."""
+    import importlib
+
     if os.name == "nt":
         config_base = pathlib.Path(os.environ.get("APPDATA", ""))
     else:
@@ -72,6 +71,9 @@ def _discover_modules(parent_modules, label):
     This ensures that decorators are executed,
     so the global registry is fully populated before use.
     """
+    import importlib
+    import pkgutil
+
     loaded_modules = []
     for pkg in parent_modules:
         # iter_modules requires the path to be iterable (a list)
@@ -99,6 +101,7 @@ def initialize_registry():
     This function is idempotent (safe to call multiple times).
     It populates static options and discovers all operations.
     """
+    import importlib
 
     if getattr(initialize_registry, "initialized", False):
         return

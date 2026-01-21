@@ -29,10 +29,7 @@ def test_split_escaped():
         ("Only delimiter", split_escaped(",", ","), ["", ""]),
     ]
 
-    if all(tests):
-        print("All tests passed!")
-    else:
-        print("\nSome tests failed.")
+    assert all(tests)
 
 
 def test_split_escaped_value_error():

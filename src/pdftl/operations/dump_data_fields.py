@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.string import fix_mojibake, xml_encode_for_info
 
 _DUMP_DATA_FIELDS_UTF8_LONG_DESC = """
@@ -48,10 +48,9 @@ _DUMP_DATA_FIELDS_LONG_DESC = """
 Extracts data from all interactive form fields (AcroForm
 fields) within the input PDF.
 
-The output uses a stanza-based format similar to
-`dump_data`, but is specific to form fields. All string
-values (such as the field's content) are processed with
-XML-style escaping.
+The output uses a stanza-based format compatible with
+`pdftk`. All string values (such as the field's content)
+are processed with XML-style escaping.
 
 This output is for informational purposes or for use in
 external scripts. It is **not** designed to be read by the
@@ -60,28 +59,46 @@ external scripts. It is **not** designed to be read by the
 
 ### Field Stanza Format
 
-Each field is represented by a single stanza.
-
-* `FieldBegin`
+Each field is represented by a single stanza. Each stanza
+consists of a separator line `---`, followed by:
 
 * `FieldName: <full_field_name>`
+
   The unique identifying name of the field (e.g., `form1.name`).
 
-* `FieldType: <Tx|Btn|Ch|Sig|...>`
-  The AcroForm type
-  (e.g., `Tx` for text, `Btn` for button, `Ch` for choice).
+* `FieldNameAlt: <tooltip_text>`
+
+  The alternate name (tooltip) of the field, if present.
+
+* `FieldType: <Text|Button|Choice|Signature|...>`
+
+  The readable type of the field.
 
 * `FieldValue: <current_value>`
+
   The current value of the field.
 
+* `FieldValueDefault: <default_value>`
+
+  The default value of the field, if defined.
+
 * `FieldFlags: <integer>`
+
   An integer representing a bitmask of field properties.
 
 * `FieldJustification: <Left|Center|Right>`
+
   Text alignment for text fields.
 
-* `FieldOptions: [<option1>, <option2>, ...]` (For Choice/List fields)
-  A list of the available options for dropdowns or list boxes.
+* `FieldStateOption: <option_value>`
+
+  Available options for Choice (dropdown/list) fields or Button
+  (checkbox/radio) fields. Multiple lines may appear.
+
+* `FieldStateOptionDisplay: <display_text>`
+
+  The display text corresponding to the preceding `FieldStateOption`,
+  used when the export value differs from the display value.
 """
 
 _DUMP_DATA_FIELDS_EXAMPLES = [
@@ -103,14 +120,14 @@ def dump_fields_cli_hook(result, stage):
     if not result.data:
         return
 
-    output_file = stage.options.get("output_file")
+    output_file = stage.options.get("output")
     if result.meta is not None:
         escape_xml = result.meta.get("escape_xml", True)
     else:
         escape_xml = True
     logger.debug("escape_xml=%s", escape_xml)
 
-    with smart_open(output_file) as f:
+    with smart_open_maybe_dash(output_file) as f:
         for idx, field in enumerate(result.data):
             # pdftk prints the separator *before* the stanza
             print("---", file=f)

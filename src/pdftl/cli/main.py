@@ -6,7 +6,6 @@
 
 """Main CLI entry point and helper methods"""
 
-import getpass
 import logging
 import sys
 
@@ -91,6 +90,8 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
             "No pipeline stages found.\n "
             "Did you forget an operation?  Hint: pdftl help operations"
         )
+
+    import getpass
 
     input_context = UserInputContext(get_input=get_input, get_pass=getpass.getpass)
     # We no longer pass global_options; all options are encapsulated within their specific stages.
