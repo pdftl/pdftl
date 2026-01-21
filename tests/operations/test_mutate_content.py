@@ -67,6 +67,7 @@ def test_mutate_content_custom_entry_point(simple_pdf, mutation_script):
     cmds = pikepdf.parse_content_stream(simple_pdf.pages[0])
     assert cmds[0][1] == pikepdf.Operator("J")
 
+
 def test_mutate_content_colon_regression(simple_pdf, mutation_script):
     """
     Regression test for Windows path handling (e.g. C:\\path vs script:func).
@@ -74,7 +75,7 @@ def test_mutate_content_colon_regression(simple_pdf, mutation_script):
     Verifies that the operation strictly uses '::' as the separator.
     If the code regresses to splitting on ':', passing 'script.py:custom_entry'
     would mistakenly succeed (loading the script and calling the function).
-    
+
     Correct behavior: treat 'script.py:custom_entry' as a literal filename,
     which does not exist, raising FileNotFoundError.
     """
@@ -86,6 +87,7 @@ def test_mutate_content_colon_regression(simple_pdf, mutation_script):
     # 2. If logic requires '::' (Fix), it looks for file "path/mutator.py:custom_entry" -> fails.
     with pytest.raises(FileNotFoundError):
         mutate_content(simple_pdf, [ambiguous_arg])
+
 
 def test_mutate_content_user_args(simple_pdf, mutation_script):
     """Covers passing extra args to context."""

@@ -140,46 +140,51 @@ class LinkRemapper:
 
     def _transform_destination_array(self, dest_array: "Array", target_page) -> "Array":
         """
-        Apply page rotation and scaling transforms to an explicit destination array.
-
-        PDF /XYZ destinations encode a specific position and zoom level:
-        [page_obj, /XYZ, x, y, zoom]. When a page has been rotated or scaled,
-        those coordinates must be adjusted to match the transformed page.
-
-        Args:
-            dest_array (Array): The explicit destination array.
-            target_page: The corresponding target page object.
-
-        Returns:
-            Array: A transformed destination array referencing the target page.
+        Optimized version: Modifies pikepdf.Array in-place to avoid
+        expensive Python list marshaling in the common case.
         """
-        from collections.abc import Iterable
-        from typing import Any, cast
-
         from pikepdf import Array, Name
 
-        d_details = list(cast(Iterable[Any], dest_array))[1:]
+        # 1. Fast Clone: Copy the array in C++ (avoid converting to Python list)
+        new_dest = Array(dest_array)
+
+        # 2. Fast Update: Set the page object directly
+        new_dest[0] = target_page.obj
+
+        # 3. Check transforms (Fast Dictionary Lookup)
         rotation, scale = self.context.page_transforms.get(
             target_page.obj.objgen, ((0, False), 1.0)
         )
         angle, _ = rotation
 
-        # Only transform explicit /XYZ destinations when rotation/scale applies
-        if (angle != 0 or scale != 1.0) and d_details and d_details[0] == Name.XYZ:
-            page_box = target_page.get(Name.CropBox, target_page.MediaBox)
+        # --- FAST PATH (99% of cases) ---
+        # If no rotation is needed, return immediately.
+        # We avoid ALL Python list allocations here.
+        # We check indices manually to avoid slicing errors.
+        if (angle == 0 and scale == 1.0) or len(new_dest) < 2 or new_dest[1] != Name.XYZ:
+            return new_dest
 
-            xyz_params = list(d_details[1:])
-            while len(xyz_params) < 3:
-                xyz_params.append(None)  # Pad to [x, y, zoom]
+        # --- SLOW PATH (Rotation needed) ---
+        # It is safe to allocate lists here because rotation is rare.
 
-            transformed_params = transform_destination_coordinates(
-                xyz_params, page_box, angle, scale
-            )
+        page_box = target_page.get(Name.CropBox, target_page.MediaBox)
 
-            # Replace transformed coordinates, removing extra None padding
-            d_details[1:] = [p for p in transformed_params if p is not None]
+        # Manual iteration to extract coords (index 2 onwards) without slicing
+        # new_dest is [Page, /XYZ, x, y, zoom]
+        current_params = [new_dest[i] for i in range(2, len(new_dest))]
 
-        return Array([target_page.obj] + d_details)
+        while len(current_params) < 3:
+            current_params.append(None)
+
+        transformed_params = transform_destination_coordinates(
+            current_params, page_box, angle, scale
+        )
+
+        new_params = [p for p in transformed_params if p is not None]
+
+        # We cannot slice-assign into pikepdf.Array, so we construct a new one.
+        # This is fine because we are already in the slow path.
+        return Array([target_page.obj, Name.XYZ] + new_params)
 
     def _find_remapped_page(self, source_dest_array: "Array"):
         """

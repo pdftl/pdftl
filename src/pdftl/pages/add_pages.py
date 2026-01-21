@@ -32,11 +32,6 @@ from pdftl.utils.scale import apply_scaling
 def _apply_rotation(page, source_page, rotation):
     """
     Applies the specified rotation to a page object.
-
-    Args:
-        page: The destination pikepdf.Page object to modify.
-        source_page: The original source pikepdf.Page object.
-        rotation: A tuple (angle, absolute) specifying the rotation.
     """
     from pikepdf import Name
 
@@ -53,12 +48,6 @@ def add_pages(
 ):
     """
     Add pages to the opened pdf file new_pdf.
-
-    Args:
-        new_pdf: The destination PDF object.
-        opened_pdfs: List of all open source PDF objects (used for indexing).
-        source_pages_to_process: A list of PageTransform instances.
-
     """
     # --- PASS 1: Copy page structure, content, and apply transformations. ---
     logger.debug("--- PASS 1: Assembling %s pages... ---", len(source_pages_to_process))
@@ -67,8 +56,6 @@ def add_pages(
     # --- PASS 2: Rebuild links and destinations. ---
     logger.debug("--- PASS 2: Rebuilding links and destinations... ---")
 
-    # The link rebuilder needs a map from a PDF's memory address to its
-    # original index in the input list.
     pdf_to_input_index = {id(pdf): i for i, pdf in enumerate(opened_pdfs)}
 
     remapper = create_link_remapper(
@@ -126,85 +113,75 @@ def process_source_pages(
         A RebuildLinksPartialContext instance containing the mapping of
         (source_page, instance_index) -> new_page_object, needed for
         resolving destinations in PASS 2.
+
+    OPTIMIZED: Uses a "Clean Master" strategy to allow independent transformations
+    of identical source pages without re-importing resources.
     """
-    import pikepdf
+    from pikepdf import Dictionary, Page
 
     ret = RebuildLinksPartialContext()
     widget_queue = []
 
     instance_counts: dict[tuple, int] = {}
-    seen_pages = set()
 
-    # Pre-cache source pages to avoid repeated attribute access/hashing
+    # Map (pdf_id, page_index) -> CLEAN MASTER OBJECT (Indirect Object in new_pdf)
+    # This master object holds the page dictionary *before* any rotation/scaling
+    # is applied in the new PDF.
+    clean_masters_map = {}
+
+    # Pre-cache source pages
     unique_sources = {p.pdf for p in source_pages_to_process}
     source_pages_cache = {}
     for src in unique_sources:
         source_pages_cache[id(src)] = list(src.pages)
 
-    # Local variable lookups for speed inside the loop
     new_pdf_pages_append = new_pdf.pages.append
-    new_pdf_add_blank = new_pdf.add_blank_page
-    new_pdf_copy_foreign = new_pdf.copy_foreign
 
     for page_data in source_pages_to_process:
         pdf_id = id(page_data.pdf)
-
-        # Fast lookup from cache
         source_page = source_pages_cache[pdf_id][page_data.index]
-
         page_identity = (page_data.pdf, page_data.index)
         page_key = (pdf_id, page_data.index)
 
         ret.unique_source_pdfs.add(page_data.pdf)
 
-        if page_identity not in seen_pages:
+        if page_key not in clean_masters_map:
             # --- FIRST ENCOUNTER ---
+            # 1. Append source directly. pikepdf handles the import.
+            new_pdf_pages_append(source_page)
 
-            # Make an explicit copy instead of standard append so that
-            # we get the handle without an expensive lookup.
-            new_page_obj = new_pdf_copy_foreign(source_page.obj)
-            new_page = pikepdf.Page(new_page_obj)
-            new_pdf_pages_append(new_page)
-            seen_pages.add(page_identity)
+            # 2. Get the new native page object
+            new_page = new_pdf.pages[-1]
+
+            # 3. Create the "Clean Master" immediately
+            # We make a shallow copy of the dictionary *before* we modify new_page.
+            # This ensures we have a pristine reference for future clones.
+            master_vars = dict(new_page.obj)
+            master_vars.pop("/Parent", None)
+
+            # Store as an indirect object in new_pdf (orphaned from page tree, but valid)
+            clean_master = new_pdf.make_indirect(Dictionary(master_vars))
+            clean_masters_map[page_key] = clean_master
 
         else:
             # --- REPEAT ENCOUNTER ---
-            # We need a fresh object to allow unique rotation/scaling,
-            # but it must share the underlying heavy resources (Images/Fonts).
-            new_page = new_pdf_add_blank()
+            # 1. Retrieve the Clean Master (unmodified state)
+            clean_master = clean_masters_map[page_key]
 
-            # Shallow copy keys to point to existing resources in new_pdf
-            src_obj = source_page.obj
-            for k, v in src_obj.items():
-                if k != "/Parent":
-                    # The simplest types in PDFs are
-                    # directly represented as Python types:
-                    # int, bool, and None stand for PDF
-                    # integers, booleans and the
-                    # “null”. Decimal is used for floating
-                    # point numbers in PDFs. If a value in a
-                    # PDF is assigned a Python float,
-                    # pikepdf will convert it to Decimal.
-                    #
-                    # Types that are not directly
-                    # convertible to Python are represented
-                    # as pikepdf.Object, a compound object
-                    # that offers a superset of possible
-                    # methods, some of which only if the
-                    # underlying type is suitable. Use the
-                    # EAFP idiom, or isinstance to determine
-                    # the type more precisely. This partly
-                    # reflects the fact that the PDF
-                    # specification allows many data fields
-                    # to be one of several types.
+            # 2. Clone it
+            # We copy the dictionary from the clean master.
+            # Since clean_master is already in new_pdf, this is fast and safe.
+            clone_vars = dict(clean_master)
 
-                    try:
-                        new_val = new_pdf_copy_foreign(page_data.pdf.make_indirect(v))
-                    except TypeError:
-                        new_val = k
-                    new_page[k] = new_val
+            # 3. Create new indirect object and wrap as Page
+            indirect_copy = new_pdf.make_indirect(Dictionary(clone_vars))
+            new_page = Page(indirect_copy)
+            new_pdf_pages_append(new_page)
 
         # --- COMMON POST-PROCESSING ---
+        # Now we can safely rotate/scale `new_page`.
+        # Even if it's the first encounter, modifying `new_page` does NOT affect
+        # `clean_master` because they are distinct indirect objects (though they share children).
 
         instance_num = instance_counts.get(page_key, 0)
         instance_counts[page_key] = instance_num + 1
@@ -217,10 +194,8 @@ def process_source_pages(
         ret.page_map[(*page_key, instance_num)] = new_page
         ret.processed_page_info.append((*page_identity, instance_num))
 
-        # Record transforms (needed for link coordinate recalculation)
         ret.page_transforms[new_page.obj.objgen] = (page_data.rotation, page_data.scale)
 
-        # Apply visual transformations
         _apply_rotation(new_page, source_page, page_data.rotation)
         apply_scaling(new_page, page_data.scale)
 
@@ -230,28 +205,17 @@ def process_source_pages(
 def _stash_page_source_data(new_page, source_page, page_data, instance_num):
     # Calculate metadata for variable expansion
     filename = getattr(page_data.pdf, "filename", "")
-    # Get original page rotation and dimensions
     orig_rotation = source_page.get("/Rotate", 0)
-    # MediaBox is typically [x0, y0, x1, y1]
     mediabox = source_page.MediaBox
     width = float(mediabox[2] - mediabox[0])
     height = float(mediabox[3] - mediabox[1])
 
-    # Handle rotation for width/height (if page is rotated 90/270, swap w/h)
-    if orig_rotation % 180 != 0:
+    if int(orig_rotation) % 180 != 0:
         width, height = height, width
 
     orientation = "portrait" if height >= width else "landscape"
 
-    # Inject comprehensive source data into the PDF page object.
-    # NOTE: We only store serializable data here (strings, numbers).
-    # We do NOT store the pikepdf.Pdf object itself, as it cannot be
-    # serialized to a PDF dictionary.
-    # Internal tools (like Link Rebuilding) use the returned
-    # RebuildLinksPartialContext to access the PDF objects.
-    # Downstream tools (like add_text) use this dictionary for variables.
     info_dict = {
-        # User-facing variable data
         "/source_filename": os.path.basename(filename) if filename else "",
         "/source_path": os.path.abspath(filename) if filename else "",
         "/source_page": page_data.index + 1,
@@ -259,12 +223,11 @@ def _stash_page_source_data(new_page, source_page, page_data, instance_num):
         "/source_width": width,
         "/source_height": height,
         "/source_orientation": orientation,
-        # Transformation data (serializable)
         "/applied_rotation_angle": page_data.rotation[0],
         "/applied_rotation_absolute": bool(page_data.rotation[1]),
         "/applied_scale": float(page_data.scale),
         "/original_index": page_data.index,
         "/instance_num": instance_num,
     }
-    # Store in a custom key in the PDF Page Dictionary
+
     new_page["/" + c.PDFTL_SOURCE_INFO_KEY] = info_dict

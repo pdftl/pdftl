@@ -360,52 +360,6 @@ class MockPageTransform:
         self.scale = scale
 
 
-def test_process_source_pages_repeat_encounter_type_error():
-    """
-    Covers Lines 195-196:
-    Verify that if new_pdf.copy_foreign raises TypeError during the repeat encounter loop,
-    the code falls back to assigning the key 'k' as the value.
-    """
-    # 1. Setup Mock PDF objects
-    mock_new_pdf = MagicMock()
-    mock_src_pdf = MagicMock()
-    mock_src_page = MagicMock()
-
-    # Setup the source page to have one item in its .obj dictionary
-    # This ensures we enter the loop at line 170: "for k, v in src_obj.items():"
-    mock_src_page.obj.items.return_value = [("/MyKey", "MyValue")]
-
-    # Setup the pages list for the cache logic (lines 133-134)
-    # The code does: list(src.pages)
-    mock_src_pdf.pages = [mock_src_page]
-
-    # 2. Setup PageTransforms
-    # We need TWO transforms for the SAME page to trigger the "Repeat Encounter" logic (Line 162)
-    t1 = MockPageTransform(pdf=mock_src_pdf, index=0)
-    t2 = MockPageTransform(pdf=mock_src_pdf, index=0)
-
-    # 3. Setup mock responses for new_pdf methods
-    mock_blank_page = MagicMock()
-    mock_new_pdf.add_blank_page.return_value = mock_blank_page
-
-    # 4. Configure copy_foreign side_effect
-    # The function is called twice:
-    # Call 1 (Line 157): First Encounter. Should succeed. returns a page object.
-    # Call 2 (Line 194): Repeat Encounter inside the loop. Should raise TypeError.
-    mock_new_pdf.copy_foreign.side_effect = [MagicMock(), TypeError("Mock TypeError")]
-
-    # 5. Execute
-    # We patch pikepdf.Page to prevent it from trying to wrap our mocks
-    with patch("pikepdf.Page", return_value=MagicMock()):
-        add_pages_module.process_source_pages(mock_new_pdf, [t1, t2])
-
-    # 6. Verification
-    # We want to verify line 197: new_page[k] = new_val
-    # Because of the TypeError at line 195, line 196 sets new_val = k.
-    # So we expect new_page["/MyKey"] = "/MyKey"
-    mock_blank_page.__setitem__.assert_any_call("/MyKey", "/MyKey")
-
-
 def test_stash_page_source_data_rotation_swap():
     """
     Covers Lines 231-232:
@@ -419,11 +373,24 @@ def test_stash_page_source_data_rotation_swap():
     mock_pdf.filename = "test.pdf"
 
     # Setup MediaBox: [0, 0, 100, 200] -> Width 100, Height 200
-    mock_source_page.MediaBox = [0, 0, 100, 200]
+    # We must ensure both .MediaBox (property) and .obj (raw dict) behave
+    mbox_val = [0, 0, 100, 200]
+    mock_source_page.MediaBox = mbox_val
 
-    # Setup Rotation: 90 (triggers swap because 90 % 180 != 0)
-    # Using side_effect to simulate dictionary .get method
-    mock_source_page.get.side_effect = lambda k, d=None: 90 if k == "/Rotate" else d
+    # FIX: Ensure .obj.get() returns None so the code falls back to the property
+    mock_source_page.obj.get.return_value = None
+
+    # Setup Rotation: 90
+    # Handle .get() calls for Rotation
+    def get_side_effect(key, default=None):
+        # Handle both string "/Rotate" and pikepdf.Name objects
+        if str(key) == "/Rotate":
+            return 90
+        return default
+
+    mock_source_page.get.side_effect = get_side_effect
+    # Also handle .obj.get() calls if the code checks there for rotation
+    mock_source_page.obj.get.side_effect = lambda k, d=None: 90 if str(k) == "/Rotate" else None
 
     page_data = MockPageTransform(pdf=mock_pdf, index=0)
 
@@ -431,14 +398,12 @@ def test_stash_page_source_data_rotation_swap():
     add_pages_module._stash_page_source_data(mock_new_page, mock_source_page, page_data, 0)
 
     # 3. Verification
-    # Check the dictionary that was stored in the new page
-    # args[0] is the key (c.PDFTL_SOURCE_INFO_KEY), args[1] is the info_dict
     assert mock_new_page.__setitem__.called
     call_args = mock_new_page.__setitem__.call_args
-    info_dict = call_args[0][1]  # Get the value passed
+    info_dict = call_args[0][1]
 
-    # Original Width: 100, Original Height: 200
-    # Because Rotation is 90, they should be swapped.
+    # Original Width: 100, Height: 200. Rotation 90 -> Swap.
+    # Width should now be 200.
     assert info_dict["/source_width"] == 200.0
     assert info_dict["/source_height"] == 100.0
 
