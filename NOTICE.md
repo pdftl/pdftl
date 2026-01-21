@@ -73,4 +73,4 @@ The `dump_text` operation and the `flatten` option use **pypdfium2**.
 * **pypdfium2 Copyright:** Copyright © 2021-2026 geisserml and contributors.
 * **PDFium Copyright:** Copyright © 2014 PDFium Authors (Google Inc.).
 * **License:** BSD-3-Clause / Apache-2.0.
-* **Source:* https://github.com/pypdfium2/pypdfium2
+* **Source:** https://github.com/pypdfium2/pypdfium2

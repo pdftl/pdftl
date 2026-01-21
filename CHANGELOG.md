@@ -5,7 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [0.9.0] - Unreleased
+## [0.9.1] - 2026-01-21
+
+### Fixed
+
+- `README.md`, `NOTICE.md` and `CHANGELOG.md` updated/corrected
+
+## [0.9.0] - 2026-01-21
 
 ### Added
 

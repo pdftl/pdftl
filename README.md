@@ -190,76 +190,78 @@ See the **[API Tutorial][4]** for more details.
 
 ## Operations and options
 
-| Operation                                                                                               | Description                                          |
-|---------------------------------------------------------------------------------------------------------|------------------------------------------------------|
-| [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages         |
-| [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                       |
-| [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page     |
-| [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into individual page files        |
-| [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF     |
-| [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html)                                   | Chop pages into multiple smaller pieces              |
-| [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages                                           |
-| [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                       |
-| [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                               |
-| [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                 |
-| [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html)                         | Metadata, page and bookmark info (XML-escaped)       |
-| [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html)           | Dump annotation info in pdftk style                  |
-| [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html)           | Print PDF form field data with XML-style escaping    |
-| [`dump_data_fields_utf8`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields_utf8.html) | Print PDF form field data in UTF-8                   |
-| [`dump_data_utf8`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_utf8.html)               | Metadata, page and bookmark info (in UTF-8)          |
-| [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html)                       | Print PDF named destinations data to the console     |
-| [`dump_files`](https://pdftl.readthedocs.io/en/latest/operations/dump_files.html)                       | List file attachments                                |
-| [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)                     | Dump layer info (JSON)                               |
-| [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html)             | List and validate digital signatures                 |
-| [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file         |
-| [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                      |
-| [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)  |
-| [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data        |
-| [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams  |
-| [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                   |
-| [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations            |
-| [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html)                                   | Move pages to a new location                         |
-| [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html)             | Use multiple pages as backgrounds                    |
-| [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html)                       | Stamp multiple pages onto an input PDF               |
-| [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html)                         | Reformat page content streams                        |
-| [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html)             | Optimize images                                      |
-| [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                  |
-| [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams            |
-| [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                           |
-| [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                |
-| [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs            |
-| [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF    |
-| [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                              |
-| [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html)                     | Update PDF metadata from dump_data instructions      |
-| [`update_info_utf8`](https://pdftl.readthedocs.io/en/latest/operations/update_info_utf8.html)           | Update PDF metadata from dump_data_utf8 instructions |
+| Operation                                                                                               | Description                                                     |
+|---------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages                    |
+| [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
+| [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |
+| [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into individual page files                   |
+| [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF                |
+| [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html)                                   | Chop pages into multiple smaller pieces                         |
+| [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages                                                      |
+| [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
+| [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
+| [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
+| [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html)                         | Metadata, page and bookmark info (XML-escaped)                  |
+| [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html)           | Dump annotation info in pdftk style                             |
+| [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html)           | Print PDF form field data with XML-style escaping               |
+| [`dump_data_fields_utf8`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields_utf8.html) | Print PDF form field data in UTF-8                              |
+| [`dump_data_utf8`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_utf8.html)               | Metadata, page and bookmark info (in UTF-8)                     |
+| [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html)                       | Print PDF named destinations data to the console                |
+| [`dump_files`](https://pdftl.readthedocs.io/en/latest/operations/dump_files.html)                       | List file attachments                                           |
+| [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)                     | Dump layer info (JSON)                                          |
+| [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html)             | List and validate digital signatures                            |
+| [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
+| [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |
+| [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |
+| [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
+| [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
+| [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
+| [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |
+| [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html)                                   | Move pages to a new location                                    |
+| [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html)             | Use multiple pages as backgrounds                               |
+| [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html)                       | Stamp multiple pages onto an input PDF                          |
+| [`mutate_content`](https://pdftl.readthedocs.io/en/latest/operations/mutate_content.html)               | Mutate page content streams using a user-supplied Python script |
+| [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html)                         | Reformat page content streams                                   |
+| [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html)             | Optimize images                                                 |
+| [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                             |
+| [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams                       |
+| [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                                      |
+| [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
+| [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |
+| [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |
+| [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                                         |
+| [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html)                     | Update PDF metadata from dump_data instructions                 |
+| [`update_info_utf8`](https://pdftl.readthedocs.io/en/latest/operations/update_info_utf8.html)           | Update PDF metadata from dump_data_utf8 instructions            |
 
-| Option                                                                                                       | Description                                       |
-|--------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
-| [`allow <perm>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm)                 | Specify permissions for encrypted files           |
-| [`compress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#compress)                       | Compress output file streams (default)            |
-| [`drop_info`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-info)                     | Discard document-level info metadata              |
-| [`drop_xfa`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xfa)                       | Discard form XFA data if present                  |
-| [`drop_xmp`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xmp)                       | Discard document-level XMP metadata               |
-| [`encrypt_128bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-128bit)           | Use 128 bit encryption (obsolete, maybe insecure) |
-| [`encrypt_40bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-40bit)             | Use 40 bit encryption (obsolete, highly insecure) |
-| [`encrypt_aes128`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes128)           | Use 128 bit AES encryption (maybe obsolete)       |
-| [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256)           | Use 256 bit AES encryption                        |
-| [`flatten`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#flatten)                         | Flatten all annotations                           |
-| [`keep_final_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-final-id)             | Copy final input PDF's ID metadata to output      |
-| [`keep_first_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-first-id)             | Copy first input PDF's ID metadata to output      |
-| [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize)                     | Linearize output file(s)                          |
-| [`no_encrypt_metadata`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#no-encrypt-metadata) | Leave metadata unencrypted                        |
-| [`need_appearances`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#need-appearances)       | Set a form rendering flag in the output PDF       |
-| [`output <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#output-file)               | The output file path, or a template for burst     |
-| [`owner_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw)               | Set owner password and encrypt output             |
-| [`sign_cert <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file)         | Path to certificate PEM                           |
-| [`sign_field <name>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-field-name)       | Signature field name (default: Signature1)        |
-| [`sign_key <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file)           | Path to private key PEM                           |
-| [`sign_pass_env <var>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-env-var)   | Environment variable with sign_cert passphrase    |
-| [`sign_pass_prompt`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-prompt)       | Prompt for sign_cert passphrase                   |
-| [`uncompress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#uncompress)                   | Disable compression of output file streams        |
-| [`user_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw)                 | Set user password and encrypt output              |
-| [`verbose`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#verbose)                         | Turn on verbose output                            |
+| Option                                                                                                             | Description                                               |
+|--------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
+| [`allow <perm>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm)                       | Specify permissions for encrypted files                   |
+| [`compress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#compress)                             | Compress output file streams (default)                    |
+| [`drop_info`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-info)                           | Discard document-level info metadata                      |
+| [`drop_xfa`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xfa)                             | Discard form XFA data if present                          |
+| [`drop_xmp`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#drop-xmp)                             | Discard document-level XMP metadata                       |
+| [`encrypt_128bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-128bit)                 | Use 128 bit encryption (obsolete, maybe insecure)         |
+| [`encrypt_40bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-40bit)                   | Use 40 bit encryption (obsolete, highly insecure)         |
+| [`encrypt_aes128`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes128)                 | Use 128 bit AES encryption (maybe obsolete)               |
+| [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256)                 | Use 256 bit AES encryption                                |
+| [`flatten`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#flatten)                               | Flatten all annotations                                   |
+| [`keep_final_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-final-id)                   | Copy final input PDF's ID metadata to output              |
+| [`keep_first_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-first-id)                   | Copy first input PDF's ID metadata to output              |
+| [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize)                           | Linearize output file(s)                                  |
+| [`no_encrypt_metadata`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#no-encrypt-metadata)       | Leave metadata unencrypted                                |
+| [`need_appearances`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#need-appearances)             | Set a form rendering flag in the output PDF               |
+| [`output <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#output-file)                     | The output file path, or a template for burst             |
+| [`owner_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw)                     | Set owner password and encrypt output                     |
+| [`replacement_font <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#replacement-font-file) | Replace the font used for all form fields with a TTF file |
+| [`sign_cert <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file)               | Path to certificate PEM                                   |
+| [`sign_field <name>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-field-name)             | Signature field name (default: Signature1)                |
+| [`sign_key <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file)                 | Path to private key PEM                                   |
+| [`sign_pass_env <var>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-env-var)         | Environment variable with sign_cert passphrase            |
+| [`sign_pass_prompt`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-pass-prompt)             | Prompt for sign_cert passphrase                           |
+| [`uncompress`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#uncompress)                         | Disable compression of output file streams                |
+| [`user_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw)                       | Set user password and encrypt output                      |
+| [`verbose`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#verbose)                               | Turn on verbose output                                    |
 
 
 ## Links
