@@ -11,6 +11,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.dependencies import ensure_dependencies
+from pdftl.utils.progress import get_track_progress
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +105,16 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
     else:
         try:
             dpi = float(args[0])
-            assert dpi > 0
+            if not (dpi > 0):
+                raise ValueError("dpi={dpi} should be positive")
         except (ValueError, AssertionError) as exc:
             raise InvalidArgumentError(
                 f"'render': invalid dpi '{args[0]}' passed. " f"Should be a positive number."
             ) from exc
 
     ensure_dependencies("render", ["pypdfium2", "PIL"], "render")
+
+    track_progress = get_track_progress(interactive=True)
 
     import pypdfium2 as pdfium
 
@@ -131,7 +135,7 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
             pattern = output_pattern or "page_%d.png"
             page_counter = 0
 
-            for page in ui_pdf:
+            for page in track_progress(ui_pdf, description="Rendering pages"):
                 page_counter += 1
                 try:
                     filename = pattern % page_counter

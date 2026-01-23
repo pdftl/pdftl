@@ -16,7 +16,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_maybe_dash
-from pdftl.utils.string import fix_mojibake, xml_encode_for_info
+from pdftl.utils.string_utils import fix_mojibake, xml_encode_for_info
 
 _DUMP_DATA_FIELDS_UTF8_LONG_DESC = """
 

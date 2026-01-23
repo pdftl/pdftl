@@ -256,10 +256,7 @@ def _make_page_label(pdf, entry: "PageLabelEntry"):
             return None, None
 
     if entry.start is not None:
-        try:
-            assert isinstance(entry.start, int)
-            assert entry.start >= 1
-        except AssertionError:
+        if not (isinstance(entry.start, int) and entry.start >= 1):
             logger.warning(
                 skip_warning_template, "Start", entry.start, "Must be a positive integer"
             )
