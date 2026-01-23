@@ -217,7 +217,6 @@ def _assign_passwords(num_inputs, handles, passwords_by_handle, passwords_by_ord
                 input_passwords[i] = next(pw_iter)
             except StopIteration:
                 break
-    logger.debug("input_passwords=%s", input_passwords)
     return input_passwords
 
 
@@ -227,12 +226,10 @@ def _parse_pre_operation_args(pre_op_args, is_first_stage):
     """
     logger.debug("pre_op_args=%s", pre_op_args)
     file_args, pw_args = _separate_file_and_pw_args(pre_op_args)
-    logger.debug("file_args=%s, pw_args=%s", file_args, pw_args)
+    # logger.debug("file_args=%s, pw_args=%s", file_args, pw_args)
     inputs, handles = _parse_file_handles(file_args)
     inputs, handles = _handle_pipeline_input(inputs, handles, is_first_stage)
     passwords_by_handle, passwords_by_order = _parse_passwords(pw_args)
-    logger.debug("passwords_by_handle=%s", passwords_by_handle)
-    logger.debug("passwords_by_order=%s", passwords_by_order)
     input_passwords = _assign_passwords(
         len(inputs), handles, passwords_by_handle, passwords_by_order
     )
@@ -268,7 +265,7 @@ def parse_cli_stage(stage_args, is_first_stage):
         implicit_op,
     )
     inputs, handles, passwords = _parse_pre_operation_args(pre_op, is_first_stage)
-    logger.debug("inputs=%s, handles=%s, passowrds=%s", inputs, handles, passwords)
+    logger.debug("inputs=%s, handles=%s", inputs, handles)
     specs, options = parse_options_and_specs(post_op)
     if implicit_op and len(inputs) > 1:
         operation = "cat"
@@ -278,7 +275,8 @@ def parse_cli_stage(stage_args, is_first_stage):
         "handles=%s, operation_args=%s, options=%s",
         operation,
         inputs,
-        passwords,
+        # passwords,
+        "<REDACTED>",
         handles,
         specs,
         options,
