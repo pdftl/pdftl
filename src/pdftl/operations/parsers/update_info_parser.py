@@ -3,7 +3,7 @@
 from pdftl.info.info_types import PdfInfo
 from pdftl.info.parse_dump import parse_dump_data
 from pdftl.utils.io_helpers import smart_open
-from pdftl.utils.string import xml_decode_for_info
+from pdftl.utils.string_utils import xml_decode_for_info
 
 
 def update_info_parser(op_args: list[str], data: dict[str, bool]) -> PdfInfo:

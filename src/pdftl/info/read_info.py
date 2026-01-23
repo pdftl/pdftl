@@ -102,12 +102,13 @@ def resolve_page_number(item: "OutlineItem", pdf_pages, named_destinations):
         logger.debug("Not a page, returning None")
         return None
 
-    # just in case:
-    assert hasattr(page_obj, "objgen")
+    if not hasattr(page_obj, "objgen"):
+        raise AttributeError("page_obj is missing required 'objgen' attribute")
 
     # Find the page by comparing object numbers
     for i, page in enumerate(pdf_pages):
-        assert hasattr(page, "objgen")
+        if not hasattr(page, "objgen"):
+            raise AttributeError("page is missing required 'objgen' attribute")
         logger.debug("page.objgen = %s, type = %s", page.objgen, type(page.objgen))
         logger.debug("page_obj.objgen = %s, type = %s", page_obj.objgen, type(page_obj.objgen))
         if page.objgen == page_obj.objgen:

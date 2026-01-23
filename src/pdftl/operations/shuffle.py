@@ -83,7 +83,9 @@ def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     """
     from pikepdf import Pdf
 
-    assert len(opened_pdfs) > 0
+    if not (len(opened_pdfs) > 0):
+        raise ValueError("opened_pdfs must contain something")
+
     page_tuples_array = _get_page_tuples_array(inputs, specs, opened_pdfs, aliases)
     # logger.debug("page_tuples_array = \n  %s", page_tuples_array)
     if not page_tuples_array:

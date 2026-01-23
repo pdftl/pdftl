@@ -23,7 +23,7 @@ from pdftl.info.info_types import PdfInfo
 from pdftl.info.set_info import set_metadata_in_pdf
 from pdftl.operations.parsers.update_info_parser import update_info_parser
 from pdftl.utils.arg_helpers import resolve_operation_spec
-from pdftl.utils.string import recursive_decode, xml_decode_for_info
+from pdftl.utils.string_utils import recursive_decode, xml_decode_for_info
 from pdftl.utils.user_input import filename_completer
 
 _UPDATE_INFO_UTF8_LONG_DESC = """

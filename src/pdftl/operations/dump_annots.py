@@ -19,7 +19,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.json import pdf_obj_to_json
-from pdftl.utils.string import compact_json_string, xml_encode_for_info
+from pdftl.utils.string_utils import compact_json_string, xml_encode_for_info
 
 _DUMP_ANNOTS_LONG_DESC = """
 

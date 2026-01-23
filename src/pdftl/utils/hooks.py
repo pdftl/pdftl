@@ -1,5 +1,4 @@
 import logging
-import sys
 from typing import Any
 
 from pdftl.core.types import OpResult
@@ -64,10 +63,12 @@ def json_dump_hook(result: OpResult, stage):
 
 
 def from_result_meta(result: OpResult, attrib: str) -> Any:
-    assert result.meta is not None
+    if result.meta is None:
+        raise ValueError("result.meta is None")
     return result.meta.get(attrib)
 
 
 def str_from_result_meta(result: OpResult, attrib: str) -> str:
-    assert isinstance(ret := from_result_meta(result, attrib), str)
+    if not isinstance(ret := from_result_meta(result, attrib), str):
+        raise TypeError("Wrong type: expected str")
     return ret

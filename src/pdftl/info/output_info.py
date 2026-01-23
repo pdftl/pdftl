@@ -34,7 +34,7 @@ from pdftl.info.read_info import (
     resolve_page_number,
 )
 from pdftl.utils.destinations import get_named_destinations
-from pdftl.utils.string import (
+from pdftl.utils.string_utils import (
     pdf_num_to_string,
     pdf_rect_to_string,
     xml_encode_for_info,

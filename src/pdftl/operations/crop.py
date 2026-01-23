@@ -107,7 +107,8 @@ def crop_pages(pdf: "Pdf", specs: list) -> OpResult:
 
 
 def _apply_crop_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules):
-    assert i < len(pdf.pages)
+    if not i < len(pdf.pages):
+        raise ValueError(f"With {len(pdf.pages)} pages, i={i} is too large")
 
     page = pdf.pages[i]
 

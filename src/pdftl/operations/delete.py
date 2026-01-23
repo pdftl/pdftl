@@ -6,6 +6,10 @@
 
 """Delete pages from a single PDF file"""
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -57,6 +61,17 @@ def delete_pages(pdf: "Pdf", specs) -> OpResult:
     """
     pages_to_delete = page_numbers_matching_page_specs(specs, len(pdf.pages))
     for page_num in sorted(pages_to_delete, reverse=True):
-        del pdf.pages[page_num - 1]
+        del_page(pdf, page_num)
 
     return OpResult(success=True, pdf=pdf)
+
+
+def del_page(pdf, page_num):
+    # See https://github.com/pikepdf/pikepdf/issues/196
+    # idea is to remove /Contents, /Resources first
+    # to avoid them sticking around after page deletion
+    page = pdf.pages[page_num - 1]
+    logger.debug("deleting page_num=%s", page_num)
+    for key in page.keys():
+        del page[key]
+    del pdf.pages[page_num - 1]

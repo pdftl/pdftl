@@ -2,14 +2,14 @@
 
 import logging
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, List
+from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import HelpExample, OpResult
-from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -39,11 +39,17 @@ In this case, `context['args']` would be `['1.5', '2.0']`.
 
 _MUTATE_CONTENT_EXAMPLES = [
     HelpExample(
-        desc="Mutate content streams in all pages using the `mutate` function in `mutate_grayscale.py`",
+        desc=(
+            "Mutate content streams in all pages"
+            " using the `mutate` function in `mutate_grayscale.py`"
+        ),
         cmd="in.pdf mutate_content mutate_grayscale.py output out.pdf",
     ),
     HelpExample(
-        desc="Fix hairlines using `mutate_hairline_fixer.py`, passing the script the argument '0.5'",
+        desc=(
+            "Fix hairlines using `mutate_hairline_fixer.py`,"
+            " passing the script the argument '0.5'"
+        ),
         cmd="in.pdf mutate_content mutate_hairline_fixer.py 0.5 output out.pdf",
     ),
 ]
@@ -103,7 +109,7 @@ def mutate_content(pdf: "Pdf", args: list) -> OpResult:
 class ContentMutationEngine:
     pdf: "Pdf"
     mutate_func: Callable
-    user_args: List[str] = field(default_factory=list)
+    user_args: list[str] = field(default_factory=list)
     _processed_xobjs: set = field(default_factory=set)
 
     def apply(self, page_num: int):

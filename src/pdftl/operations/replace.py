@@ -24,7 +24,7 @@ from pdftl.utils.normalize import (
     normalize_page_content_stream,
 )
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
-from pdftl.utils.string import split_escaped
+from pdftl.utils.string_utils import split_escaped
 
 _REPLACE_LONG_DESC = """
 

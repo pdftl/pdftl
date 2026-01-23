@@ -174,7 +174,8 @@ def _safe_float_list(value):
 
 def _parse_field(key, value, current_data, prefix, decode_lookup):
     """Parses a field"""
-    assert key.startswith(prefix)
+    if not key.startswith(prefix):
+        raise ValueError(f"Key {key} must start with given prefix {prefix}")
     if (short_key := key[len(prefix) :]) in decode_lookup:
         current_data[short_key] = decode_lookup[short_key](value)
     else:

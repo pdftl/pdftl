@@ -15,7 +15,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.hooks import text_dump_hook
-from pdftl.utils.string import remove_ignored_nonprinting_chars
+from pdftl.utils.string_utils import remove_ignored_nonprinting_chars
 
 _DUMP_TEXT_LONG_DESC = """
 
@@ -82,7 +82,7 @@ def dump_text(input_filename, input_password, output_file=None) -> OpResult:
 
     if input_password is None:
         logger.debug("No password supplied.")
-        input_password = ""
+        input_password = ""  # nosec
 
     try:
         import pypdfium2

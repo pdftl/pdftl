@@ -264,7 +264,7 @@ OUTPUT = "output"
 
 # Internal/Resolved context keys for specific command logic
 INPUT_FILENAME = "input_filename"
-INPUT_PASSWORD = "input_password"
+INPUT_PASSWORD = "input_password"  # nosec
 INPUT_PDF = "input_pdf"
 OVERLAY_PDF = "overlay_pdf"
 ON_TOP = "on_top"
