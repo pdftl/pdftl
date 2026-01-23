@@ -1,5 +1,3 @@
-import io
-from typing import List, cast
 from unittest.mock import MagicMock, patch
 
 import pikepdf

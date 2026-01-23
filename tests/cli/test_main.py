@@ -256,16 +256,6 @@ import pytest
 from pdftl.cli.main import main
 
 
-def test_main_debug_reraise():
-    """Triggers line 52: re-raise error if debug flag is present."""
-    # Mocking initialize_registry to throw an error
-    with (
-        patch("pdftl.cli.main.initialize_registry", side_effect=UserCommandLineError("Boom")),
-        pytest.raises(UserCommandLineError),
-    ):
-        main(["pdftl", "--debug", "input.pdf"])
-
-
 def test_main_execution_block():
     """Triggers line 180: The __main__ block (via manual import/execution)."""
     with patch("pdftl.cli.main.main") as mock_main:

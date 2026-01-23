@@ -72,7 +72,7 @@ def test_close_multiple_times():
 
 # --- Merged from test_font_utils_extra.py ---
 # tests/test_font_utils_extra.py
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -122,11 +122,7 @@ def test_close_calls_ttfont_close(monkeypatch):
 # --- Merged from test_font_utils_gap.py ---
 # tests/test_font_utils_gap.py
 import logging
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from pdftl.fonts.font_utils import FontWrapper
+from unittest.mock import patch
 
 
 def test_get_char_width_robust_fallback(caplog):
@@ -189,7 +185,7 @@ def test_font_wrapper_cleanup():
 
 def test_font_wrapper_zero_units_per_em(tmp_path):
     """Covers font_utils.py line 39: fallback when units_per_em is 0."""
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from pdftl.fonts.font_utils import FontWrapper
 
