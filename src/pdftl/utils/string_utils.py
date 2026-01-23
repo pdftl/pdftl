@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# src/pdftl/utils/string.py
+# src/pdftl.utils.string_utils.py
 
 """String processing utilities, including before_space and
 xml_{de,en}code_for_info"""
@@ -154,7 +154,7 @@ def pdf_obj_to_string(x):
 
 
 def split_escaped(text: str, delimiter: str) -> list[str]:
-    """
+    r"""
     Splits a string by a delimiter, allowing the delimiter to be
     escaped with a backslash.
 
@@ -172,7 +172,7 @@ def split_escaped(text: str, delimiter: str) -> list[str]:
         ['a', 'b.c', 'd']
         >>> split_escaped("a\\\\.b.c", ".")
         ['a\\\.b', 'c']
-    """  # noqa: W605  # pylint: disable=W1401
+    """
     if len(delimiter) != 1:
         raise ValueError("Delimiter must be a single character")
 
