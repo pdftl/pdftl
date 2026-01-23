@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.pages.links import RebuildLinksPartialContext
+from pdftl.utils.progress import get_track_progress
 
 # A helper to store info about each "chunk" of pages.
 # page_count = total number of pages in this chunk
@@ -61,7 +62,7 @@ class OutlineCopier:
         """
         from pikepdf import OutlineItem
 
-        logger.debug("  source_item title is '%s'", source_item.title)
+        # logger.debug("  source_item title is '%s'", source_item.title)
         # --- 1. Get/Create a GoTo Action Dictionary ---
         source_action = _get_source_action(source_item)
         final_destination = None  # This will be passed to the constructor
@@ -142,8 +143,9 @@ def rebuild_outlines(
 
     new_dests_from_outlines: list[Any] = []
 
+    track = get_track_progress(interactive=True)
     with new_pdf.open_outline() as new_outline:
-        for chunk in chunks:
+        for chunk in track(chunks, description="Bookmark chunk handling", transient=True):
             remapper.set_call_context(new_pdf, chunk.pdf, chunk.instance_num)
             _process_chunk(chunk, remapper, new_outline)
 
