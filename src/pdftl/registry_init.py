@@ -45,9 +45,15 @@ def _discover_external_operations():
             continue
 
         module_name = py_file.stem
+        module_name = f"pdftl.external.{py_file.stem}"
         try:
-            # Using import_module because we added op_dir to sys.path
-            importlib.import_module(module_name)
+            spec = importlib.util.spec_from_file_location(module_name, py_file)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+
             logger.debug("Loaded external operation: %s", module_name)
         except ImportError as e:
             logger.error("Could not import external operation '%s': %s", module_name, e)
@@ -83,7 +89,17 @@ def _discover_modules(parent_modules, label):
             continue
 
         for _, module_name, _ in pkgutil.iter_modules(path):
+            if not module_name.isidentifier():
+                logger.error("Skipping invalid module name: %s", module_name)
+                continue
+
             fq_name = f"{pkg.__name__}.{module_name}"
+            if not fq_name.startswith("pdftl."):
+                logger.error(
+                    "Security violation: Attempted to load module outside pdftl: %s", fq_name
+                )
+                continue
+
             importlib.import_module(fq_name)
             loaded_modules.append(fq_name)
 
