@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
 from pdftl.pages.link_remapper import LinkRemapper
+from pdftl.utils.progress import get_track_progress
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -174,7 +175,8 @@ def write_named_dests(pdf, all_named_dests):
 
     # Revert to handling the flat list that rebuild_links currently produces.
     # We will refactor this to tuples in a later step.
-    assert len(all_named_dests) % 2 == 0
+    if not (len(all_named_dests) % 2 == 0):
+        raise ValueError("all_named_dests must have even length")
     dest_tree = NameTree.new(pdf)
     for key, value in zip(all_named_dests[0::2], all_named_dests[1::2]):
         dest_tree[str(key)] = value
@@ -224,8 +226,12 @@ def rebuild_links(pdf, processed_page_info: list, remapper: LinkRemapper) -> lis
 
     annots_key = pikepdf.Name("/Annots")
 
+    track = get_track_progress(interactive=True)
+
     # --- 2. LOOP ---
-    for target_page, (src_pdf, page_idx, instance_num) in zip(pdf.pages, processed_page_info):
+    for target_page, (src_pdf, page_idx, instance_num) in track(
+        zip(pdf.pages, processed_page_info), description="Remapping links", transient=True
+    ):
         source_page_obj = source_pages_cache[id(src_pdf)][page_idx]
         if annots_key not in source_page_obj:
             continue

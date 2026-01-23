@@ -140,6 +140,19 @@ class LinkRemapper:
 
     def _transform_destination_array(self, dest_array: "Array", target_page) -> "Array":
         """
+        Apply page rotation and scaling transforms to an explicit destination array.
+
+        PDF /XYZ destinations encode a specific position and zoom level:
+        [page_obj, /XYZ, x, y, zoom]. When a page has been rotated or scaled,
+        those coordinates must be adjusted to match the transformed page.
+
+        Args:
+            dest_array (Array): The explicit destination array.
+            target_page: The corresponding target page object.
+
+        Returns:
+            Array: A transformed destination array referencing the target page.
+
         Optimized version: Modifies pikepdf.Array in-place to avoid
         expensive Python list marshaling in the common case.
         """

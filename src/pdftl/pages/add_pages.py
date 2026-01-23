@@ -26,7 +26,8 @@ from pdftl.pages.links import (
     write_named_dests,
 )
 from pdftl.pages.outlines import rebuild_outlines
-from pdftl.utils.scale import apply_scaling
+from pdftl.utils.progress import get_track_progress
+from pdftl.utils.scale import apply_scaling, scale_annotations_in_page
 
 
 def _apply_rotation(page, source_page, rotation):
@@ -68,6 +69,11 @@ def add_pages(
 
     # Pass 2a: Get all destinations from link annotations
     all_dests = rebuild_links(new_pdf, rebuild_context.processed_page_info, remapper)
+
+    # scale annotations here
+    for objgen, transform in rebuild_context.page_transforms.items():
+        _rotate, scale = transform
+        scale_annotations_in_page(new_pdf.get_object(objgen), scale)
 
     # Pass 2b: Get all destinations from outlines
     outline_dests = rebuild_outlines(new_pdf, source_pages_to_process, rebuild_context, remapper)
@@ -137,7 +143,11 @@ def process_source_pages(
 
     new_pdf_pages_append = new_pdf.pages.append
 
-    for page_data in source_pages_to_process:
+    track = get_track_progress(interactive=True)
+
+    for page_data in track(
+        source_pages_to_process, description="Processing pages", transient=True
+    ):
         pdf_id = id(page_data.pdf)
         source_page = source_pages_cache[pdf_id][page_data.index]
         page_identity = (page_data.pdf, page_data.index)
@@ -197,7 +207,7 @@ def process_source_pages(
         ret.page_transforms[new_page.obj.objgen] = (page_data.rotation, page_data.scale)
 
         _apply_rotation(new_page, source_page, page_data.rotation)
-        apply_scaling(new_page, page_data.scale)
+        apply_scaling(new_page, page_data.scale, scale_annotations=False)
 
     return ret, widget_queue
 
@@ -215,7 +225,15 @@ def _stash_page_source_data(new_page, source_page, page_data, instance_num):
 
     orientation = "portrait" if height >= width else "landscape"
 
+    # Inject comprehensive source data into the PDF page object.
+    # NOTE: We only store serializable data here (strings, numbers).
+    # We do NOT store the pikepdf.Pdf object itself, as it cannot be
+    # serialized to a PDF dictionary.
+    # Internal tools (like Link Rebuilding) use the returned
+    # RebuildLinksPartialContext to access the PDF objects.
+    # Downstream tools (like add_text) use this dictionary for variables.
     info_dict = {
+        # User-facing variable data
         "/source_filename": os.path.basename(filename) if filename else "",
         "/source_path": os.path.abspath(filename) if filename else "",
         "/source_page": page_data.index + 1,
@@ -223,6 +241,7 @@ def _stash_page_source_data(new_page, source_page, page_data, instance_num):
         "/source_width": width,
         "/source_height": height,
         "/source_orientation": orientation,
+        # Transformation data (serializable)
         "/applied_rotation_angle": page_data.rotation[0],
         "/applied_rotation_absolute": bool(page_data.rotation[1]),
         "/applied_scale": float(page_data.scale),
@@ -230,4 +249,5 @@ def _stash_page_source_data(new_page, source_page, page_data, instance_num):
         "/instance_num": instance_num,
     }
 
+    # Store in a custom key in the PDF Page Dictionary
     new_page["/" + c.PDFTL_SOURCE_INFO_KEY] = info_dict
