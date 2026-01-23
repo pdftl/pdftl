@@ -191,8 +191,6 @@ def _format_examples_block(examples, show_topics=False):
             )
             output += f"### {heading_text}\n"
 
-        assert "desc" in ex and "cmd" in ex
-
         # Use a quote block for description and a fenced code block for command
         output += f"> {ex.get('desc','')}\n"
         output += f"```\n{WHOAMI} {ex['cmd'].strip()}\n```\n\n"
