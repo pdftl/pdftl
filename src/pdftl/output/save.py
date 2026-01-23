@@ -427,6 +427,11 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         except AttributeError as e:
             logger.warning("Problem setting need_appearances: %s %s", e.__class__.__name__, e)
 
+    # https://pikepdf.readthedocs.io/en/latest/api/main.html#pikepdf.Pdf.remove_unreferenced_resources
+    # this is slow on big files, and the docs say something about auto
+    # so it is staying commented out
+    # pdf.remove_unreferenced_resources()
+
     save_opts = _build_save_options(options, input_context)
 
     if set_pdf_id:
@@ -446,6 +451,27 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
         else:
             pdf.save(output_filename, **save_opts)
+            # pikepdf_save_with_transient_status(pdf, output_filename, save_opts)
+
+
+# def pikepdf_save_with_transient_status(pdf, output_path, save_opts):
+#     from concurrent.futures import ThreadPoolExecutor
+#     from pdftl.cli.console import get_console
+#     console = get_console()
+
+#     logger.debug("Saving with the fancy")
+#     # console.status is transient by default: it disappears when the 'with' block ends.
+#     with console.status(f"[bold green]Writing {output_path}...", spinner="dots") as status:
+#         with ThreadPoolExecutor(max_workers=1) as executor:
+#             # Submit the atomic C++ call to a worker thread
+#             future = executor.submit(pdf.save, output_path, **save_opts)
+
+#             # This blocks the main thread until the C++ call returns,
+#             # but because Rich runs the spinner in its own background thread,
+#             # the animation remains smooth.
+#             future.result()
+
+#     console.print(f"[bold check] Saved: [white]{output_path}")
 
 
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):

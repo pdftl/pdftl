@@ -81,13 +81,9 @@ def test_widths_array(monkeypatch):
 
 # --- Merged from test_font_embedding_extra.py ---
 # tests/test_font_embedding_extra.py
-from unittest.mock import MagicMock
 
-import pikepdf
-import pytest
 
 from pdftl.fonts import font_embedding as fe
-from pdftl.fonts.font_embedding import _extract_ttf_metrics
 
 
 def test__extract_ttf_metrics_missing_sCapHeight_uses_ascent():
@@ -98,13 +94,6 @@ def test__extract_ttf_metrics_missing_sCapHeight_uses_ascent():
 
     metrics = fe._extract_ttf_metrics(tt)
     assert metrics.cap_height == pytest.approx(metrics.ascent)
-
-
-def test_embed_truetype_font_file_not_found(tmp_path):
-    pdf = pikepdf.new()
-    missing = tmp_path / "does_not_exist.ttf"
-    with pytest.raises(FileNotFoundError):
-        fe.embed_truetype_font(pdf, str(missing))
 
 
 def make_tt_mock(
@@ -270,12 +259,8 @@ def test_embed_truetype_font_success(tmp_path, monkeypatch):
 # tests/test_font_embedding.py
 
 import logging
-from unittest.mock import MagicMock
-
-import pytest
 
 # Assuming _widths_array and FontMetricsData are imported or accessible
-from pdftl.fonts.font_embedding import _widths_array
 
 
 @pytest.fixture

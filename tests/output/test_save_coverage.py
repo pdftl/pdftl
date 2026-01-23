@@ -106,11 +106,7 @@ def test_save_sign_to_stdout_error(minimal_pdf):
         save_pdf(minimal_pdf, output_filename="-", input_context=mock_ctx, options=options)
 
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from pdftl.output.save import _get_passwords_from_options, save_pdf
+from pdftl.output.save import _get_passwords_from_options
 
 
 def test_password_prompt_truncation():

@@ -163,11 +163,7 @@ def test_load_simple_dataclass_no_factory():
 #         importlib.reload(pdftl.utils.arg_helpers)
 
 
-import json
 import sys
-from unittest.mock import MagicMock, mock_open, patch
-
-import pytest
 
 from pdftl.utils.arg_helpers import _load_spec_from_file
 
@@ -263,9 +259,6 @@ def test_convert_to_model_factory():
 
     assert isinstance(result, MockModelFactory)
     assert result.data["via_factory"] is True
-
-
-from pdftl.utils.arg_helpers import resolve_operation_spec
 
 
 def test_resolve_operation_spec_passes_data():

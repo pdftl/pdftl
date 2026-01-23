@@ -1,6 +1,5 @@
 import io
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from pdftl.cli.help import _load_help_markdown, print_help
 

@@ -172,3 +172,57 @@ def test_integration_cat_a_a(complex_pdf_a: Path, tmp_path: Path):
 
     pdf_a.close()
     new_pdf.close()
+
+
+def test_integration_cat_a_b_links(complex_pdf_a: Path, tmp_path: Path):
+    """
+    Verifies that links in PDF A and PDF B remain independent
+    and don't 'bleed' into each other's namespaces.
+    """
+    # 1. Create PDF B with a DIFFERENT named destination but the SAME name
+    # If PDF A has "StartPage" and PDF B has "StartPage", they must stay separate.
+
+    import pikepdf
+
+    pdf_b_path = tmp_path / "B.pdf"
+    with pikepdf.Pdf.new() as pdf_b:
+        pdf_b.add_blank_page()
+        dests_tree = pikepdf.NameTree.new(pdf_b)
+        # Use the EXACT same name as PDF A
+        dests_tree["StartPage"] = pikepdf.Array([pdf_b.pages[0].obj, pikepdf.Name.Fit])
+
+        if pikepdf.Name.Names not in pdf_b.Root:
+            pdf_b.Root.Names = pikepdf.Dictionary()
+        pdf_b.Root.Names.Dests = dests_tree.obj
+        link = pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot,
+            Subtype=pikepdf.Name.Link,
+            Rect=[0, 0, 10, 10],
+            A=pikepdf.Dictionary(S=pikepdf.Name.GoTo, D="StartPage"),
+        )
+        page = pdf_b.pages[0]
+        page.Annots = pdf_b.make_indirect(pikepdf.Array([link]))
+        pdf_b.save(pdf_b_path)
+    # 2. Act - Concatenate A + B
+    pdf_a = pikepdf.Pdf.open(complex_pdf_a)
+    pdf_b = pikepdf.Pdf.open(pdf_b_path)
+
+    new_pdf = pikepdf.Pdf.new()
+    page_specs = [
+        PageTransform(pdf_a, 0, (0, False), 1.0),
+        PageTransform(pdf_b, 0, (0, False), 1.0),
+    ]
+
+    add_pages(new_pdf, [pdf_a, pdf_b], page_specs)
+
+    # 3. Assert
+    # Verify that the destination tree now has TWO entries
+    # (likely suffixed to avoid collision)
+    all_dests = get_named_destinations(new_pdf)
+    assert len(all_dests) == 2
+
+    # Verify that Page 1's link points to Page 1, and Page 2's link points to Page 2
+    # This proves the 'Namespace Separation' works across different files.
+    p1_link_dest = new_pdf.pages[0].Annots[0].A.D
+    p2_link_dest = new_pdf.pages[1].Annots[0].A.D
+    assert p1_link_dest != p2_link_dest

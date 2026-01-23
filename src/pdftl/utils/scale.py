@@ -10,8 +10,9 @@ Page scaling
 
 import logging
 
-logger = logging.getLogger(__name__)
 from pdftl.core.constants import PAGE_BOXES
+
+logger = logging.getLogger(__name__)
 
 
 def _scale_rect(rect, scale):
@@ -24,14 +25,15 @@ def _scale_standard_page_boxes(page, scale):
             page[box_name] = _scale_rect(page[box_name], scale)
 
 
-def _scale_all_annots_in_page(page, scale):
+def scale_annotations_in_page(page, scale):
+    """Scale all annotations in a page"""
     for annot in getattr(page, "Annots", {}):
         if hasattr(annot, "Rect"):
-            logger.debug("scaling %s", list(annot.Rect))
+            # logger.debug("scaling %s", list(annot.Rect))
             annot.Rect = _scale_rect(annot.Rect, scale)
 
 
-def apply_scaling(page, scale):
+def apply_scaling(page, scale, scale_annotations=True):
     """
     Applies scaling to a page's boxes, content stream, and annotations.
 
@@ -47,4 +49,5 @@ def apply_scaling(page, scale):
     # Prepend a scaling matrix to the page's content stream.
     page.contents_add(bytes(f"{scale} 0 0 {scale} 0 0 cm", "utf-8"), prepend=True)
 
-    _scale_all_annots_in_page(page, scale)
+    if scale_annotations:
+        scale_annotations_in_page(page, scale)

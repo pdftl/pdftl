@@ -125,7 +125,7 @@ def test_discover_external_import_success(clean_sys_modules, tmp_path, caplog):
             f"------------------"
         )
         # Check success log
-        assert "Loaded external operation: my_plugin" in caplog.text, debug_info
+        assert "Loaded external operation: pdftl.external.my_plugin" in caplog.text, debug_info
         # Check __init__ skip
         assert "Loaded external operation: __init__" not in caplog.text, debug_info
 
@@ -146,7 +146,7 @@ def test_discover_external_import_error(clean_sys_modules, tmp_path, caplog):
 
         _discover_external_operations()
 
-        assert "Could not import external operation 'bad_import'" in caplog.text
+        assert "Could not import external operation 'pdftl.external.bad_import'" in caplog.text
 
 
 def test_discover_external_syntax_error(clean_sys_modules, tmp_path, caplog):
@@ -165,7 +165,7 @@ def test_discover_external_syntax_error(clean_sys_modules, tmp_path, caplog):
 
         _discover_external_operations()
 
-        assert "Syntax error in external operation 'bad_syntax'" in caplog.text
+        assert "Syntax error in external operation 'pdftl.external.bad_syntax'" in caplog.text
 
 
 def test_discover_external_general_exception(clean_sys_modules, tmp_path, caplog):
@@ -186,4 +186,6 @@ def test_discover_external_general_exception(clean_sys_modules, tmp_path, caplog
 
         _discover_external_operations()
 
-        assert "Unexpected error loading external operation 'bad_code'" in caplog.text
+        assert (
+            "Unexpected error loading external operation 'pdftl.external.bad_code'" in caplog.text
+        )

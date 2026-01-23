@@ -256,14 +256,11 @@ class TestFDFFieldEdgeCases(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-import io
-from unittest.mock import MagicMock
 
-import pikepdf
 import pytest
-from pikepdf.form import CheckboxField, RadioButtonGroup
+from pikepdf.form import RadioButtonGroup
 
-from pdftl.operations.generate_fdf import _write_field_as_fdf_to_file, _write_string_to_binary_file
+from pdftl.operations.generate_fdf import _write_string_to_binary_file
 
 
 def test_write_string_utf8_fallback():
@@ -306,48 +303,9 @@ def test_pikepdf_name_vs_string_formatting():
     assert b"//Yes" not in name_buffer.getvalue()
 
 
-def test_unparseable_value_fallback():
-    """Covers line 146-148: Fallback to unparse() when str() fails."""
-
-    # 1. Define a fake class that mimics the behavior we want.
-    # It acts as the "Type" we check against and the "Instance" we use.
-    class FakeString:
-        def __str__(self):
-            # Raise the specific error to trigger the except block
-            raise UnicodeDecodeError("utf-8", b"", 0, 1, "fail")
-
-        def unparse(self):
-            # Return the fallback value
-            return "<FEFF0041>"
-
-    # 2. Patch 'pikepdf.String' with our FakeString class.
-    # When the function under test does 'from pikepdf import String',
-    # it receives FakeString.
-    with patch("pikepdf.String", new=FakeString):
-        buffer = io.BytesIO()
-
-        # 3. Create an instance of our fake
-        bad_val = FakeString()
-
-        field = MagicMock()
-        field.value = bad_val
-
-        # 4. Run the function
-        # isinstance(bad_val, FakeString) will be True
-        _write_field_as_fdf_to_file("BadField", field, buffer)
-
-    # 5. Verify the fallback output
-    assert b"/V <FEFF0041>" in buffer.getvalue()
-
-
-import io
-from unittest.mock import ANY, MagicMock, patch
-
-import pikepdf
 import pytest
 
 from pdftl.core.constants import META_OUTPUT_FILE
-from pdftl.operations.generate_fdf import _write_field_as_fdf_to_file, generate_fdf_cli_hook
 
 
 def test_pikepdf_string_happy_path():
@@ -426,26 +384,36 @@ class FickleName(metaclass=FickleMeta):
 
 
 def test_unparseable_value_fallback():
-    """Covers line 146-148: Fallback to unparse() when str() crashes."""
-    buffer = io.BytesIO()
+    """Covers line 146-148: Fallback to unparse() when str() fails."""
 
-    # Define a fake class that raises error on str()
-    class BrokenString(FakeString):
+    # 1. Define a fake class that mimics the behavior we want.
+    # It acts as the "Type" we check against and the "Instance" we use.
+    class FakeString:
         def __str__(self):
+            # Raise the specific error to trigger the except block
             raise UnicodeDecodeError("utf-8", b"", 0, 1, "fail")
 
         def unparse(self):
+            # Return the fallback value
             return "<FEFF0041>"
 
-    # Patch pikepdf.String with our class (NOT a Mock object)
-    # This satisfies isinstance(val, String) because String IS BrokenString
-    with patch("pikepdf.String", new=BrokenString):
-        val = BrokenString()
-        field = MagicMock()
-        field.value = val
+    # 2. Patch 'pikepdf.String' with our FakeString class.
+    # When the function under test does 'from pikepdf import String',
+    # it receives FakeString.
+    with patch("pikepdf.String", new=FakeString):
+        buffer = io.BytesIO()
 
+        # 3. Create an instance of our fake
+        bad_val = FakeString()
+
+        field = MagicMock()
+        field.value = bad_val
+
+        # 4. Run the function
+        # isinstance(bad_val, FakeString) will be True
         _write_field_as_fdf_to_file("BadField", field, buffer)
 
+    # 5. Verify the fallback output
     assert b"/V <FEFF0041>" in buffer.getvalue()
 
 

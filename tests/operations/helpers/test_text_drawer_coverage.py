@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 from pdftl.operations.helpers.text_drawer import (
     TextDrawer,
     _get_preset_x,
@@ -66,12 +64,7 @@ def test_draw_rule_invalid_data_warning(caplog):
     assert "Skipping one text rule" in caplog.text
 
 
-import io
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from pdftl.operations.helpers.text_drawer import TextDrawer
+from unittest.mock import patch
 
 
 def test_get_font_name_external_registry():

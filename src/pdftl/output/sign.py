@@ -83,7 +83,7 @@ def parse_sign_options(options, input_context):
         "key": options.get("sign_key"),
         "cert": options.get("sign_cert"),
         "field": options.get("sign_field"),
-        "passphrase": None,
+        "passphrase": None,  # nosec
     }
 
     if not sign_cfg["key"] or not sign_cfg["cert"]:

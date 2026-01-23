@@ -100,10 +100,10 @@ def test_str_from_result_meta():
     # Case 2: Missing Key (AssertionError from from_result_meta or None check)
     # The code asserts result.meta is not None.
     # But if key is missing, .get returns None, failing isinstance(None, str)
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         str_from_result_meta(res, "missing_key")
 
     # Case 3: Wrong Type
     res_int = OpResult(success=True, meta={"key": 123})
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         str_from_result_meta(res_int, "key")

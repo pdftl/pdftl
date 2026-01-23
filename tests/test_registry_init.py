@@ -169,19 +169,26 @@ def test_registry_syntax_error():
         )
 
         # Patch import_module to raise SyntaxError when called
-        with patch("importlib.import_module") as mock_import:
-            mock_import.side_effect = SyntaxError(
+        with (
+            patch("importlib.util.spec_from_file_location") as mock_spec_func,
+            patch("importlib.util.module_from_spec") as mock_module_func,
+        ):
+
+            # Setup the mock spec and its loader
+            mock_spec = MagicMock()
+            mock_spec_func.return_value = mock_spec
+
+            # Simulate a SyntaxError when the loader tries to execute the module
+            mock_spec.loader.exec_module.side_effect = SyntaxError(
                 "Invalid Syntax", ("broken_plugin.py", 1, 1, "bad code")
             )
 
-            # Patch sys.path so we don't actually mess up the test runner's path
-            with patch.object(sys, "path", []):
-                # Execute
-                _discover_external_operations()
+            # Execute
+            _discover_external_operations()
 
-            # If we reached here without a crash, the try/except block worked.
-            # We can verify import was attempted
-            mock_import.assert_called()
+            # Verify the new mechanism was called
+            mock_spec_func.assert_called()
+            mock_spec.loader.exec_module.assert_called()
 
 
 def test_registry_no_config_dir():

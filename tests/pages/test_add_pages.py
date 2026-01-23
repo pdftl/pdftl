@@ -16,6 +16,7 @@ from pdftl.pages.link_remapper import LinkRemapper
 # This is returned by process_source_pages, so we need it.
 from pdftl.pages.links import RebuildLinksPartialContext
 from pdftl.utils.page_specs import PageTransform
+from pdftl.utils.scale import scale_annotations_in_page
 
 # --- Fixtures ---
 
@@ -183,9 +184,9 @@ def test_process_source_pages_full():
         # Ensure apply_scaling was called 3 times
         mock_scale.assert_has_calls(
             [
-                call(page_0, tf1_scale),
-                call(page_1, tf2_scale),
-                call(page_2, tf3_scale),
+                call(page_0, tf1_scale, scale_annotations=False),
+                call(page_1, tf2_scale, scale_annotations=False),
+                call(page_2, tf3_scale, scale_annotations=False),
             ]
         )
 
@@ -237,6 +238,8 @@ def test_process_source_pages_empty(mock_new_pdf):
 ## add_pages ##
 
 
+@patch("pikepdf.Pdf.get_object")
+@patch("pdftl.utils.scale.scale_annotations_in_page")
 @patch("pdftl.pages.add_pages.handle_page_widgets")
 @patch("pdftl.pages.add_pages.rebuild_acroform_index")
 @patch("pdftl.pages.add_pages.write_named_dests")
@@ -252,13 +255,15 @@ def test_add_pages_orchestration(
     mock_write_named_dests,
     mock_rebuild_acroform,
     mock_handle_widgets,
+    mock_scale_annotations_in_page,
+    mock_pdf_get_object,
     mock_new_pdf,  # Fixture
 ):
     """Tests that add_pages correctly orchestrates its helper functions."""
     # 1. Arrange
     mock_context = MagicMock(spec=RebuildLinksPartialContext)
     mock_context.page_map = {"page_map_key": "page_map_val"}
-    mock_context.page_transforms = {"transforms_key": "transforms_val"}
+    mock_context.page_transforms = {"transforms_key": ("transforms_val0", "transforms_val1")}
     mock_context.processed_page_info = ["page_info_1"]
     mock_context.unique_source_pdfs = {"pdf_a", "pdf_b"}
     # UPDATED: Mock return value must be a tuple (ctx, queue)

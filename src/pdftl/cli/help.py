@@ -20,7 +20,7 @@ from pdftl.cli.help_data import (
 from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
 from pdftl.core.registry import register_help_topic, registry
 from pdftl.core.types import HelpExample
-from pdftl.utils.string import before_space
+from pdftl.utils.string_utils import before_space
 
 TAG_PREFIX = "tag:"
 
@@ -175,6 +175,10 @@ def _format_examples_block(examples, show_topics=False):
     topic = None
 
     for ex in examples:
+        if not ("desc" in ex and "cmd" in ex):
+            logger.warn("Skipping incomplete example: %s", ex)
+            continue
+
         # Add topic heading if necessary
         if show_topics and ex.get("topic"):
             if ex.topic == topic:

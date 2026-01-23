@@ -399,7 +399,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pdftl.cli.pipeline import CliStage, PipelineManager
 from pdftl.core.types import OpResult
 
 
