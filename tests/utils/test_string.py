@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.utils.string import fix_mojibake, sensible_decode, split_escaped
+from pdftl.utils.string_utils import fix_mojibake, sensible_decode, split_escaped
 
 
 def test_split_escaped():
@@ -37,7 +37,7 @@ def test_split_escaped_value_error():
         split_escaped("", "ab")
 
 
-from pdftl.utils.string import recursive_decode
+from pdftl.utils.string_utils import recursive_decode
 
 
 def test_recursive_decode():
@@ -67,7 +67,7 @@ from decimal import Decimal
 
 import pikepdf
 
-from pdftl.utils.string import (
+from pdftl.utils.string_utils import (
     before_space,
     compact_json_string,
     pdf_num_to_string,
@@ -405,7 +405,7 @@ def test_fix_mojibake_exception():
     Checks that fix_mojibake returns original text if a UnicodeError occurs.
     """
     # Patch sensible_decode to raise a UnicodeError to trigger the except block
-    with patch("pdftl.utils.string.sensible_decode", side_effect=UnicodeError("Boom")):
+    with patch("pdftl.utils.string_utils.sensible_decode", side_effect=UnicodeError("Boom")):
         original_text = "problematic_string"
         result = fix_mojibake(original_text)
         assert result == original_text

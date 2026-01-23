@@ -5,7 +5,7 @@ from pikepdf import Array, Dictionary, Page
 
 # --- Import the functions to test ---
 from pdftl.utils.scale import (
-    _scale_all_annots_in_page,
+    scale_annotations_in_page,
     _scale_rect,
     _scale_standard_page_boxes,
     apply_scaling,
@@ -59,7 +59,7 @@ def test_scale_standard_page_boxes(mocker):
     assert page.OtherKey == "value"
 
 
-def test_scale_all_annots_in_page():
+def test_scale_annotations_in_page():
     """
     Tests that all annotations with a /Rect attribute
     have that rect scaled in-place.
@@ -74,7 +74,7 @@ def test_scale_all_annots_in_page():
     page.Annots = [annot1, annot2, annot3]
 
     # Act
-    _scale_all_annots_in_page(page, 2.0)
+    scale_annotations_in_page(page, 2.0)
 
     # Assert
     assert annot1.Rect == Array([20.0, 20.0, 40.0, 40.0])
@@ -82,7 +82,7 @@ def test_scale_all_annots_in_page():
     assert "/Rect" not in annot3
 
 
-def test_scale_all_annots_in_page_no_annots():
+def test_scale_annotations_in_page_no_annots():
     """
     Tests that the function runs without crashing if
     the page has no /Annots key.
@@ -95,7 +95,7 @@ def test_scale_all_annots_in_page_no_annots():
 
     # Act & Assert (should not crash)
     try:
-        _scale_all_annots_in_page(page, 2.0)
+        scale_annotations_in_page(page, 2.0)
     except AttributeError as e:
         if "Annots" in str(e):
             pytest.fail("Crashed on page with no Annots")
@@ -129,7 +129,7 @@ def test_apply_scaling_orchestration(mocker):
     # Arrange
     # Patch the helper functions *within the scale module*
     mock_scale_boxes = mocker.patch("pdftl.utils.scale._scale_standard_page_boxes")
-    mock_scale_annots = mocker.patch("pdftl.utils.scale._scale_all_annots_in_page")
+    mock_scale_annots = mocker.patch("pdftl.utils.scale.scale_annotations_in_page")
 
     page = MagicMock(spec=Page)
     scale = 3.0
