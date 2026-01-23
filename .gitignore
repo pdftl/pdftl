@@ -68,3 +68,8 @@ complexipy*.json
 .github/assets/pdftl.png
 vendor_tests/php-pdftk
 scratch/
+
+nuitka*
+scalene*
+out_*.pdf
+bench_*
