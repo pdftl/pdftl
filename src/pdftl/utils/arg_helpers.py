@@ -104,8 +104,17 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
 
     # Instantiate the class
     # If the class has a specific 'from_dict' factory (common in complex models), use it.
-    if factory := getattr(model_class, "from_dict", None):
-        return factory(data)
+    if (factory := getattr(model_class, "from_dict", None)) is not None:
+        if callable(factory):
+            return factory(data)
+        else:
+            logger.warning(
+                "Attribute 'from_dict' on %s is not callable. Falling back to constructor.",
+                model_class.__name__,
+            )
 
     # Otherwise, assume standard dataclass/constructor kwargs
-    return model_class(**data)
+    try:
+        return model_class(**data)
+    except TypeError as e:
+        raise TypeError(f"Failed to instantiate {model_class.__name__}: {e}") from e

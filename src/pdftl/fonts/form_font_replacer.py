@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import TYPE_CHECKING, List, cast
+from typing import TYPE_CHECKING, cast
 
 from pdftl.fonts.font_embedding import embed_truetype_font
 from pdftl.utils.dependencies import ensure_dependencies
@@ -53,7 +53,7 @@ def replace_form_fonts(pdf: "pikepdf.Pdf", ttf_path: str):
 
     # 4. Patch Individual Fields
     if "/Fields" in acroform:
-        for field in cast(List["pikepdf.Object"], acroform.Fields):
+        for field in cast(list["pikepdf.Object"], acroform.Fields):
             _update_field_font_recursive(field, NEW_ALIAS)
 
     # 5. Set the regeneration flag
@@ -82,5 +82,5 @@ def _update_field_font_recursive(field: "pikepdf.Object", new_alias: str):
 
     # Recurse into children (Radio Button groups, etc)
     if "/Kids" in field:
-        for kid in cast(List["pikepdf.Object"], field.Kids):
+        for kid in cast(list["pikepdf.Object"], field.Kids):
             _update_field_font_recursive(kid, new_alias)

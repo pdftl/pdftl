@@ -117,7 +117,7 @@ class PdfPipeline:
         kwargs[c.OPERATION_ARGS] = mapped_op_args
         return kwargs
 
-    def _apply_metadata(self, func: "Callable", name: str) -> "Callable":
+    def _apply_metadata(self, func: Callable, name: str) -> Callable:
         """Copies docstrings and signatures from the API function to the wrapper."""
         func.__name__ = name
         try:

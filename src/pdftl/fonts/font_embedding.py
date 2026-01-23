@@ -15,7 +15,7 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import pikepdf
@@ -29,7 +29,7 @@ class FontMetricsData:  # pylint: disable=too-many-instance-attributes
     """Dataclass for font metrics"""
 
     ascent: float = 0
-    bbox: List = field(default_factory=list)
+    bbox: list = field(default_factory=list)
     cap_height: float = 0
     descent: float = 0
     flags: int = 0
@@ -42,7 +42,7 @@ class FontMetricsData:  # pylint: disable=too-many-instance-attributes
 def embed_truetype_font(
     pdf: "pikepdf.Pdf",
     font_path: str,
-    custom_encoding_map: Optional[Dict[int, str]] = None,
+    custom_encoding_map: dict[int, str] | None = None,
 ) -> "pikepdf.Object":
     """
     Embeds a TrueType font into the PDF document and returns the Font Object.
@@ -184,7 +184,7 @@ def _get_glyph_width(tt, metrics, gname):
 
 def _calculate_slot_width(
     i: int,
-    custom_map: Optional[Dict[int, str]],
+    custom_map: dict[int, str] | None,
     cmap,
     tt,
     metrics,
@@ -225,7 +225,7 @@ def _calculate_slot_width(
     return width
 
 
-def _widths_array(tt, metrics, custom_map: Optional[Dict[int, str]] = None):
+def _widths_array(tt, metrics, custom_map: dict[int, str] | None = None):
     """
     Return the widths array for a Simple Font (0..255).
     """

@@ -5,6 +5,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Fixed
+
+- `cat` performance improvements (input files with many pages) and
+  more testing for this
+
+- `delete` properly removes page resources, resulting in smaller
+  output files
+
+### Security
+
+- Removed passwords from logging calls
+
+- Now using `defusedxml` to avoid `xml.etree.ElementTree` vulnerabilities
+
 ## [0.9.1] - 2026-01-21
 
 ### Fixed
