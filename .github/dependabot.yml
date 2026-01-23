@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # 1. Monitors your GitHub Action SHAs
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # This ensures it continues to use SHAs when it suggests updates
+    commit-message:
+      prefix: "chore(deps-actions)"
+
+  # 2. Monitors your Python dependencies (pip/PyPI)
+  - package-ecosystem: "pip"
+    directory: "/" # Adjust if your requirements.txt or pyproject.toml is in a subfolder
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps-python)"
