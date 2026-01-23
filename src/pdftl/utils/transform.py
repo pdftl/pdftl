@@ -78,19 +78,21 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
 def _rotate_pair(angle, x_coord, y_coord, page_width, page_height):
     """Apply a rotation. If x_coord and/or y_coord is None,
     do something reasonable."""
-    if angle == 0:
+    mod_angle = angle % 360
+
+    if mod_angle == 0:
         return x_coord, y_coord
-    if angle == 90:
+    if mod_angle == 90:
         # new_x = h - y, new_y = x
         new_x = _subtract_or_none(page_height, y_coord)
         new_y = x_coord
         return new_x, new_y
-    if angle == 180:
+    if mod_angle == 180:
         # new_x = w - x, new_y = h - y
         new_x = _subtract_or_none(page_width, x_coord)
         new_y = _subtract_or_none(page_height, y_coord)
         return new_x, new_y
-    if angle == 270:
+    if mod_angle == 270:
         # new_x = y, new_y = w - x
         new_x = y_coord
         new_y = _subtract_or_none(page_width, x_coord)
