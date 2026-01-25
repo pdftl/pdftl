@@ -203,7 +203,6 @@ def test_integration_cat_a_b_links(complex_pdf_a: Path, tmp_path: Path):
         page = pdf_b.pages[0]
         page.Annots = pdf_b.make_indirect(pikepdf.Array([link]))
         pdf_b.save(pdf_b_path)
-        pdf_b.save("/tmp/b.pdf")
     # 2. Act - Concatenate A + B
     pdf_a = pikepdf.Pdf.open(complex_pdf_a)
     pdf_b = pikepdf.Pdf.open(pdf_b_path)
@@ -220,7 +219,6 @@ def test_integration_cat_a_b_links(complex_pdf_a: Path, tmp_path: Path):
     # Verify that the destination tree now has TWO entries
     # (likely suffixed to avoid collision)
     all_dests = get_named_destinations(new_pdf)
-    new_pdf.save("/tmp/out.pdf")
     assert len(all_dests) == 2
 
     # Verify that Page 1's link points to Page 1, and Page 2's link points to Page 2
