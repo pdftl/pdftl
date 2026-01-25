@@ -169,17 +169,8 @@ class PipelineManager:
         result = self._run_operation(stage, opened_pdfs)
         self._process_result(result, stage, opened_pdfs)
 
-    def _process_result(self, result, stage, opened_pdfs):
-        """
-        Updates pipeline state and manages file cleanup.
-        Crucially, it defers cleanup if the result is a generator.
-        """
-
-        import pikepdf
-
-        from pdftl.core.types import OpResult
-
-        # 1. Unpack OpResult if present
+    def _unpack_result_value_and_run_hooks(self, result, stage, opened_pdfs):
+        # Unpack OpResult if present
         if isinstance(result, OpResult):
             self.results.append(result)
             self.result_discardable = result.is_discardable
@@ -199,10 +190,22 @@ class PipelineManager:
         if not result_val and opened_pdfs:
             result_val = opened_pdfs[0]
 
-        # 2. Update the Pipeline State Variable
+        return result_val
+
+    def _process_result(self, result, stage, opened_pdfs):
+        """
+        Updates pipeline state and manages file cleanup.
+        Crucially, it defers cleanup if the result is a generator.
+        """
+
+        import pikepdf
+
+        result_val = self._unpack_result_value_and_run_hooks(result, stage, opened_pdfs)
+
+        # Update the Pipeline State Variable
         self.pipeline_pdf = result_val
 
-        # 3. Smart Cleanup Logic
+        # Smart Cleanup Logic
         # CASE A: Generator (Lazy Evaluation)
         # We CANNOT close opened_pdfs here because the generator hasn't run yet.
         # We rely on the generator having a `finally` block to close these when done.

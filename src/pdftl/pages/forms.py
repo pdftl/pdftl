@@ -16,7 +16,6 @@ def handle_page_widgets(new_pdf, new_page, source_page, instance_num):
     Scans the new_page for Widget annotations.
     If instance_num > 0 (it's a duplicate), renames the fields to avoid collisions.
     """
-    import pikepdf
 
     if "/Annots" not in new_page:
         return
@@ -25,47 +24,52 @@ def handle_page_widgets(new_pdf, new_page, source_page, instance_num):
     # share the same NEW parent object.
     cloned_parents = {}
 
-    for i, annot in enumerate(new_page.Annots):
+    for annot in new_page.Annots:
 
         type_str = str(annot.get("/Type", ""))
         subtype_str = str(annot.get("/Subtype", ""))
         is_widget = type_str == "/Widget" or subtype_str == "/Widget"
 
         if is_widget and instance_num > 0:
+            _handle_widget(annot, instance_num, new_pdf, cloned_parents)
 
-            # Case A: Standard Widget (Text/Check) - Has its own Name (/T)
-            if "/T" in annot:
-                old_name = str(annot.T)
-                new_name = f"{old_name}_{instance_num}"
-                annot.T = new_name
-                logger.debug(f"  > Renamed Widget {old_name} -> {new_name}")
 
-            # Case B: Child Widget (Radio Button) - Inherits Name from Parent
-            elif "/Parent" in annot:
-                old_parent = annot.Parent
+def _handle_widget(annot, instance_num, new_pdf, cloned_parents):
+    import pikepdf
 
-                if old_parent.objgen in cloned_parents:
-                    # Point this widget to the existing new parent
-                    annot.Parent = cloned_parents[old_parent.objgen]
-                else:
-                    # Create a deep copy of the parent dictionary structure
-                    # CRITICAL FIX: Must be made INDIRECT so it gets a real Object ID
-                    new_parent = new_pdf.make_indirect(pikepdf.Dictionary(old_parent))
+    # Case A: Standard Widget (Text/Check) - Has its own Name (/T)
+    if "/T" in annot:
+        old_name = str(annot.T)
+        new_name = f"{old_name}_{instance_num}"
+        annot.T = new_name
+        logger.debug(f"  > Renamed Widget {old_name} -> {new_name}")
 
-                    if "/T" in old_parent:
-                        old_parent_name = str(old_parent.T)
-                        new_parent_name = f"{old_parent_name}_{instance_num}"
-                        new_parent.T = new_parent_name
+    # Case B: Child Widget (Radio Button) - Inherits Name from Parent
+    elif "/Parent" in annot:
+        old_parent = annot.Parent
 
-                        cloned_parents[old_parent.objgen] = new_parent
-                        annot.Parent = new_parent
+        if old_parent.objgen in cloned_parents:
+            # Point this widget to the existing new parent
+            annot.Parent = cloned_parents[old_parent.objgen]
+        else:
+            # Create a deep copy of the parent dictionary structure
+            # CRITICAL FIX: Must be made INDIRECT so it gets a real Object ID
+            new_parent = new_pdf.make_indirect(pikepdf.Dictionary(old_parent))
 
-                        logger.debug(
-                            f"  > Cloned & Renamed Parent: {old_parent_name} -> {new_parent_name}"
-                        )
-                    else:
-                        # Should rarely happen for valid forms
-                        pass
+            if "/T" in old_parent:
+                old_parent_name = str(old_parent.T)
+                new_parent_name = f"{old_parent_name}_{instance_num}"
+                new_parent.T = new_parent_name
+
+                cloned_parents[old_parent.objgen] = new_parent
+                annot.Parent = new_parent
+
+                logger.debug(
+                    f"  > Cloned & Renamed Parent: {old_parent_name} -> {new_parent_name}"
+                )
+            else:
+                # Should rarely happen for valid forms
+                pass
 
 
 def rebuild_acroform_index(pdf):
@@ -79,21 +83,7 @@ def rebuild_acroform_index(pdf):
 
     for page in pdf.pages:
         if "/Annots" in page:
-            for annot in page.Annots:
-
-                type_str = str(annot.get("/Type", ""))
-                subtype_str = str(annot.get("/Subtype", ""))
-
-                if type_str == "/Widget" or subtype_str == "/Widget":
-
-                    candidate = annot
-                    if "/Parent" in annot:
-                        candidate = annot.Parent
-
-                    # Deduplicate based on Object ID
-                    if candidate.objgen not in seen_fields:
-                        fields.append(candidate)
-                        seen_fields.add(candidate.objgen)
+            _rebuild_acroform_for_page_annots(page.Annots, fields, seen_fields)
 
     logger.debug(f"[FORMS] Total unique fields collected: {len(fields)}")
 
@@ -108,3 +98,20 @@ def rebuild_acroform_index(pdf):
         # If no fields, remove AcroForm if it exists to clean up
         if "/AcroForm" in pdf.Root:
             del pdf.Root.AcroForm
+
+
+def _rebuild_acroform_for_page_annots(page_annots, fields, seen_fields):
+    for annot in page_annots:
+        type_str = str(annot.get("/Type", ""))
+        subtype_str = str(annot.get("/Subtype", ""))
+
+        if type_str == "/Widget" or subtype_str == "/Widget":
+
+            candidate = annot
+            if "/Parent" in annot:
+                candidate = annot.Parent
+
+            # Deduplicate based on Object ID
+            if candidate.objgen not in seen_fields:
+                fields.append(candidate)
+                seen_fields.add(candidate.objgen)

@@ -5,10 +5,10 @@ from pikepdf import Array, Dictionary, Page
 
 # --- Import the functions to test ---
 from pdftl.utils.scale import (
-    scale_annotations_in_page,
     _scale_rect,
     _scale_standard_page_boxes,
     apply_scaling,
+    scale_annotations_in_page,
 )
 
 # --- Test _scale_rect ---
