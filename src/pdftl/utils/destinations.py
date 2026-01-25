@@ -1,8 +1,5 @@
-# src/pdftl/utils/destinations.py
-
 import logging
-from collections.abc import Iterable
-from typing import Any, NamedTuple, cast
+from typing import Any, Iterable, NamedTuple, cast
 
 logger = logging.getLogger(__name__)
 
@@ -10,11 +7,10 @@ logger = logging.getLogger(__name__)
 class ResolvedDest(NamedTuple):
     page_num: int
     dest_type: str
-    args: list[str]
+    args: list[Any]
 
 
 def get_named_destinations(pdf):
-    """Get the named destinations NameTree from the PDF, if there is one"""
     from pikepdf import NameTree
 
     if "/Names" in pdf.Root and "/Dests" in pdf.Root.Names:
@@ -22,55 +18,68 @@ def get_named_destinations(pdf):
     return None
 
 
+def _find_page_index(page_obj, pdf_pages) -> int | None:
+    """Helper to find 1-based index of a page object."""
+    if not hasattr(page_obj, "objgen"):
+        return None
+    for i, page in enumerate(pdf_pages):
+        if hasattr(page, "objgen") and page.objgen == page_obj.objgen:
+            return i + 1
+    return None
+
+
+def _dest_from_outline_item(dest):
+    # OutlineItem.destination handles the primary lookup;
+    # fallback to action if None
+    orig_item = dest
+    dest = orig_item.destination
+    if dest is None and hasattr(orig_item, "action"):
+        action = orig_item.action
+        if action is not None and hasattr(action, "D"):
+            dest = action.D
+    return dest
+
+
+def _resolve_named_dest_to_array(dest, named_destinations):
+    from pikepdf import Array, Dictionary
+
+    dest_str = str(dest).lstrip("/")
+    dest_obj = named_destinations.get(dest_str) if named_destinations else None
+
+    if isinstance(dest_obj, Dictionary) and "/D" in dest_obj:
+        return dest_obj["/D"]
+    elif isinstance(dest_obj, Array):
+        return dest_obj
+
+    return None
+
+
 def resolve_dest_to_page_num(
     dest: Any, pdf_pages: Any, named_destinations: Any
 ) -> ResolvedDest | None:
     """
-    Generalized resolver: Takes a pikepdf Object (Array, Name, String, or Dict)
+    Generalized resolver: Takes an OutlineItem, Array, Name, String, or Dict
     and returns a ResolvedDest(page_num, dest_type, args).
     """
-    from pikepdf import Array, Dictionary, Name, String
+    from pikepdf import Array, Dictionary, Name, OutlineItem, String
 
-    # 1. Handle Action Dictionaries (GoTo actions use /D for destination)
+    # 1. Extract destination from OutlineItem or Action Dictionary
+    if isinstance(dest, OutlineItem):
+        dest = _dest_from_outline_item(dest)
+
     if isinstance(dest, Dictionary) and "/D" in dest:
         dest = dest["/D"]
 
-    # 2. Resolve Named Destinations
+    # 2. Resolve Named Destinations (String/Name -> Array)
     if isinstance(dest, (String, Name, str)):
-        dest_str = str(dest).lstrip("/")
-        # Look up in the NameTree
-        dest_obj = named_destinations.get(dest_str) if named_destinations else None
+        dest = _resolve_named_dest_to_array(dest, named_destinations)
 
-        if isinstance(dest_obj, Dictionary) and "/D" in dest_obj:
-            dest = dest_obj["/D"]
-        elif isinstance(dest_obj, Array):
-            dest = dest_obj
-        else:
-            logger.debug("Could not resolve named destination: %s", dest_str)
-            return None
-
-    # 3. Extract Data from Destination Array [page_obj /Type ...]
+    # 3. Extract Data from [page_obj /Type ...]
     if isinstance(dest, Array) and len(dest) > 0:
-        page_obj = dest[0]
-
-        # Match page object to 1-indexed page number using objgen
-        page_num = None
-        if hasattr(page_obj, "objgen"):
-            for i, page in enumerate(pdf_pages):
-                if page.objgen == page_obj.objgen:
-                    page_num = i + 1
-                    break
-
-        if page_num is None:
-            logger.debug("Destination array found but page object could not be matched.")
-            return None
-
-        # Extract type (e.g., /XYZ, /Fit)
-        dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
-
-        # Extract remaining arguments as strings (null, 0, 806, etc.)
-        dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
-
-        return ResolvedDest(page_num, dest_type, dest_args)
+        page_num = _find_page_index(dest[0], pdf_pages)
+        if page_num:
+            dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
+            dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
+            return ResolvedDest(page_num, dest_type, dest_args)
 
     return None

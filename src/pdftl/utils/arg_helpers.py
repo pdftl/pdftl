@@ -6,9 +6,12 @@
 
 """Utilities to help operations gather arguments in different formats"""
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

@@ -107,8 +107,6 @@ def _write_string_to_binary_file(x, file):
 
 def _write_field_as_fdf_to_file(field_name, field, file):
     """Write FDF data for a single field to a file"""
-    from pikepdf import Name, String
-    from pikepdf.form import CheckboxField, RadioButtonGroup
 
     def _write(x):
         _write_string_to_binary_file(x, file)
@@ -117,20 +115,24 @@ def _write_field_as_fdf_to_file(field_name, field, file):
     _write("\n  <<")
     _write(f"\n    /T ({field_name})")
 
+    val_as_string = _get_val_as_string(field)
+
+    if val_as_string is not None:
+        _write(f"\n    /V {val_as_string}")
+
+    _write("\n  >>")
+
+
+def _get_val_as_string(field):
+    from pikepdf import Name, String
+    from pikepdf.form import CheckboxField, RadioButtonGroup
+
     # Resolve the value to use
     val = field.value if field.value is not None else field.default_value
     val_as_string = None
 
     if val is None:
-        # Robustness: getattr protects against mocks or non-standard objects
-        field_obj = getattr(field, "obj", {})
-        is_radio = isinstance(field, RadioButtonGroup)
-        is_merged_widget = field_obj.get("/Subtype") == "/Widget"
-
-        if is_radio and not is_merged_widget:
-            val_as_string = "/Off"
-        else:
-            val_as_string = "/"
+        val_as_string = _val_string_from_none(field)
 
     elif isinstance(field, (RadioButtonGroup, CheckboxField)):
         # State-based fields use Name format (/Value)
@@ -138,28 +140,46 @@ def _write_field_as_fdf_to_file(field_name, field, file):
         val_as_string = s_val if s_val.startswith("/") else f"/{s_val}"
 
     elif isinstance(val, (String, Name)):
-        # Robustness: try/except catches binary data that can't be stringified
-        try:
-            s_val = str(val)
-            # Maintain pdftk style: Strings get parens, Names get slashes
-            if isinstance(val, String):
-                val_as_string = f"({s_val})"
-            elif isinstance(val, Name):
-                # Ensure we don't double up slashes (e.g. //Yes)
-                val_as_string = s_val if s_val.startswith("/") else f"/{s_val}"
-            else:
-                # Fallback for the theoretical edge case where the tuple check passed
-                # but individual checks failed (defensive coding)
-                val_as_string = f"({val})"
-        except (ValueError, UnicodeDecodeError):
-            # Fallback to pikepdf's hex encoding <...> for binary safety
-            val_as_string = val.unparse()
-
+        val_as_string = _val_string_from_stringy(val)
     else:
         # Standard fallback for basic types
         val_as_string = f"({val})"
 
-    if val_as_string is not None:
-        _write(f"\n    /V {val_as_string}")
+    return val_as_string
 
-    _write("\n  >>")
+
+def _val_string_from_none(field):
+    from pikepdf.form import RadioButtonGroup
+
+    # Robustness: getattr protects against mocks or non-standard objects
+    field_obj = getattr(field, "obj", {})
+    is_radio = isinstance(field, RadioButtonGroup)
+    is_merged_widget = field_obj.get("/Subtype") == "/Widget"
+
+    if is_radio and not is_merged_widget:
+        return "/Off"
+
+    return "/"
+
+
+def _val_string_from_stringy(val):
+    from pikepdf import Name, String
+
+    # Robustness: try/except catches binary data that can't be stringified
+    try:
+        s_val = str(val)
+        # Maintain pdftk style: Strings get parens, Names get slashes
+        if isinstance(val, String):
+            val_as_string = f"({s_val})"
+        elif isinstance(val, Name):
+            # Ensure we don't double up slashes (e.g. //Yes)
+            val_as_string = s_val if s_val.startswith("/") else f"/{s_val}"
+        else:
+            # Fallback for the theoretical edge case where the tuple check passed
+            # but individual checks failed (defensive coding)
+            val_as_string = f"({val})"
+    except (ValueError, UnicodeDecodeError):
+        # Fallback to pikepdf's hex encoding <...> for binary safety
+        val_as_string = val.unparse()
+
+    return val_as_string

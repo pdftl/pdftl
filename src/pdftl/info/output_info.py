@@ -41,25 +41,22 @@ from pdftl.utils.string_utils import (
 )
 
 
-def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
+def _get_extra_info(info, pdf, input_filename):
+    info.file_path = input_filename
+    info.version = pdf.pdf_version
+    info.encrypted = pdf.is_encrypted
 
-    from collections.abc import Iterable
 
+def _get_docinfo(info, pdf_docinfo):
     import pikepdf
 
-    info = PdfInfo(pages=len(pdf.pages), ids=pdf_id_metadata_as_strings(pdf))
-    if extra_info:
-        info.file_path = input_filename
-        info.version = pdf.pdf_version
-        info.encrypted = pdf.is_encrypted
-    if pdf.docinfo:
-        if info.doc_info is None:
-            info.doc_info = []
-        docinfo_keys_sorted = list(pdf.docinfo.keys())
+    if info.doc_info is None:
+        info.doc_info = []
+        docinfo_keys_sorted = list(pdf_docinfo.keys())
         docinfo_keys_sorted.sort()
         for key in docinfo_keys_sorted:
             key_str = str(key)[1:]
-            value = pdf.docinfo[key]
+            value = pdf_docinfo[key]
             if not isinstance(value, (str, pikepdf.String)):
                 logger.warning(
                     "Skipping non-string InfoValue '%s' (type: %s) for InfoKey '%s'",
@@ -69,64 +66,69 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
                 )
                 continue
             info.doc_info.append(DocInfoEntry(key=key_str, value=str(value)))
-    for i, page in enumerate(pdf.pages):
-        rotation = int(page.get("/Rotate", 0))
 
-        if info.page_media is None:
-            info.page_media = []
-        page_media_dict: dict[str, Any] = {
-            "page_number": i + 1,
-            "rotation": rotation,
-        }
-        saved_media_box = None
-        saved_crop_box = None
-        for box, key in c.INFO_TO_PAGE_BOXES_MAP.items():
-            box_obj = getattr(page, key, None)
-            if not isinstance(box_obj, (pikepdf.Array, list)):
-                continue
-            box_list = [float(x) for x in cast(Iterable[Any], box_obj)]
-            width_str = pdf_num_to_string(abs(box_list[2] - box_list[0]))
-            height_str = pdf_num_to_string(abs(box_list[3] - box_list[1]))
-            # breakpoint()
-            if box == "media_rect":
-                page_media_dict["dimensions"] = (width_str, height_str)
-                saved_media_box = box_list
-            elif box == "crop_rect":
-                if box_list == saved_media_box:
-                    continue
-                saved_crop_box = box_list
-            else:
-                if box_list == saved_crop_box or (
-                    saved_crop_box is None and box_list == saved_media_box
-                ):
-                    continue
-            page_media_dict[box] = box_list
 
-        info.page_media.append(PageMediaEntry(**page_media_dict))
+def _get_page_info(info, i, page):
+    import pikepdf
 
-    if hasattr(pdf.Root, "PageLabels"):
-        from pikepdf import NumberTree
+    rotation = int(page.get("/Rotate", 0))
 
-        labels = NumberTree(pdf.Root.PageLabels)
-        for page_idx, entry in labels.items():
-            style_code = getattr(entry, "S", None)
-            try:
-                found_style = next(
-                    k for k, v in PAGE_LABEL_STYLE_MAP.items() if v == str(style_code)
-                )
-            except StopIteration:
-                found_style = "NoNumber"
-            if info.page_labels is None:
-                info.page_labels = []
-            info.page_labels.append(
-                PageLabelEntry(
-                    new_index=int(page_idx) + 1,
-                    start=int(getattr(entry, "St", 1)),
-                    prefix=str(getattr(entry, "P", "")) or None,
-                    num_style=found_style,
-                )
+    if info.page_media is None:
+        info.page_media = []
+    page_media_dict: dict[str, Any] = {
+        "page_number": i + 1,
+        "rotation": rotation,
+    }
+    saved_boxes = {"media": None, "crop": None}
+    for box, key in c.INFO_TO_PAGE_BOXES_MAP.items():
+        box_obj = getattr(page, key, None)
+        if not isinstance(box_obj, (pikepdf.Array, list)):
+            continue
+        _update_box_info_dict(page_media_dict, box, box_obj, saved_boxes)
+    info.page_media.append(PageMediaEntry(**page_media_dict))
+
+
+def _update_box_info_dict(page_media_dict, box, box_obj, saved_boxes):
+    from collections.abc import Iterable
+
+    box_list = [float(x) for x in cast(Iterable[Any], box_obj)]
+    width_str = pdf_num_to_string(abs(box_list[2] - box_list[0]))
+    height_str = pdf_num_to_string(abs(box_list[3] - box_list[1]))
+    if box == "media_rect":
+        page_media_dict["dimensions"] = (width_str, height_str)
+        saved_boxes["media"] = box_list
+    elif box == "crop_rect":
+        if box_list == saved_boxes["media"]:
+            return
+        saved_boxes["crop"] = box_list
+    else:
+        if box_list == saved_boxes["crop"] or (
+            saved_boxes["crop"] is None and box_list == saved_boxes["media"]
+        ):
+            return
+    page_media_dict[box] = box_list
+
+
+def _get_pagelabels(info, labels):
+    for page_idx, entry in labels.items():
+        style_code = getattr(entry, "S", None)
+        try:
+            found_style = next(k for k, v in PAGE_LABEL_STYLE_MAP.items() if v == str(style_code))
+        except StopIteration:
+            found_style = "NoNumber"
+        if info.page_labels is None:
+            info.page_labels = []
+        info.page_labels.append(
+            PageLabelEntry(
+                new_index=int(page_idx) + 1,
+                start=int(getattr(entry, "St", 1)),
+                prefix=str(getattr(entry, "P", "")) or None,
+                num_style=found_style,
             )
+        )
 
+
+def _get_bookmarks(info, pdf):
     from pikepdf.exceptions import OutlineStructureError
 
     try:
@@ -142,6 +144,26 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
             "Warning: Could not read bookmarks. Outline may be corrupted. Error: %s",
             exc,
         )
+
+
+def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
+
+    info = PdfInfo(pages=len(pdf.pages), ids=pdf_id_metadata_as_strings(pdf))
+    if extra_info:
+        _get_extra_info(info, pdf, input_filename)
+    if pdf.docinfo:
+        _get_docinfo(info, pdf.docinfo)
+    for i, page in enumerate(pdf.pages):
+        _get_page_info(info, i, page)
+
+    if hasattr(pdf.Root, "PageLabels"):
+        from pikepdf import NumberTree
+
+        labels = NumberTree(pdf.Root.PageLabels)
+        _get_pagelabels(info, labels)
+
+    _get_bookmarks(info, pdf)
+
     return info
 
 

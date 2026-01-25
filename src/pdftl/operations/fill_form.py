@@ -155,6 +155,29 @@ def _fill_form_value_from_fdf_field(form, fdf_field, ancestors):
             _set_form_field_value(field, value)
 
 
+def _tagname(element_with_tag):
+    return element_with_tag.tag.split("}", 1)[-1]
+
+
+def _recurse_xfdf(element, xfdf_data, parent_name=""):
+    for child in element:
+        if _tagname(child) == "field":
+            name = child.get("name")
+            if name:
+                _recurse_into_named_xfdf_field(child, name, xfdf_data, parent_name)
+
+
+def _recurse_into_named_xfdf_field(field, name, xfdf_data, parent_name):
+    full_name = f"{parent_name}.{name}" if parent_name else name
+
+    for subchild in field:
+        if _tagname(subchild) == "value":
+            xfdf_data[full_name] = subchild.text or ""
+            break
+
+    _recurse_xfdf(field, xfdf_data, full_name)
+
+
 def _fill_form_from_xfdf_data(form, data):
     """Fill in a form, using given XFDF data"""
     import defusedxml.ElementTree as ET
@@ -166,32 +189,14 @@ def _fill_form_from_xfdf_data(form, data):
 
     # 1. Parse XFDF into a flat dictionary
     xfdf_data = {}
-
-    def _recurse_xfdf(element, parent_name=""):
-        for child in element:
-            tag = child.tag.split("}", 1)[-1]
-            if tag == "field":
-                name = child.get("name")
-                if not name:
-                    continue
-                full_name = f"{parent_name}.{name}" if parent_name else name
-
-                # value_found = False
-                for subchild in child:
-                    if subchild.tag.split("}", 1)[-1] == "value":
-                        xfdf_data[full_name] = subchild.text or ""
-                        # value_found = True
-                        break
-
-                _recurse_xfdf(child, full_name)
-
     fields_element = None
+
     for child in root:
         if child.tag.split("}", 1)[-1] == "fields":
             fields_element = child
             break
     if fields_element is not None:
-        _recurse_xfdf(fields_element)
+        _recurse_xfdf(fields_element, xfdf_data)
 
     # 2. Fill fields
     for field in form:
@@ -204,63 +209,74 @@ def _fill_form_from_xfdf_data(form, data):
 
 
 def _set_form_field_value(field, value):
-    from pikepdf import Name
-
     if field.is_text:
         field.value = str(value)
 
     elif field.is_checkbox:
-        # Map XFDF "Yes"/"On" string to boolean
-        # Common valid "true" values in XFDF: "Yes", "On", "true", "1"
-        is_checked = str(value).lower() in ("yes", "on", "true", "1")
-
-        try:
-            # Try the high-level pikepdf wrapper first (safe, verifies keys)
-            field.checked = is_checked
-        except AttributeError:
-            # FALLBACK: The PDF is missing the /AP (Appearance) dictionary.
-            # pikepdf fails because it can't lookup the "On" state name.
-            # We must set the raw object values blindly.
-            # Standard PDF checkboxes use "/Yes" for on and "/Off" for off.
-
-            val = Name("/Yes") if is_checked else Name("/Off")
-
-            # Update the Value (/V) and Appearance State (/AS)
-            field.obj.V = val
-            field.obj.AS = val
+        _set_checkbox_value(field, value)
 
     elif field.is_radio_button:
-        # Existing logic for radio buttons...
-        val_str = str(value)
-        if not val_str.startswith("/"):
-            val_str = "/" + val_str
-
-        # Helper to safely clear the field (handle "/Off")
-        def _clear_radio():
-            if "/V" in field.obj:
-                del field.obj["/V"]
-            if "/AS" in field.obj:
-                del field.obj["/AS"]
-
-        # Workaround for pikepdf/qpdf crash on RadioGroups without /Kids
-        if "/Kids" not in field.obj:
-            if val_str.lower() == "/off":
-                _clear_radio()
-            else:
-                field.obj.V = Name(val_str)
-        else:
-            try:
-                field.value = Name(val_str)
-            except ValueError as e:
-                # Catch "Off" values and map them to manual deletion
-                if "uncheck a radio button" in str(e) and val_str.lower() == "/off":
-                    _clear_radio()
-                else:
-                    raise e
+        _set_radio_button_value(field, value)
 
     else:
         # Fallback for other types
         field.value = str(value)
+
+
+def _set_checkbox_value(field, value):
+    from pikepdf import Name
+
+    # Map XFDF "Yes"/"On" string to boolean
+    # Common valid "true" values in XFDF: "Yes", "On", "true", "1"
+    is_checked = str(value).lower() in ("yes", "on", "true", "1")
+
+    try:
+        # Try the high-level pikepdf wrapper first (safe, verifies keys)
+        field.checked = is_checked
+    except AttributeError:
+        # FALLBACK: The PDF is missing the /AP (Appearance) dictionary.
+        # pikepdf fails because it can't lookup the "On" state name.
+        # We must set the raw object values blindly.
+        # Standard PDF checkboxes use "/Yes" for on and "/Off" for off.
+
+        val = Name("/Yes") if is_checked else Name("/Off")
+
+        # Update the Value (/V) and Appearance State (/AS)
+        field.obj.V = val
+        field.obj.AS = val
+
+
+def _set_radio_button_value(field, value):
+    from pikepdf import Name
+
+    # Logic for radio buttons
+    val_str = str(value)
+    if not val_str.startswith("/"):
+        val_str = "/" + val_str
+
+    # Workaround for pikepdf/qpdf crash on RadioGroups without /Kids
+    if "/Kids" not in field.obj:
+        if val_str.lower() == "/off":
+            _clear_radio(field)
+        else:
+            field.obj.V = Name(val_str)
+    else:
+        try:
+            field.value = Name(val_str)
+        except ValueError as e:
+            # Catch "Off" values and map them to manual deletion
+            if "uncheck a radio button" in str(e) and val_str.lower() == "/off":
+                _clear_radio(field)
+            else:
+                raise e
+
+
+# Helper to safely clear the field (handle "/Off")
+def _clear_radio(field):
+    if "/V" in field.obj:
+        del field.obj["/V"]
+    if "/AS" in field.obj:
+        del field.obj["/AS"]
 
 
 def fully_qualified_name(x, ancestors):
