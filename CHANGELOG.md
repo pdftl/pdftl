@@ -5,21 +5,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.9.2] - 2026-01-26
+
+### Changed
+
+- Performance improvements for `cat`, `shuffle`, and `rotate` operations, especially regarding hyperlink handling.
+
+- Invalid page arguments (e.g., requesting page 10 of a 5-page PDF) now return descriptive error messages instead of crashing.
 
 ### Fixed
 
-- `cat` performance improvements (input files with many pages) and
-  more testing for this
+- `delete`: Now properly removes page resources, resulting in smaller output files.
 
-- `delete` properly removes page resources, resulting in smaller
-  output files
+- `generate_fdf`: Fixed an issue where generation could fail or produce invalid output when handling `None` values or specific binary string formats.
+
+- The option parser (used in `add_text`, etc.) now correctly handles unbalanced quotes by raising a descriptive error, preventing data corruption.
 
 ### Security
 
-- Removed passwords from logging calls
+- Replaced regex parsing with a state machine to prevent application hangs (ReDoS) when processing malformed quoted strings.
 
-- Now using `defusedxml` to avoid `xml.etree.ElementTree` vulnerabilities
+- Now using `defusedxml` to avoid `xml.etree.ElementTree` vulnerabilities.
+
+- Ensure passwords are redacted from all logging calls.
 
 ## [0.9.1] - 2026-01-21
 
