@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pikepdf import Array
 
 from pdftl.core.constants import UNITS
-from pdftl.utils.page_specs import parse_specs
+from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 MAX_PIECES = 10_000
 
@@ -59,76 +59,22 @@ def parse_chop_specs_to_rules(specs, total_pages):
     """
     page_rules = {}
 
-    # 1. Pre-process specs to handle legacy 'even'/'odd' keywords.
-    #    e.g. "odd 1-5rows2".
-    #    New syntax like "[1-5]oddrows2" is handled by parse_specs naturally.
-    grouped_specs = _group_specs_with_qualifiers(specs)
-
-    for spec_str, keyword_qualifier in grouped_specs:
+    for spec in specs:
 
         # 2. Split the spec into its two main parts.
         #    e.g. "1-5rows2" -> "1-5", "rows2"
         #    e.g. "1,3rows2" -> "1,3", "rows2"
-        page_range_part, chop_part = _split_spec_string(spec_str)
+        page_range_part, chop_part = _split_spec_string(spec)
 
-        # 3. Use the central parser to resolve the page selection.
-        #    We pass the page_range_part as a single-element list.
-        for page_spec in parse_specs([page_range_part], total_pages):
-
-            # 4. Generate the list of affected page numbers from the PageSpec
-            step = 1 if page_spec.start <= page_spec.end else -1
-            page_numbers = list(range(page_spec.start, page_spec.end + step, step))
-
-            # Filter: Internal Qualifiers (from [1-5]even syntax)
-            if "even" in page_spec.qualifiers:
-                page_numbers = [p for p in page_numbers if p % 2 == 0]
-            if "odd" in page_spec.qualifiers:
-                page_numbers = [p for p in page_numbers if p % 2 != 0]
-
-            # Filter: External Keyword Qualifier (legacy "even 1-5..." syntax)
-            if keyword_qualifier == "even":
-                page_numbers = [p for p in page_numbers if p % 2 == 0]
-            elif keyword_qualifier == "odd":
-                page_numbers = [p for p in page_numbers if p % 2 != 0]
-
-            # Filter: Omissions
-            for om_start, om_end in page_spec.omissions:
-                page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
-
-            # 5. Apply the chop rule to the generated pages.
-            for p_num in page_numbers:
-                # Convert from 1-based page number to 0-based index.
-                page_rules[p_num - 1] = chop_part
+        # 5. Apply the chop rule to the generated pages.
+        for p_num in page_numbers_matching_page_spec(page_range_part, total_pages):
+            # Convert from 1-based page number to 0-based index.
+            page_rules[p_num - 1] = chop_part
 
     return page_rules
 
 
 ##################################################
-
-
-def _group_specs_with_qualifiers(specs):
-    """
-    Pre-processes the specs list to pair qualifiers ('even', 'odd')
-    with the spec string that follows them.
-    Returns a list of tuples: [(spec_str, qualifier_keyword), ...].
-    """
-    logger.debug("got specs=%s", specs)
-    grouped_specs = []
-    specs_iterator = iter(specs)
-    for spec in specs_iterator:
-        is_qualifier = spec.lower() in ("even", "odd")
-        if is_qualifier:
-            try:
-                # The qualifier applies to the *next* spec string.
-                next_spec = next(specs_iterator)
-                grouped_specs.append((next_spec, spec.lower()))
-            except StopIteration as exc:
-                raise ValueError(f"Missing chop spec after '{spec}' keyword.") from exc
-        else:
-            # This spec has no preceding keyword qualifier.
-            grouped_specs.append((spec, None))
-    logger.debug("returning grouped_specs=%s", grouped_specs)
-    return grouped_specs
 
 
 def _split_spec_string(spec_str):

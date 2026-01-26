@@ -174,17 +174,20 @@ def test_fuzzy_matching_and_fallbacks():
 # --- Part 2: Test output_info.py (Writer Coverage) ---
 
 
-def test_write_info_full_coverage():
+def test_write_info_full_coverage(temp_dir):
     """
     Calls write_info with a fully populated object to hit all 'if' branches.
     Hits output_info.py lines 119, 140, 152, 157, 163, 182, 186.
     """
+    from pathlib import Path
+
     mock_writer = MagicMock()
+    file_path = str(Path(temp_dir / "test.pdf"))
 
     info = PdfInfo(
         pages=10,
         ids=["abc", "def"],
-        file_path="/tmp/test.pdf",
+        file_path=file_path,
         version="1.7",
         encrypted=False,
         doc_info=[DocInfoEntry("Title", "MyPDF")],
@@ -212,7 +215,7 @@ def test_write_info_full_coverage():
     output_text = "\n".join(c.args[0] for c in mock_writer.call_args_list)
 
     # Assertions for specific branches
-    assert "File: /tmp/test.pdf" in output_text  # extra_info
+    assert f"File: {file_path}" in output_text  # extra_info
     assert "PdfID0: abc" in output_text  # ids
     assert "BookmarkTitle: Intro" in output_text  # bookmarks
     # pdf_rect_to_string output is "x y w h", not list brackets

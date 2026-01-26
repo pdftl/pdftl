@@ -421,7 +421,7 @@ def test_create_page_tuples_from_numbers_catches_r0(mock_pdfs_fixture):
 
 def test_expand_specs_to_pages_no_inputs():
     """Tests that a ValueError is raised if no inputs are provided."""
-    with pytest.raises(ValueError, match="inputs were not passed"):
+    with pytest.raises(ValueError, match="no inputs or opened pdfs were passed"):
         expand_specs_to_pages(specs=["1-5"])
 
 

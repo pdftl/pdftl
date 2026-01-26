@@ -6,7 +6,6 @@ from pikepdf import Array, Dictionary, Name
 
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import PageTransform
-from pdftl.utils.scale import apply_scaling
 
 
 @pytest.fixture

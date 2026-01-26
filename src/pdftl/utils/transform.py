@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from pikepdf import Array, Pdf
 
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.page_specs import parse_specs
+from pdftl.utils.page_specs import expand_specs_to_pages
 from pdftl.utils.scale import apply_scaling
 
 
@@ -31,46 +31,24 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
     """
     total_pages = len(source_pdf.pages)
 
-    # The parse_specs generator handles commas and brackets, yielding
-    # atomic PageSpec objects one by one.
-    for page_spec in parse_specs(specs, total_pages):
+    for page_transform in expand_specs_to_pages(specs, opened_pdfs=[source_pdf]):
+        (angle, relative), scale = page_transform.rotation, page_transform.scale
+        i = page_transform.index
+        # i is 0-based, like pikepdf
+        try:
+            page = source_pdf.pages[i]
+        except IndexError:
+            raise InvalidArgumentError(
+                f"Page {i+1} does not exist in the PDF (total pages: {total_pages})."
+            )
 
-        # 1. Generate the list of target pages from the PageSpec object
-        step = 1 if page_spec.start <= page_spec.end else -1
+        if scale != 1.0:
+            apply_scaling(page, scale)
 
-        # Inclusive range (end + step)
-        page_numbers = list(range(page_spec.start, page_spec.end + step, step))
-
-        # 2. Filter: Qualifiers (Even/Odd)
-        if "even" in page_spec.qualifiers:
-            page_numbers = [p for p in page_numbers if p % 2 == 0]
-        if "odd" in page_spec.qualifiers:
-            page_numbers = [p for p in page_numbers if p % 2 != 0]
-
-        # 3. Filter: Omissions
-        # Omissions are stored as list of (start, end) tuples in the PageSpec
-        for om_start, om_end in page_spec.omissions:
-            page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
-
-        # 4. Apply Transformations
-        (angle, relative), scale = page_spec.rotate, page_spec.scale
-
-        for i in page_numbers:
-            # i is 1-based, pikepdf is 0-based
-            try:
-                page = source_pdf.pages[i - 1]
-            except IndexError:
-                raise InvalidArgumentError(
-                    f"Page {i} does not exist in the PDF (total pages: {total_pages})."
-                )
-
-            if scale != 1.0:
-                apply_scaling(page, scale)
-
-            # Apply rotation if it is non-zero (or if it is a relative 0, though that's a no-op)
-            # Optimization: 0-degree relative rotation does nothing, but we pass it anyway
-            # to keep logic simple unless strict performance is needed.
-            page.rotate(angle, relative=relative)
+        # Apply rotation if it is non-zero (or if it is a relative 0, though that's a no-op)
+        # Optimization: 0-degree relative rotation does nothing, but we pass it anyway
+        # to keep logic simple unless strict performance is needed.
+        page.rotate(angle, relative=relative)
 
     return source_pdf
 

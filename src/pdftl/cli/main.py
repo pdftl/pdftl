@@ -172,7 +172,7 @@ def _handle_special_flags(nonverbose_cli_args):
     Handles --version and --help flags by delegating to helper functions (and exiting).
     """
     if any(arg in VERSION_FLAGS for arg in nonverbose_cli_args):
-        from pdftl.cli.help import print_version
+        from pdftl.cli.help_version import print_version
 
         print_version()
         sys.exit(0)

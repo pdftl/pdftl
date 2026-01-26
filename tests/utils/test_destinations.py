@@ -157,3 +157,44 @@ def test_resolve_dest_fallthrough():
 
         result_int = resolve_dest_to_page_num(123, pdf.pages, None)
         assert result_int is None
+
+
+from unittest.mock import MagicMock
+
+from pdftl.utils.destinations import _dest_from_outline_item, _find_page_index
+
+
+def test_find_page_index_no_objgen():
+    """
+    Covers line 25: if not hasattr(page_obj, "objgen"): return None
+    """
+    # Pass a standard object that definitely doesn't have .objgen
+    plain_obj = object()
+    pages = [MagicMock()]
+
+    assert _find_page_index(plain_obj, pages) is None
+
+
+def test_dest_from_outline_item_action_fallback():
+    """
+    Covers lines 38-40:
+      fallback to action if None
+      ... if action is not None and hasattr(action, "D"): ...
+    """
+    # 1. Create a mock OutlineItem
+    mock_item = MagicMock()
+
+    # 2. Ensure primary destination is None (to enter the 'if' block)
+    mock_item.destination = None
+
+    # 3. Setup the Action object with a 'D' attribute
+    mock_action = MagicMock()
+    mock_action.D = "/MyFallbackDest"
+
+    # 4. Attach action to item
+    mock_item.action = mock_action
+
+    # 5. Run function
+    result = _dest_from_outline_item(mock_item)
+
+    assert result == "/MyFallbackDest"

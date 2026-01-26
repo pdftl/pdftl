@@ -1,7 +1,9 @@
 import io
+import logging
 from unittest.mock import MagicMock
 
-from pdftl.cli.help import _load_help_markdown, print_help
+from pdftl.cli.help import print_help
+from pdftl.cli.help_render import _load_help_markdown, format_examples_block
 
 
 def test_help_markdown_internals():
@@ -58,7 +60,7 @@ def test_print_help_formatted_to_stdout(monkeypatch):
     This triggers the use of the global get_console().
     """
     mock_console = MagicMock()
-    monkeypatch.setattr("pdftl.cli.help.get_console", lambda: mock_console)
+    monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
 
     # dest=None, raw=False -> goes to line 446/447
     print_help("help", dest=None, raw=False)
@@ -68,3 +70,9 @@ def test_print_help_formatted_to_stdout(monkeypatch):
     args = mock_console.print.call_args[0]
     # The class name is dynamic, so we check the type name string
     assert type(args[0]).__name__ == "HelpMarkdown"
+
+
+def test_skip_invalid_example(caplog):
+    caplog.set_level(logging.WARNING)
+    format_examples_block([{}])
+    assert "Skipping incomplete example" in caplog.text

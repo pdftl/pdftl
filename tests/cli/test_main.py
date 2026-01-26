@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from pdftl.cli import help as helpmod
+from pdftl.cli import help_version as helpvermod
 from pdftl.cli import main as mainmod
 from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
 from pdftl.exceptions import UserCommandLineError
@@ -14,7 +15,7 @@ from pdftl.exceptions import UserCommandLineError
 def patch_main_help_functions(monkeypatch):
     """Patch the functions actually used by main.py."""
     monkeypatch.setattr("pdftl.cli.help.print_help", MagicMock())
-    monkeypatch.setattr("pdftl.cli.help.print_version", MagicMock())
+    monkeypatch.setattr("pdftl.cli.help_version.print_version", MagicMock())
     monkeypatch.setattr(
         "pdftl.cli.help.find_special_topic_command",
         lambda x: "special" if x == "special" else None,
@@ -33,7 +34,7 @@ def patch_main_help_functions(monkeypatch):
 def patch_help_functions(monkeypatch):
     """Patch help functions so print_help/print_version can be monitored."""
     monkeypatch.setattr(helpmod, "print_help", MagicMock())
-    monkeypatch.setattr(helpmod, "print_version", MagicMock())
+    monkeypatch.setattr(helpvermod, "print_version", MagicMock())
     # Patch find_* functions to simple return values for testing _find_help_command
     monkeypatch.setattr(
         helpmod,
@@ -83,11 +84,11 @@ def test_handle_special_flags_calls(monkeypatch):
 
     # 1. Version flag triggers print_version and STILL exits (based on your diff not changing that block)
     mainmod._handle_special_flags(list(VERSION_FLAGS))
-    helpmod.print_version.assert_called_once()
+    helpvermod.print_version.assert_called_once()
     fake_sys.exit.assert_called_once_with(0)
 
     # Reset mocks
-    helpmod.print_version.reset_mock()
+    helpvermod.print_version.reset_mock()
     helpmod.print_help.reset_mock()
     fake_sys.exit.reset_mock()
 

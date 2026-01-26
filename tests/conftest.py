@@ -233,8 +233,8 @@ class Runner:
         self.stderr = result.stderr
 
         if check and result.returncode != 0:
-            logging.warning("STDOUT:", result.stdout)
-            logging.warning("STDERR:", result.stderr)
+            logging.warning("STDOUT: %s", result.stdout)
+            logging.warning("STDERR: %s", result.stderr)
             raise subprocess.CalledProcessError(
                 result.returncode, command_str, result.stdout, result.stderr
             )

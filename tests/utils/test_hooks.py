@@ -107,3 +107,60 @@ def test_str_from_result_meta():
     res_int = OpResult(success=True, meta={"key": 123})
     with pytest.raises(TypeError):
         str_from_result_meta(res_int, "key")
+
+
+import types
+from unittest.mock import mock_open, patch
+
+from pdftl.utils.hooks import (
+    consume_output_option,
+    from_result_meta,
+)
+
+
+def test_consume_output_option_no_options_attr():
+    """
+    Covers hooks.py lines 17-19 (defensive check):
+    Ensures consume_output_option doesn't crash if stage object has no 'options' attribute.
+    """
+    stage = types.SimpleNamespace()
+    # Should do nothing and not raise AttributeError
+    consume_output_option(stage)
+
+
+def test_text_dump_hook_appends_newline():
+    """
+    Covers hooks.py line 41-42:
+    Ensures a newline is appended if the data string doesn't end with one.
+    """
+    result = OpResult(success=True, data="Hello World")
+    stage = types.SimpleNamespace(options={"output": "out.txt"})
+
+    m = mock_open()
+    with patch("pdftl.utils.hooks.smart_open_maybe_dash", m):
+        text_dump_hook(result, stage)
+
+    handle = m()
+    # Check that we wrote the data AND a newline
+    handle.write.assert_any_call("Hello World")
+    handle.write.assert_any_call("\n")
+
+
+def test_from_result_meta_none():
+    """
+    Covers hooks.py line 66-67:
+    Ensures ValueError is raised if result.meta is None.
+    """
+    result = OpResult(success=True, meta=None)
+    with pytest.raises(ValueError, match="result.meta is None"):
+        from_result_meta(result, "some_attrib")
+
+
+def test_str_from_result_meta_wrong_type():
+    """
+    Covers hooks.py line 72-73:
+    Ensures TypeError is raised if the meta attribute is not a string.
+    """
+    result = OpResult(success=True, meta={"count": 123})  # int, not str
+    with pytest.raises(TypeError, match="expected str"):
+        str_from_result_meta(result, "count")

@@ -242,7 +242,7 @@ def test_attach_files_orchestration(mock_get_options, mock_attach, mock_input_co
 @patch("pikepdf.Dictionary")
 @patch("pikepdf.AttachedFileSpec.from_filepath")
 def test_page_attachment_with_relationship(
-    mock_from_filepath, mock_Dictionary, mock_Annotation, mock_pdf
+    mock_from_filepath, mock_Dictionary, mock_Annotation, mock_pdf, tmp_path
 ):
     mock_spec = MagicMock(spec=pikepdf.AttachedFileSpec)
     mock_from_filepath.return_value = mock_spec
@@ -252,7 +252,7 @@ def test_page_attachment_with_relationship(
     mock_pdf.pages = [mock_page]
     mock_pdf.attachments = {}
 
-    att = Attachment(path=Path("/tmp/t.pdf"), pages=[1], relationship="Source")
+    att = Attachment(path=Path(tmp_path / "t.pdf"), pages=[1], relationship="Source")
 
     _attach_attachment(mock_pdf, att, num_attached_by_page=[0])
 

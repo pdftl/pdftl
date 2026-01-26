@@ -1,5 +1,4 @@
 import logging
-import sys
 import types
 from unittest.mock import MagicMock, patch
 
@@ -212,3 +211,132 @@ def test_registry_no_config_dir():
             _discover_external_operations()
 
             assert len(mock_sys_path) == 0
+
+
+import sys
+
+import pytest
+
+# Adjust the import based on your actual package structure
+
+
+def test_registry_external_spec_none(tmp_path, monkeypatch):
+    """
+    Covers line 52: 'if spec is None or spec.loader is None: continue'
+    """
+    # 1. Setup a fake external config directory
+    fake_config = tmp_path / "pdftl" / "operations"
+    fake_config.mkdir(parents=True)
+    (fake_config / "my_plugin.py").touch()
+
+    # 2. Mock environment to point to tmp_path
+    # Windows uses APPDATA, others use ~/.config
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+    # 3. Patch importlib to return None for spec
+    with patch("importlib.util.spec_from_file_location", return_value=None):
+        _discover_external_operations()
+        # If no exception is raised and code passes, coverage is hit.
+
+
+def test_registry_discover_invalid_identifier(caplog):
+    """
+    Covers lines 93-94: 'if not module_name.isidentifier()...'
+    """
+    mock_pkg = MagicMock()
+    mock_pkg.__path__ = ["/fake/path"]
+    mock_pkg.__name__ = "pdftl.ops"
+
+    # Simulate pkgutil returning a module with a dash (invalid python identifier)
+    mock_iter = [(None, "invalid-name-module", False)]
+
+    with patch("pkgutil.iter_modules", return_value=mock_iter):
+        with caplog.at_level(logging.ERROR):
+            _discover_modules([mock_pkg], "test_label")
+
+    assert "Skipping invalid module name: invalid-name-module" in caplog.text
+
+
+def test_registry_discover_security_violation(caplog):
+    """
+    Covers lines 98-101: 'if not fq_name.startswith("pdftl."): ...'
+    """
+    # Create a mock package that does NOT start with 'pdftl'
+    evil_pkg = MagicMock()
+    evil_pkg.__path__ = ["/fake/path"]
+    evil_pkg.__name__ = "evil_package"  # This is the root cause of the violation
+
+    mock_iter = [(None, "exploit", False)]
+
+    with patch("pkgutil.iter_modules", return_value=mock_iter):
+        with caplog.at_level(logging.ERROR):
+            _discover_modules([evil_pkg], "test_label")
+
+    # The Fully Qualified Name (fq_name) will be "evil_package.exploit"
+    assert "Security violation" in caplog.text
+
+
+import pytest
+
+
+@pytest.fixture
+def clean_broken_plugin():
+    """Ensure the specific test module is removed from sys.modules."""
+    module_name = "pdftl.external.broken_plugin"
+
+    # Cleanup before test
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+
+    yield
+
+    # Cleanup after test
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+
+
+def test_discover_external_operations_spec_none(clean_broken_plugin):
+    """
+    Covers registry_init.py line 52:
+    Simulates a scenario where importlib.util.spec_from_file_location returns None.
+    This ensures the loop 'continue's gracefully without crashing.
+    """
+    # Mock pathlib to simulate finding a file
+    mock_path = MagicMock()
+    mock_file = MagicMock()
+    mock_file.stem = "broken_plugin"
+
+    # glob returns one file
+    mock_path.glob.return_value = [mock_file]
+    mock_path.exists.return_value = True
+
+    with patch("pdftl.registry_init.pathlib.Path") as MockPath:
+        # Let's patch os.name to ensure consistent path logic (non-nt)
+        with patch("os.name", "posix"):
+            # Mock the path construction:
+            mock_home = MagicMock()
+            MockPath.home.return_value = mock_home
+
+            # Setup the directory chain to return our mock op_dir
+            # This handles the repeated .div calls in the source code
+            op_dir = (
+                mock_home.__truediv__.return_value.__truediv__.return_value.__truediv__.return_value
+            )
+            op_dir.exists.return_value = True
+            op_dir.glob.return_value = [mock_file]
+            op_dir.__str__.return_value = "/fake/path"
+
+            # Mock importlib to return None for spec
+            with patch(
+                "importlib.util.spec_from_file_location", return_value=None
+            ) as mock_spec_loader:
+
+                _discover_external_operations()
+
+                # Assert we tried to load it
+                mock_spec_loader.assert_called_once()
+
+                # Assert it was NOT added to sys.modules
+                # (This is now safe because we cleaned sys.modules in the fixture)
+                assert "pdftl.external.broken_plugin" not in sys.modules

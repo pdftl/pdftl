@@ -202,26 +202,6 @@ def test_split_spec_string_no_match():
 
 
 # ---------------------------
-# _group_specs_with_qualifiers
-# ---------------------------
-
-
-def test_group_specs_with_even_odd():
-    specs = ["even", "1-3cols2", "odd", "4-5rows3", "6cols2"]
-    grouped = cp._group_specs_with_qualifiers(specs)
-    assert grouped == [
-        ("1-3cols2", "even"),
-        ("4-5rows3", "odd"),
-        ("6cols2", None),
-    ]
-
-
-def test_group_specs_with_missing_next():
-    with pytest.raises(ValueError):
-        cp._group_specs_with_qualifiers(["even"])
-
-
-# ---------------------------
 # parse_chop_specs_to_rules
 # ---------------------------
 
@@ -257,13 +237,6 @@ def test_parse_chop_specs_to_rules_basic():
     assert result == {0: "cols2", 1: "cols2", 2: "cols2"}
 
 
-def test_parse_chop_specs_to_rules_with_even(monkeypatch):
-    specs = ["even", "4-6cols3"]
-    result = cp.parse_chop_specs_to_rules(specs, 10)
-    # 4,6 only
-    assert result == {3: "cols3", 5: "cols3"}
-
-
 def test_parse_chop_specs_to_rules_with_range_qualifier(monkeypatch):
     specs = ["4-6cols3"]
     result = cp.parse_chop_specs_to_rules(specs, 10)
@@ -271,64 +244,13 @@ def test_parse_chop_specs_to_rules_with_range_qualifier(monkeypatch):
     assert set(result.keys()) == {3, 5}
 
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from pdftl.operations.parsers.chop_parser import (
     MAX_PIECES,
     _parse_integer_spec,
     parse_chop_spec,
-    parse_chop_specs_to_rules,
 )
-
-
-def test_chop_parser_legacy_qualifiers_odd():
-    """
-    Covers line 92: page_numbers = [p for p in page_numbers if p % 2 != 0]
-    Triggered when using the legacy 'odd' keyword before a spec.
-    """
-    # Syntax: "odd", "1-5rows2" -> chops pages 1, 3, 5
-    specs = ["odd", "1-5rows2"]
-    total_pages = 10
-
-    rules = parse_chop_specs_to_rules(specs, total_pages)
-
-    # Check 0-based indices
-    assert 0 in rules  # Page 1
-    assert 2 in rules  # Page 3
-    assert 4 in rules  # Page 5
-    assert 1 not in rules  # Page 2 (even)
-    assert 3 not in rules  # Page 4 (even)
-
-
-def test_chop_parser_omissions():
-    """
-    Covers line 96: if not om_start <= p <= om_end
-    We mock parse_specs to guarantee omissions are present, isolating the logic in chop_parser.
-    """
-    with patch("pdftl.operations.parsers.chop_parser.parse_specs") as mock_parse:
-        # Create a mock PageSpec that selects 1-5 but omits 3
-        mock_spec = MagicMock()
-        mock_spec.start = 1
-        mock_spec.end = 5
-        mock_spec.qualifiers = []
-        mock_spec.omissions = [(3, 3)]  # Omit page 3
-
-        mock_parse.return_value = [mock_spec]
-
-        # The actual string doesn't matter much since we mock the parser,
-        # but it must split correctly into range/chop parts.
-        specs = ["1-5rows2"]
-        total_pages = 10
-
-        rules = parse_chop_specs_to_rules(specs, total_pages)
-
-        # Expected: 1, 2, 4, 5 (indices 0, 1, 3, 4)
-        assert 0 in rules  # Page 1
-        assert 1 in rules  # Page 2
-        assert 2 not in rules  # Page 3 (Excluded)
-        assert 3 in rules  # Page 4
 
 
 def test_chop_parser_max_pieces_exceeded():

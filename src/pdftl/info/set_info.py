@@ -100,7 +100,6 @@ def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
 
     if len(pdf.pages) < page_number:
         raise ValueError(f"Nonexistent page {page_number} requested for PageMedia metadata.")
-        return
 
     page = pdf.pages[page_number - 1]
 

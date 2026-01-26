@@ -65,3 +65,40 @@ class TestPageSpecs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from pdftl.utils.page_specs import parse_specs
+
+
+def test_parse_specs_pipeline_integration():
+    """
+    Covers page_specs.py lines 328-334:
+    Verifies that parse_specs correctly chains _expand_square_brackets,
+    _flatten_spec_list, and parse_sub_page_spec in a generator loop.
+    """
+    # Input contains:
+    # 1. A standard range: "1-2"
+    # 2. A comma-separated string that needs flattening: "4,5"
+    # 3. A group syntax that needs expansion: "[6,7]x2"
+    specs_input = ["1-2", "4,5", "[6,7]x2"]
+    total_pages = 10
+
+    # Execute the generator
+    results = list(parse_specs(specs_input, total_pages))
+
+    # Expectation:
+    # 1. "1-2" -> 1 spec (start=1, end=2)
+    # 2. "4"   -> 1 spec (start=4, end=4)
+    # 3. "5"   -> 1 spec (start=5, end=5)
+    # 4. "6x2" -> 1 spec (start=6, end=6, scale=2.0)
+    # 5. "7x2" -> 1 spec (start=7, end=7, scale=2.0)
+    assert len(results) == 5
+
+    # Validate specific attributes to ensure the flow worked
+    assert results[0].start == 1 and results[0].end == 2
+    assert results[1].start == 4
+    assert results[2].start == 5
+
+    # Check scaling from the group expansion
+    assert results[3].start == 6 and results[3].scale == 2.0
+    assert results[4].start == 7 and results[4].scale == 2.0

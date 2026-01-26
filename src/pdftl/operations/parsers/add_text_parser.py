@@ -13,7 +13,7 @@ from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import UNITS
-from pdftl.utils.page_specs import parse_specs
+from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 # Set of valid, case-insensitive preset position keywords
 PRESET_POSITIONS = {
@@ -91,14 +91,11 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
     """
     page_rules = defaultdict(list)
 
-    # 1. Pre-process specs to handle 'even'/'odd' keywords cleanly.
-    grouped_specs = _group_specs_with_qualifiers(specs)
-
-    for spec_str, keyword_qualifier in grouped_specs:
+    for spec in specs:
         try:
             # 2. Split the spec into its three main parts.
             #    e.g. "1-5/my text/(pos=top)" -> "1-5", "my text", "(pos=top)"
-            page_range_part, text_string, options_part = _split_spec_string(spec_str)
+            page_range_part, text_string, options_part = _split_spec_string(spec)
 
             logger.debug(
                 "page_range_part='%s', text_string='%s', options_part='%s'",
@@ -112,35 +109,14 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
 
             # 4. Use the central parser to resolve the page selection.
             #    We pass the page_range_part as a single-element list.
-            for page_spec in parse_specs([page_range_part], total_pages):
+            # for page_spec in parse_specs([page_range_part], total_pages):
 
-                # 5. Generate the list of affected page numbers
-                step = 1 if page_spec.start <= page_spec.end else -1
-                page_numbers = list(range(page_spec.start, page_spec.end + step, step))
-
-                # Filter: Internal Qualifiers (from [1-5]even syntax)
-                if "even" in page_spec.qualifiers:
-                    page_numbers = [p for p in page_numbers if p % 2 == 0]
-                if "odd" in page_spec.qualifiers:
-                    page_numbers = [p for p in page_numbers if p % 2 != 0]
-
-                # Filter: External Keyword Qualifier (legacy "even 1-5..." syntax)
-                if keyword_qualifier == "even":
-                    page_numbers = [p for p in page_numbers if p % 2 == 0]
-                elif keyword_qualifier == "odd":
-                    page_numbers = [p for p in page_numbers if p % 2 != 0]
-
-                # Filter: Omissions
-                for om_start, om_end in page_spec.omissions:
-                    page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
-
-                # 6. Apply the parsed rule to all generated page numbers.
-                for p_num in page_numbers:
-                    # Convert from 1-based page number to 0-based index.
-                    page_rules[p_num - 1].append(rule_dict)
+            for p_num in page_numbers_matching_page_spec(page_range_part, total_pages):
+                # Convert from 1-based page number to 0-based index.
+                page_rules[p_num - 1].append(rule_dict)
 
         except ValueError as exc:
-            raise ValueError(f"Invalid add_text spec '{spec_str}': {exc}") from exc
+            raise ValueError(f"Invalid add_text spec '{spec}': {exc}") from exc
 
     return dict(page_rules)
 
@@ -577,22 +553,3 @@ def _find_unit(input_str: str):
         if input_str.endswith(unit_name):
             return unit_name
     return None
-
-
-def _group_specs_with_qualifiers(specs):
-    """
-    Pre-processes the specs list to pair qualifiers ('even', 'odd').
-    """
-    grouped_specs = []
-    specs_iterator = iter(specs)
-    for spec in specs_iterator:
-        is_qualifier = spec.lower() in ("even", "odd")
-        if is_qualifier:
-            try:
-                next_spec = next(specs_iterator)
-                grouped_specs.append((next_spec, spec.lower()))
-            except StopIteration as exc:
-                raise ValueError(f"Missing spec after '{spec}' keyword.") from exc
-        else:
-            grouped_specs.append((spec, None))
-    return grouped_specs

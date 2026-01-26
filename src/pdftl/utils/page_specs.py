@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 from pdftl.core.registry import register_help_topic
-from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
+from pdftl.exceptions import InvalidArgumentError
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ QUALIFIER_MAP = {"even", "odd"}
 def _expand_square_brackets(specs: list[str]) -> list[str]:
     """
     Expands Group Syntax: `[A,B]mod` -> `Amod, Bmod`.
-    Raises UserCommandLineError if the spec is ambiguous (e.g. `[1,2]x2,3`).
+    Raises InvalidArgumentError if the spec is ambiguous (e.g. `[1,2]x2,3`).
     """
     expanded = []
     # Matches [content]suffix
@@ -126,7 +126,7 @@ def _expand_square_brackets(specs: list[str]) -> list[str]:
 
             # Guardrail: If the suffix contains a comma, the user likely forgot a space.
             if "," in suffix:
-                raise UserCommandLineError(
+                raise InvalidArgumentError(
                     f"Invalid page spec: '{spec}'.\n"
                     f"Found a comma after the closing bracket (in '{suffix}').\n"
                     "Please separate distinct page specifications with spaces.\n"
@@ -339,20 +339,20 @@ def expand_specs_to_pages(
 ) -> list[PageTransform]:
     """
     Expand pdftk-style page specs into an array of PageTransform objects.
-    Used primarily by the 'cat' command.
+    Used by the 'cat' command.
     """
     aliases = aliases or {}
     opened_pdfs = opened_pdfs or {}
 
-    if not inputs:
-        raise ValueError("inputs were not passed in expand_specs_to_pages")
+    if not inputs and not opened_pdfs:
+        raise ValueError("no inputs or opened pdfs were passed to expand_specs_to_pages")
+
+    if not specs:
+        return _handle_no_specs(inputs, opened_pdfs)
 
     default_alias = "DEFAULT"
     aliases[default_alias] = 0
     opened_pdfs_by_alias = {alias: opened_pdfs[idx] for alias, idx in aliases.items()}
-
-    if not specs:
-        return _handle_no_specs(inputs, opened_pdfs)
 
     # Reuse the logic of expanding groups and flattening lists
     grouped_specs = _expand_square_brackets(specs)
@@ -391,7 +391,7 @@ def _resolve_alias_and_spec(spec, opened_pdfs_by_alias, default_alias):
         page_spec_full = spec
 
     if not alias or alias not in opened_pdfs_by_alias:
-        raise UserCommandLineError(f"Cannot determine a valid alias for spec '{spec}'")
+        raise InvalidArgumentError(f"Cannot determine a valid alias for spec '{spec}'")
 
     pdf = opened_pdfs_by_alias[alias]
     return pdf, page_spec_full, alias
@@ -421,7 +421,7 @@ def _create_page_tuples_from_numbers(
 
     for page_num in page_numbers:
         if not 1 <= page_num <= total_pages:
-            raise UserCommandLineError(
+            raise InvalidArgumentError(
                 f"Invalid page.\n  "
                 f"Page spec '{spec_for_error}' includes page {page_num} but "
                 f"there are only {total_pages} pages in {pdf_filename}"
@@ -443,6 +443,7 @@ def _new_tuples_from_spec_str(
     step = 1 if page_spec.start <= page_spec.end else -1
     initial_page_numbers = list(range(page_spec.start, page_spec.end + step, step))
 
+    # apply even/odd and omissions
     final_page_numbers = _filter_page_numbers(
         initial_page_numbers, page_spec.qualifiers, page_spec.omissions
     )

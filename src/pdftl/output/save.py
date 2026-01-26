@@ -454,26 +454,6 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
             # pikepdf_save_with_transient_status(pdf, output_filename, save_opts)
 
 
-# def pikepdf_save_with_transient_status(pdf, output_path, save_opts):
-#     from concurrent.futures import ThreadPoolExecutor
-#     from pdftl.cli.console import get_console
-#     console = get_console()
-
-#     logger.debug("Saving with the fancy")
-#     # console.status is transient by default: it disappears when the 'with' block ends.
-#     with console.status(f"[bold green]Writing {output_path}...", spinner="dots") as status:
-#         with ThreadPoolExecutor(max_workers=1) as executor:
-#             # Submit the atomic C++ call to a worker thread
-#             future = executor.submit(pdf.save, output_path, **save_opts)
-
-#             # This blocks the main thread until the C++ call returns,
-#             # but because Rich runs the spinner in its own background thread,
-#             # the animation remains smooth.
-#             future.result()
-
-#     console.print(f"[bold check] Saved: [white]{output_path}")
-
-
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
 
     # 1. Create an in-memory bytes buffer

@@ -278,3 +278,46 @@ def test_resolve_operation_spec_passes_data():
     # 3. Assert correct data was passed through
     assert result["args"] == input_args
     assert result["received_data"] == input_data
+
+
+def test_load_spec_bad_factory(tmp_path, caplog):
+    """
+    Covers line 114: Attribute 'from_dict' ... is not callable.
+    """
+
+    # Define a class with a non-callable from_dict
+    class BadModel:
+        from_dict = "I am a string, not a function"
+
+        def __init__(self, x):
+            self.x = x
+
+    # Create a dummy JSON file
+    f = tmp_path / "test.json"
+    f.write_text('{"x": 1}', encoding="utf-8")
+
+    # This should trigger the warning and fall back to __init__
+    result = _load_spec_from_file(str(f), BadModel)
+
+    assert isinstance(result, BadModel)
+    assert result.x == 1
+    assert "is not callable" in caplog.text
+
+
+def test_load_spec_type_error(tmp_path):
+    """
+    Covers lines 122-123: except TypeError as e: raise TypeError(...)
+    """
+
+    # Define a strict class
+    class StrictModel:
+        def __init__(self, x):
+            self.x = x
+
+    # Create JSON with an unknown field 'y'
+    f = tmp_path / "test.json"
+    f.write_text('{"x": 1, "y": 2}', encoding="utf-8")
+
+    # Expect the wrapper TypeError
+    with pytest.raises(TypeError, match="Failed to instantiate StrictModel"):
+        _load_spec_from_file(str(f), StrictModel)

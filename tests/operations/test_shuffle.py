@@ -15,3 +15,12 @@ def test_shuffle_no_page_tuples():
     with patch("pdftl.operations.shuffle._get_page_tuples_array", return_value=[]):
         with pytest.raises(ValueError, match="Range specifications gave no pages"):
             shuffle_pdfs(inputs=["A"], specs=[], opened_pdfs=[mock_pdf])
+
+
+def test_shuffle_no_opened_pdfs():
+    """
+    Covers shuffle.py line 87:
+    Checks that shuffle_pdfs raises a ValueError if opened_pdfs is empty.
+    """
+    with pytest.raises(ValueError, match="opened_pdfs must contain something"):
+        shuffle_pdfs(inputs=[], specs=[], opened_pdfs=[])

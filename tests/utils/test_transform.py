@@ -223,4 +223,42 @@ def test_transform_page_out_of_bounds(dummy_pdf):
     with pytest.raises(InvalidArgumentError) as exc:
         transform_pdf(dummy_pdf, specs)
 
-    assert "Page 10 does not exist" in str(exc.value)
+    assert "only 5 pages" in str(exc.value)
+
+
+import pytest
+
+
+def test_transform_pdf_index_error():
+    """
+    Covers transform.py lines 40-42:
+    Checks that InvalidArgumentError is raised if specs refer to a non-existent page.
+    """
+    # Mock a PDF with 1 page
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [MagicMock()]
+
+    # Spec asks for page index 5 (which is page 6)
+    # We mock expand_specs_to_pages to return a spec for index 5
+    mock_spec = MagicMock()
+    mock_spec.index = 5
+    mock_spec.rotation = (0, False)
+    mock_spec.scale = 1.0
+
+    with patch("pdftl.utils.transform.expand_specs_to_pages", return_value=[mock_spec]):
+        with pytest.raises(InvalidArgumentError, match="Page 6 does not exist"):
+            transform_pdf(mock_pdf, ["ignored_spec"])
+
+
+def test_rotate_pair_invalid_angle(caplog):
+    """
+    Covers transform.py lines 79-82:
+    Checks that a warning is logged if an unsupported rotation angle (e.g., 45) is used.
+    """
+    with caplog.at_level(logging.WARNING):
+        x, y = _rotate_pair(45, 10, 10, 100, 100)
+
+    assert "Unsupported rotation angle 45" in caplog.text
+    # Fallback behavior: returns original coords
+    assert x == 10
+    assert y == 10

@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 # Ensure the module under test is imported
 from pdftl.cli.help import (
-    _format_examples_block,
     _print_topic_help,
     find_special_topic_command,
     print_help,
 )
+from pdftl.cli.help_render import format_examples_block
 from pdftl.core.types import HelpExample
 
 
@@ -30,7 +30,7 @@ class TestHelpLogicEdgeCases(unittest.TestCase):
             HelpExample(topic="bar", desc="d3", cmd="c3"),
         ]
 
-        output = _format_examples_block(examples, show_topics=True)
+        output = format_examples_block(examples, show_topics=True)
 
         # FIX: The logic uses "Example" for the first one, not "Example 1"
         self.assertIn("Example for '`foo`'", output)  # First example

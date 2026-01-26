@@ -558,3 +558,21 @@ def test_links_unconfigured_remapper_guards():
         _rebuild_annotations_for_page(
             new_page=None, source_page=None, page_idx=0, remapper=remapper, pikepdf=None
         )
+
+
+import pytest
+
+
+def test_write_named_dests_odd_length():
+    """
+    Covers links.py line 179:
+    Checks that write_named_dests raises ValueError if the list length is not even.
+    The function expects a flat list: [name1, dest1, name2, dest2, ...]
+    """
+    pdf = pikepdf.new()
+
+    # List has 3 elements (odd), which is invalid for key-value pairs
+    odd_dests = ["Name1", ["DestObj"], "Name2"]
+
+    with pytest.raises(ValueError, match="must have even length"):
+        write_named_dests(pdf, odd_dests)

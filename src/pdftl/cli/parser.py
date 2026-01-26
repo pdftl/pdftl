@@ -270,12 +270,11 @@ def parse_cli_stage(stage_args, is_first_stage):
     if implicit_op and len(inputs) > 1:
         operation = "cat"
         logging.debug("Changing from filter to cat")
-    logger.debug(
+    logger.debug(  # nosemgrep - passwords are redacted
         "CliStage(operation=%s, inputs=%s, input_passwords=%s,"
         "handles=%s, operation_args=%s, options=%s",
         operation,
         inputs,
-        # passwords,
         "<REDACTED>",
         handles,
         specs,

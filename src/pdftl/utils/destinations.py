@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Iterable, NamedTuple, cast
+from collections.abc import Iterable
+from typing import Any, NamedTuple, cast
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,4 @@
 import pikepdf
-import pytest
 
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import PageTransform

@@ -10,7 +10,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'map'
-import pdftl.operations.parsers.modify_annots_parser as map
+import pdftl.operations.parsers.modify_annots_parser as ma_parser
 
 # --- -----------------------
 # Tests for _unquote_string
@@ -30,7 +30,7 @@ import pdftl.operations.parsers.modify_annots_parser as map
     ],
 )
 def test_unquote_string(input_str, expected):
-    assert map._unquote_string(input_str) == expected
+    assert ma_parser._unquote_string(input_str) == expected
 
 
 # --- -----------------------
@@ -50,7 +50,7 @@ def test_unquote_string(input_str, expected):
     ],
 )
 def test_parse_kv_pair_success(input_str, expected_key, expected_val):
-    key, val = map._parse_kv_pair(input_str)
+    key, val = ma_parser._parse_kv_pair(input_str)
     assert key == expected_key
     assert val == expected_val
 
@@ -58,7 +58,7 @@ def test_parse_kv_pair_success(input_str, expected_key, expected_val):
 @pytest.mark.parametrize("input_str", ["NoEquals", " =NoKey", " "])
 def test_parse_kv_pair_failure(input_str):
     with pytest.raises(ValueError):
-        map._parse_kv_pair(input_str)
+        ma_parser._parse_kv_pair(input_str)
 
 
 # --- -----------------------
@@ -67,30 +67,30 @@ def test_parse_kv_pair_failure(input_str):
 
 
 def test_parse_modification_string_simple():
-    result = map._parse_modification_string("Border=null")
+    result = ma_parser._parse_modification_string("Border=null")
     assert result == [("Border", "null")]
 
 
 def test_parse_modification_string_multiple():
-    result = map._parse_modification_string("Border=null, Foo=bar, C=[1 0 0]")
+    result = ma_parser._parse_modification_string("Border=null, Foo=bar, C=[1 0 0]")
     assert result == [("Border", "null"), ("Foo", "bar"), ("C", "[1 0 0]")]
 
 
 def test_parse_modification_string_quotes_and_spaces():
-    result = map._parse_modification_string(
+    result = ma_parser._parse_modification_string(
         " T = 'Title, with comma' , Key=\"Value, with comma\" "
     )
     assert result == [("T", "Title, with comma"), ("Key", "Value, with comma")]
 
 
 def test_parse_modification_string_trailing_comma():
-    result = map._parse_modification_string("Key=Val,")
+    result = ma_parser._parse_modification_string("Key=Val,")
     assert result == [("Key", "Val")]
 
 
 def test_parse_modification_string_empty_fails():
     with pytest.raises(ValueError, match="Empty modification list"):
-        map._parse_modification_string("")
+        ma_parser._parse_modification_string("")
 
 
 # --- -----------------------
@@ -111,7 +111,7 @@ def test_parse_modification_string_empty_fails():
     ],
 )
 def test_parse_selector_string(input_str, expected_page_spec, expected_type):
-    page_spec, type_spec = map._parse_selector_string(input_str)
+    page_spec, type_spec = ma_parser._parse_selector_string(input_str)
     assert page_spec == expected_page_spec
     assert type_spec == expected_type
 
@@ -127,7 +127,7 @@ def test_parser_success_simple():
     """
     specs = ["1-4/Link(Border=null, Foo=bar)"]
     # We use total_pages=10 so 1-4 is valid.
-    rules = map.specs_to_modification_rules(specs, total_pages=10)
+    rules = ma_parser.specs_to_modification_rules(specs, total_pages=10)
 
     assert len(rules) == 1
     rule = rules[0]
@@ -148,7 +148,7 @@ def test_parser_success_multiple_specs():
         "/Text(T='(New Author)')",
         "(Key=Val)",  # Empty selector -> 1-end
     ]
-    rules = map.specs_to_modification_rules(specs, total_pages=10)
+    rules = ma_parser.specs_to_modification_rules(specs, total_pages=10)
 
     assert len(rules) == 3
 
@@ -213,18 +213,18 @@ def test_parser_hypothesis_valid_specs(selector, kv_list):
     spec_str = f"{selector}({mod_str})"
 
     # Using the real logic is fine as long as total_pages is sufficient for "1-5"
-    rules = map.specs_to_modification_rules([spec_str], total_pages=10)
+    rules = ma_parser.specs_to_modification_rules([spec_str], total_pages=10)
 
     assert len(rules) == 1
     assert len(rules[0].modifications) == len(kv_list)
     assert rules[0].modifications[0][0] == kv_list[0].split("=")[0]
 
 
-@given(spec=st.text().filter(lambda s: not map.spec_pattern.match(s)))
+@given(spec=st.text().filter(lambda s: not ma_parser.spec_pattern.match(s)))
 def test_parser_hypothesis_invalid_specs(spec):
     """
     Tests that any string that does NOT match the spec pattern
     correctly raises a ValueError.
     """
     with pytest.raises(ValueError):
-        map.specs_to_modification_rules([spec], total_pages=10)
+        ma_parser.specs_to_modification_rules([spec], total_pages=10)

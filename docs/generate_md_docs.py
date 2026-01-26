@@ -73,7 +73,7 @@ def write_api_reference(operations, filepath):
                 if line.strip():
                     f.write(f"   {line}\n")
                 else:
-                    f.write(f"\n")
+                    f.write("\n")
 
             f.write("\n\n")
 

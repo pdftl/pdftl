@@ -16,7 +16,6 @@ from pdftl.pages.link_remapper import LinkRemapper
 # This is returned by process_source_pages, so we need it.
 from pdftl.pages.links import RebuildLinksPartialContext
 from pdftl.utils.page_specs import PageTransform
-from pdftl.utils.scale import scale_annotations_in_page
 
 # --- Fixtures ---
 

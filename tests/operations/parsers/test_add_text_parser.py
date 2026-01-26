@@ -358,7 +358,7 @@ class TestAddTextParser(unittest.TestCase):
 
     def test_parse_specs_grouped_qualifiers(self):
         # 'even' applies to the next spec
-        specs = ["even", "1-5 /Even 1-5/ (size=10)", "/All/ (size=12)"]
+        specs = ["1-5even /Even 1-5/ (size=10)", "/All/ (size=12)"]
         rules = parse_add_text_specs_to_rules(specs, self.total_pages)
 
         # 'even 1-5' -> 2, 4 (indices 1, 3)
@@ -381,7 +381,7 @@ class TestAddTextParser(unittest.TestCase):
         self.assertEqual(rules[3][1]["text"](self.context), "All")
 
     def test_parse_fail_missing_spec_after_qualifier(self):
-        with self.assertRaisesRegex(ValueError, "Missing spec after 'even'"):
+        with self.assertRaisesRegex(ValueError, "Invalid add_text spec.*delimiter"):
             parse_add_text_specs_to_rules(["even"], self.total_pages)
 
     def test_parse_fail_invalid_spec_syntax(self):
@@ -631,22 +631,6 @@ import unittest
 
 
 class TestAddTextFiltering(unittest.TestCase):
-
-    def test_line_131_external_odd_qualifier(self):
-        """Tests filtering via the external 'odd' keyword (Line 131)."""
-        # Format: [qualifier, spec]
-        specs = ["odd", "1-4/Hello/"]
-        total_pages = 10
-
-        # Result should only contain indices for pages 1 and 3
-        # indices: 0, 2
-        rules = parse_add_text_specs_to_rules(specs, total_pages)
-
-        self.assertIn(0, rules)
-        self.assertIn(2, rules)
-        self.assertNotIn(1, rules)  # Page 2 (even)
-        self.assertNotIn(3, rules)  # Page 4 (even)
-        self.assertEqual(len(rules), 2)
 
     def test_line_135_omissions(self):
         """Tests filtering via page range omissions '~' (Line 135)."""

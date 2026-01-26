@@ -13,15 +13,16 @@ from rich.console import Console
 
 import pdftl.cli.console as console_mod
 import pdftl.cli.help as helpmod
+import pdftl.cli.help_version as helpvermod
 from pdftl.core.types import HelpExample
 
 
 @pytest.fixture
 def patch_environment(monkeypatch, tmp_path):
     """Patch core globals so all help functions run cleanly."""
-    monkeypatch.setattr(helpmod, "WHOAMI", "pdftl")
-    monkeypatch.setattr(helpmod, "HOMEPAGE", "https://example.com")
-    monkeypatch.setattr(helpmod, "PACKAGE", "pdftl")
+    monkeypatch.setattr(helpvermod, "WHOAMI", "pdftl")
+    monkeypatch.setattr(helpvermod, "HOMEPAGE", "https://example.com")
+    monkeypatch.setattr(helpvermod, "PACKAGE", "pdftl")
 
     # Create fake operations and options
     fake_op = {
@@ -71,7 +72,7 @@ def patch_environment(monkeypatch, tmp_path):
     monkeypatch.setattr(helpmod, "SPECIAL_HELP_TOPICS_MAP", {("input", "in"): "help input"})
     monkeypatch.setattr(helpmod, "SYNOPSIS_TEMPLATE", "Usage: {whoami} [{special_help_topics}]")
     monkeypatch.setattr(
-        helpmod,
+        helpvermod,
         "VERSION_TEMPLATE",
         "{whoami} {package} {project_version}\n{dependencies}",
     )
@@ -137,11 +138,11 @@ def test_print_version_to_console(monkeypatch, patch_environment):
         "pikepdf",
         types.SimpleNamespace(__version__="10.0", __libqpdf_version__="11.0"),
     )
-    monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
     buf_out, buf_err = io.StringIO(), io.StringIO()
     with patch("rich.console.Console") as MockConsole:
         with redirect_stdout(buf_out), redirect_stderr(buf_err):
-            helpmod.print_version()
+            helpvermod.print_version()
         MockConsole.return_value.print.assert_called_once()
     # Optionally check that the output buffer is empty (since print_version uses console)
     assert buf_out.getvalue() == ""
@@ -154,9 +155,9 @@ def test_print_version_to_file(monkeypatch, patch_environment):
         "pikepdf",
         types.SimpleNamespace(__version__="10.0", __libqpdf_version__="11.0"),
     )
-    monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
     buf = io.StringIO()
-    helpmod.print_version(dest=buf)
+    helpvermod.print_version(dest=buf)
     assert "1.0.0" in buf.getvalue()
 
 
@@ -197,11 +198,11 @@ def test_print_version_to_console(monkeypatch, patch_environment):
         "pikepdf",
         type("FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"})(),
     )
-    monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
 
-    with patch.object(helpmod, "get_console") as mock_get_console:
+    with patch.object(helpvermod, "get_console") as mock_get_console:
         # Run the command
-        helpmod.print_version()
+        helpvermod.print_version()
 
         # 3. Capture the mock console instance that get_console() returned
         mock_console_instance = mock_get_console.return_value
@@ -224,10 +225,10 @@ def test_print_version_to_file(monkeypatch, patch_environment):
         "pikepdf",
         type("FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"})(),
     )
-    monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
 
     buf = io.StringIO()
-    helpmod.print_version(dest=buf)
+    helpvermod.print_version(dest=buf)
     output = buf.getvalue()
 
     assert "pdftl 1.0.0" in output
@@ -252,8 +253,6 @@ def test_find_option_topic_command(patch_environment):
 
 
 import pytest
-
-from pdftl.cli import help as cli_help
 
 # --- Fixtures & Mocks ---
 
@@ -300,7 +299,7 @@ def test_get_optional_dependencies_filtering(mock_metadata):
     Verifies that dev tools and self-references are filtered out,
     and only 'feature' extras remain.
     """
-    results = cli_help.get_optional_dependencies_status()
+    results = helpvermod.get_optional_dependencies_status()
 
     # Extract just the names for easy assertion
     pkg_names = {r[0] for r in results}
@@ -320,7 +319,7 @@ def test_get_optional_dependencies_status_detection(mock_metadata):
     Verifies that installed packages return their version,
     and missing packages return None.
     """
-    results = dict(cli_help.get_optional_dependencies_status())
+    results = dict(helpvermod.get_optional_dependencies_status())
 
     assert results["reportlab"] == "4.0.0", "Should return version for installed pkg"
     assert results["pypdfium2"] is None, "Should return None for missing pkg"
@@ -331,7 +330,7 @@ def test_print_version_output_format(mock_metadata):
     Verifies the actual string output to stdout.
     """
     capture = io.StringIO()
-    cli_help.print_version(dest=capture)
+    helpvermod.print_version(dest=capture)
 
     stdout = capture.getvalue()
 
@@ -363,7 +362,7 @@ def test_print_version_no_metadata_crash(mocker):
     )
 
     # Should run without error
-    cli_help.print_version(dest=capture)
+    helpvermod.print_version(dest=capture)
     stdout = capture.getvalue()
 
     # Should still print core info, just no optional block

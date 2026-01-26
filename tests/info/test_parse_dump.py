@@ -569,3 +569,57 @@ def test_parse_dump_data_consecutive_info_keys(caplog):
     # 2. Verify the dictionary state: 'FirstKey' should be dropped, 'SecondKey' kept
     assert "FirstKey" not in result["Info"]
     assert result["Info"]["SecondKey"] == "ValidValue"
+
+
+import pytest
+
+
+def test_parse_field_invalid_prefix():
+    """
+    Covers parse_dump.py line 178:
+    Ensures _parse_field raises ValueError if the key does not start with the expected prefix.
+    """
+    with pytest.raises(ValueError, match="must start with given prefix"):
+        _parse_field("WrongPrefixKey", "value", {}, "CorrectPrefix", {})
+
+
+def test_parse_field_unknown_key_in_block():
+    """
+    Covers parse_dump.py line 182:
+    Ensures _parse_field raises ValueError if the key suffix is unknown in the lookup table.
+    """
+    # Lookup table expects 'Title', but we give 'Unknown'
+    lookup = {"Title": lambda x: x}
+    with pytest.raises(ValueError, match="Unknown key BookmarkUnknown"):
+        _parse_field("BookmarkUnknown", "value", {}, "Bookmark", lookup)
+
+
+def test_parse_info_field_bug_check():
+    """
+    Covers parse_dump.py line 204:
+    Ensures _parse_info_field raises ValueError if a key other than InfoKey/InfoValue is passed.
+    This is effectively an assertion for internal logic.
+    """
+    with pytest.raises(ValueError, match="Unknown Info field key"):
+        _parse_info_field("InvalidKey", "val", {}, {}, lambda x: x)
+
+
+def test_parse_top_level_field_unknown():
+    """
+    Covers parse_dump.py line 214:
+    Ensures _parse_top_level_field raises ValueError for unknown global keys.
+    """
+    pdf_data = {}
+    with pytest.raises(ValueError, match="Unknown key RandomGlobal"):
+        _parse_top_level_field("RandomGlobal", "value", pdf_data, lambda x: x)
+
+
+def test_parse_dump_data_bad_top_level_line():
+    """
+    Integration test for top-level unknown key to ensure it bubbles up correctly
+    if encountered during actual parsing.
+    """
+    lines = ["RandomKey: SomeValue"]
+    # This should trigger the ValueError in _handle_line -> _handle_key_value -> _parse_top_level_field
+    with pytest.raises(ValueError, match="Unknown key RandomKey"):
+        parse_dump_data(lines, lambda x: x)

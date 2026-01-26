@@ -161,3 +161,24 @@ def test_crop_preview_rotated_page(minimal_pdf):
     # and potentially inspect the page content for the overlay if needed.
     # But for coverage, execution is enough.
     assert True
+
+
+import pytest
+
+from pdftl.operations.crop import _apply_crop_rule_to_page
+
+
+def test_apply_crop_rule_invalid_index():
+    """
+    Covers crop.py line 111:
+    Checks that a ValueError is raised if the page index `i` is out of bounds
+    relative to the PDF's page count.
+    """
+    pdf = pikepdf.new()
+    pdf.add_blank_page()  # PDF has 1 page (index 0)
+
+    # Try to access index 5
+    with pytest.raises(ValueError, match="is too large"):
+        _apply_crop_rule_to_page(
+            page_rule="some_rule", i=5, pdf=pdf, preview=False, fit_ctx=None, all_rules={}
+        )

@@ -100,7 +100,12 @@ def _discover_modules(parent_modules, label):
                 )
                 continue
 
+            # Override semgrep here: Input is strictly validated to start with 'pdftl.' namespace
+            # and must be a valid python identifier.
+
+            # nosemgrep: python.lang.security.audit.dynamic-import
             importlib.import_module(fq_name)
+
             loaded_modules.append(fq_name)
 
     logger.debug("[registry_init] Loaded %s %s modules:", len(loaded_modules), label)
@@ -126,7 +131,7 @@ def initialize_registry():
     # We must explicitly import 'utils' and 'cli' so their submodules (like
     # page_specs.py and pipeline.py) can be discovered and their decorators executed.
     for module in ["operations", "core", "output", "cli", "utils"]:
-        importlib.import_module(f"pdftl.{module}")
+        importlib.import_module(f"pdftl.{module}")  # nosemgrep
 
     # 2. Discover and register all operations and help topics
     # We scan all relevant packages to find @register_operation and @register_help_topic
