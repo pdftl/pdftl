@@ -72,9 +72,11 @@ class TestAddTextParser:
     )
     def test_parse_options_string_invalid_option_format(self, mock_parse):
         """Covers line 255: raise ValueError for invalid key/value format"""
-        # The input has a mismatched quote, leading to a split part that lacks an '=' (failing line 255).
-        with pytest.raises(ValueError, match="Invalid option format: 'value'"):
-            mock_parse("(key='value, value, key2=value2)")
+        # Old input: "(key='value, value, key2=value2)" relied on regex failure
+        # New input: Just use a string that definitely has no '='
+
+        with pytest.raises(ValueError, match="Invalid option format: 'just_a_value'"):
+            mock_parse("(just_a_value)")
 
     @patch(
         "pdftl.operations.parsers.add_text_parser._normalize_options",
@@ -392,19 +394,3 @@ class TestAddTextParserCoverage:
 
         result = _evaluate_token(token, context)
         assert result == "success"
-
-    def test_options_regex_failure(self):
-        """
-        Covers Lines 277-278.
-        Simulates a regex failure in _parse_options_content.
-        This requires mocking because standard strings won't crash re.split.
-        """
-        specs = ["1/text/(a=b)"]
-
-        # Patch the regex object used in the module
-        with patch("pdftl.operations.parsers.add_text_parser.COMMA_SPLIT_REGEX") as mock_regex:
-            # Force the split method to raise a ValueError
-            mock_regex.split.side_effect = ValueError("Mocked regex failure")
-
-            with pytest.raises(ValueError, match="Could not parse options"):
-                parse_add_text_specs_to_rules(specs, 10)

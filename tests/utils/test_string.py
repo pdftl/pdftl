@@ -2,7 +2,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.utils.string_utils import fix_mojibake, sensible_decode, split_escaped
+from pdftl.utils.string_utils import (
+    fix_mojibake,
+    sensible_decode,
+    split_escaped,
+    split_string_respecting_quotes,
+)
 
 
 def test_split_escaped():
@@ -409,3 +414,12 @@ def test_fix_mojibake_exception():
         original_text = "problematic_string"
         result = fix_mojibake(original_text)
         assert result == original_text
+
+
+def test_string_split_happy():
+    assert split_string_respecting_quotes("f,'x,','y'z", delimiter=",") == ["f", "'x,'", "'y'z"]
+
+
+def test_string_split_raises():
+    with pytest.raises(ValueError):
+        split_string_respecting_quotes("f,'x'y'z", delimiter=",")

@@ -13,17 +13,10 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.string_utils import split_string_respecting_quotes
 
 # --- This logic is borrowed directly from add_text_parser.py ---
 # We use it to parse the (modifications) string.
-
-# Regex to split by commas, but not inside single or double quotes
-# This regex should correctly handle balanced, unescaped quotes.
-COMMA_SPLIT_REGEX = re.compile(r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
-
-# Regex to find the first unquoted/unescaped '='
-# This regex should correctly handle balanced, unescaped quotes.
-EQUALS_SPLIT_REGEX = re.compile(r"=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
 
 
 def _unquote_string(val: str) -> str:
@@ -38,14 +31,14 @@ def _parse_kv_pair(part: str) -> tuple[str, str]:
     Parses a single 'Key=Value' string, respecting quotes in the value.
     (Adapted from add_text_parser._parse_kv_pair)
     """
-    parts = EQUALS_SPLIT_REGEX.split(part, 1)
-    if len(parts) != 2:
+    all_parts = split_string_respecting_quotes(part, delimiter="=")
+    if len(all_parts) < 2:
         raise ValueError(f"Invalid modification: '{part}'. Expected format 'Key=Value'.")
 
-    key = parts[0].strip()
+    key = all_parts[0].strip()
     if not key:
         raise ValueError(f"Invalid modification: '{part}'. Key cannot be empty.")
-    value = _unquote_string(parts[1].strip())
+    value = _unquote_string(("=".join(all_parts[1:])).strip())
     return key, value
 
 
@@ -75,7 +68,7 @@ def _parse_modification_string(mod_str: str) -> list[tuple[str, str]]:
     if not mod_str:
         raise ValueError("Empty modification list '()'. Must specify modifications.")
 
-    mod_parts = COMMA_SPLIT_REGEX.split(mod_str)
+    mod_parts = split_string_respecting_quotes(mod_str, delimiter=",")
     modifications = []
     for part in mod_parts:
         if part.strip():

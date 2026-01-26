@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import UNITS
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.string_utils import split_string_respecting_quotes
 
 # Set of valid, case-insensitive preset position keywords
 PRESET_POSITIONS = {
@@ -29,9 +30,6 @@ PRESET_POSITIONS = {
 }
 
 NUMERIC_VARS = {"page", "total", "source_page", "source_rotation", "source_width", "source_height"}
-
-# Regex to split by commas, but not inside single or double quotes
-COMMA_SPLIT_REGEX = re.compile(r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)")
 
 # Regex to capture either an escaped block {{...}} OR a variable block {...}
 TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
@@ -248,7 +246,7 @@ def _parse_options_content(content: str):
 
     # 1. Split by commas, but respect commas inside quotes.
     try:
-        parts = COMMA_SPLIT_REGEX.split(content)
+        parts = split_string_respecting_quotes(content, delimiter=",")
     except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError(f"Could not parse options: {content}") from exc
 

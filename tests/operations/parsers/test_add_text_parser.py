@@ -67,6 +67,7 @@ import pdftl.operations.parsers.add_text_parser
 # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
 from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
     _compile_text_renderer,
+    _parse_options_content,
     _parse_options_string,
     _split_spec_string,
     parse_add_text_specs_to_rules,
@@ -78,6 +79,11 @@ from pdftl.operations.parsers.add_text_parser import (  # Import new function fo
 # pdftl.operations.parsers.add_text_parser.parse_sub_page_spec = mock_parse_sub_page_spec
 # # We also need to give it the 're' module for the fixed _split_spec_string
 # pdftl.operations.parsers.add_text_parser.re = re
+
+
+def test_parse_options_content_error():
+    with pytest.raises(ValueError):
+        _parse_options_content("key='foo")
 
 
 class TestAddTextParser(unittest.TestCase):

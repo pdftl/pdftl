@@ -248,3 +248,41 @@ def fix_mojibake(text: str) -> str:
         return sensible_decode(raw_bytes)
     except UnicodeError:
         return text
+
+
+def split_string_respecting_quotes(text, delimiter=","):
+    """
+    Splits a string by a delimiter, respecting nested quotes (single and double).
+    Preserves empty fields and original quotes, exactly like re.split behavior.
+
+    DoS Safe: Runs in O(N) time.
+    """
+    result = []
+    current = []
+    quote_char = None
+
+    for char in text:
+        if quote_char:
+            # We are inside a quote, just keep accumulating
+            current.append(char)
+            if char == quote_char:
+                quote_char = None  # Closed the quote
+        else:
+            # We are not in a quote
+            if char == delimiter:
+                # Found a split point!
+                result.append("".join(current))
+                current = []
+            else:
+                current.append(char)
+                # If this is a start of a quote, track it
+                if char in ('"', "'"):
+                    quote_char = char
+
+    if quote_char:
+        raise ValueError(f"Unbalanced quote in string: {text}")
+
+    # Append whatever is left (even if it's an empty string)
+    result.append("".join(current))
+
+    return result
