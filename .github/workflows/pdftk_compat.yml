@@ -35,7 +35,7 @@ jobs:
           pytest -ra vendor_tests/pdftk-java --junitxml=test-results.xml
 
       - name: Publish PDFtk Stats
-        uses: EnricoMi/publish-unit-test-result-action@12fa20e14d449d310778f2d0af1e3b2f57dde2a7
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f
         if: always()
         with:
           check_name: "PDFtk Compat Stats"
