@@ -30,24 +30,29 @@ class GrammarBuilder:
         grammar = [
             textwrap.dedent(
                 f"""
-            start: input_section [op_section] [opt_section]
-                 | help_cmd [help_topic]
-                 | global_flag
+            start: global_flag* input_section [op_section] [opt_section]
+                 | global_flag* help_cmd [help_topic]
+
 
             help_cmd: HELP_KW | HELP_FLAG
             help_topic: HELP_SUB_KW | operation | CHAIN_SEP
-            global_flag: COMP_FLAG | VERSION_FLAG | DEBUG_FLAG
+            global_flag: comp_cmd | VERSION_FLAG | DEBUG_FLAG
+            !comp_cmd: COMP_FLAG (COMP_BASH | COMP_ZSH | COMP_PWSH)
+
+            COMP_FLAG.10: "--completion"
+            COMP_BASH: "bash"
+            COMP_ZSH: "zsh"
+            COMP_PWSH: "powershell"
 
             HELP_KW.10: "help"
             HELP_FLAG.10: "--help"
-            COMP_FLAG.10: "--completion=bash"
             VERSION_FLAG.10: "--version"
             DEBUG_FLAG.10: "--debug"
             HELP_SUB_KW.10: {help_topics_str}
 
             input_section: file_ref+
             op_section: (operation | CHAIN_SEP)+
-            opt_section: option+
+            opt_section: option+ global_flag*
 
             CHAIN_SEP.10: "---"
             file_ref: /[A-Z]=/? PDF_PATH

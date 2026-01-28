@@ -1,9 +1,13 @@
 import io
 import os
+import posixpath
+import runpy
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from pdftl.cli.complete import get_cache_dir_and_file
 from pdftl.cli.complete import main as complete_main
+from pdftl.cli.complete import rebuild_cache, resolve_candidates
 
 
 def test_complete_main_integration(tmp_path, monkeypatch):
@@ -35,56 +39,6 @@ def test_rebuild_on_corrupt_cache(tmp_path, monkeypatch):
     assert parser is not None
 
 
-import runpy
-from unittest.mock import MagicMock
-
-
-from pdftl.cli.complete import get_cache_dir_and_file
-from pdftl.cli.complete import rebuild_cache, resolve_candidates
-
-# def test_coverage_gap_windows_paths(monkeypatch):
-#     """Targets lines 13-14: Windows path logic fallback safely."""
-#     # We patch os.name ONLY inside the complete.py module
-#     # This keeps pytest's own logic (running in Linux) healthy
-#     monkeypatch.setattr("pdftl.cli.complete.os.name", "nt")
-
-#     # We also need to mock the environment variable locally
-#     monkeypatch.delenv("LOCALAPPDATA", raising=False)
-
-#     # Mock expanduser to simulate a Windows-style home path
-#     # We use a Windows-style path string to satisfy the line 13-14 logic
-#     with patch("os.path.expanduser", return_value="C:\\Users\\test"):
-#         from pdftl.cli.complete import get_cache_dir_and_file
-#         cache_dir, _ = get_cache_dir_and_file()
-
-#         # Now we check if your code correctly appended the Windows-specific parts
-#         assert "AppData\\Local\\pdftl\\Cache" in cache_dir
-
-
-def test_get_cache_dir_logic_branching():
-    """Manually test both branches by patching the function's internal 'os' reference."""
-    from pdftl.cli import complete
-
-    # 1. Test Windows logic branch
-    with patch("pdftl.cli.complete.os") as mock_os:
-        mock_os.name = "nt"
-        mock_os.environ.get.return_value = None
-        mock_os.path.expanduser.return_value = "C:\\Users\\test"
-        mock_os.path.join.side_effect = os.path.join  # Keep join functional
-
-        cache_dir, _ = complete.get_cache_dir_and_file()
-        assert "AppData\\Local" in cache_dir
-
-    # 2. Test POSIX logic branch
-    with patch("pdftl.cli.complete.os") as mock_os:
-        mock_os.name = "posix"
-        mock_os.environ.get.return_value = "/custom/cache"
-        mock_os.path.join.side_effect = os.path.join
-
-        cache_dir, _ = complete.get_cache_dir_and_file()
-        assert "/custom/cache/pdftl" in cache_dir
-
-
 def test_coverage_gap_import_errors():
     """Targets lines 37-38: Handling missing dependencies during rebuild."""
     # We poison the sys.modules for cloudpickle to trigger the ImportError
@@ -110,31 +64,6 @@ def test_coverage_gap_main_edge_cases(monkeypatch):
         with patch("sys.stdout", new_callable=io.StringIO):
             result = complete_main()
             assert result is None
-
-
-def test_get_cache_dir_logic_branching():
-    """Manually test both branches without causing path-separator collisions."""
-    from pdftl.cli import complete
-
-    # 1. Test Windows logic branch
-    with patch("pdftl.cli.complete.os") as mock_os:
-        mock_os.name = "nt"
-        mock_os.environ.get.return_value = None
-        mock_os.path.expanduser.return_value = "C:\\Users\\test"
-        # Manually control join to return a Windows-looking string
-        mock_os.path.join.return_value = "C:\\Users\\test\\AppData\\Local\\pdftl\\Cache"
-
-        cache_dir, _ = complete.get_cache_dir_and_file()
-        assert "AppData\\Local" in cache_dir
-
-    # 2. Test POSIX logic branch
-    with patch("pdftl.cli.complete.os") as mock_os:
-        mock_os.name = "posix"
-        mock_os.environ.get.return_value = "/custom/cache"
-        mock_os.path.join.side_effect = os.path.join
-
-        cache_dir, _ = complete.get_cache_dir_and_file()
-        assert "/custom/cache/pdftl" in cache_dir
 
 
 def test_coverage_gap_module_entrypoint():
@@ -171,3 +100,31 @@ def test_coverage_gap_module_entrypoint(capsys):
 
     # This "swallows" the printed output so it doesn't spam your terminal
     capsys.readouterr()
+
+
+def test_get_cache_dir_logic_branching():
+    """Manually test both branches without causing path-separator collisions."""
+    from pdftl.cli import complete
+
+    # 1. Test Windows logic branch
+    with patch("pdftl.cli.complete.os") as mock_os:
+        mock_os.name = "nt"
+        mock_os.environ.get.return_value = None
+        mock_os.path.expanduser.return_value = "C:\\Users\\test"
+        # Manually control join to return a Windows-looking string
+        mock_os.path.join.return_value = "C:\\Users\\test\\AppData\\Local\\pdftl\\Cache"
+
+        cache_dir, _ = complete.get_cache_dir_and_file()
+        assert "AppData\\Local" in cache_dir
+
+    # 2. Test POSIX logic branch
+    with patch("pdftl.cli.complete.os") as mock_os:
+        mock_os.name = "posix"
+        mock_os.environ.get.return_value = "/custom/cache"
+
+        # FIX: Use posixpath.join to force forward slashes,
+        # even when running on Windows.
+        mock_os.path.join.side_effect = posixpath.join
+
+        cache_dir, _ = complete.get_cache_dir_and_file()
+        assert "/custom/cache/pdftl" in cache_dir

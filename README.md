@@ -46,6 +46,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 | **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
 | **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
 | **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
+| **Shell Completion** | ❌ | ✅ **bash, zsh and powershell** |
 | **Help** | ⚠️ Basic (manpage) | ✅ **Self-documenting: [`pdftl help <operation/option/topic/tag>`][7]** |
 
 ## Installation

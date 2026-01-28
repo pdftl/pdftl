@@ -136,10 +136,10 @@ def print_main_help(dest=None, raw=False):
             # usage_styled.highlight_regex(r"<[^>]+>", "underline")
 
             usage_styled.highlight_regex(
-                r"((\b(pdftl|help|all|sign|filter|pages|completion|example|output)|--version)\b|---|[^<]input[^>])",
+                r"((\b(pdftl|help|all|sign|filter|pages|completion|examples|output|bash|powershell|zsh)|--version)\b|---|[^<]input[^>])",
                 "bold cyan",
             )
-            usage_styled.highlight_regex(r"\[|\]", "dim")
+            usage_styled.highlight_regex(r"[][|()]", "dim")
 
             # Indent the synopsis slightly for readability
             console.print(Padding(usage_styled, (0, 0, 1, 2)))

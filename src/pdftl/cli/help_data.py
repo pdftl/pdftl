@@ -29,6 +29,7 @@ SYNOPSIS_TEMPLATE = """
 {whoami} <input>... <operation> [<option...>] --- [<input>...] <operation>... [<option...>] ...
 {whoami} help [<operation> | <option>]
 {whoami} help [{special_help_topics}]
+{whoami} --completion  (bash | zsh | powershell)
 {whoami} --version
 """
 

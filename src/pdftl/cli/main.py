@@ -183,21 +183,20 @@ def _handle_special_flags(nonverbose_cli_args):
         return _print_help_and_chill(command)
 
     try:
-        completion_arg = next(
-            arg
-            for arg in nonverbose_cli_args
-            if (arg == "--completion" or arg.startswith("--completion="))
+        i, completion_arg = next(
+            x for x in enumerate(nonverbose_cli_args) if (x[1] == "--completion")
         )
-        return _handle_completion_arg(completion_arg)
+        if i + 1 >= len(nonverbose_cli_args):
+            _print_help_and_chill("--completion")
+            return 1
+
+        shell = nonverbose_cli_args[i + 1]
+        return _handle_completion_arg(shell)
     except StopIteration:
         return None
 
 
-def _handle_completion_arg(arg):
-    if "=" not in arg:
-        _print_help_and_chill("--completion")
-        return 1
-    shell = arg.split("=", 1)[1]
+def _handle_completion_arg(shell):
     try:
         from pdftl.cli.completion_setup import completion_setup
 

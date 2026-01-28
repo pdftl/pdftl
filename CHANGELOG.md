@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.10.0] - 2026-01-28
+
+### Added
+
+- Shell completion for bash, zsh and powershell
+
 ## [0.9.2] - 2026-01-26
 
 ### Changed

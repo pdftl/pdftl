@@ -388,16 +388,14 @@ def test_cli_handles_completion_flag():
         mock_setup.return_value = 0
 
         # ACT
-        cli_main(["pdftl.exe", "--completion=bash"])
+        cli_main(["pdftl.exe", "--completion", "bash"])
 
         # ASSERT
         assert mock_setup.called, "The mock was never called!"
         mock_setup.assert_called_once_with("bash")
 
 
-
 import pytest
-
 
 
 def test_main_completion_missing_equals():
@@ -417,19 +415,12 @@ def test_main_completion_missing_equals():
 
 def test_main_completion_not_implemented():
     """Targets lines 204-206: Handling unsupported shells."""
-    # We need to patch the internal import call
-    with patch("pdftl.cli.completion_setup.completion_setup") as mock_setup:
-        # Simulate a shell that doesn't exist (like 'zsh' if not yet supported)
-        mock_setup.side_effect = NotImplementedError("Shell 'fish' not supported")
+    with patch("sys.stderr", new_callable=io.StringIO) as mock_err:
+        # ACT: Call main with the unsupported shell
+        result = cli_main(["pdftl", "--completion", "fish"])
 
-        # Capture stderr to verify the error message is printed
-        with patch("sys.stderr", new_callable=io.StringIO) as mock_err:
-            # ACT: Call main with the unsupported shell
-            result = cli_main(["pdftl", "--completion=fish"])
-
-            # ASSERT
-            assert result == 1
-            assert "Error: Shell 'fish' not supported" in mock_err.getvalue()
+        assert result == 1
+        assert "Error: Shell completion for 'fish' is not available" in mock_err.getvalue()
 
 
 def test_main_success_return_zero():

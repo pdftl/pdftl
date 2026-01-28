@@ -1,3 +1,5 @@
+# src/pdftl/cli/complete.py
+
 import os
 import sys
 
@@ -83,7 +85,10 @@ def resolve_candidates(allowed_tokens, parser):
     literal_map = {
         "HELP_KW": "help",
         "HELP_FLAG": "--help",
-        "COMP_FLAG": "--completion=bash",
+        "COMP_FLAG": "--completion",
+        "COMP_BASH": "bash",
+        "COMP_ZSH": "zsh",
+        "COMP_PWSH": "powershell",
         "VERSION_FLAG": "--version",
         "DEBUG_FLAG": "--debug",
     }
@@ -96,7 +101,7 @@ def resolve_candidates(allowed_tokens, parser):
             for t in parser.terminals:
                 if t.name == "HELP_SUB_KW":
                     # This extracts "help", "sign", etc. from the Lark terminal pattern
-                    options = t.pattern.value.split("|")
+                    options = t.pattern.value[3:-1].split("|")
                     candidates.update(opt.strip('" ') for opt in options)
         elif name == "PDF_PATH":
             candidates.add("__PDF_FILE__")
