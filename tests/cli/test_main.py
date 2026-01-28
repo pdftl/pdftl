@@ -85,7 +85,7 @@ def test_handle_special_flags_calls(monkeypatch):
     # 1. Version flag triggers print_version and STILL exits (based on your diff not changing that block)
     mainmod._handle_special_flags(list(VERSION_FLAGS))
     helpvermod.print_version.assert_called_once()
-    fake_sys.exit.assert_called_once_with(0)
+    fake_sys.exit.assert_not_called()
 
     # Reset mocks
     helpvermod.print_version.reset_mock()
@@ -123,7 +123,7 @@ def test_print_help_returns_zero(monkeypatch):
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stdout=io.StringIO(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
-    ret_code = mainmod._print_help_and_exit("somecmd")
+    ret_code = mainmod._print_help_and_chill("somecmd")
 
     helpmod.print_help.assert_called_once_with(
         command="somecmd",
@@ -167,15 +167,15 @@ def test_main_no_args_triggers_help(monkeypatch):
     monkeypatch.setattr(mainmod, "_get_flags_and_setup_logging", lambda x: (set(), []))
     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
 
-    # Patch _print_help_and_exit to prevent actual exit
+    # Patch _print_help_and_chill to prevent actual exit
     fake_exit = MagicMock(side_effect=StopExecution("Called help exit"))
-    monkeypatch.setattr(mainmod, "_print_help_and_exit", fake_exit)
+    monkeypatch.setattr(mainmod, "_print_help_and_chill", fake_exit)
 
     with pytest.raises(StopExecution):
         # Run main with empty args
         mainmod.main(["pdftl"])
 
-    # Assert _print_help_and_exit was called
+    # Assert _print_help_and_chill was called
     fake_exit.assert_called_once_with(None)
 
 
@@ -334,7 +334,7 @@ def test_main_special_flags_returns_early(mocker):
     mocker.patch.object(sys, "argv", ["pdftl", "help"])
 
     # Mock _handle_special_flags to return a specific exit code (e.g., 0)
-    # This simulates _print_help_and_exit returning 0
+    # This simulates _print_help_and_chill returning 0
     mocker.patch("pdftl.cli.main._handle_special_flags", return_value=0)
 
     # Ensure initialize_registry doesn't actually run/fail during test
@@ -372,3 +372,84 @@ def test_main_operation_error_exit_code(mocker):
 
     # Assert that OperationError results in exit code 3
     assert exit_code == 3
+
+
+from pdftl.cli.main import main as cli_main
+
+
+def test_cli_handles_completion_flag():
+    # Test --completion without shell (should show help)
+    with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+        cli_main(["--completion"])
+
+    # Test --completion=bash
+    with patch("pdftl.cli.completion_setup.completion_setup") as mock_setup:
+        # Mocking the return value is crucial for main()'s logic
+        mock_setup.return_value = 0
+
+        # ACT
+        cli_main(["pdftl.exe", "--completion=bash"])
+
+        # ASSERT
+        assert mock_setup.called, "The mock was never called!"
+        mock_setup.assert_called_once_with("bash")
+
+
+
+import pytest
+
+
+
+def test_main_completion_missing_equals():
+    """Targets lines 198-199: Bare --completion without shell."""
+    # We patch _print_help_and_chill to avoid actual help output in logs
+    # and to verify it was called with the correct topic.
+    with patch("pdftl.cli.main._print_help_and_chill") as mock_help:
+        mock_help.return_value = 0
+
+        # ACT: Call main with just the bare flag
+        result = cli_main(["pdftl", "--completion"])
+
+        # ASSERT
+        assert result == 1  # Logic returns 1 after showing help
+        mock_help.assert_called_once_with("--completion")
+
+
+def test_main_completion_not_implemented():
+    """Targets lines 204-206: Handling unsupported shells."""
+    # We need to patch the internal import call
+    with patch("pdftl.cli.completion_setup.completion_setup") as mock_setup:
+        # Simulate a shell that doesn't exist (like 'zsh' if not yet supported)
+        mock_setup.side_effect = NotImplementedError("Shell 'fish' not supported")
+
+        # Capture stderr to verify the error message is printed
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_err:
+            # ACT: Call main with the unsupported shell
+            result = cli_main(["pdftl", "--completion=fish"])
+
+            # ASSERT
+            assert result == 1
+            assert "Error: Shell 'fish' not supported" in mock_err.getvalue()
+
+
+def test_main_success_return_zero():
+    """Targets line 49: Successful execution returns 0."""
+    # We mock PipelineManager to prevent it from actually running a real pipeline
+    # We patch it in pdftl.cli.main where it is imported/used
+    with patch("pdftl.cli.main.PipelineManager") as mock_manager:
+        # Configure the mock to return an object that has a run() method
+        mock_instance = mock_manager.return_value
+        mock_instance.run.return_value = None
+
+        # We need to provide enough args so it doesn't hit 'no pipeline stages found'
+        # 'help' would hit special flags, so we use a fake operation 'info'
+        # (Assuming 'info' is a registered operation)
+        with patch("pdftl.cli.main.parse_options_and_specs", return_value=([], {})):
+            with patch("pdftl.cli.main.parse_cli_stage", return_value=MagicMock()):
+
+                # ACT: Provide an argument that passes through to _prepare_pipeline
+                result = cli_main(["pdftl", "info"])
+
+                # ASSERT
+                assert result == 0
+                assert mock_instance.run.called

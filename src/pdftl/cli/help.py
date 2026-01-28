@@ -136,7 +136,7 @@ def print_main_help(dest=None, raw=False):
             # usage_styled.highlight_regex(r"<[^>]+>", "underline")
 
             usage_styled.highlight_regex(
-                r"((\b(pdftl|help|all|sign|filter|pages|example|output)|--version)\b|---|[^<]input[^>])",
+                r"((\b(pdftl|help|all|sign|filter|pages|completion|example|output)|--version)\b|---|[^<]input[^>])",
                 "bold cyan",
             )
             usage_styled.highlight_regex(r"\[|\]", "dim")
@@ -286,12 +286,13 @@ def print_help(command=None, dest=None, raw=False):
             "signing",
             "page_specs",
             "pipeline",
+            "completion",
             "help",
         ]
         _print_multiple_topics(all_topics, hprint, dest, raw)
     else:
         logger.warning("Unknown help topic '%s' requested, showing default help\n", command)
-        print_main_help(hprint)
+        print_main_help(dest=dest, raw=raw)
 
 
 def _print_multiple_topics(topics, hprint, dest, raw):

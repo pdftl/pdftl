@@ -41,7 +41,7 @@ def main(argv=None):
         return ret
 
     if not args_for_parsing:
-        return _print_help_and_exit(None)
+        return _print_help_and_chill(None)
 
     try:
         pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
@@ -98,7 +98,7 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
     return PipelineManager(parsed_stages, input_context)
 
 
-def _print_help_and_exit(command, raw=False):
+def _print_help_and_chill(command, raw=False):
     """Prints the relevant help topic and exits the program."""
     from pdftl.cli.help import print_help
 
@@ -170,14 +170,38 @@ def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
 def _handle_special_flags(nonverbose_cli_args):
     """
     Handles --version and --help flags by delegating to helper functions (and exiting).
+    And also --completion
     """
     if any(arg in VERSION_FLAGS for arg in nonverbose_cli_args):
         from pdftl.cli.help_version import print_version
 
         print_version()
-        sys.exit(0)
+        return 0
+
     if any(arg in HELP_FLAGS for arg in nonverbose_cli_args):
         command = _find_help_command(nonverbose_cli_args)
-        return _print_help_and_exit(command)
+        return _print_help_and_chill(command)
 
-    return None
+    try:
+        completion_arg = next(
+            arg
+            for arg in nonverbose_cli_args
+            if (arg == "--completion" or arg.startswith("--completion="))
+        )
+        return _handle_completion_arg(completion_arg)
+    except StopIteration:
+        return None
+
+
+def _handle_completion_arg(arg):
+    if "=" not in arg:
+        _print_help_and_chill("--completion")
+        return 1
+    shell = arg.split("=", 1)[1]
+    try:
+        from pdftl.cli.completion_setup import completion_setup
+
+        return completion_setup(shell)
+    except NotImplementedError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1

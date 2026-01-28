@@ -48,6 +48,7 @@ flatten = ["pypdfium2"]
 optimize-images = ["ocrmypdf"]
 replacement-font = [ "fonttools>=4.0,<5.0" ]
 signing = ["pyhanko"]
+shell-completion = ["lark", "cloudpickle"]
 
 # All optional CLI dependencies
 extras = [
@@ -58,6 +59,7 @@ extras = [
     "pdftl[optimize-images]",
     "pdftl[replacement-font]",
     "pdftl[signing]",
+    "pdftl[shell-completion]",
 ]
 
 # User-facing "Batteries Included" install

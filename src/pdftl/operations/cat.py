@@ -66,6 +66,7 @@ _CAT_EXAMPLES = [
         [c.INPUTS, c.OPERATION_ARGS, c.OPENED_PDFS],
         {c.ALIASES: c.ALIASES},
     ),
+    grammar_spec="cat_spec+",
 )
 def cat_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     """

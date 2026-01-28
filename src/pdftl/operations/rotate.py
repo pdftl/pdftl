@@ -62,6 +62,7 @@ _ROTATE_EXAMPLES = [
     usage="<input> rotate <spec>... output <file> [<option...>]",
     examples=_ROTATE_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
+    grammar_spec="rotate_spec+",
 )
 def rotate_pdf(source_pdf: "Pdf", specs: list) -> OpResult:
     """
