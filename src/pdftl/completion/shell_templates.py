@@ -84,47 +84,88 @@ POWERSHELL_TEMPLATE = """
 $pdftl_completer = {{
     param($wordToComplete, $commandAst, $cursorPosition)
 
+    # 1. Extract arguments to pass to Python
     if ($null -ne $commandAst) {{
         $rawTokens = $commandAst.CommandElements | ForEach-Object {{ $_.Value }}
     }} else {{
         $rawTokens = @()
     }}
 
+    # Remove the command itself from the start
     if ($rawTokens.Count -gt 1) {{
         $argsForPython = $rawTokens[1..($rawTokens.Count - 1)]
     }} else {{
         $argsForPython = @()
     }}
 
-    $output = & "{ps_python}" "{ps_script}" $argsForPython 2>$null
+    # 2. Ask Python for the plan
+    $pythonExe = "{ps_python}"
+    $scriptPath = "{ps_script}"
+
+    $output = & $pythonExe $scriptPath $argsForPython 2>$null
+
+    $results = @()
 
     if ($null -ne $output) {{
-        $results = @()
         foreach ($line in $output) {{
-            if ($line -eq "__PDF_FILE__" -or $line -eq "__FILE__") {{
+
+            # --- CASE A: Python wants PDF Files ---
+            if ($line -eq "__PDF_FILE__") {{
+                if ($wordToComplete -notlike "-*") {{
+                    $userTypedPrefix = $wordToComplete -replace '[^/\\\\]*$', ''
+
+                    # Get files matching prefix: Directories OR files ending in .pdf
+                    Get-ChildItem -Path "$wordToComplete*" |
+                        Where-Object {{ $_.PSIsContainer -or $_.Name -like "*.pdf" }} |
+                        ForEach-Object {{
+                            if ($userTypedPrefix) {{
+                                $completionText = "$userTypedPrefix$($_.Name)"
+                            }} else {{ $completionText = $_.Name }}
+
+                            # Add trailing slash for directories
+                            if ($_.PSIsContainer) {{ $completionText += "/" }}
+
+                            # Handle Spaces
+                            if ($completionText -match ' ') {{
+                                $completionText = "'$completionText'"
+                            }}
+
+                            $results += [System.Management.Automation.CompletionResult]::new(
+                                $completionText, $completionText, 'ParameterValue', $completionText
+                            )
+                        }}
+                }}
+            }}
+
+            # --- CASE B: Python wants ALL Files ---
+            elseif ($line -eq "__FILE__") {{
                 if ($wordToComplete -notlike "-*") {{
                     $userTypedPrefix = $wordToComplete -replace '[^/\\\\]*$', ''
 
                     Get-ChildItem -Path "$wordToComplete*" | ForEach-Object {{
-                        if ($userTypedPrefix) {{
-                            $completionText = "$userTypedPrefix$($_.Name)"
-                        }} else {{
-                            $completionText = $_.Name
-                        }}
+                        if ($userTypedPrefix) {{ $completionText = "$userTypedPrefix$($_.Name)" }}
+                        else {{ $completionText = $_.Name }}
 
+                        if ($_.PSIsContainer) {{ $completionText += "/" }}
                         if ($completionText -match ' ') {{ $completionText = "'$completionText'" }}
 
                         $results += [System.Management.Automation.CompletionResult]::new(
-                               $completionText, $completionText, 'ParameterValue', $completionText)
+                            $completionText, $completionText, 'ParameterValue', $completionText)
                     }}
                 }}
-            }} elseif ($line -like "$wordToComplete*") {{
+            }}
+
+            # --- CASE C: Python returned a Keyword ---
+            elseif (
+                $line -ne "__PDF_FILE__" -and
+                $line -ne "__FILE__" -and
+                $line -like "$wordToComplete*") {{
                 $results += [System.Management.Automation.CompletionResult]::new(
-                                              $line, $line, 'ParameterValue', $line)
+                    $line, $line, 'ParameterValue', $line)
             }}
         }}
-        return $results
     }}
+    return $results
 }}
 
 Register-ArgumentCompleter -CommandName '{whoami}' -ScriptBlock $pdftl_completer
