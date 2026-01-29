@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/cli/complete.py
 
 import os
@@ -5,7 +9,8 @@ import sys
 
 # CONFIGURATION
 PICKLER = "cloudpickle"
-# if grammar.py output changes: update!
+
+# if grammar.py output changes: update this!
 GRAMMAR_VERSION = "1"
 
 
@@ -34,7 +39,6 @@ def rebuild_cache():
         import cloudpickle as pickler
         from lark import Lark
 
-        # This is likely the slow import that scans your folders
         from pdftl.completion.grammar import GrammarBuilder
     except ImportError:
         return None
@@ -80,8 +84,8 @@ def get_parser():
 def resolve_candidates(allowed_tokens, parser):
     candidates = set()
 
-    # NEW: Map for the explicit terminals you added to GrammarBuilder
-    # This matches the names in your latest GrammarBuilder
+    # Map for explicit terminals in GrammarBuilder
+    # This must match the names in GrammarBuilder
     literal_map = {
         "HELP_KW": "help",
         "HELP_FLAG": "--help",
@@ -110,7 +114,7 @@ def resolve_candidates(allowed_tokens, parser):
         elif name == "CHAIN_SEP":
             candidates.add("---")
         elif name.startswith("KW_"):
-            # This handles your dynamic registry operations/options
+            # This handles dynamic registry operations/options
             # It tries to find the literal string Lark is looking for
             for t in parser.terminals:
                 if t.name == name:
@@ -160,7 +164,7 @@ def main():
         candidates = resolve_candidates(allowed, parser)
 
         for c in sorted(candidates):
-            # --- FIX 2: Always output the magic tokens, regardless of partial match ---
+            # Always output the magic tokens, regardless of partial match
             if c in ("__FILE__", "__PDF_FILE__"):
                 print(c)
             elif c.startswith(current_partial):
