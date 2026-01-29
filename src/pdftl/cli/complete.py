@@ -1,27 +1,119 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/cli/complete.py
 
+import marshal  # built in, no import cost
 import os
 import sys
 
 # CONFIGURATION
 PICKLER = "cloudpickle"
-# if grammar.py output changes: update!
+
+# if grammar.py output changes: update this!
 GRAMMAR_VERSION = "1"
 
+HARDCODED_KEYWORDS = [
+    "add_text",
+    "attach_files",
+    "background",
+    "background_layer",
+    "burst",
+    "cat",
+    "chop",
+    "crop",
+    "delete",
+    "delete_annots",
+    "dump_annots",
+    "dump_data",
+    "dump_data_annots",
+    "dump_data_fields",
+    "dump_data_fields_utf8",
+    "dump_data_utf8",
+    "dump_dests",
+    "dump_files",
+    "dump_layers",
+    "dump_signatures",
+    "dump_text",
+    "fill_form",
+    "filter",
+    "generate_fdf",
+    "inject",
+    "insert",
+    "modify_annots",
+    "move",
+    "multibackground",
+    "multistamp",
+    "mutate_content",
+    "normalize",
+    "optimize_images",
+    "place",
+    "render",
+    "replace",
+    "rotate",
+    "shuffle",
+    "stamp",
+    "unpack_files",
+    "update_info",
+    "update_info_utf8",
+    "allow",
+    "compress",
+    "drop_info",
+    "drop_xfa",
+    "drop_xmp",
+    "encrypt_128bit",
+    "encrypt_40bit",
+    "encrypt_aes128",
+    "encrypt_aes256",
+    "flatten",
+    "keep_final_id",
+    "keep_first_id",
+    "linearize",
+    "need_appearances",
+    "no_encrypt_metadata",
+    "output",
+    "owner_pw",
+    "replacement_font",
+    "sign_cert",
+    "sign_field",
+    "sign_key",
+    "sign_pass_env",
+    "sign_pass_prompt",
+    "uncompress",
+    "user_pw",
+    "verbose",
+]
 
-def get_cache_dir_and_file():
+
+def get_cache_dir():
     # Windows
+    completions_subdir_name = "completions"
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
-        cache_dir = os.path.join(base, "pdftl", "Cache")
+        return os.path.join(base, "pdftl", "Cache", completions_subdir_name)
     else:
         # Mac / Linux (XDG)
         # XDG_CACHE_HOME defaults to ~/.cache if not set
         base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-        cache_dir = os.path.join(base, "pdftl")
+        return os.path.join(base, "pdftl", completions_subdir_name)
 
-    cache_file = os.path.join(cache_dir, f"completion_grammar_v{GRAMMAR_VERSION}.{PICKLER}")
-    return cache_dir, cache_file
+
+def get_cache_path(cache_name="grammar", cache_dir=None, cache_format=PICKLER):
+    if cache_dir is None:
+        cache_dir = get_cache_dir()
+    return os.path.join(cache_dir, f"completion_{cache_name}_v{GRAMMAR_VERSION}.{cache_format}")
+
+
+def get_grammar_cache_path(cache_dir=None):
+    return get_cache_path(cache_name="grammar", cache_dir=cache_dir, cache_format=PICKLER)
+
+
+def get_simple_cache_path(cache_dir=None):
+    py_tag = f"{sys.version_info.major}.{sys.version_info.minor}"
+    return get_cache_path(
+        cache_name="simple", cache_dir=cache_dir, cache_format=f"marshal_{py_tag}"
+    )
 
 
 def rebuild_cache():
@@ -34,7 +126,6 @@ def rebuild_cache():
         import cloudpickle as pickler
         from lark import Lark
 
-        # This is likely the slow import that scans your folders
         from pdftl.completion.grammar import GrammarBuilder
     except ImportError:
         return None
@@ -46,15 +137,114 @@ def rebuild_cache():
     # 3. Create the Parser (Earley is required for completion)
     parser = Lark(grammar_str, parser="earley")
 
-    cache_dir, cache_file = get_cache_dir_and_file()
+    cache_dir = get_cache_dir()
     # 4. Save to Disk
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir, exist_ok=True)
 
+    cache_file = get_grammar_cache_path(cache_dir=cache_dir)
     with open(cache_file, "wb") as f:
         pickler.dump(parser, f)
 
     return parser
+
+
+def load_simple_cache():
+    """
+    Attempts to load the lightweight simple cache.
+    Returns a dict { "context_key": ["candidate1", "candidate2"] } or {} on failure.
+    """
+    cache_path = get_simple_cache_path()
+    if not is_package_newer_than_cache(cache_path):
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, "rb") as f:
+                    return marshal.load(f)
+        except Exception:
+            raise
+            # pass
+    return {}
+
+
+def update_simple_cache(context_key, candidates, cache=None):
+    """
+    Updates the simple cache with new results found by the heavy parser.
+    """
+    # Only cache purely static text results.
+    # If the parser returned dynamic instructions like __FILE__, we cache that instruction,
+    # but we don't try to cache the result of the file listing itself.
+
+    try:
+        if cache is None:
+            cache = load_simple_cache()
+        cache[context_key] = list(candidates)  # Ensure it's a list for JSON
+
+        path = get_simple_cache_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        with open(path, "wb") as f:
+            marshal.dump(cache, f)
+    except Exception:
+        raise
+        # pass
+
+
+
+_cache_check_results = {}
+
+
+def is_package_newer_than_cache(cache_path):
+    if cache_path in _cache_check_results:
+        return _cache_check_results[cache_path]
+
+    try:
+        cache_mtime = os.path.getmtime(cache_path)
+
+        # .../pdftl/cli/complete.py -> .../pdftl
+        cli_dir = os.path.dirname(os.path.abspath(__file__))
+        package_root = os.path.dirname(cli_dir)
+
+        # 1. Check Package Root (Covers pip installs/updates)
+        if os.path.getmtime(package_root) > cache_mtime:
+            _cache_check_results[cache_path] = True
+            return True
+
+        # 2. Check Critical Subdirectories (Covers local dev edits)
+        # Add the folders where your registry/grammar logic actually lives.
+        # e.g., if you add a new operation file in 'operations/', completion needs to know.
+        if os.name == "nt":
+            custom_op_base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
+        else:
+            custom_op_base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+
+        custom_op_dir = os.path.join(custom_op_base, "pdftl", "operations")
+
+        critical_dirs = [
+            package_root,
+            os.path.join(package_root, "operations"),
+            os.path.join(package_root, "completion"),
+            custom_op_dir,
+            # add others if they affect the grammar
+        ]
+
+        for d in critical_dirs:
+            if os.path.exists(d) and os.path.getmtime(d) > cache_mtime:
+                _cache_check_results[cache_path] = True
+                return True
+
+        # 3. Check this script itself (logic changes)
+        if os.path.getmtime(__file__) > cache_mtime:
+            _cache_check_results[cache_path] = True
+            return True
+
+    except OSError:
+        # If cache doesn't exist, it's infinitely old, so package is "newer"
+        _cache_check_results[cache_path] = True
+        return True
+
+    _cache_check_results[cache_path] = False
+    return False
+
 
 
 def get_parser():
@@ -62,17 +252,19 @@ def get_parser():
     The Fast Function.
     Tries to load from disk to avoid importing pdftl.
     """
-    _, cache_file = get_cache_dir_and_file()
-    try:
-        import cloudpickle as pickler
+    cache_file = get_grammar_cache_path()
 
-        # We must verify we can load it.
-        # If the pickle is stale/corrupt, we fall back to rebuild.
-        with open(cache_file, "rb") as f:
-            return pickler.load(f)
+    if not is_package_newer_than_cache(cache_file):
+        try:
+            import cloudpickle as pickler
 
-    except Exception:  # noqa: BLE001 (performance)
-        pass  # Fall through to rebuild
+            # We must verify we can load it.
+            # If the pickle is stale/corrupt, we fall back to rebuild.
+            with open(cache_file, "rb") as f:
+                return pickler.load(f)
+
+        except Exception:  # noqa: BLE001 (performance)
+            pass  # Fall through to rebuild
 
     return rebuild_cache()
 
@@ -80,8 +272,8 @@ def get_parser():
 def resolve_candidates(allowed_tokens, parser):
     candidates = set()
 
-    # NEW: Map for the explicit terminals you added to GrammarBuilder
-    # This matches the names in your latest GrammarBuilder
+    # Map for explicit terminals in GrammarBuilder
+    # This must match the names in GrammarBuilder
     literal_map = {
         "HELP_KW": "help",
         "HELP_FLAG": "--help",
@@ -110,7 +302,7 @@ def resolve_candidates(allowed_tokens, parser):
         elif name == "CHAIN_SEP":
             candidates.add("---")
         elif name.startswith("KW_"):
-            # This handles your dynamic registry operations/options
+            # This handles dynamic registry operations/options
             # It tries to find the literal string Lark is looking for
             for t in parser.terminals:
                 if t.name == name:
@@ -119,6 +311,32 @@ def resolve_candidates(allowed_tokens, parser):
                     candidates.add(val)
                     break
     return candidates
+
+
+def simple_cache_key(context, current_partial):
+    if len(context) == 0:
+        return "__zero"
+    lastword = context[-1]
+    if lastword in ("help", "--help"):
+        return "__help"
+    if lastword.startswith("--") and not lastword.startswith("---"):
+        return f"__option:{lastword}"
+    if len(context) == 1:
+        return "__one"
+    if lastword == "---":
+        return "__start_pipeline"
+    if lastword in HARDCODED_KEYWORDS:
+        return f"__hardcoded:{lastword}"
+    return None
+
+
+def output_candidates(candidates, current_partial=""):
+    # Always output the magic tokens, regardless of partial match
+    for c in candidates:
+        if c in ("__FILE__", "__PDF_FILE__"):
+            print(c)
+        elif c.startswith(current_partial):
+            print(c)
 
 
 def main():
@@ -132,6 +350,19 @@ def main():
     else:
         current_partial = ""
         context = []
+
+    simple_context_key = simple_cache_key(context, current_partial)
+
+    # Initialize simple_cache to be in scope for the update call later
+    simple_cache = {}
+    if simple_context_key is not None:
+        simple_cache = load_simple_cache()
+        if simple_context_key in simple_cache:
+            # HIT! We found the list of allowed tokens (e.g. ["merge", "--help", "__PDF_FILE__"])
+            # We didn't import Lark. We are fast.
+            candidates = simple_cache[simple_context_key]
+            output_candidates(candidates, current_partial)
+            return
 
     # 3. Load Parser (Fast if cached)
     parser = get_parser()
@@ -157,14 +388,12 @@ def main():
         # Lark tells us exactly what tokens were allowed at this position
         allowed = getattr(e, "allowed", getattr(e, "expected", set()))
 
-        candidates = resolve_candidates(allowed, parser)
+        candidates = sorted(resolve_candidates(allowed, parser))
+        if simple_context_key is not None:
+            # Pass the already-loaded cache to avoid a re-read
+            update_simple_cache(simple_context_key, candidates, cache=simple_cache)
 
-        for c in sorted(candidates):
-            # --- FIX 2: Always output the magic tokens, regardless of partial match ---
-            if c in ("__FILE__", "__PDF_FILE__"):
-                print(c)
-            elif c.startswith(current_partial):
-                print(c)
+        output_candidates(candidates, current_partial)
 
 
 if __name__ == "__main__":
