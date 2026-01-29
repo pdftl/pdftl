@@ -25,11 +25,11 @@ def _discover_external_operations():
     import importlib
 
     if os.name == "nt":
-        config_base = pathlib.Path(os.environ.get("APPDATA", ""))
+        base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
     else:
-        config_base = pathlib.Path.home() / ".config"
+        base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 
-    op_dir = config_base / "pdftl" / "operations"
+    op_dir = pathlib.Path(base) / "pdftl" / "operations"
 
     if not op_dir.exists():
         return
