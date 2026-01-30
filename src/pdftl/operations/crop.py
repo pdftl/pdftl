@@ -8,8 +8,6 @@
 
 import logging
 
-from pdftl.utils.type_helpers import as_iterable
-
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 

@@ -11,13 +11,12 @@ Contains dataclasses and structural schemas used by the registry.
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generator, Union
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from types import GeneratorType
 
     import pikepdf
 

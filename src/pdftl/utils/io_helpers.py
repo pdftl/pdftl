@@ -7,8 +7,9 @@
 """Helper functions for robust file I/O operations."""
 
 import sys
+from contextlib import AbstractContextManager as ContextManager
 from contextlib import nullcontext
-from typing import IO, TYPE_CHECKING, Any, ContextManager, Literal, overload
+from typing import IO, TYPE_CHECKING, Any, Literal, overload
 
 if TYPE_CHECKING:
     import pikepdf

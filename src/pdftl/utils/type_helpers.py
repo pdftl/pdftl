@@ -1,5 +1,6 @@
 import dataclasses
-from typing import Any, ClassVar, Iterable, Protocol, TypeVar, cast
+from collections.abc import Iterable
+from typing import Any, ClassVar, Protocol, TypeVar, cast
 
 from pdftl.exceptions import PdftlConfigError
 

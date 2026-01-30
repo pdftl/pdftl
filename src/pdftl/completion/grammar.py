@@ -1,18 +1,15 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # src/pdftl/completion/grammar.py
 
 import re
 import textwrap
 
+from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.core.registry import registry
 from pdftl.registry_init import initialize_registry
 
 # ============================== IMPORTANT ==============================
 # bump this if grammar output changes, both here and in complete.py
-GRAMMAR_VERSION = "1"
+GRAMMAR_VERSION = "2"
 # =======================================================================
 
 
@@ -39,7 +36,6 @@ class GrammarBuilder:
             start: global_flag* input_section [op_section] [opt_section]
                  | global_flag* help_cmd [help_topic]
 
-
             help_cmd: HELP_KW | HELP_FLAG
             help_topic: HELP_SUB_KW | operation | CHAIN_SEP
             global_flag: comp_cmd | VERSION_FLAG | DEBUG_FLAG
@@ -56,15 +52,28 @@ class GrammarBuilder:
             DEBUG_FLAG.10: "--debug"
             HELP_SUB_KW.10: {help_topics_str}
 
+            # --- PIPELINE STRUCTURE ---
+            
+            # Recursive definition for inline pipelines
+            inline_pipeline: KW_SUB pipeline_body KW_END
+            pipeline_body: input_section [op_section] [opt_section]
+
             input_section: file_ref+
             op_section: (operation | CHAIN_SEP)+
             opt_section: option+ global_flag*
 
             CHAIN_SEP.10: "---"
-            file_ref: /[A-Z]=/? PDF_PATH
+            
+            # Modified file_ref to accept recursive pipelines
+            file_ref: handle_prefix? (PDF_PATH | inline_pipeline)
+            handle_prefix: /[A-Z]=/
+
+            KW_SUB.10: "{SUB_START}"
+            KW_END.10: "{SUB_END}"
 
             # Use a negative lookahead to prevent PDF_PATH from matching flags starting with --
             # Also exclude \\x01 (the cursor marker)
+            # PDF_PATH matches filenames OR handles (e.g. "X", "A")
             PDF_PATH.0: /(?!--)[^ \\t\\n\\x01\\x00-\\x1f]+/
             FILE_PATH.0: /[^ \\t\\n\\x01\\x00-\\x1f]+/
 

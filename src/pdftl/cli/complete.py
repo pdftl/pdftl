@@ -1,7 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # src/pdftl/cli/complete.py
 
 import marshal  # built in, no import cost
@@ -12,9 +8,11 @@ import sys
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "1"
+GRAMMAR_VERSION = "2"
 
 HARDCODED_KEYWORDS = [
+    "SUB",
+    "DONE",
     "add_text",
     "attach_files",
     "background",
@@ -260,6 +258,8 @@ def resolve_candidates(allowed_tokens, parser):
     # Map for explicit terminals in GrammarBuilder
     # This must match the names in GrammarBuilder
     literal_map = {
+        "KW_SUB": "SUB",
+        "KW_END": "DONE",
         "HELP_KW": "help",
         "HELP_FLAG": "--help",
         "COMP_FLAG": "--completion",
