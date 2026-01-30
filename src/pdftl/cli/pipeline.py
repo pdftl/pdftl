@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
+from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.cli.whoami import WHOAMI
 from pdftl.core.executor import run_operation
 from pdftl.core.registry import register_help_topic, registry
@@ -28,6 +29,18 @@ def _first_or_none(x: list):
         return x[0]
     except (IndexError, ValueError):
         return None
+
+
+@dataclass
+class InlineSubPipeline:
+    """Wrapper for a nested list of stages representing an inline sub-pipeline."""
+
+    stages: list["CliStage"]
+    original_text: str = "<inline_sub_pipeline>"
+    handle_name: str | None = None
+
+    def __repr__(self):
+        return self.original_text
 
 
 @dataclass
@@ -81,13 +94,15 @@ class PipelineResult:
 class PipelineManager:
     """Orchestrates the execution of a multi-stage PDF processing pipeline."""
 
-    def __init__(self, stages, input_context) -> None:
+    def __init__(self, stages, input_context, is_inline=False, handles=None) -> None:
         self.stages: list[CliStage] = stages
         self.pipeline_pdf = None
         self.kept_id = None
         self.input_context = input_context
         self.results: list[OpResult] = []
         self.result_discardable = False
+        self.is_inline = is_inline
+        self.handles = handles or {}
 
     def run(self):
         """Executes all stages in the pipeline."""
@@ -127,7 +142,7 @@ class PipelineManager:
             # last stage had no 'output' option.
 
         finally:
-            if self.pipeline_pdf is not None:
+            if self.pipeline_pdf is not None and not self.is_inline:
                 import pikepdf
 
                 if isinstance(self.pipeline_pdf, pikepdf.Pdf):
@@ -236,7 +251,12 @@ class PipelineManager:
         # Check if the stage has an output option
         has_output = bool(stage.options.get(c.OUTPUT))
 
-        if is_last and (stage.operation == "filter" or op_requires_output) and not has_output:
+        if (
+            is_last
+            and not self.is_inline
+            and (stage.operation == "filter" or op_requires_output)
+            and not has_output
+        ):
             raise MissingArgumentError(
                 f"The '{stage.operation}' operation requires 'output <file>' in the final stage."
             )
@@ -366,12 +386,60 @@ class PipelineManager:
         # We assume global/final options (like keep_first_id) are attached to the LAST stage.
         final_stage_options = self.stages[-1].options if self.stages else {}
 
-        for i, filename in enumerate(stage.inputs):
+        for i, item in enumerate(stage.inputs):
             password = stage.input_passwords[i]
-            if filename in ["-", "_"]:
+
+            if isinstance(item, InlineSubPipeline):
+                logger.debug("Detected InlineSubPipeline input at index %s", i)
+
+                # [CHANGE] Construct the handle scope for the child
+                # 1. Start with inherited handles (from outer scopes)
+                child_handles = self.handles.copy()
+                # 2. Add sibling handles defined earlier in THIS stage
+                # (e.g., in 'A=a.pdf B=JOB', B can see A)
+                for h_name, h_idx in stage.handles.items():
+                    if h_idx < i:
+                        child_handles[h_name] = opened_pdfs[h_idx]
+
+                # 1. Create a FRESH PipelineManager for the inline stages.
+                #    We pass the same input_context (for prompts/stdin),
+                #    but the handle scope is implicitly reset because it's a new instance.
+                sub_manager = PipelineManager(
+                    stages=item.stages,
+                    input_context=self.input_context,
+                    is_inline=True,
+                    handles=child_handles,
+                )
+
+                # 2. Execute the inner pipeline
+                sub_manager.run()
+
+                # 3. The result is our input.
+                # If pipeline_pdf is None (inner pipe had no output), this logic handles it
+                # by raising the appropriate error inside the sub-manager or returning None here.
+                if sub_manager.pipeline_pdf is None:
+                    # This usually happens if the inner pipeline was purely side-effects
+                    # or failed silently. Treated as an error for process substitution.
+                    raise UserCommandLineError("Inline pipeline returned no output PDF.")
+
+                pdf_obj = sub_manager.pipeline_pdf
+                # Transfer ownership of the object so we don't double-close incorrectly later,
+                # though sub_manager's finally block handles its own cleanup.
+                # Ideally, we want the result object to stay open.
+                sub_manager.pipeline_pdf = None
+
+            # [CHANGE] Check if item is a sibling handle defined in THIS stage
+            elif isinstance(item, str) and item in stage.handles and stage.handles[item] < i:
+                pdf_obj = opened_pdfs[stage.handles[item]]
+
+            elif isinstance(item, str) and item in self.handles:
+                # Use the existing object from the outer scope
+                pdf_obj = self.handles[item]
+
+            elif item in ["-", "_"]:
                 pdf_obj = self._open_pdf_from_special_input(password, is_first)
             else:
-                pdf_obj = self._open_pdf_from_file(filename, password)
+                pdf_obj = self._open_pdf_from_file(item, password)
             opened_pdfs.append(pdf_obj)
             if (
                 final_stage_options.get("keep_first_id")
@@ -390,18 +458,11 @@ class PipelineManager:
 @register_help_topic(
     "pipeline",
     title="pipeline syntax",
-    desc="Using `---` to pipe multiple operations together",
+    desc="Chaining operations, named handles, and pipeline substitution",
     examples=[
         HelpExample(
             desc="Shuffle two documents, then crop the resulting pages to A4",
             cmd="a.pdf b.pdf shuffle --- crop '(a4)' output out.pdf",
-        ),
-        HelpExample(
-            desc=(
-                "Shuffle doc_B with the even pages of doc_A, with B's pages first:\n"
-                "'_' is required to place the piped-in pages second in the given order."
-            ),
-            cmd="doc_A.pdf cat even --- B=doc_B.pdf shuffle B _ output final.pdf",
         ),
         HelpExample(
             desc=(
@@ -415,27 +476,56 @@ class PipelineManager:
         ),
         HelpExample(
             desc=(
-                "Crop all pages to A3 in landscape,\n"
-                "and preview the effect of cropping odd pages to A4"
+                "Define a handle 'A' for reuse later in the pipeline. "
+                "Here we use 'A' as a background for 'B', then append 'A' again at the end."
             ),
-            cmd="in.pdf crop (A3_l) --- crop odd(A4) output out.pdf",
+            cmd="A=logo.pdf B=content.pdf multistamp B A --- cat A output report.pdf",
+        ),
+        HelpExample(
+            desc=(
+                "Use pipeline substitution (JOB...DONE) to rotate one file before "
+                "merging it with another."
+            ),
+            cmd=f"R={SUB_START} in.pdf cat right {SUB_END} main.pdf cat R output final.pdf",
+        ),
+        HelpExample(
+            desc=("Rotate and stamp a.pdf, crop b.pdf, then combine selected pages from both"),
+            cmd=(
+                f"A={SUB_START} a.pdf rotate right --- stamp stamp.pdf {SUB_END} "
+                f"B={SUB_START} b.pdf crop '(a4)' {SUB_END} "
+                "cat A1-3 B2-end output combined.pdf"
+            ),
+        ),
+        HelpExample(
+            desc=("Join a contract with a stamped copy of itself"),
+            cmd=(
+                f"contract.pdf {SUB_START} contract.pdf stamp file_copy.pdf {SUB_END} output combined.pdf"
+            ),
         ),
     ],
 )
 def _pipeline_help_topic():
-    """Multiple operations can be chained together using `---` as a
-    separator. The output of one stage becomes the input for the next
-    stage.
+    """
+    Construct complex workflows using pipelines, handles, and substitution.
 
-    If the next stage has no input files, the result from the previous
-    is used automatically. For multi-input commands where order matters,
-    you can use the special `_` handle to refer to the piped-in input.
+    **1. Chaining (`---`)**
+    Multiple operations can be chained together using `---`. The output of one
+    stage becomes the input for the next stage. If a stage has no explicit
+    inputs, it automatically uses the result from the previous stage.
 
-    You can use the `output` command in any stage (not just
-    the last one) to save the current state of the
-    document. The pipeline then continues to the next stage
-    using that same document state.
+    **2. Named Handles (`X=...`)**
+    You can assign single capital letter handles (A-Z) to inputs to refer
+    to them later:
+      `pdftl A=logo.pdf B=content.pdf ...`
+    This allows you to re-use a specific file or result multiple times in
+    different stages (e.g., `cat A B A`).
 
+    **3. Pipeline Substitution (`X=JOB ... DONE`)**
+    Similar to command substitution in a shell, you can process files in a
+    temporary sub-pipeline before assigning them to a handle.
+      `S=JOB in.pdf rotate right DONE`
+    This runs the commands between JOB and DONE, and assigns the final result
+    to the handle `S`. You can then use `S` like any other input file.
     """
 
 

@@ -11,7 +11,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
-from pdftl.cli.pipeline import CliStage
+from pdftl.cli.constants import SUB_END, SUB_START
+from pdftl.cli.pipeline import CliStage, InlineSubPipeline
 from pdftl.core.constants import ALLOW_PERMISSIONS, ALLOW_PERMISSIONS_L
 from pdftl.core.registry import registry
 from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
@@ -41,6 +42,8 @@ def _get_value_keywords():
 def _find_operation_and_split(args):
     """Splits arguments into pre-operation and post-operation lists."""
     for i, token in enumerate(args):
+        if not isinstance(token, str):
+            continue
         if token.lower() in registry.operations:
             return (token.lower(), args[:i], args[i + 1 :])
     return (None, args, [])
@@ -130,6 +133,12 @@ def parse_options_and_specs(args):
     just_slurped_allow_index = None
     while i < len(args):
         arg = args[i]
+
+        if not isinstance(arg, str):
+            specs.append(arg)
+            i += 1
+            continue
+
         arg_lower = arg.lower()
 
         if arg_lower == "allow":
@@ -169,12 +178,18 @@ def _parse_file_handles(file_args):
     """Parses file arguments to extract inputs and handles."""
     inputs, handles = ([], {})
     for i, arg in enumerate(file_args):
-        if len(arg) > 2 and arg[1] == "=" and arg[0].isupper():
-            handle, filename = arg.split("=", 1)
-            handles[handle] = i
-            inputs.append(filename)
+        if isinstance(arg, str):
+            if len(arg) > 2 and arg[1] == "=" and arg[0].isupper():
+                handle, filename = arg.split("=", 1)
+                handles[handle] = i
+                inputs.append(filename)
+            else:
+                inputs.append(arg)
         else:
+            # Suppose InlineSubPipeline or other non-str inputs, which may be named
             inputs.append(arg)
+            if hasattr(arg, "handle_name") and arg.handle_name:
+                handles[arg.handle_name] = i
     return (inputs, handles)
 
 
@@ -291,7 +306,62 @@ def parse_cli_stage(stage_args, is_first_stage):
     return stage
 
 
-def split_args_by_separator(argv, separator="---"):
+def _recursive_group_pipelines(arg_iter, depth=0):
+    """
+    Recursively consumes an iterator of arguments.
+    Returns a list of strings and InlinePipeline objects.
+    """
+    result = []
+
+    while True:
+        try:
+            token = next(arg_iter)
+        except StopIteration:
+            if depth > 0:
+                raise InvalidArgumentError(f"Unclosed sub-pipeline, missing {SUB_END}.")
+            break
+
+        is_named_sub = isinstance(token, str) and token.endswith("=" + SUB_START)
+        if token == SUB_START or is_named_sub:
+            # Recurse
+            inner_args = _recursive_group_pipelines(arg_iter, depth + 1)
+
+            # Now we must PARSE these args into Stages immediately,
+            # because InlinePipeline expects list[CliStage]
+
+            # 1. Split inner args by '---' (handles nested separators naturally
+            #    because the recursive call already consumed the nested JOB DONE)
+            inner_stages_raw = _split_flat_by_separator(inner_args, "---")
+
+            # 2. Parse into CliStage objects
+            #    We assume the inner pipeline starts fresh (is_first=True for its first stage)
+            inner_stages_parsed = [
+                parse_cli_stage(s, is_first_stage=(k == 0)) for k, s in enumerate(inner_stages_raw)
+            ]
+            pipeline_obj = InlineSubPipeline(stages=inner_stages_parsed)
+
+            if is_named_sub:
+                # token is like "B=JOB", split at the LAST '=' to be safe,
+                # though strictly handles are usually simple.
+                # Using maxsplit=1 from the left is consistent with your other parsing.
+                handle, _ = token.split("=", 1)
+                pipeline_obj.handle_name = handle
+
+            result.append(pipeline_obj)
+
+        elif token == SUB_END:
+            if depth == 0:
+                raise InvalidArgumentError(
+                    f"Unexpected '{SUB_END}' found without opening '{SUB_START}'."
+                )
+            return result
+        else:
+            result.append(token)
+
+    return result
+
+
+def _split_flat_by_separator(argv, separator="---"):
     """Splits a list of arguments into stages based on a separator."""
     stages, current_stage = ([], [])
     for arg in argv:
@@ -302,3 +372,17 @@ def split_args_by_separator(argv, separator="---"):
             current_stage.append(arg)
     stages.append(current_stage)
     return stages
+
+
+def split_args_by_separator(argv, separator="---"):
+    """
+    Splits a list of arguments into stages based on a separator.
+    Handles 'JOB ... DONE' inline sub-pipelines by pre-parsing them.
+    """
+    # 1. Pre-process to resolve JOB ... DONE into InlinePipeline objects
+    #    We convert argv list to an iterator for the recursive function
+    grouped_args = _recursive_group_pipelines(iter(argv))
+
+    # 2. Now split the top-level list by '---'
+    #    Since inner '---' were inside the recursive call, they are gone/encapsulated.
+    return _split_flat_by_separator(grouped_args, separator)

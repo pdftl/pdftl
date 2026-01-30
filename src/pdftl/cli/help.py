@@ -8,7 +8,6 @@
 
 import logging
 import sys
-from copyreg import dispatch_table
 
 logger = logging.getLogger(__name__)
 
