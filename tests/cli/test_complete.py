@@ -5,7 +5,7 @@ import runpy
 import sys
 from unittest.mock import MagicMock, patch
 
-from pdftl.cli.complete import get_cache_dir_and_file
+from pdftl.cli.complete import get_cache_dir, get_cache_path
 from pdftl.cli.complete import main as complete_main
 from pdftl.cli.complete import rebuild_cache, resolve_candidates
 
@@ -27,7 +27,7 @@ def test_rebuild_on_corrupt_cache(tmp_path, monkeypatch):
     from pdftl.cli.complete import get_parser
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    _, cache_file = get_cache_dir_and_file()
+    cache_file = get_cache_path()
 
     # Create a garbage pickle file
     os.makedirs(os.path.dirname(cache_file), exist_ok=True)
@@ -114,7 +114,7 @@ def test_get_cache_dir_logic_branching():
         # Manually control join to return a Windows-looking string
         mock_os.path.join.return_value = "C:\\Users\\test\\AppData\\Local\\pdftl\\Cache"
 
-        cache_dir, _ = complete.get_cache_dir_and_file()
+        cache_dir = complete.get_cache_dir()
         assert "AppData\\Local" in cache_dir
 
     # 2. Test POSIX logic branch
@@ -126,5 +126,5 @@ def test_get_cache_dir_logic_branching():
         # even when running on Windows.
         mock_os.path.join.side_effect = posixpath.join
 
-        cache_dir, _ = complete.get_cache_dir_and_file()
+        cache_dir = complete.get_cache_dir()
         assert "/custom/cache/pdftl" in cache_dir

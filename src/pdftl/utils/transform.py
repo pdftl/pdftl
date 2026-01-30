@@ -45,10 +45,15 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
         if scale != 1.0:
             apply_scaling(page, scale)
 
+        angle_int = int(angle)
+        if angle != angle_int or angle_int % 90 != 0:
+            raise InvalidArgumentError(
+                f"Rotation angle must be a multiple of 90 degrees. Got: {angle}"
+            )
         # Apply rotation if it is non-zero (or if it is a relative 0, though that's a no-op)
         # Optimization: 0-degree relative rotation does nothing, but we pass it anyway
         # to keep logic simple unless strict performance is needed.
-        page.rotate(angle, relative=relative)
+        page.rotate(angle_int, relative=relative)
 
     return source_pdf
 

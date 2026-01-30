@@ -8,6 +8,8 @@
 
 import logging
 
+from pdftl.utils.type_helpers import as_iterable
+
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
@@ -18,10 +20,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.operations.helpers.crop_fit import FitCropContext
-from pdftl.operations.parsers.crop_parser import (
-    parse_crop_content,
-    specs_to_page_rules,
-)
+from pdftl.operations.parsers.crop_parser import parse_crop_content, specs_to_page_rules
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import get_visible_page_dimensions
 
@@ -194,7 +193,7 @@ def _overlay_preview_rectangle(page, new_box):
 
         # overlay geometry should mirror source
         # use list to avoid copy_foreign shenanigans
-        overlay_page.mediabox = list(page.mediabox)
+        overlay_page.mediabox = pikepdf.Array(list(page.mediabox))
         if hasattr(page, "Rotate"):
             overlay_page.Rotate = int(page.Rotate)
 

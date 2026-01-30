@@ -8,6 +8,8 @@
 
 import logging
 
+from pdftl.utils.type_helpers import as_iterable
+
 logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
@@ -58,7 +60,9 @@ def _compound_obj_to_json(obj, page_object_to_num_map, visited):
             str(k): _pdf_obj_to_json(v, page_object_to_num_map, visited) for k, v in obj.items()
         }
     if isinstance(obj, Array):
-        return [_pdf_obj_to_json(item, page_object_to_num_map, visited) for item in obj]
+        return [
+            _pdf_obj_to_json(item, page_object_to_num_map, visited) for item in as_iterable(obj)
+        ]
     raise ValueError("Unknown compound PDF object, cannot convert to JSON")
 
 

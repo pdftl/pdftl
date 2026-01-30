@@ -28,6 +28,8 @@ def dim_str_to_pts(val_str, total_dimension=None):
     if val_str.endswith("%"):
         # Percentage is a special case that depends on the total dimension.
         numeric_part = val_str[:-1]
+        if total_dimension is None:
+            raise ValueError(f"Percentage value '{val_str}' requires a total dimension.")
         try:
             return (float(numeric_part) / 100.0) * total_dimension
         except ValueError:

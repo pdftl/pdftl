@@ -288,13 +288,16 @@ def _key_value_lines(key, value, prefix, string_convert, compat=False):
         return []
 
 
-def _data_item_to_string_helper(key, value, prefix, string_convert, compat=False):
+def _data_item_to_string_helper(key, value, prefix, string_convert_maybe, compat=False):
     """Helper method to convert a data item to a string"""
 
-    if string_convert is None:
+    if string_convert_maybe is None:
 
         def string_convert(x):
             return x
+
+    else:
+        string_convert = string_convert_maybe
 
     if isinstance(value, str) and value.startswith("/"):
         value = value[1:]

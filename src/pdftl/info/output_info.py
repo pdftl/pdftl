@@ -271,7 +271,11 @@ def _extract_bookmarks_recursive(
                 exc,
             )
             page_num = 0
-
+        if page_num is None:
+            logger.warning(
+                "Could not resolve page number for bookmark '%s'. Using page number 0.", item.title
+            )
+            page_num = 0
         entry = BookmarkEntry(title=str(item.title), level=level, page_number=page_num)
 
         if item.children:

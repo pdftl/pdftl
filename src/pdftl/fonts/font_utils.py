@@ -12,6 +12,7 @@
 
 """Font utilities"""
 import logging
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class FontWrapper:
     @property
     def units_per_em(self) -> int:
         """Returns the unitsPerEm value from the head table."""
-        return self.head.unitsPerEm
+        return cast(Any, self.head).unitsPerEm
 
     @property
     def scale_factor(self) -> float:
@@ -58,7 +59,7 @@ class FontWrapper:
 
         # Get Glyph Name from Unicode
         ord_val = ord(char)
-        glyph_name = self.cmap.get(ord_val)
+        glyph_name = self.cmap.get(ord_val) if self.cmap else None
 
         if not glyph_name:
             logger.warning(

@@ -20,11 +20,7 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.pages.forms import handle_page_widgets, rebuild_acroform_index
 from pdftl.pages.link_remapper import create_link_remapper
-from pdftl.pages.links import (
-    RebuildLinksPartialContext,
-    rebuild_links,
-    write_named_dests,
-)
+from pdftl.pages.links import RebuildLinksPartialContext, rebuild_links, write_named_dests
 from pdftl.pages.outlines import rebuild_outlines
 from pdftl.utils.progress import get_track_progress
 from pdftl.utils.scale import apply_scaling, scale_annotations_in_page
@@ -92,7 +88,7 @@ def add_pages(
 
 def process_source_pages(
     new_pdf, source_pages_to_process: list["PageTransform"]
-) -> RebuildLinksPartialContext:
+) -> tuple[RebuildLinksPartialContext, list]:
     """Handles PASS 1: Assembling pages and applying transformations.
 
     This function iterates through source pages, copies them to the new PDF,
@@ -119,6 +115,8 @@ def process_source_pages(
         A RebuildLinksPartialContext instance containing the mapping of
         (source_page, instance_index) -> new_page_object, needed for
         resolving destinations in PASS 2.
+
+        A widget queue for later processing.
 
     OPTIMIZED: Uses a "Clean Master" strategy to allow independent transformations
     of identical source pages without re-importing resources.

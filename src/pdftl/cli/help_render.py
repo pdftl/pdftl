@@ -61,12 +61,17 @@ def load_hprint(dest, raw):
         HelpMarkdown = _load_help_markdown()
         use_rich_console = not raw and (dest is None or dest is sys.stdout or dest is sys.stderr)
         if use_rich_console:
-            get_console().print(HelpMarkdown(x))
+            console = get_console()
+            if console is None:
+                raise RuntimeError("Rich console is not available")
+            console.print(HelpMarkdown(x))
         elif not raw:
             from rich.console import Console
 
             # Rendered output for files/pipes (fixes missing table format in files)
             console = get_console()
+            if console is None:
+                raise RuntimeError("Rich console is not available")
             width = console.width if console.width else 80
             file_console = Console(file=dest, width=width, force_terminal=False)
             file_console.print(HelpMarkdown(x))

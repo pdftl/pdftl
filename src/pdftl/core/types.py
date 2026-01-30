@@ -14,7 +14,7 @@ Contains dataclasses and structural schemas used by the registry.
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Generator, Union
 
 if TYPE_CHECKING:
     from types import GeneratorType
@@ -161,7 +161,12 @@ class Option(LegacyDictAccess):
 @dataclass
 class OpResult:
     success: bool = True
-    pdf: Union["pikepdf.Pdf", "GeneratorType", None] = None  # pipeline output
+    pdf: Union[
+        "pikepdf.Pdf",
+        Generator["pikepdf.Pdf", None, None],
+        Generator[tuple[str, "pikepdf.Pdf"], None, None],
+        None,
+    ] = None  # pipeline output
     data: Any = None  # The structured payload (dict, list, etc.)
     error: str | None = None
     is_discardable: bool = False

@@ -244,9 +244,11 @@ def _build_encryption_object(options, input_context):
     from collections import OrderedDict
 
     passwords = _get_passwords_from_options(options, input_context)
+
+    # pdftk uses 128 bit encryption by default, so we follow that here
     default_method_key = "encrypt_aes128"
 
-    encryption_methods = OrderedDict(
+    encryption_methods: OrderedDict[str, dict] = OrderedDict(
         [
             # AES-256 (PDF 2.0 / Extension Level 3)
             ("encrypt_aes256", {"R": 6, "aes": True, "metadata": True}),
@@ -411,8 +413,8 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     _action_drop_flags(pdf, options)
 
     # Add the font replacement trigger here
-    if options.get("replacement_font"):
-        replace_form_fonts(pdf, options.get("replacement_font"))
+    if (replacement_font := options.get("replacement_font")) and isinstance(replacement_font, str):
+        replace_form_fonts(pdf, replacement_font)
 
     if options.get("flatten"):
         # breakpoint()

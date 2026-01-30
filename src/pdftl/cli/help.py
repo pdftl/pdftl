@@ -8,6 +8,7 @@
 
 import logging
 import sys
+from copyreg import dispatch_table
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,8 @@ def print_main_help(dest=None, raw=False):
             console = get_console()
         else:
             console = Console(file=dest, width=80, force_terminal=False)
+        if console is None:
+            raise RuntimeError("Rich console is not available")
 
         def print_title(main, sub):
             # 1. Restore the Heavy Box around the title
@@ -236,8 +239,12 @@ def _print_help_dispatch_table():
             )
         }
     )
-    dispatch_table["output_options"] = _print_output_options_help
-    dispatch_table["examples"] = _print_examples_help
+    dispatch_table["output_options"] = (
+        lambda hprint, op_info=None, op_name=None: _print_output_options_help(hprint)
+    )
+    dispatch_table["examples"] = lambda hprint, op_info=None, op_name=None: _print_examples_help(
+        hprint
+    )
     return dispatch_table
 
 

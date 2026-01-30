@@ -8,6 +8,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.type_helpers import as_iterable
 
 _DUMP_LAYERS_LONG_DESC = """
 
@@ -82,11 +83,11 @@ def _parse_order(order_item):
     import pikepdf
 
     if isinstance(order_item, pikepdf.Array):
-        return [_parse_order(i) for i in order_item]
+        return [_parse_order(i) for i in as_iterable(order_item)]
 
     if isinstance(order_item, pikepdf.Dictionary):
         # Fetch the name here so the tree is self-documenting
-        name = str(order_item.get("/Name", "Unnamed"))
+        name = str(getattr(order_item, "Name", "Unnamed"))
         return {"obj_id": int(order_item.objgen[0]), "name": name, "type": "layer"}
 
     if isinstance(order_item, (pikepdf.String, str)):

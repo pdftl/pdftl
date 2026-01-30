@@ -219,6 +219,8 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
     chop_rects = parse_chop_spec(chop_spec_to_use, source_page.mediabox)
 
     def make_new_chopped_page(rect):
+        import pikepdf
+
         # duplicate source_page to create new_page
         pdf.pages.append(source_page)
         new_page = pdf.pages[-1]
@@ -227,7 +229,7 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
         x0, y0, x1, y1 = rect
         chop_width = float(x1 - x0)
         chop_height = float(y1 - y0)
-        new_page.mediabox = [0, 0, chop_width, chop_height]
+        new_page.mediabox = pikepdf.Array([0, 0, chop_width, chop_height])
 
         # Create a content stream transformation to shift the content
         transform_matrix = f"1 0 0 1 {-x0:.4f} {-y0:.4f} cm ".encode()

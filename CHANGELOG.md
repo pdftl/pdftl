@@ -5,6 +5,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [Unreleased]
+
+### Changed
+
+- Bump pikepdf required version to 10.3.0 so that pdftl now passes the vendored pdftk-java test suite
+
+### Added
+
+- API now accepts `io.BytesIO` as PDF inputs
+
 ## [0.10.0] - 2026-01-28
 
 ### Added
