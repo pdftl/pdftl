@@ -63,6 +63,8 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
 
     # (Logger logic omitted for brevity, but keep it if you prefer)
     cms_signer = signers.SimpleSigner.load(*key_and_cert, key_passphrase=key_passphrase)
+    if cms_signer is None:
+        raise UserCommandLineError("Failed to load signing key and certificate.")
 
     # 5. Apply Signature
     requested_field = sign_cfg["field"] or "Signature1"

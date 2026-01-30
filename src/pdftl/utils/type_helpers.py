@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, ClassVar, Protocol, TypeVar
+from typing import Any, ClassVar, Iterable, Protocol, TypeVar, cast
 
 from pdftl.exceptions import PdftlConfigError
 
@@ -43,3 +43,8 @@ def safe_create(cls: type[T], data: dict[str, Any]) -> T:
 
     # 5. Create the instance safely
     return cls(**filtered_data)
+
+
+def as_iterable(obj: Any) -> Iterable[Any]:
+    """Force Pyright to treat a pikepdf object as iterable."""
+    return cast(Iterable[Any], obj)

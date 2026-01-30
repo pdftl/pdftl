@@ -9,7 +9,7 @@
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ T = TypeVar("T")
 
 
 def resolve_operation_spec(
-    args_or_spec: list[str] | T,
-    parser_func: Callable,
+    args_or_spec: list[Any] | T,
+    parser_func: Callable[..., T],
     model_class: type[T] | None = None,
     data: Any = None,
 ) -> T:
@@ -82,6 +82,7 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
         HAS_YAML = True
     except ImportError:
         HAS_YAML = False
+        yaml = None
 
     path = Path(path_str)
     if not path.exists():
@@ -90,7 +91,7 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     with open(path, encoding="utf-8") as f:
         # Simple extension check
         if path.suffix.lower() in (".yaml", ".yml"):
-            if not HAS_YAML:
+            if not HAS_YAML or yaml is None:
                 raise ImportError(
                     "PyYAML is required to load .yaml files. Install it with: pip install pyyaml"
                 )
@@ -109,7 +110,7 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     # If the class has a specific 'from_dict' factory (common in complex models), use it.
     if (factory := getattr(model_class, "from_dict", None)) is not None:
         if callable(factory):
-            return factory(data)  # pylint: disable=not-callable
+            return cast(T, factory(data))  # pylint: disable=not-callable
         else:
             logger.warning(
                 "Attribute 'from_dict' on %s is not callable. Falling back to constructor.",

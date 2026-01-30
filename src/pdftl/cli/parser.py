@@ -206,7 +206,7 @@ def _parse_passwords(pw_args):
 
 def _assign_passwords(num_inputs, handles, passwords_by_handle, passwords_by_order):
     """Assigns passwords to inputs, prioritizing handles over positional order."""
-    input_passwords = [None] * num_inputs
+    input_passwords: list[str | None] = [None] * num_inputs
     for handle, index in handles.items():
         if handle in passwords_by_handle and index < num_inputs:
             input_passwords[index] = passwords_by_handle[handle]

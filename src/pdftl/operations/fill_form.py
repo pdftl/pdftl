@@ -8,6 +8,8 @@
 
 import logging
 
+from pdftl.utils.type_helpers import as_iterable
+
 logger = logging.getLogger(__name__)
 
 from collections.abc import Callable
@@ -107,8 +109,10 @@ def _fill_form_from_fdf_data(form, data):
 
     with pikepdf.open(wrap_fdf_data_in_pdf_bytes(data)) as wrapper_pdf:
         fdf_fields = wrapper_pdf.Root.FDF.Fields
+        if not isinstance(fdf_fields, pikepdf.Array):
+            raise UserCommandLineError(f"FDF fields is not an array: {type(fdf_fields)}")
         # logger.debug(fdf_fields)
-        for fdf_field in fdf_fields:
+        for fdf_field in as_iterable(fdf_fields):
             _fill_form_field_from_fdf_field(form, fdf_field)
 
 

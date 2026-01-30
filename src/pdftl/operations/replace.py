@@ -19,10 +19,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.normalize import (
-    get_normalized_page_content_stream,
-    normalize_page_content_stream,
-)
+from pdftl.utils.normalize import get_normalized_page_content_stream, normalize_page_content_stream
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_escaped
 
@@ -98,6 +95,11 @@ def _parse_replace_spec(pdf, spec, normalize_input, normalize_output):
     import re
 
     count_match = re.match("^(.*?)([0-9]*)$", spec)
+    if not count_match:
+        raise InvalidArgumentError(
+            f"Replacement specification '{spec}' does not look correct."
+            " Could not parse count suffix."
+        )
     count = int(count_match[2] or 0)
     countless_spec = count_match[1]
     spec_parts = split_escaped(countless_spec, countless_spec[-1])

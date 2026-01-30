@@ -142,7 +142,7 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
             "signer": signer_name,
             "hash_algorithm": status.md_algorithm,
             "is_valid": status.intact,
-            "coverage": status.coverage.name,
+            "coverage": status.coverage.name if status.coverage else "UNKNOWN_NONE",
             "modification_level": mod_level,
             # We could include more raw data here if needed by the API
         }

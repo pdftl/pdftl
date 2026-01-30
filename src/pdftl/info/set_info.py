@@ -48,7 +48,7 @@ def set_metadata_in_pdf(pdf: "pikepdf.Pdf", info: "PdfInfo"):
         _set_page_labels(pdf, info.page_labels)
 
 
-def _set_docinfo(pdf, doc_info_list):
+def _set_docinfo(pdf: "pikepdf.Pdf", doc_info_list):
     """Set fields in a PDF's Info dictionary from a list of DocInfoEntry."""
     from pikepdf import Name
 
@@ -57,7 +57,7 @@ def _set_docinfo(pdf, doc_info_list):
         pdf.docinfo[Name("/" + entry.key)] = entry.value
 
 
-def _set_ids(pdf, ids_list):
+def _set_ids(pdf: "pikepdf.Pdf", ids_list):
     """Handle ID updates with safeguards and RESET logic."""
     import pikepdf
 
@@ -86,13 +86,13 @@ def _set_ids(pdf, ids_list):
             _set_id_info(pdf, 0, val)
 
 
-def _set_page_media(pdf, page_media_list: list["PageMediaEntry"]):
+def _set_page_media(pdf: "pikepdf.Pdf", page_media_list: list["PageMediaEntry"]):
     """Set page media in a PDF from a list of PageMediaEntry."""
     for entry in page_media_list:
         _set_page_media_entry(pdf, entry)
 
 
-def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
+def _set_page_media_entry(pdf: "pikepdf.Pdf", entry: "PageMediaEntry"):
     import pikepdf
 
     # entry.number is 1-based index from input
@@ -118,7 +118,7 @@ def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
         new_media_box = [0, 0, *entry.dimensions]
     if new_media_box is not None:
         try:
-            page.mediabox = new_media_box
+            page.mediabox = pikepdf.Array(new_media_box)
         except ValueError as exc:
             logger.warning(warning_template, "MediaBox", new_media_box, page_number, exc)
 
@@ -130,7 +130,9 @@ def _set_page_media_entry(pdf, entry: "PageMediaEntry"):
                 logger.warning(warning_template, box_name, box_list, page_number, exc)
 
 
-def _set_bookmarks(pdf, bookmark_list: list["BookmarkEntry"], delete_existing_bookmarks=True):
+def _set_bookmarks(
+    pdf: "pikepdf.Pdf", bookmark_list: list["BookmarkEntry"], delete_existing_bookmarks=True
+):
     """Sets bookmarks in a PDF from a flat list of BookmarkEntry objects."""
     from pikepdf import OutlineItem
 
@@ -144,7 +146,10 @@ def _set_bookmarks(pdf, bookmark_list: list["BookmarkEntry"], delete_existing_bo
 
 
 def _add_bookmark(
-    pdf, bookmark: "BookmarkEntry", outline, bookmark_oi_ancestors: list["OutlineItem"]
+    pdf: "pikepdf.Pdf",
+    bookmark: "BookmarkEntry",
+    outline,
+    bookmark_oi_ancestors: list["OutlineItem"],
 ) -> list["pikepdf.OutlineItem"]:
     """Add a bookmark object to the PDF document."""
 
@@ -193,7 +198,7 @@ def _add_bookmark(
     return bookmark_oi_ancestors[: level - 1] + [new_bookmark_oi]
 
 
-def _set_page_labels(pdf, label_list: list["PageLabelEntry"], delete_existing=True):
+def _set_page_labels(pdf: "pikepdf.Pdf", label_list: list["PageLabelEntry"], delete_existing=True):
     """Set a PDF document's page label definitions."""
     from pikepdf import NumberTree
 
@@ -204,13 +209,13 @@ def _set_page_labels(pdf, label_list: list["PageLabelEntry"], delete_existing=Tr
 
     for entry in label_list:
         index, page_label = _make_page_label(pdf, entry)
-        if index is not None:
+        if index is not None and page_label is not None:
             page_labels[index] = page_label
 
     pdf.Root.PageLabels = page_labels.obj
 
 
-def _set_id_info(pdf, id_index, hex_string):
+def _set_id_info(pdf: "pikepdf.Pdf", id_index, hex_string):
     if pdf.trailer and hasattr(pdf.trailer, "ID"):
         try:
             pdf.trailer.ID[id_index] = bytes.fromhex(hex_string)
@@ -222,7 +227,7 @@ def _set_id_info(pdf, id_index, hex_string):
             )
 
 
-def _make_page_label(pdf, entry: "PageLabelEntry"):
+def _make_page_label(pdf: "pikepdf.Pdf", entry: "PageLabelEntry"):
     """Return a page label object and its index."""
     import pikepdf
 

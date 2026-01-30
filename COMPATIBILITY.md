@@ -14,15 +14,13 @@ So the questions are:
 
 We don't really know the answers. Our approach is to take existing integration tests for various pdftk implementations and to check whether or not pdftl passes them.
 
-Getting pdftl to pass them all is work in progress.
+Getting pdftl to pass them all is the goal.
 
 ## Known compatibility bugs
 
-None right now
+None right now. [Please report if you find any][1].
 
-### Upstream bugs
-
-- Bleeding edge pikepdf is required to deal properly with dictionary keys (duplicate keys and keys which cannot be converted to UTF-8).
+[1]: https://github.com/pdftl/pdftl/issues
 
 ## Compatibility caveats and issues
 

@@ -66,19 +66,34 @@ def test_discover_external_windows_path(clean_sys_modules, tmp_path):
         assert str(fake_pdftl_ops) in sys.path
 
 
+import logging
+import os
+import sys
+from unittest.mock import MagicMock, patch
+
+from pdftl.registry_init import _discover_external_operations
+
+
 def test_discover_external_unix_path(clean_sys_modules, tmp_path):
     """
     Covers lines 31-36.
-    Simulate running on Unix/Linux (default path).
+    Simulate running on Unix/Linux by setting XDG_CONFIG_HOME.
     """
-    fake_home = tmp_path / "home_user"
-    fake_pdftl_ops = fake_home / ".config" / "pdftl" / "operations"
+    # Setup the fake config base
+    fake_config_home = tmp_path / "fake_config"
+
+    # The code expects: base / "pdftl" / "operations"
+    fake_pdftl_ops = fake_config_home / "pdftl" / "operations"
     fake_pdftl_ops.mkdir(parents=True)
 
-    with patch("pathlib.Path.home", return_value=fake_home), patch("os.name", "posix"):
+    # We set XDG_CONFIG_HOME to our temp path.
+    # We also force os.name to posix to ensure we hit the 'else' block in the code.
+    env_vars = {"XDG_CONFIG_HOME": str(fake_config_home)}
 
+    with patch.dict(os.environ, env_vars), patch("os.name", "posix"):
         _discover_external_operations()
 
+        # The code adds the string path to sys.path
         assert str(fake_pdftl_ops) in sys.path
 
 
@@ -87,47 +102,29 @@ def test_discover_external_import_success(clean_sys_modules, tmp_path, caplog):
     Covers lines 40-52.
     Test successful loading of a valid python module.
     """
-    fake_home = tmp_path / "home_valid"
-    ops_dir = fake_home / ".config" / "pdftl" / "operations"
+    fake_config_home = tmp_path / "fake_config"
+    ops_dir = fake_config_home / "pdftl" / "operations"
     ops_dir.mkdir(parents=True)
 
     # Create a valid module
     (ops_dir / "my_plugin.py").write_text("print('Plugin Loaded')", encoding="utf-8")
 
-    # Create __init__.py which should be skipped (line 45-46)
+    # Create __init__.py which should be skipped
     (ops_dir / "__init__.py").write_text("", encoding="utf-8")
 
+    env_vars = {"XDG_CONFIG_HOME": str(fake_config_home)}
+
     with (
-        patch("pathlib.Path.home", return_value=fake_home),
+        patch.dict(os.environ, env_vars),
         patch("os.name", "posix"),
         caplog.at_level(logging.DEBUG),
     ):
-
         _discover_external_operations()
 
-        module_status = "NOT LOADED"
-        if "my_plugin" in sys.modules:
-            module_status = f"LOADED from {sys.modules['my_plugin'].__file__}"
-
-        long_dump = "\n".join(
-            [
-                f"{name} -> {getattr(module, '__file__', '(built-in)')}"
-                for name, module in list(sys.modules.items())
-            ]
-        )
-
-        debug_info = (
-            f"\n--- DEBUG DUMP ---\n"
-            f"Module Status: {module_status}\n"
-            f"Sys.Path top 3: {sys.path[:3]}\n"
-            f"Caplog Records: {[r.message for r in caplog.records]}\n"
-            f"Sys.modules dump: \n{long_dump}\n"
-            f"------------------"
-        )
         # Check success log
-        assert "Loaded external operation: pdftl.external.my_plugin" in caplog.text, debug_info
+        assert "Loaded external operation: pdftl.external.my_plugin" in caplog.text
         # Check __init__ skip
-        assert "Loaded external operation: __init__" not in caplog.text, debug_info
+        assert "Loaded external operation: __init__" not in caplog.text
 
 
 def test_discover_external_import_error(clean_sys_modules, tmp_path, caplog):
@@ -135,15 +132,16 @@ def test_discover_external_import_error(clean_sys_modules, tmp_path, caplog):
     Covers lines 53-54.
     Test handling of ImportError within the plugin.
     """
-    fake_home = tmp_path / "home_import_err"
-    ops_dir = fake_home / ".config" / "pdftl" / "operations"
+    fake_config_home = tmp_path / "fake_config"
+    ops_dir = fake_config_home / "pdftl" / "operations"
     ops_dir.mkdir(parents=True)
 
     # Create module that imports non-existent package
     (ops_dir / "bad_import.py").write_text("import this_does_not_exist_at_all", encoding="utf-8")
 
-    with patch("pathlib.Path.home", return_value=fake_home), patch("os.name", "posix"):
+    env_vars = {"XDG_CONFIG_HOME": str(fake_config_home)}
 
+    with patch.dict(os.environ, env_vars), patch("os.name", "posix"):
         _discover_external_operations()
 
         assert "Could not import external operation 'pdftl.external.bad_import'" in caplog.text
@@ -154,15 +152,16 @@ def test_discover_external_syntax_error(clean_sys_modules, tmp_path, caplog):
     Covers lines 55-61.
     Test handling of SyntaxError in the plugin.
     """
-    fake_home = tmp_path / "home_syntax_err"
-    ops_dir = fake_home / ".config" / "pdftl" / "operations"
+    fake_config_home = tmp_path / "fake_config"
+    ops_dir = fake_config_home / "pdftl" / "operations"
     ops_dir.mkdir(parents=True)
 
     # Create module with invalid syntax
     (ops_dir / "bad_syntax.py").write_text("def broken_function(:", encoding="utf-8")
 
-    with patch("pathlib.Path.home", return_value=fake_home), patch("os.name", "posix"):
+    env_vars = {"XDG_CONFIG_HOME": str(fake_config_home)}
 
+    with patch.dict(os.environ, env_vars), patch("os.name", "posix"):
         _discover_external_operations()
 
         assert "Syntax error in external operation 'pdftl.external.bad_syntax'" in caplog.text
@@ -173,8 +172,8 @@ def test_discover_external_general_exception(clean_sys_modules, tmp_path, caplog
     Covers lines 62-65.
     Test handling of generic Exception (e.g. ValueError) at module level.
     """
-    fake_home = tmp_path / "home_general_err"
-    ops_dir = fake_home / ".config" / "pdftl" / "operations"
+    fake_config_home = tmp_path / "fake_config"
+    ops_dir = fake_config_home / "pdftl" / "operations"
     ops_dir.mkdir(parents=True)
 
     # Create module that raises an exception on load
@@ -182,8 +181,9 @@ def test_discover_external_general_exception(clean_sys_modules, tmp_path, caplog
         "raise ValueError('Something went wrong')", encoding="utf-8"
     )
 
-    with patch("pathlib.Path.home", return_value=fake_home), patch("os.name", "posix"):
+    env_vars = {"XDG_CONFIG_HOME": str(fake_config_home)}
 
+    with patch.dict(os.environ, env_vars), patch("os.name", "posix"):
         _discover_external_operations()
 
         assert (

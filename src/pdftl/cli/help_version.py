@@ -68,4 +68,6 @@ def print_version(dest=None):
         return
 
     # If writing to terminal, use Rich
+    if console is None:
+        raise RuntimeError("Rich console is not available")
     console.print(output)

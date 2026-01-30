@@ -26,6 +26,8 @@ maps describing the relationship between source and target pages.
 import logging
 from dataclasses import dataclass
 
+from pdftl.utils.type_helpers import as_iterable
+
 logger = logging.getLogger(__name__)
 
 from typing import TYPE_CHECKING, Union
@@ -159,7 +161,7 @@ class LinkRemapper:
         from pikepdf import Array, Name
 
         # 1. Fast Clone: Copy the array in C++ (avoid converting to Python list)
-        new_dest = Array(dest_array)
+        new_dest = Array(as_iterable(dest_array))
 
         # 2. Fast Update: Set the page object directly
         new_dest[0] = target_page.obj
@@ -184,7 +186,7 @@ class LinkRemapper:
 
         # Manual iteration to extract coords (index 2 onwards) without slicing
         # new_dest is [Page, /XYZ, x, y, zoom]
-        current_params = [new_dest[i] for i in range(2, len(new_dest))]
+        current_params: list[Object | None] = [new_dest[i] for i in range(2, len(new_dest))]
 
         while len(current_params) < 3:
             current_params.append(None)
@@ -266,7 +268,12 @@ class LinkRemapper:
                 - new_named_dest (tuple | None): A (String, Dictionary) pair defining the
                   new named destination, or None if remapping failed.
         """
-        from pikepdf import Dictionary, Name, String
+        from pikepdf import Array, Dictionary, Name, String
+
+        if self.pdf is None:
+            raise ValueError(
+                "Unconfigured LinkRemapper attempted to use _remap_named_destination_data"
+            )
 
         original_name = str(resolved_name).lstrip("/")
         source_dests = self.context.dest_caches.get(id(self.source_pdf), {})
@@ -282,6 +289,12 @@ class LinkRemapper:
         dest_array = (
             dest_obj.D if isinstance(dest_obj, Dictionary) and Name.D in dest_obj else dest_obj
         )
+        if not isinstance(dest_array, Array):
+            logger.warning(
+                "Named destination '%s' is not an array. Link will be dropped.",
+                original_name,
+            )
+            return None, None
 
         target_page = self._find_remapped_page(dest_array)
         if not target_page:

@@ -73,3 +73,6 @@ nuitka*
 scalene*
 out_*.pdf
 bench_*
+.env
+.vscode/
+.pyre/

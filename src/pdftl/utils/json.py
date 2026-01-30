@@ -10,6 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.whatisit import is_page
 
 # def _abbreviate_debug_string(s: str, max_len: int = 250, head: int = 200, tail: int = 50) -> str:
@@ -214,7 +215,7 @@ def _add_resolved_destination_if_goto(
         resolved_page_num = page_object_map.get(target_page_ref.objgen, "Unknown")
 
     # --- Process destination details and update the dictionary ---
-    dest_details = [pdf_obj_to_json(item) for item in list(dest_array)[1:]]
+    dest_details = [pdf_obj_to_json(item) for item in list(as_iterable(dest_array))[1:]]
 
     action_dict[KEY_RESOLVED_DESTINATION] = {
         "TargetPage": resolved_page_num,

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 _CONSOLE = None
 
 
-def get_console(create_if_none=True) -> "Console":
+def get_console(create_if_none=True) -> "Console | None":
     global _CONSOLE
     if _CONSOLE is None and create_if_none:
         from rich.console import Console

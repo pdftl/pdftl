@@ -10,6 +10,7 @@ This function populates registry options and discovers all operations.
 """
 
 import logging
+from typing import Any, cast
 
 import pdftl
 
@@ -22,7 +23,7 @@ import sys
 
 def _discover_external_operations():
     """Discover user-provided operations in the config directory."""
-    import importlib
+    import importlib.util
 
     if os.name == "nt":
         base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
@@ -141,4 +142,4 @@ def initialize_registry():
     # 3. Discover external operations last (change order? depending on shadowing preference)
     _discover_external_operations()
 
-    initialize_registry.initialized = True
+    cast(Any, initialize_registry).initialized = True

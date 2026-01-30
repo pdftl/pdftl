@@ -60,25 +60,21 @@ def _reset_state(state=None, state_type=None):
 
 def _handle_line(line, pdf_data, state, string_decoder):
     """Handle a line during parsing"""
+
+    if isinstance(line, (bytes, memoryview)):
+        line = bytes(line).decode("utf-8")
+
     # skip empty lines
     if not line.strip():
         return
 
-    # the following string-or-bytes handling is needed when
-    # we take data on stdin... fixme: why?
-
-    def decode(x):
-        if isinstance(x, bytes):
-            return x.decode()
-        return x
-
-    split_at = bytes(":", "utf-8") if isinstance(line, bytes) else ":"
+    split_at = ":"
 
     parts = line.split(split_at, 1)
-    key = decode(parts[0]).strip()
+    key = parts[0].strip()
 
     if len(parts) == 2:
-        value = decode(parts[1]).strip()
+        value = parts[1].strip()
         _handle_key_value(key, value, pdf_data, state, string_decoder)
         return
 

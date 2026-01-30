@@ -266,7 +266,10 @@ class PipelineManager:
         """Dispatches to the correct command function based on the operation."""
         operation = stage.operation
         op_data = registry.operations.get(operation)
-        op_function, arg_style = op_data.get("function"), op_data.get("args")
+        if op_data:
+            op_function, arg_style = op_data.get("function"), op_data.get("args")
+        else:
+            op_function, arg_style = None, None
         if not op_function or not arg_style:
             raise ValueError(f"Operation '{operation}' is not fully configured.")
 

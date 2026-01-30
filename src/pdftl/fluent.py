@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -73,7 +73,7 @@ class PdfPipeline:
             final_kwargs = self._map_fluent_args(op_data, args, kwargs)
 
             # 2. Execute via the API
-            result = api.call(name, **final_kwargs)
+            result = api.call(name, **final_kwargs)  # type: ignore
 
             # 3. Handle state (Chain or Return)
             from pikepdf import Pdf
@@ -124,7 +124,7 @@ class PdfPipeline:
             api_func = getattr(api, name)
             func.__doc__ = api_func.__doc__
             if hasattr(api_func, "__signature__"):
-                func.__signature__ = api_func.__signature__
+                cast(Any, func).__signature__ = api_func.__signature__
         except AttributeError:
             # Silence issues with dynamic API generation or partial init
             pass

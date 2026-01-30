@@ -98,6 +98,8 @@ def move_pages(pdf: "Pdf", args: list) -> OpResult:
     CLI Adapter for `move`: Parses string arguments into a spec, then runs logic.
     """
     spec = resolve_operation_spec(args, parse_move_args, MoveSpec)
+    if not isinstance(spec, MoveSpec):
+        raise UserCommandLineError("Failed to parse move specification.")
     return execute_move(pdf, spec)
 
 

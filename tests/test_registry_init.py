@@ -315,17 +315,18 @@ def test_discover_external_operations_spec_none(clean_broken_plugin):
         # Let's patch os.name to ensure consistent path logic (non-nt)
         with patch("os.name", "posix"):
             # Mock the path construction:
-            mock_home = MagicMock()
-            MockPath.home.return_value = mock_home
+            # 1. Setup the Mock that the constructor returns
+            mock_path_instance = MagicMock()
+            MockPath.return_value = mock_path_instance
 
-            # Setup the directory chain to return our mock op_dir
-            # This handles the repeated .div calls in the source code
-            op_dir = (
-                mock_home.__truediv__.return_value.__truediv__.return_value.__truediv__.return_value
-            )
-            op_dir.exists.return_value = True
-            op_dir.glob.return_value = [mock_file]
-            op_dir.__str__.return_value = "/fake/path"
+            # 2. Setup the directory chain on THAT instance
+            # When code does Path(base) / "pdftl" / "operations"
+            op_dir_mock = mock_path_instance.__truediv__.return_value.__truediv__.return_value
+
+            # 3. Attach your behavior (exists, glob) to the final directory mock
+            op_dir_mock.exists.return_value = True
+            op_dir_mock.glob.return_value = [mock_file]
+            op_dir_mock.__str__.return_value = "/fake/path"
 
             # Mock importlib to return None for spec
             with patch(

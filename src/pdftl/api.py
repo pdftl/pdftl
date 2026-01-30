@@ -12,9 +12,10 @@ CLI-specific exceptions into standard Python exceptions.
 
 from __future__ import annotations
 
+import io
 import logging
 import types
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import pikepdf
@@ -66,9 +67,19 @@ def _process_user_input(i, item, password, final_inputs, final_opened):
         final_inputs.append(f"<explicit-obj-{i}>")
     elif isinstance(item, (str, bytes, pathlib.Path, pathlib.PosixPath)):
         try:
-            pdf = pikepdf.open(item, password=password) if password else pikepdf.open(item)
+            if isinstance(item, bytes):
+                openable_item = io.BytesIO(item)
+                item_str = f"<bytes-obj-{i}>"
+            else:
+                openable_item = item
+                item_str = str(item)
+            pdf = (
+                pikepdf.open(openable_item, password=password)
+                if password
+                else pikepdf.open(openable_item)
+            )
             final_opened[i] = pdf
-            final_inputs.append(str(item))
+            final_inputs.append(item_str)
         except Exception as e:
             raise ValueError(f"Failed to open input '{item}': {e}") from e
     elif isinstance(item, pikepdf.Pdf):
@@ -270,13 +281,18 @@ def __getattr__(name: str) -> Any:
         op_function = get_val("function")
         long_desc = get_val("long_desc")
         short_desc = get_val("desc")
+
+        # Create a proxy typed as Any to bypass attribute checks
+        op_proxy = cast(Any, dynamic_op)
+
         if op_function and op_function.__doc__:
-            dynamic_op.__doc__ = op_function.__doc__
+            op_proxy.__doc__ = op_function.__doc__  # Use op_proxy here
         elif long_desc:
-            dynamic_op.__doc__ = long_desc
+            op_proxy.__doc__ = long_desc  # Use op_proxy here
         elif short_desc:
-            dynamic_op.__doc__ = short_desc
-        dynamic_op.__signature__ = _create_signature(name)
+            op_proxy.__doc__ = short_desc  # Use op_proxy here
+
+        op_proxy.__signature__ = _create_signature(name)  # Use op_proxy here
         return dynamic_op
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 

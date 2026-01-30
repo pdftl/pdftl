@@ -87,17 +87,22 @@ def mutate_content(pdf: "Pdf", args: list) -> OpResult:
 
     module_name = f"pdftl_user_mutator_{path.stem}"
     spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load script module from path: {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
 
     mutate_func = getattr(module, func_name, None)
+    if mutate_func is None or not callable(mutate_func):
+        raise AttributeError(f"Function '{func_name}' not found or not callable in script: {path}")
 
     # 3. Execution Engine
     # Note: We pass extra_args here to be included in the context
     engine = ContentMutationEngine(pdf, mutate_func, extra_args)
 
-    # In this version, we process all pages of the document
+    # Process all pages of the document
+    # The mutation function can selectively mutate pages/XObjects as needed
     num_pages = len(pdf.pages)
     for page_num in range(1, num_pages + 1):
         engine.apply(page_num)
