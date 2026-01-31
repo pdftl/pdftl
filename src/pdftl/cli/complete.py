@@ -164,7 +164,7 @@ def load_simple_cache():
     return {}
 
 
-def update_simple_cache(context_key, candidates):
+def update_simple_cache(context_key, candidates, cache=None):
     """
     Updates the simple cache with new results found by the heavy parser.
     """
@@ -173,7 +173,8 @@ def update_simple_cache(context_key, candidates):
     # but we don't try to cache the result of the file listing itself.
 
     try:
-        cache = load_simple_cache()
+        if cache is None:
+            cache = load_simple_cache()
         cache[context_key] = list(candidates)  # Ensure it's a list for JSON
 
         path = get_simple_cache_path()
@@ -186,7 +187,14 @@ def update_simple_cache(context_key, candidates):
         # pass
 
 
+
+_cache_check_results = {}
+
+
 def is_package_newer_than_cache(cache_path):
+    if cache_path in _cache_check_results:
+        return _cache_check_results[cache_path]
+
     try:
         cache_mtime = os.path.getmtime(cache_path)
 
@@ -196,6 +204,7 @@ def is_package_newer_than_cache(cache_path):
 
         # 1. Check Package Root (Covers pip installs/updates)
         if os.path.getmtime(package_root) > cache_mtime:
+            _cache_check_results[cache_path] = True
             return True
 
         # 2. Check Critical Subdirectories (Covers local dev edits)
@@ -222,16 +231,22 @@ def is_package_newer_than_cache(cache_path):
 
         for d in critical_dirs:
             if os.path.exists(d) and os.path.getmtime(d) > cache_mtime:
+                _cache_check_results[cache_path] = True
                 return True
 
         # 3. Check this script itself (logic changes)
         if os.path.getmtime(__file__) > cache_mtime:
+            _cache_check_results[cache_path] = True
             return True
 
     except OSError:
-        return False
+        # If cache doesn't exist, it's infinitely old, so package is "newer"
+        _cache_check_results[cache_path] = True
+        return True
 
+    _cache_check_results[cache_path] = False
     return False
+
 
 
 def get_parser():
@@ -341,7 +356,9 @@ def main():
         context = []
 
     simple_context_key = simple_cache_key(context, current_partial)
-    # print(f"DEBUG:simple_context_key={simple_context_key}")
+
+    # Initialize simple_cache to be in scope for the update call later
+    simple_cache = {}
     if simple_context_key is not None:
         simple_cache = load_simple_cache()
         if simple_context_key in simple_cache:
@@ -377,7 +394,8 @@ def main():
 
         candidates = sorted(resolve_candidates(allowed, parser))
         if simple_context_key is not None:
-            update_simple_cache(simple_context_key, candidates)
+            # Pass the already-loaded cache to avoid a re-read
+            update_simple_cache(simple_context_key, candidates, cache=simple_cache)
 
         output_candidates(candidates, current_partial)
 
