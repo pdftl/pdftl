@@ -17,7 +17,15 @@ from pdftl.core.types import HelpExample, OpResult
 from pdftl.operations.parsers.place_parser import PlacementOp, parse_place_args
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
+from pdftl.utils.geometry import (
+    calculate_placement_matrix,
+    transform_quadpoints,
+    transform_rect_bbox,
+)
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+
+if TYPE_CHECKING:
+    from pikepdf import Page
 
 _PLACE_LONG_DESC = """
 Applies geometric transformations (direct similarities) to the content of selected pages.
@@ -78,8 +86,9 @@ _PLACE_EXAMPLES = [
     ),
 )
 def place_content(target_pdf, place_specs) -> OpResult:
-    total_pages = len(target_pdf.pages)
+    import pikepdf
 
+    total_pages = len(target_pdf.pages)
     commands = parse_place_args(place_specs)
 
     for cmd in commands:
@@ -90,82 +99,119 @@ def place_content(target_pdf, place_specs) -> OpResult:
                 continue
 
             page = target_pdf.pages[p_num - 1]
+
+            # 1. Calculate the Matrix using the unified Geometry Engine
+            # We map the high-level commands (shift/scale) into the parameters
+            # expected by calculate_placement_matrix
             matrix = _calculate_transformation_matrix(page, cmd.operations)
 
-            if matrix is not None:
-                matrix_str = " ".join(f"{x:.4f}" for x in matrix)
+            if matrix != pikepdf.Matrix():
+                # 2. Apply the matrix to the content stream
+                matrix_str = matrix.encode().decode("utf-8")
                 affix_content(page, "Q", "tail")
-                affix_content(page, f"q {matrix_str} cm", "head")
-                update_annotations(page, matrix)
+                affix_content(page, f"q {matrix_str} cm ", "head")
+
+                # 3. Update annotations using the shared helpers
+                _update_annotations(page, matrix)
 
     return OpResult(success=True, pdf=target_pdf)
 
 
-def _calculate_transformation_matrix(
-    page: "Page", operations: list[PlacementOp]
-) -> list[float] | None:
-    ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]  # Identity
+def _calculate_transformation_matrix(page, operations):
+    """
+    Adapts the specific 'shift/scale/spin' logic of the Place command.
+    """
+    from pikepdf import Matrix
+
+    # We need these imports available locally or at module level
+    from pdftl.utils.geometry import _resolve_anchor
+
+    # Start with Identity
+    current_matrix = Matrix()
+
+    # Dimensions for relative math (50%)
     dims = get_visible_page_dimensions(page)
-
     if dims is None:
-        return None
-
+        return Matrix()
     x0, y0, w, h = dims
-    rect = (x0, y0, x0 + w, y0 + h)
 
     for op in operations:
-        op_matrix = None
+        step_matrix = Matrix()
 
         if op.name == "shift":
-            dx = _eval_coordinate(op.params["dx"], w)
-            dy = _eval_coordinate(op.params["dy"], h)
-            op_matrix = [1, 0, 0, 1, dx, dy]
+            dx = _eval_dim(op.params["dx"], w)
+            dy = _eval_dim(op.params["dy"], h)
+            step_matrix = Matrix().translated(dx, dy)
 
-        elif op.name == "scale":
-            s = float(op.params["value"])
-            ax, ay = _resolve_anchor(op.params, rect)
+        elif op.name == "scale" or op.name == "spin":
+            # --- RESTORED ANCHOR LOGIC ---
+            # 1. Determine the anchor point (ax, ay) in absolute page coordinates
+            ax, ay = 0.0, 0.0
 
-            # 1. Translate anchor to origin
-            m1 = [1, 0, 0, 1, -ax, -ay]
-            # 2. Scale
-            m2 = [s, 0, 0, s, 0, 0]
-            # 3. Translate origin back to anchor
-            m3 = [1, 0, 0, 1, ax, ay]
+            if op.params.get("anchor_type") == "coord":
+                # Case A: Explicit coordinates (e.g. "50% 10pt")
+                # We calculate offset from the page origin (x0, y0)
+                offset_x = _eval_dim(op.params["anchor_x"], w)
+                offset_y = _eval_dim(op.params["anchor_y"], h)
+                ax, ay = x0 + offset_x, y0 + offset_y
+            else:
+                # Case B: Named anchor (e.g. "center", "top-left")
+                # Delegate to the geometry helper
+                anchor_name = op.params.get("anchor_name", "center")
+                ax, ay = _resolve_anchor(anchor_name, x0, y0, w, h)
 
-            # Order: m1 -> m2 -> m3
-            # Matrix Math: m1 * m2 * m3
-            op_matrix = _multiply_matrices(m1, _multiply_matrices(m2, m3))
+            # 2. Build the Matrix
+            # Move Anchor->Origin, Transform, Move Back
+            m1 = Matrix().translated(-ax, -ay)
+            m3 = Matrix().translated(ax, ay)
 
-        elif op.name == "spin":
-            import math
+            if op.name == "scale":
+                s = float(op.params["value"])
+                m2 = Matrix().scaled(s, s)
+            else:  # spin
+                deg = float(op.params["value"])
+                m2 = Matrix().rotated(deg)
 
-            angle_deg = float(op.params["value"])
-            ax, ay = _resolve_anchor(op.params, rect)
-            rad = math.radians(angle_deg)
-            c_val = math.cos(rad)
-            s_val = math.sin(rad)
+            step_matrix = m1 @ m2 @ m3
 
-            # 1. Translate anchor to origin
-            m1 = [1, 0, 0, 1, -ax, -ay]
-            # 2. Rotate
-            m2 = [c_val, s_val, -s_val, c_val, 0, 0]
-            # 3. Translate origin back to anchor
-            m3 = [1, 0, 0, 1, ax, ay]
+        # Accumulate
+        current_matrix = current_matrix @ step_matrix
 
-            # Order: m1 -> m2 -> m3
-            op_matrix = _multiply_matrices(m1, _multiply_matrices(m2, m3))
-
-        if op_matrix:
-            # Accumulate: current_CTM * new_op
-            ctm = _multiply_matrices(ctm, op_matrix)
-
-    return ctm
+    return current_matrix
 
 
-def _eval_coordinate(terms: list[str], total_dim: float) -> float:
+def _update_annotations(page, matrix):
+    """Updates clickable areas to match the new visual location."""
+    if "/Annots" not in page:
+        return
+
+    for annot in page["/Annots"]:
+        # Use shared geometry helpers for the heavy lifting
+        if "/QuadPoints" in annot:
+            # transform_quadpoints is a new export from geometry.py
+            annot["/QuadPoints"] = transform_quadpoints(annot["/QuadPoints"], matrix)
+
+        if "/Rect" in annot:
+            # transform_rect_bbox is a new export from geometry.py
+            annot["/Rect"] = transform_rect_bbox(annot["/Rect"], matrix)
+
+        if "/AP" in annot:
+            del annot["/AP"]
+
+
+def _eval_dim(terms, reference_size: float) -> float:
+    """
+    Converts dimension strings (e.g. ['1in', '50%']) into a float value in points.
+    Wraps dim_str_to_pts to handle lists of terms.
+    """
     total = 0.0
-    for term in terms:
-        total += dim_str_to_pts(term, total_dim)
+    # The parser returns a list of terms to be summed (e.g. "1in + 5pt")
+    if isinstance(terms, list):
+        for term in terms:
+            total += dim_str_to_pts(term, reference_size)
+    else:
+        # Handle single string case just to be safe
+        total = dim_str_to_pts(terms, reference_size)
     return total
 
 
@@ -199,87 +245,3 @@ def _resolve_anchor(params: dict, rect: tuple[float, float, float, float]) -> tu
             y = mid_y
 
         return x, y
-
-
-def _multiply_matrices(m1: list[float], m2: list[float]) -> list[float]:
-    """Result = M1 * M2. Corrected affine multiplication."""
-    a1, b1, c1, d1, e1, f1 = m1
-    a2, b2, c2, d2, e2, f2 = m2
-    return [
-        a1 * a2 + b1 * c2,
-        a1 * b2 + b1 * d2,
-        c1 * a2 + d1 * c2,
-        c1 * b2 + d1 * d2,
-        e1 * a2 + f1 * c2 + e2,  # FIXED: + e2 (was + e1)
-        e1 * b2 + f1 * d2 + f2,  # FIXED: + f2 (was + f1)
-    ]
-
-
-def _transform_point(x: float, y: float, m: list[float]) -> tuple[float, float]:
-    """Applies affine transform matrix m to point (x,y)."""
-    a, b, c, d, e, f = m
-    # PDF Matrix math: [x y 1] * [a b 0; c d 0; e f 1]
-    nx = a * x + c * y + e
-    ny = b * x + d * y + f
-    return nx, ny
-
-
-def _get_aabb_from_rect(rect: list[float], matrix: list[float]) -> list[float]:
-    """
-    Calculates the new Axis-Aligned Bounding Box (AABB) for a transformed Rect.
-    This handles the rotation limitation by growing the box to fit.
-    """
-    x1, y1, x2, y2 = rect
-
-    # Get all 4 corners of the original rectangle
-    corners = [
-        _transform_point(x1, y1, matrix),
-        _transform_point(x2, y1, matrix),
-        _transform_point(x2, y2, matrix),
-        _transform_point(x1, y2, matrix),
-    ]
-
-    # Find the new min/max to create the AABB
-    xs = [p[0] for p in corners]
-    ys = [p[1] for p in corners]
-
-    # Return [x_ll, y_ll, x_ur, y_ur]
-    return [min(xs), min(ys), max(xs), max(ys)]
-
-
-def _transform_quadpoints(quads: list[float], matrix: list[float]) -> list[float]:
-    """
-    Transforms QuadPoints directly.
-    QuadPoints allow arbitrary rotation (perfect for highlights).
-    """
-    new_quads = []
-    # Quads are sets of 8 numbers (x1,y1 ... x4,y4)
-    for i in range(0, len(quads), 2):
-        nx, ny = _transform_point(quads[i], quads[i + 1], matrix)
-        new_quads.extend([nx, ny])
-    return new_quads
-
-
-def update_annotations(page, matrix: list[float]):
-    if "/Annots" not in page:
-        return
-
-    def to_floats(x):
-        return list(map(float, x))
-
-    for annot in page["/Annots"]:
-        # 1. Update QuadPoints FIRST (if present)
-        # This preserves the "perfect" rotation data for highlights
-        if "/QuadPoints" in annot:
-            annot["/QuadPoints"] = _transform_quadpoints(to_floats(annot["/QuadPoints"]), matrix)
-
-        # 2. Update Rect
-        # For highlights, this becomes the bounding box of the QuadPoints.
-        # For links, this expands to cover the rotated area.
-        if "/Rect" in annot:
-            annot["/Rect"] = _get_aabb_from_rect(to_floats(annot["/Rect"]), matrix)
-
-        # 3. Reset Appearance
-        # Force the viewer to redraw the annotation based on new coords
-        if "/AP" in annot:
-            del annot["/AP"]

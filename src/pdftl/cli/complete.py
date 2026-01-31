@@ -191,7 +191,6 @@ def update_simple_cache(context_key, candidates, cache=None):
         # pass
 
 
-
 _cache_check_results = {}
 
 
@@ -215,13 +214,9 @@ def is_package_newer_than_cache(cache_path):
         # Add the folders where your registry/grammar logic actually lives.
         # e.g., if you add a new operation file in 'operations/', completion needs to know.
         if os.name == "nt":
-            custom_op_base = os.environ.get("APPDATA") or os.path.expanduser(
-                "~\\AppData\\Roaming"
-            )
+            custom_op_base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
         else:
-            custom_op_base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(
-                "~/.config"
-            )
+            custom_op_base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 
         custom_op_dir = os.path.join(custom_op_base, "pdftl", "operations")
 
@@ -250,7 +245,6 @@ def is_package_newer_than_cache(cache_path):
 
     _cache_check_results[cache_path] = False
     return False
-
 
 
 def get_parser():
