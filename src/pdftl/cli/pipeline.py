@@ -466,32 +466,32 @@ class PipelineManager:
         ),
         HelpExample(
             desc=(
+                "Crop all pages to A3 in landscape,\n"
+                "and preview the effect of cropping odd pages to A4"
+            ),
+            cmd="in.pdf crop '(A3_l)' --- crop 'odd(A4)' preview output out.pdf",
+        ),
+        HelpExample(
+            desc=(
                 "Save a snapshot of a rotated file,"
                 " then apply a stamp and save the final version"
             ),
             cmd=(
                 "in.pdf rotate right output rotated_snapshot.pdf --- "
-                "stamp watermark.pdf output final.pdf"
+                "background watermark.pdf output final.pdf"
             ),
-        ),
-        HelpExample(
-            desc=(
-                "Define a handle 'A' for reuse later in the pipeline. "
-                "Here we use 'A' as a background for 'B', then append 'A' again at the end."
-            ),
-            cmd="A=logo.pdf B=content.pdf multistamp B A --- cat A output report.pdf",
         ),
         HelpExample(
             desc=(
                 "Use pipeline substitution (JOB...DONE) to rotate one file before "
                 "merging it with another."
             ),
-            cmd=f"R={SUB_START} in.pdf cat right {SUB_END} main.pdf cat R output final.pdf",
+            cmd=f"{SUB_START} in.pdf cat right {SUB_END} main.pdf cat output final.pdf",
         ),
         HelpExample(
             desc=("Rotate and stamp a.pdf, crop b.pdf, then combine selected pages from both"),
             cmd=(
-                f"A={SUB_START} a.pdf rotate right --- stamp stamp.pdf {SUB_END} "
+                f"A={SUB_START} a.pdf rotate right --- stamp logo.pdf {SUB_END} "
                 f"B={SUB_START} b.pdf crop '(a4)' {SUB_END} "
                 "cat A1-3 B2-end output combined.pdf"
             ),
@@ -499,7 +499,7 @@ class PipelineManager:
         HelpExample(
             desc=("Join a contract with a stamped copy of itself"),
             cmd=(
-                f"contract.pdf {SUB_START} contract.pdf stamp file_copy.pdf {SUB_END} output combined.pdf"
+                f"contract.pdf {SUB_START} contract.pdf stamp logo.pdf {SUB_END} output combined.pdf"
             ),
         ),
     ],
