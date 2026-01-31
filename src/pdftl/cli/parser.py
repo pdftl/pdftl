@@ -330,7 +330,7 @@ def _recursive_group_pipelines(arg_iter, depth=0):
             # because InlinePipeline expects list[CliStage]
 
             # 1. Split inner args by '---' (handles nested separators naturally
-            #    because the recursive call already consumed the nested SUB END)
+            #    because the recursive call already consumed the nested JOB DONE)
             inner_stages_raw = _split_flat_by_separator(inner_args, "---")
 
             # 2. Parse into CliStage objects
@@ -341,7 +341,7 @@ def _recursive_group_pipelines(arg_iter, depth=0):
             pipeline_obj = InlineSubPipeline(stages=inner_stages_parsed)
 
             if is_named_sub:
-                # token is like "B=SUB", split at the LAST '=' to be safe,
+                # token is like "B=JOB", split at the LAST '=' to be safe,
                 # though strictly handles are usually simple.
                 # Using maxsplit=1 from the left is consistent with your other parsing.
                 handle, _ = token.split("=", 1)
@@ -377,9 +377,9 @@ def _split_flat_by_separator(argv, separator="---"):
 def split_args_by_separator(argv, separator="---"):
     """
     Splits a list of arguments into stages based on a separator.
-    Handles 'SUB ... END' inline sub-pipelines by pre-parsing them.
+    Handles 'JOB ... DONE' inline sub-pipelines by pre-parsing them.
     """
-    # 1. Pre-process to resolve SUB ... END into InlinePipeline objects
+    # 1. Pre-process to resolve JOB ... DONE into InlinePipeline objects
     #    We convert argv list to an iterator for the recursive function
     grouped_args = _recursive_group_pipelines(iter(argv))
 

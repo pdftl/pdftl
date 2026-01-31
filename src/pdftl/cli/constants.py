@@ -10,5 +10,5 @@ DEBUG_FLAGS = {"--debug"}
 HELP_FLAGS = {"-help", "--help", "-h", "help"}
 VERBOSE_FLAGS = {"verbose"}
 VERSION_FLAGS = {"--version"}
-SUB_START = "SUB"
+SUB_START = "JOB"
 SUB_END = "DONE"

@@ -10,14 +10,14 @@ def run_main(args):
 
 def test_basic_inline_pipeline(dummy_pdfs, tmp_path):
     """
-    Test: R=SUB ... DONE
+    Test: R=JOB ... DONE
     """
     input_pdf = dummy_pdfs["a.pdf"]
     output_pdf = tmp_path / "out.pdf"
 
     # Fix: Use "rotate right" instead of "rotate 90"
     args = [
-        "R=SUB",
+        "R=JOB",
         str(input_pdf),
         "rotate",
         "right",
@@ -46,11 +46,11 @@ def test_inline_scope_visibility(dummy_pdfs, tmp_path):
     in_b = dummy_pdfs["b.pdf"]
     output_pdf = tmp_path / "scope_test.pdf"
 
-    # Fix: "Y=SUB X cat ..."
+    # Fix: "Y=JOB X cat ..."
     # Load X first so cat has something to append to
     args = [
         f"X={in_a}",
-        "Y=SUB",
+        "Y=JOB",
         "X",
         str(in_b),
         "cat",
@@ -70,7 +70,7 @@ def test_inline_scope_visibility(dummy_pdfs, tmp_path):
 
 def test_nested_inline_pipeline(dummy_pdfs, tmp_path):
     """
-    Test: F=SUB ... I=SUB ... DONE ... DONE
+    Test: F=JOB ... I=JOB ... DONE ... DONE
     """
     input_pdf = dummy_pdfs["a.pdf"]
     output_pdf = tmp_path / "nested.pdf"
@@ -80,8 +80,8 @@ def test_nested_inline_pipeline(dummy_pdfs, tmp_path):
     # 2. Start I -> Load input, select page 1 -> End I
     # 3. F continues -> Load I
     args = [
-        "F=SUB",
-        "I=SUB",
+        "F=JOB",
+        "I=JOB",
         str(input_pdf),
         "cat",
         "1",

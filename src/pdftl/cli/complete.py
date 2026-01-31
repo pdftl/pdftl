@@ -11,7 +11,7 @@ PICKLER = "cloudpickle"
 GRAMMAR_VERSION = "2"
 
 HARDCODED_KEYWORDS = [
-    "SUB",
+    "JOB",
     "DONE",
     "add_text",
     "attach_files",
@@ -202,9 +202,13 @@ def is_package_newer_than_cache(cache_path):
         # Add the folders where your registry/grammar logic actually lives.
         # e.g., if you add a new operation file in 'operations/', completion needs to know.
         if os.name == "nt":
-            custom_op_base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
+            custom_op_base = os.environ.get("APPDATA") or os.path.expanduser(
+                "~\\AppData\\Roaming"
+            )
         else:
-            custom_op_base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+            custom_op_base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(
+                "~/.config"
+            )
 
         custom_op_dir = os.path.join(custom_op_base, "pdftl", "operations")
 
@@ -258,7 +262,7 @@ def resolve_candidates(allowed_tokens, parser):
     # Map for explicit terminals in GrammarBuilder
     # This must match the names in GrammarBuilder
     literal_map = {
-        "KW_SUB": "SUB",
+        "KW_SUB": "JOB",
         "KW_END": "DONE",
         "HELP_KW": "help",
         "HELP_FLAG": "--help",

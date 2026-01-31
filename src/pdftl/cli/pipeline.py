@@ -396,7 +396,7 @@ class PipelineManager:
                 # 1. Start with inherited handles (from outer scopes)
                 child_handles = self.handles.copy()
                 # 2. Add sibling handles defined earlier in THIS stage
-                # (e.g., in 'A=a.pdf B=SUB', B can see A)
+                # (e.g., in 'A=a.pdf B=JOB', B can see A)
                 for h_name, h_idx in stage.handles.items():
                     if h_idx < i:
                         child_handles[h_name] = opened_pdfs[h_idx]
@@ -483,7 +483,7 @@ class PipelineManager:
         ),
         HelpExample(
             desc=(
-                "Use pipeline substitution (SUB...END) to rotate one file before "
+                "Use pipeline substitution (JOB...DONE) to rotate one file before "
                 "merging it with another."
             ),
             cmd=f"R={SUB_START} in.pdf cat right {SUB_END} main.pdf cat R output final.pdf",
@@ -520,11 +520,11 @@ def _pipeline_help_topic():
     This allows you to re-use a specific file or result multiple times in
     different stages (e.g., `cat A B A`).
 
-    **3. Pipeline Substitution (`X=SUB ... DONE`)**
+    **3. Pipeline Substitution (`X=JOB ... DONE`)**
     Similar to command substitution in a shell, you can process files in a
     temporary sub-pipeline before assigning them to a handle.
-      `S=SUB in.pdf rotate right DONE`
-    This runs the commands between SUB and DONE, and assigns the final result
+      `S=JOB in.pdf rotate right DONE`
+    This runs the commands between JOB and DONE, and assigns the final result
     to the handle `S`. You can then use `S` like any other input file.
     """
 
