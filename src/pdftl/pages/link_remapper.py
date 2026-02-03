@@ -140,6 +140,7 @@ class LinkRemapper:
 
         return f"{self.instance_num}-{original_name}"
 
+    # @profile
     def _transform_destination_array(self, dest_array: "Array", target_page) -> "Array":
         """
         Apply page rotation and scaling transforms to an explicit destination array.
@@ -212,9 +213,10 @@ class LinkRemapper:
         Returns:
             Page | None: The remapped page object, or None if no mapping exists.
         """
-        from pikepdf import Array
+        # from pikepdf import Array
+        # optimization: assume we have an Array
 
-        if not isinstance(source_dest_array, Array) or len(source_dest_array) == 0:
+        if not source_dest_array:
             return None
 
         target_ref = source_dest_array[0]
@@ -251,6 +253,7 @@ class LinkRemapper:
         new_action_dest = self._transform_destination_array(resolved_array, target_page)
         return new_action_dest, None
 
+    # @profile
     def _remap_named_destination_data(self, resolved_name):
         """
         Remap a named destination from the source PDF into the target PDF.
@@ -264,11 +267,11 @@ class LinkRemapper:
 
         Returns:
             tuple: (new_action_dest, new_named_dest)
-                - new_action_dest (String | None): The name string to assign to the action.
+                - new_action_dest (str | None): The name string to assign to the action.
                 - new_named_dest (tuple | None): A (String, Dictionary) pair defining the
                   new named destination, or None if remapping failed.
         """
-        from pikepdf import Array, Dictionary, Name, String
+        from pikepdf import Array, Dictionary
 
         if self.pdf is None:
             raise ValueError(
@@ -286,9 +289,16 @@ class LinkRemapper:
             return None, None
 
         dest_obj = source_dests[original_name]
-        dest_array = (
-            dest_obj.D if isinstance(dest_obj, Dictionary) and Name.D in dest_obj else dest_obj
-        )
+        # d_value = dest_obj.get("D")
+        # dest_array = d_value if d_value is not None else dest_obj
+        # dest_array = (
+        #     dest_obj.D if isinstance(dest_obj, Dictionary) and Name.D in dest_obj else dest_obj
+        # )
+        try:
+            dest_array = dest_obj.D
+        except ValueError:
+            dest_array = dest_obj
+
         if not isinstance(dest_array, Array):
             logger.warning(
                 "Named destination '%s' is not an array. Link will be dropped.",
@@ -303,14 +313,13 @@ class LinkRemapper:
         new_dest_array = self._transform_destination_array(dest_array, target_page)
 
         new_name_str = self._get_new_destination_name(original_name)
-        new_name_obj = String(new_name_str)
-        dest_dict = self.pdf.make_indirect(Dictionary(D=new_dest_array))
+        dest_dict = self.pdf.make_indirect(Dictionary({"/D": new_dest_array}))
 
-        new_named_dest = (new_name_obj, dest_dict)
-        new_action_dest = new_name_obj
-
+        new_named_dest = (new_name_str, dest_dict)
+        new_action_dest = new_name_str
         return new_action_dest, new_named_dest
 
+    # @profile
     def remap_goto_action(self, action: "Dictionary"):
         """
         Remap a /GoTo action, handling both named and explicit destinations.

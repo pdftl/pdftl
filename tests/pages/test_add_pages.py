@@ -183,7 +183,7 @@ def test_process_source_pages_full():
         # Ensure apply_scaling was called 3 times
         mock_scale.assert_has_calls(
             [
-                call(page_0, tf1_scale, scale_annotations=False),
+                # optimization: don't call if scale is 1.0, so no tf1_scale here
                 call(page_1, tf2_scale, scale_annotations=False),
                 call(page_2, tf3_scale, scale_annotations=False),
             ]
