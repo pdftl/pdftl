@@ -71,13 +71,18 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
             - new_annotation (Dictionary | None): The copied annotation.
             - new_named_dest_data (list | None): A flat list of (name, dest) pairs.
     """
-    from pikepdf import ForeignObjectError, Name
+    from pikepdf import Dictionary, ForeignObjectError, Name
 
     if remapper.pdf is None or remapper.source_pdf is None:
         return None, None
 
     try:
-        new_annot = remapper.pdf.copy_foreign(remapper.source_pdf.make_indirect(original_annot))
+        annot_to_copy = (
+            original_annot
+            if original_annot.is_indirect
+            else remapper.source_pdf.make_indirect(original_annot)
+        )
+        new_annot = remapper.pdf.copy_foreign(annot_to_copy)
     except (ForeignObjectError, ValueError, RuntimeError) as e:
         logger.warning(
             "Skipping potentially corrupt annotation from source page %s. "
@@ -127,8 +132,6 @@ def _rebuild_annotations_for_page(
     if remapper.pdf is None:
         raise ValueError("Internal error: unconfigured LinkRemapper")
 
-    from pikepdf import Array
-
     if "/Annots" not in source_page:
         return []
 
@@ -136,7 +139,7 @@ def _rebuild_annotations_for_page(
     if "/Annots" in new_page:
         del new_page.Annots
 
-    new_annots = Array()
+    new_annots = []
     page_dests = []
 
     for annot in source_page.Annots:
