@@ -140,6 +140,7 @@ class LinkRemapper:
 
         return f"{self.instance_num}-{original_name}"
 
+    # @profile
     def _transform_destination_array(self, dest_array: "Array", target_page) -> "Array":
         """
         Apply page rotation and scaling transforms to an explicit destination array.
@@ -266,11 +267,11 @@ class LinkRemapper:
 
         Returns:
             tuple: (new_action_dest, new_named_dest)
-                - new_action_dest (String | None): The name string to assign to the action.
+                - new_action_dest (str | None): The name string to assign to the action.
                 - new_named_dest (tuple | None): A (String, Dictionary) pair defining the
                   new named destination, or None if remapping failed.
         """
-        from pikepdf import Array, String
+        from pikepdf import Array, Dictionary
 
         if self.pdf is None:
             raise ValueError(
@@ -312,8 +313,7 @@ class LinkRemapper:
         new_dest_array = self._transform_destination_array(dest_array, target_page)
 
         new_name_str = self._get_new_destination_name(original_name)
-        # new_name_obj = String(new_name_str)
-        dest_dict = self.pdf.make_indirect({"/D": new_dest_array})
+        dest_dict = self.pdf.make_indirect(Dictionary({"/D": new_dest_array}))
 
         new_named_dest = (new_name_str, dest_dict)
         new_action_dest = new_name_str
