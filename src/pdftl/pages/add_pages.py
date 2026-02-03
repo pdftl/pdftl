@@ -69,7 +69,8 @@ def add_pages(
     # scale annotations here
     for objgen, transform in rebuild_context.page_transforms.items():
         _rotate, scale = transform
-        scale_annotations_in_page(new_pdf.get_object(objgen), scale)
+        if scale != 1.0:
+            scale_annotations_in_page(new_pdf.get_object(objgen), scale)
 
     # Pass 2b: Get all destinations from outlines
     outline_dests = rebuild_outlines(new_pdf, source_pages_to_process, rebuild_context, remapper)
@@ -152,7 +153,7 @@ def process_source_pages(
         page_key = (pdf_id, page_data.index)
 
         ret.unique_source_pdfs.add(page_data.pdf)
-
+        new_pdf_make_indirect = new_pdf.make_indirect
         if page_key not in clean_masters_map:
             # --- FIRST ENCOUNTER ---
             # 1. Append source directly. pikepdf handles the import.
@@ -164,11 +165,11 @@ def process_source_pages(
             # 3. Create the "Clean Master" immediately
             # We make a shallow copy of the dictionary *before* we modify new_page.
             # This ensures we have a pristine reference for future clones.
-            master_vars = dict(new_page.obj)
-            master_vars.pop("/Parent", None)
+            master_vars = new_page.obj.copy()  # dict(new_page.obj)
+            del master_vars["/Parent"]  # master_vars.pop("/Parent", None)
 
             # Store as an indirect object in new_pdf (orphaned from page tree, but valid)
-            clean_master = new_pdf.make_indirect(Dictionary(master_vars))
+            clean_master = new_pdf_make_indirect(Dictionary(master_vars))
             clean_masters_map[page_key] = clean_master
 
         else:
@@ -182,7 +183,7 @@ def process_source_pages(
             clone_vars = dict(clean_master)
 
             # 3. Create new indirect object and wrap as Page
-            indirect_copy = new_pdf.make_indirect(Dictionary(clone_vars))
+            indirect_copy = new_pdf_make_indirect(Dictionary(clone_vars))
             new_page = Page(indirect_copy)
             new_pdf_pages_append(new_page)
 
@@ -204,8 +205,10 @@ def process_source_pages(
 
         ret.page_transforms[new_page.obj.objgen] = (page_data.rotation, page_data.scale)
 
-        _apply_rotation(new_page, source_page, page_data.rotation)
-        apply_scaling(new_page, page_data.scale, scale_annotations=False)
+        if page_data.rotation != (0, False):
+            _apply_rotation(new_page, source_page, page_data.rotation)
+        if page_data.scale != 1.0:
+            apply_scaling(new_page, page_data.scale, scale_annotations=False)
 
     return ret, widget_queue
 
