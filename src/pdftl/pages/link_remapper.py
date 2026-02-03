@@ -212,9 +212,9 @@ class LinkRemapper:
         Returns:
             Page | None: The remapped page object, or None if no mapping exists.
         """
-        from pikepdf import Array
+        # from pikepdf import Array
 
-        if not isinstance(source_dest_array, Array) or len(source_dest_array) == 0:
+        if not hasattr(source_dest_array, "__len__") or len(source_dest_array) == 0:
             return None
 
         target_ref = source_dest_array[0]
