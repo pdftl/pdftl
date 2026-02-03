@@ -127,3 +127,51 @@ def _resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> Tupl
         ry = y + h / 2.0
 
     return rx, ry
+
+
+def calculate_fit_metrics(
+    src_w: float,
+    src_h: float,
+    target_w: float,
+    target_h: float,
+    preserve_aspect_ratio: bool = True,
+) -> Tuple[float, float, float, float]:
+    """
+    Calculates scale factors and centering offsets to fit a source rectangle
+    into a target rectangle.
+
+    Args:
+        src_w, src_h: Dimensions of the content to fit.
+        target_w, target_h: Dimensions of the container slot.
+        preserve_aspect_ratio:
+            True: Scale uniformly to fit inside (letterboxing may occur).
+            False: Stretch to fill the target exactly (distortion may occur).
+
+    Returns:
+        (scale_x, scale_y, offset_x, offset_y)
+        Offsets are relative to the target's bottom-left corner to achieve centering.
+    """
+    if src_w <= 0 or src_h <= 0:
+        return 1.0, 1.0, 0.0, 0.0
+
+    # Calculate raw scaling ratios for both axes
+    ratio_w = target_w / src_w
+    ratio_h = target_h / src_h
+
+    if preserve_aspect_ratio:
+        # Scale uniformly using the smaller ratio to ensure it fits entirely
+        s = min(ratio_w, ratio_h)
+        sx, sy = s, s
+    else:
+        # Scale axes independently to fill the slot exactly
+        sx, sy = ratio_w, ratio_h
+
+    # Calculate the final dimensions of the fitted content
+    final_w = src_w * sx
+    final_h = src_h * sy
+
+    # Calculate centering offsets
+    dx = (target_w - final_w) / 2.0
+    dy = (target_h - final_h) / 2.0
+
+    return sx, sy, dx, dy
