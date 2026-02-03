@@ -270,7 +270,7 @@ class LinkRemapper:
                 - new_named_dest (tuple | None): A (String, Dictionary) pair defining the
                   new named destination, or None if remapping failed.
         """
-        from pikepdf import Array, Dictionary, Name, String
+        from pikepdf import Array, String
 
         if self.pdf is None:
             raise ValueError(
@@ -288,8 +288,16 @@ class LinkRemapper:
             return None, None
 
         dest_obj = source_dests[original_name]
-        d_value = dest_obj.get("D")
-        dest_array = d_value if d_value is not None else dest_obj
+        # d_value = dest_obj.get("D")
+        # dest_array = d_value if d_value is not None else dest_obj
+        # dest_array = (
+        #     dest_obj.D if isinstance(dest_obj, Dictionary) and Name.D in dest_obj else dest_obj
+        # )
+        try:
+            dest_array = dest_obj.D
+        except ValueError:
+            dest_array = dest_obj
+
         if not isinstance(dest_array, Array):
             logger.warning(
                 "Named destination '%s' is not an array. Link will be dropped.",
@@ -304,12 +312,11 @@ class LinkRemapper:
         new_dest_array = self._transform_destination_array(dest_array, target_page)
 
         new_name_str = self._get_new_destination_name(original_name)
-        new_name_obj = String(new_name_str)
-        dest_dict = self.pdf.make_indirect(Dictionary(D=new_dest_array))
+        # new_name_obj = String(new_name_str)
+        dest_dict = self.pdf.make_indirect({"/D": new_dest_array})
 
-        new_named_dest = (new_name_obj, dest_dict)
-        new_action_dest = new_name_obj
-
+        new_named_dest = (new_name_str, dest_dict)
+        new_action_dest = new_name_str
         return new_action_dest, new_named_dest
 
     # @profile
