@@ -215,13 +215,15 @@ def process_source_pages(
 
 def _stash_page_source_data(new_page, source_page, page_data, instance_num):
     # Calculate metadata for variable expansion
+    from pikepdf import Dictionary, Name
+
     filename = getattr(page_data.pdf, "filename", "")
-    orig_rotation = source_page.get("/Rotate", 0)
+    orig_rotation = int(source_page.get("/Rotate", 0))
     mediabox = source_page.MediaBox
     width = float(mediabox[2] - mediabox[0])
     height = float(mediabox[3] - mediabox[1])
 
-    if int(orig_rotation) % 180 != 0:
+    if orig_rotation % 180 != 0:
         width, height = height, width
 
     orientation = "portrait" if height >= width else "landscape"
@@ -233,22 +235,24 @@ def _stash_page_source_data(new_page, source_page, page_data, instance_num):
     # Internal tools (like Link Rebuilding) use the returned
     # RebuildLinksPartialContext to access the PDF objects.
     # Downstream tools (like add_text) use this dictionary for variables.
-    info_dict = {
-        # User-facing variable data
-        "/source_filename": os.path.basename(filename) if filename else "",
-        "/source_path": os.path.abspath(filename) if filename else "",
-        "/source_page": page_data.index + 1,
-        "/source_rotation": int(orig_rotation),
-        "/source_width": width,
-        "/source_height": height,
-        "/source_orientation": orientation,
-        # Transformation data (serializable)
-        "/applied_rotation_angle": page_data.rotation[0],
-        "/applied_rotation_absolute": bool(page_data.rotation[1]),
-        "/applied_scale": float(page_data.scale),
-        "/original_index": page_data.index,
-        "/instance_num": instance_num,
-    }
+    info_dict = Dictionary(
+        {
+            # User-facing variable data
+            "/source_filename": os.path.basename(filename) if filename else "",
+            "/source_path": os.path.abspath(filename) if filename else "",
+            "/source_page": page_data.index + 1,
+            "/source_rotation": orig_rotation,
+            "/source_width": width,
+            "/source_height": height,
+            "/source_orientation": orientation,
+            # Transformation data (serializable)
+            "/applied_rotation_angle": page_data.rotation[0],
+            "/applied_rotation_absolute": bool(page_data.rotation[1]),
+            "/applied_scale": float(page_data.scale),
+            "/original_index": page_data.index,
+            "/instance_num": instance_num,
+        }
+    )
 
     # Store in a custom key in the PDF Page Dictionary
     new_page["/" + c.PDFTL_SOURCE_INFO_KEY] = info_dict

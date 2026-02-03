@@ -213,8 +213,9 @@ class LinkRemapper:
             Page | None: The remapped page object, or None if no mapping exists.
         """
         # from pikepdf import Array
+        # optimization: assume we have an Array
 
-        if not hasattr(source_dest_array, "__len__") or len(source_dest_array) == 0:
+        if not source_dest_array:
             return None
 
         target_ref = source_dest_array[0]
@@ -251,6 +252,7 @@ class LinkRemapper:
         new_action_dest = self._transform_destination_array(resolved_array, target_page)
         return new_action_dest, None
 
+    # @profile
     def _remap_named_destination_data(self, resolved_name):
         """
         Remap a named destination from the source PDF into the target PDF.
@@ -286,9 +288,8 @@ class LinkRemapper:
             return None, None
 
         dest_obj = source_dests[original_name]
-        dest_array = (
-            dest_obj.D if isinstance(dest_obj, Dictionary) and Name.D in dest_obj else dest_obj
-        )
+        d_value = dest_obj.get("D")
+        dest_array = d_value if d_value is not None else dest_obj
         if not isinstance(dest_array, Array):
             logger.warning(
                 "Named destination '%s' is not an array. Link will be dropped.",
@@ -311,6 +312,7 @@ class LinkRemapper:
 
         return new_action_dest, new_named_dest
 
+    # @profile
     def remap_goto_action(self, action: "Dictionary"):
         """
         Remap a /GoTo action, handling both named and explicit destinations.
