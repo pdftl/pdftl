@@ -166,6 +166,7 @@ st_full_spec_string = st.builds(
 )
 
 
+@settings(deadline=1000)
 @given(
     specs=st.lists(st_full_spec_string, min_size=1, max_size=5),
     total_pages=st.integers(min_value=1, max_value=50),

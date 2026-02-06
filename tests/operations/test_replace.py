@@ -164,3 +164,17 @@ def test_replacer_fallback_no_regex():
     # Verify it passed the original content directly to make_stream
     # (skipping re.sub at line 136)
     mock_pdf.make_stream.assert_called_with(b"Original Content")
+
+
+def test_replace_parse_error_coverage():
+    """Hit replace.py:99 - Replacement specification does not look correct."""
+    from unittest.mock import MagicMock, patch
+
+    from pdftl.exceptions import InvalidArgumentError
+    from pdftl.operations.replace import _parse_replace_spec
+
+    mock_pdf = MagicMock()
+    # Force re.match to fail for the specific parsing line
+    with patch("re.match", return_value=None):
+        with pytest.raises(InvalidArgumentError, match="Could not parse count suffix"):
+            _parse_replace_spec(mock_pdf, "any_spec", True, True)

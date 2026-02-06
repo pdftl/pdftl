@@ -434,3 +434,103 @@ def test_process_result_implicit_passthrough():
     # Verify we didn't accidentally close the input PDF inside _process_result
     # (The cleanup logic only closes inputs that *aren't* the result)
     mock_input_pdf.close.assert_not_called()
+
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from pdftl.cli.pipeline import CliStage, InlineSubPipeline, PipelineManager
+from pdftl.exceptions import MissingArgumentError, UserCommandLineError
+
+
+def test_pipeline_missing_output_error():
+    """Hit Line 261: Validation error for operations requiring output."""
+    # Mock registry to say 'filter' requires output
+    with patch("pdftl.core.registry.registry.operations", {"filter": {"usage": "output"}}):
+        stage = CliStage(operation="filter", inputs=["in.pdf"], options={})
+        mgr = PipelineManager(stages=[stage], input_context=MagicMock(), is_inline=False)
+        with pytest.raises(MissingArgumentError, match="requires 'output <file>'"):
+            mgr._validate_stage_args(stage, is_first=True, is_last=True)
+
+
+def test_sibling_handle_reference():
+    """Hit Line 433: Using A=file.pdf then referring to A in same stage."""
+    mock_pdf = MagicMock()
+    # Ensure input_passwords length matches inputs length
+    stage = CliStage(
+        operation="cat", inputs=["a.pdf", "A"], input_passwords=[None, None], handles={"A": 0}
+    )
+
+    mgr = PipelineManager(stages=[stage], input_context=MagicMock())
+    with patch.object(mgr, "_open_pdf_from_file", return_value=mock_pdf):
+        opened = mgr._open_input_pdfs(stage, is_first=True)
+        # The first was opened from file, the second was copied from the sibling list
+        assert len(opened) == 2
+        assert opened[1] is mock_pdf
+
+
+def test_inline_pipeline_no_output_error():
+    """Hit Line 423: Inline JOB...DONE returns nothing."""
+    sub_pipe = InlineSubPipeline(stages=[CliStage(operation="dump_text")])
+    # Again, match passwords length to inputs length
+    stage = CliStage(operation="cat", inputs=[sub_pipe], input_passwords=[None])
+
+    mgr = PipelineManager(stages=[stage], input_context=MagicMock())
+
+    # We patch the class's 'run' so it does nothing,
+    # then we'll use a side_effect to ensure the sub-manager's
+    # pipeline_pdf is None when it finishes.
+    with patch("pdftl.cli.pipeline.PipelineManager.run") as mock_run:
+        # We need to simulate the sub_manager that is created INSIDE _open_input_pdfs
+        # To hit line 423, the sub_manager.pipeline_pdf must be None.
+        with pytest.raises(UserCommandLineError, match="Inline pipeline returned no output PDF"):
+            mgr._open_input_pdfs(stage, is_first=True)
+
+
+import pytest
+
+from pdftl.cli.pipeline import CliStage, InlineSubPipeline, PipelineManager
+from pdftl.core.registry import registry
+
+
+# This test is safe because it only uses the public API logic
+def test_pipeline_repr_coverage():
+    # Fixes Line 43
+    sub_pipe = InlineSubPipeline(stages=[], original_text="TEST_REPR")
+    assert repr(sub_pipe) == "TEST_REPR"
+
+
+# This test uses a context manager to ensure the registry is never permanently altered
+def test_pipeline_config_error_coverage(mocker):
+    # Fixes Line 292
+    # mocker.patch.dict ensures 'broken_op' disappears after this function returns
+    mocker.patch.dict(registry.operations, {"broken_op": {"type": "single input operation"}})
+
+    stage = CliStage(operation="broken_op", inputs=["test.pdf"])
+    # Mock the input context so we don't trigger real IO
+    mock_context = mocker.Mock()
+    manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+    with pytest.raises(ValueError, match="is not fully configured"):
+        manager._run_operation(stage, opened_pdfs=[mocker.Mock()])
+
+
+# Check after the test to prove no pollution occurred
+def test_verify_no_pollution():
+    assert "broken_op" not in registry.operations
+
+
+def test_pipeline_missing_op_config(mocker):
+    from pdftl.cli.pipeline import CliStage, PipelineManager
+    from pdftl.core.registry import registry
+
+    # Ensure 'ghost_op' is definitely not in the registry
+    mocker.patch.dict(registry.operations, {}, clear=False)
+
+    stage = CliStage(operation="ghost_op", inputs=["in.pdf"])
+    manager = PipelineManager(stages=[stage], input_context=mocker.Mock())
+
+    # This hits Line 292 because op_data will be None
+    with pytest.raises(ValueError, match="Operation 'ghost_op' is not fully configured"):
+        manager._run_operation(stage, opened_pdfs=[mocker.Mock()])

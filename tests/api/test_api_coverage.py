@@ -138,3 +138,56 @@ class TestIntrospection:
         """Hit line 204: Attribute error."""
         with pytest.raises(AttributeError, match="has no attribute 'invalid_op'"):
             _ = api.invalid_op
+
+
+import io
+
+import pikepdf
+import pytest
+
+from pdftl import api
+
+
+def test_process_user_input_with_bytes(temp_pdf):
+    """
+    Hits api.py:71-72 by passing raw PDF bytes.
+    """
+    # 1. Create a minimal PDF in memory and get its bytes
+    out_buf = io.BytesIO()
+    temp_pdf.add_blank_page()
+    temp_pdf.save(out_buf)
+    pdf_bytes = out_buf.getvalue()
+
+    # 2. Call the API using these bytes as the input
+    # We use a simple operation name like 'info' or any registered op
+    # This triggers _normalize_inputs -> _process_user_input
+    # which sees the 'bytes' type and hits line 71.
+
+    # Using 'call' is the cleanest way to hit the whole flow
+    # We'll mock the internal executor so we don't actually need
+    # the operation to do anything.
+    from unittest.mock import patch
+
+    from pdftl.core.types import OpResult
+
+    with patch("pdftl.core.executor.run_operation") as mock_run:
+        mock_run.return_value = OpResult(success=True, summary="Success", pdf=temp_pdf)
+
+        # Passing bytes here hits line 71
+        api.call("info", pdf_bytes)
+
+    # 3. Verification
+    # No assertion needed for coverage, but let's ensure it didn't crash
+    assert mock_run.called
+
+
+import pdftl.api
+
+
+def test_api_metadata():
+    """
+    Ensures the module docstring and metadata are loaded.
+    This clears line 7 (docstring) coverage.
+    """
+    assert pdftl.api.__doc__ is not None
+    assert "API layer" in pdftl.api.__doc__

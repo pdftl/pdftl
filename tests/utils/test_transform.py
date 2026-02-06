@@ -262,3 +262,26 @@ def test_rotate_pair_invalid_angle(caplog):
     # Fallback behavior: returns original coords
     assert x == 10
     assert y == 10
+
+
+import pikepdf
+import pytest
+
+from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.page_specs import PageTransform
+from pdftl.utils.transform import transform_pdf
+
+
+def test_transform_pdf_invalid_angle(dummy_pdf):
+    """Hits transform.py:50 by providing a non-90-degree rotation."""
+    dummy_pdf.add_blank_page()
+
+    # We create a manual PageTransform object to bypass the parser
+    # and hit the validation logic inside the loop directly.
+    # Rotation is (angle, relative)
+    bad_transform = PageTransform(dummy_pdf, index=0, rotation=(45, False), scale=1.0)
+
+    # We mock expand_specs_to_pages to yield our specific bad transform
+    with pytest.raises(InvalidArgumentError, match="multiple of 90 degrees"):
+        with patch("pdftl.utils.transform.expand_specs_to_pages", return_value=[bad_transform]):
+            transform_pdf(dummy_pdf, ["ignored_spec"])

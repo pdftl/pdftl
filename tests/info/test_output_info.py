@@ -781,3 +781,20 @@ def test_write_info_bookmarks():
         # This forces execution of: (saved_crop_box is None and box_list == saved_media_box)
         assert info.page_media[0].media_rect == rect_data
         assert info.page_media[0].trim_rect is None
+
+
+def test_info_bookmark_resolution_none(mocker):
+    from pdftl.info.output_info import _extract_bookmarks_recursive
+
+    # Create a mock bookmark item
+    mock_item = mocker.Mock()
+    mock_item.title = "Ghost Bookmark"
+    mock_item.children = []
+
+    # Mock resolve_page_number to return None specifically
+    mocker.patch("pdftl.info.output_info.resolve_page_number", return_value=None)
+
+    results = _extract_bookmarks_recursive([mock_item], {}, {})
+
+    # Verify it defaulted to 0 and hit the warning line (276-279)
+    assert results[0].page_number == 0

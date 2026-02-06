@@ -1,6 +1,6 @@
 import io
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from pdftl.cli.help import print_help
 from pdftl.cli.help_render import _load_help_markdown, format_examples_block
@@ -76,3 +76,45 @@ def test_skip_invalid_example(caplog):
     caplog.set_level(logging.WARNING)
     format_examples_block([{}])
     assert "Skipping incomplete example" in caplog.text
+
+
+def test_hprint_no_console():
+    import sys
+
+    import pytest
+
+    from pdftl.cli.help_render import load_hprint
+
+    # Hit line 66: Standard hprint failure
+    hprint_std = load_hprint(None, raw=False)
+    with patch("pdftl.cli.help_render.get_console", return_value=None):
+        with pytest.raises(RuntimeError, match="Rich console is not available"):
+            hprint_std("some markdown")
+
+    # Hit line 74: Redirection (file) hprint failure
+    hprint_file = load_hprint(sys.stderr, raw=False)
+    with patch("pdftl.cli.help_render.get_console", return_value=None):
+        with pytest.raises(RuntimeError, match="Rich console is not available"):
+            hprint_file("some markdown")
+
+
+import io
+from unittest.mock import patch
+
+import pytest
+
+from pdftl.cli.help_render import load_hprint
+
+
+def test_load_hprint_file_no_console():
+    """Hits help_render.py:74 by rendering to a file without a console."""
+    fake_file = io.StringIO()
+    # To hit line 74, we need:
+    # 1. raw = False
+    # 2. dest is NOT sys.stdout/stderr (so we use a StringIO)
+    # 3. get_console returns None
+    hprint = load_hprint(dest=fake_file, raw=False)
+
+    with patch("pdftl.cli.help_render.get_console", return_value=None):
+        with pytest.raises(RuntimeError, match="Rich console is not available"):
+            hprint("some markdown")

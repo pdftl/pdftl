@@ -484,3 +484,23 @@ def test_copy_item_recursion_and_pruning():
     assert len(new_parent_list) == 1
     # Verify child was processed (remapper called twice: parent + child)
     assert mock_remapper.remap_goto_action.call_count == 2
+
+
+from unittest.mock import MagicMock
+
+import pikepdf
+
+from pdftl.pages.outlines import rebuild_outlines
+
+
+def test_rebuild_outlines_no_chunks():
+    """Hits outlines.py:141-142."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_remapper = MagicMock()
+    mock_context = MagicMock()
+    # Providing an empty list of page info results in zero chunks
+    mock_context.processed_page_info = []
+
+    result = rebuild_outlines(mock_pdf, [], mock_context, mock_remapper)
+
+    assert result == []

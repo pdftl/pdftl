@@ -162,9 +162,8 @@ def load_simple_cache():
             if os.path.exists(cache_path):
                 with open(cache_path, "rb") as f:
                     return marshal.load(f)
-        except Exception:
-            raise
-            # pass
+        except (OSError, ValueError, EOFError):
+            return {}
     return {}
 
 

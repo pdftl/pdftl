@@ -201,47 +201,13 @@ def _update_annotations(page, matrix):
 
 def _eval_dim(terms, reference_size: float) -> float:
     """
-    Converts dimension strings (e.g. ['1in', '50%']) into a float value in points.
-    Wraps dim_str_to_pts to handle lists of terms.
+    Converts dimension strings (e.g. '1in' or ['1in', '5pt'])
+    into a float value in points.
     """
+    if isinstance(terms, str):
+        terms = [terms]  # Normalize single string to list
+
     total = 0.0
-    # The parser returns a list of terms to be summed (e.g. "1in + 5pt")
-    if isinstance(terms, list):
-        for term in terms:
-            total += dim_str_to_pts(term, reference_size)
-    else:
-        # Handle single string case just to be safe
-        total = dim_str_to_pts(terms, reference_size)
+    for term in terms:
+        total += dim_str_to_pts(term, reference_size)
     return total
-
-
-def _resolve_anchor(params: dict, rect: tuple[float, float, float, float]) -> tuple[float, float]:
-    x1, y1, x2, y2 = rect
-    w = x2 - x1
-    h = y2 - y1
-
-    if params["anchor_type"] == "coord":
-        x_offset = _eval_coordinate(params["anchor_x"], w)
-        y_offset = _eval_coordinate(params["anchor_y"], h)
-        return x1 + x_offset, y1 + y_offset
-
-    else:
-        name = params.get("anchor_name", "center").lower().replace("-", "").replace("_", "")
-        mid_x = x1 + w / 2
-        mid_y = y1 + h / 2
-
-        if "left" in name:
-            x = x1
-        elif "right" in name:
-            x = x2
-        else:
-            x = mid_x
-
-        if "top" in name:
-            y = y2
-        elif "bottom" in name:
-            y = y1
-        else:
-            y = mid_y
-
-        return x, y

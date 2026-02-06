@@ -213,3 +213,14 @@ def test_place_content_skips_invalid_page_numbers(mocker):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_place_eval_dim_normalization():
+    from pdftl.operations.place import _eval_dim
+
+    # Line 208: Pass a single string instead of a list
+    # This triggers: if isinstance(terms, str): terms = [terms]
+    result = _eval_dim("1in", reference_size=100.0)
+
+    # 1 inch is 72 points
+    assert result == 72.0

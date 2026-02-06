@@ -73,3 +73,41 @@ def test_call_unsuccessful_operation():
     with patch("pdftl.core.executor.run_operation", return_value=mock_result):
         with pytest.raises(OperationError, match="Failed specifically"):
             api.call("some_op")
+
+
+import io
+
+import pikepdf
+import pytest
+
+from pdftl import api
+
+
+def test_normalize_inputs_with_list(temp_pdf):
+    """Hits line 44: user_opened is a list."""
+    # We pass a list of open PDF objects
+    opened_list = [temp_pdf]
+    inputs, opened_dict = api._normalize_inputs(
+        user_inputs=None, user_opened=opened_list, password=None
+    )
+
+    assert opened_dict[0] == temp_pdf
+    assert inputs == ["<obj-0>"]
+
+
+def test_process_bytes_input():
+    """Hits lines 71-72: input item is bytes."""
+    # Create a tiny valid PDF in memory
+    buf = io.BytesIO()
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        pdf.save(buf)
+    pdf_bytes = buf.getvalue()
+
+    # Call _process_user_input directly or via call()
+    final_inputs, final_opened = api._process_user_input(
+        i=0, item=pdf_bytes, password=None, final_inputs=[], final_opened={}
+    )
+
+    assert final_inputs == ["<bytes-obj-0>"]
+    assert isinstance(final_opened[0], pikepdf.Pdf)

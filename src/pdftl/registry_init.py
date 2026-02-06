@@ -30,7 +30,7 @@ def _discover_external_operations():
     else:
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 
-    op_dir = pathlib.Path(base) / "pdftl" / "operations"
+    op_dir = pathlib.Path(os.path.join(base, "pdftl", "operations"))
 
     if not op_dir.exists():
         return

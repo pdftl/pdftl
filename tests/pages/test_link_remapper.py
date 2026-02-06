@@ -544,3 +544,53 @@ def test_copy_action_unconfigured_raises_error():
     # Attempting to copy an action should now trigger the ValueError
     with pytest.raises(ValueError, match="Unconfigured LinkRemapper"):
         remapper._copy_action({})
+
+
+from unittest.mock import MagicMock
+
+import pikepdf
+import pytest
+
+from pdftl.pages.link_remapper import LinkRemapper, RemapperContext
+
+
+@pytest.fixture
+def empty_context():
+    return RemapperContext(
+        page_map={},
+        rev_maps={},
+        dest_caches={},
+        pdf_to_input_index={},
+        page_transforms={},
+        include_instance=False,
+        include_pdf_id=False,
+    )
+
+
+def test_remap_named_unconfigured_error(empty_context):
+    """Hits Line 277: self.pdf is None during named remapping."""
+    remapper = LinkRemapper(empty_context)
+    # Note: We do NOT call set_call_context here
+
+    with pytest.raises(ValueError, match="Unconfigured LinkRemapper"):
+        remapper._remap_named_destination_data("some_dest")
+
+
+def test_remap_named_destination_invalid_type(empty_context, caplog):
+    """Hits Lines 303-307: Named destination is not an array."""
+    with pikepdf.new() as pdf, pikepdf.new() as source_pdf:
+        # 1. Setup context with a 'bad' destination (a string instead of an array)
+        pdf_id = id(source_pdf)
+        empty_context.dest_caches[pdf_id] = {"BadDest": pikepdf.String("I should be an array")}
+
+        remapper = LinkRemapper(empty_context)
+        remapper.set_call_context(pdf, source_pdf, instance_num=0)
+
+        # 2. Trigger the remapping
+        action_dest, named_dest = remapper._remap_named_destination_data("BadDest")
+
+        # 3. Verify
+        assert action_dest is None
+        assert named_dest is None
+        assert "is not an array" in caplog.text
+        assert "Link will be dropped" in caplog.text

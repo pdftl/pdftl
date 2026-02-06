@@ -154,3 +154,25 @@ def test_save_and_sign_encryption_success_path():
 
         # Verify line 42 was hit by checking the logger call
         mock_logger.debug.assert_any_call("SUCCESS: Buffer is now encrypted.")
+
+
+def test_sign_load_failure_coverage():
+    """Hit sign.py:67 - Failed to load signing key and certificate."""
+    from unittest.mock import MagicMock, patch
+
+    from pdftl.exceptions import UserCommandLineError
+    from pdftl.output.sign import save_and_sign
+
+    mock_pdf = MagicMock()
+    sign_cfg = {"key": "k", "cert": "c", "passphrase": "p", "field": "f"}
+    save_opts = {"encryption": None}
+
+    # Intercept pyhanko's load method to return None
+    with (
+        patch("pyhanko.sign.signers.SimpleSigner.load", return_value=None),
+        patch("pyhanko.pdf_utils.incremental_writer.IncrementalPdfFileWriter"),
+        patch("pdftl.output.sign.io.BytesIO"),
+    ):
+
+        with pytest.raises(UserCommandLineError, match="Failed to load signing key"):
+            save_and_sign(mock_pdf, sign_cfg, save_opts, "out.pdf")

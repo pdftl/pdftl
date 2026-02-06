@@ -1,3 +1,71 @@
+from unittest.mock import MagicMock
+
+import pikepdf
+import pytest
+
+from pdftl.utils.destinations import (
+    ResolvedDest,
+    _dest_from_outline_item,
+    _find_page_index,
+    get_named_destinations,
+    get_page_map,
+    resolve_dest_to_page_num,
+)
+
+# --- 1. RESTORE ORIGINAL INTEGRATION TESTS (Lines 23-27, 63-65, 88) ---
+
+
+def test_resolve_named_dest_dictionary_path():
+    """Hits Line 63: Named dest points to a Dict with a /D key."""
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        dest_dict = pikepdf.Dictionary(
+            {"/D": pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")])}
+        )
+        named_dests = {"Complex": dest_dict}
+
+        res = resolve_dest_to_page_num("Complex", pdf.pages, named_dests)
+        assert res.dest_type == "Fit"
+
+
+# --- 2. OUTLINE & ACTION FALLBACKS (Lines 47-53, 81) ---
+
+
+def test_outline_item_action_fallback():
+    """Hits Lines 47-53 & 81: OutlineItem -> Action -> Destination."""
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        page_obj = pdf.pages[0].obj
+
+        # Create a mock OutlineItem that behaves like pikepdf's C-extension object
+        mock_item = MagicMock(spec=pikepdf.OutlineItem)
+        mock_item.destination = None
+        # Mocking the .action.D attribute access
+        mock_item.action = MagicMock()
+        mock_item.action.D = pikepdf.Array([page_obj, pikepdf.Name("/XYZ")])
+
+        # This hits line 81, then 47-53
+        res = resolve_dest_to_page_num(mock_item, pdf.pages, None)
+        assert res.page_num == 1
+
+
+# --- 3. EDGE CASE FAILURES (Lines 33, 108) ---
+
+
+def test_find_page_index_missing_objgen():
+    """Hits Line 33: Object has no objgen attribute."""
+    assert _find_page_index(object(), []) is None
+
+
+def test_resolve_dest_to_page_num_catch_all():
+    """Hits Line 108: Array is valid but contains invalid page data."""
+    with pikepdf.new() as pdf:
+        # Array with an integer instead of a Page Dictionary
+        invalid_dest = pikepdf.Array([123, pikepdf.Name("/XYZ")])
+        res = resolve_dest_to_page_num(invalid_dest, pdf.pages, None)
+        assert res is None  # Hits line 108
+
+
 import pikepdf
 
 from pdftl.utils.destinations import ResolvedDest, get_named_destinations, resolve_dest_to_page_num
@@ -198,3 +266,102 @@ def test_dest_from_outline_item_action_fallback():
     result = _dest_from_outline_item(mock_item)
 
     assert result == "/MyFallbackDest"
+
+
+def test_find_page_index_fast_path_explicit():
+    """
+    Directly hits destinations.py:35
+    The main resolver skips _find_page_index if pdf_pages is a dict,
+    so we have to call the helper directly to cover this line.
+    """
+    from unittest.mock import MagicMock
+
+    from pdftl.utils.destinations import _find_page_index
+
+    mock_page = MagicMock()
+    mock_page.objgen = (10, 0)
+
+    # Passing a dict here forces Line 34 to be True and Line 35 to execute
+    page_map = {(10, 0): 1}
+
+    result = _find_page_index(mock_page, page_map)
+    assert result == 1
+
+
+from unittest.mock import MagicMock
+
+import pikepdf
+import pytest
+
+from pdftl.utils.destinations import (
+    _find_page_index,
+    get_named_destinations,
+    get_page_map,
+    resolve_dest_to_page_num,
+)
+
+
+def test_resolve_dest_full_integration(temp_pdf):
+    from pikepdf import Array, Dictionary, Name, NameTree
+
+    page2 = temp_pdf.add_blank_page()
+    num_pages = len(temp_pdf.pages)
+    page_map = get_page_map(temp_pdf.pages)
+
+    # 1. Use the NameTree helper to create a valid /Dests tree
+    dest_tree = NameTree.new(temp_pdf)
+
+    # 2. Add the destination (the helper handles the tree logic)
+    dest_tree["MyDest"] = Array([page2.obj, Name.XYZ])
+
+    # 3. Attach it to the Root Catalog
+    if "/Names" not in temp_pdf.Root:
+        temp_pdf.Root.Names = Dictionary()
+
+    temp_pdf.Root.Names.Dests = dest_tree.obj
+
+    # 4. Now this should succeed
+    named_dests = get_named_destinations(temp_pdf)
+    assert "MyDest" in named_dests
+
+    res = resolve_dest_to_page_num("MyDest", page_map, named_dests)
+    assert res.page_num == num_pages
+    assert res.dest_type == "XYZ"
+
+
+def test_resolve_named_dest_dictionary_path(temp_pdf):
+    """Hits Line 63: Named dest points to a Dict with a /D key."""
+    page = temp_pdf.add_blank_page()
+    dest_dict = pikepdf.Dictionary(D=pikepdf.Array([page.obj, pikepdf.Name("/Fit")]))
+    named_dests = {"Complex": dest_dict}
+
+    # Pass pages as a list to hit 'slow path' coverage in helper
+    res = resolve_dest_to_page_num("Complex", temp_pdf.pages, named_dests)
+    assert res.dest_type == "Fit"
+
+
+def test_destinations_fast_paths_final(temp_pdf):
+    """Hits lines 96-104 safely using real objects."""
+    page = temp_pdf.add_blank_page()
+    page_map = {page.objgen: 1}
+
+    # Real Array prevents the 'isinstance' failure and instability
+    fake_dest = pikepdf.Array([page.obj, pikepdf.Name("/XYZ"), 0, 0])
+
+    res = resolve_dest_to_page_num(fake_dest, page_map, {})
+
+    assert res.page_num == 1
+    assert res.dest_type == "XYZ"
+    assert res.args == [0, 0]
+
+
+def test_resolve_dest_to_page_num_catch_all(temp_pdf):
+    """Hits Line 108: Array is valid but contains invalid page data (int instead of dict)."""
+    invalid_dest = pikepdf.Array([123, pikepdf.Name("/XYZ")])
+    res = resolve_dest_to_page_num(invalid_dest, temp_pdf.pages, None)
+    assert res is None
+
+
+def test_find_page_index_missing_objgen():
+    """Hits Line 33: Object has no objgen attribute (edge case)."""
+    assert _find_page_index(object(), []) is None

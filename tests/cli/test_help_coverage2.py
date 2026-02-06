@@ -67,3 +67,18 @@ def test_print_multiple_topics_separator():
 
     # (Optional) Verify something was written
     assert output.getvalue() != ""
+
+
+from unittest.mock import patch
+
+import pytest
+
+from pdftl.cli.help import print_main_help
+
+
+def test_print_main_help_no_console():
+    """Hits help.py:115 by simulating a missing Rich console."""
+    with patch("pdftl.cli.help.get_console", return_value=None):
+        # We must set raw=False to enter the Rich path
+        with pytest.raises(RuntimeError, match="Rich console is not available"):
+            print_main_help(raw=False)

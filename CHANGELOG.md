@@ -5,19 +5,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [Unreleased 0.11.0]
+## [0.11.0] - 2026-02-08
 
 ### Added
 
-- Pipeline substitution using `JOB` and `DONE`
+- Inline pipeline substitution using new `JOB` and `DONE` keywords, documented under `pdftl help pipeline`
 
 ### Changed
 
-- Bump pikepdf required version to 10.3.0 so that pdftl now passes the vendored pdftk-java test suite
+- Bump pikepdf required version to 10.3.0 to enable better pdftk compatibility
 
-### Added
+- Compatibility:
+  - Default to encrypt_aes128 encryption, the strongest which is pdftk compatible
+  - pdftl now passes the vendored pdftk-java test suite
 
-- API now accepts `io.BytesIO` as PDF inputs
+- Shell completion improvements and optimization
+
+- Respect XDG environment variables for cache and plugin directory on non-Windows
+
+- Performance improvements, particularly in `cat` and `dump_data`
+
+- API now accepts `io.BytesIO` as PDF inputs (as well as `pathlib.Path`, etc)
+
+### Fixed
+
+- Resolved issue with outlines (contents) when using `cat` with named destinations
 
 ## [0.10.0] - 2026-01-28
 

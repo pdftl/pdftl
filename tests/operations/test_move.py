@@ -1,4 +1,5 @@
 # tests/operations/test_move.py
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
@@ -213,3 +214,17 @@ def test_move_command_loads_json_spec():
                 _, called_spec = mock_exec.call_args[0]
                 assert called_spec.source_spec == "10"
                 assert called_spec.mode == "after"
+
+
+def test_move_parse_failure_coverage():
+    """Hit move.py:102 - Failed to parse move specification."""
+    from unittest.mock import MagicMock, patch
+
+    from pdftl.exceptions import UserCommandLineError
+    from pdftl.operations.move import move_pages
+
+    mock_pdf = MagicMock()
+    # Mocking resolve_operation_spec to return None to fail the isinstance check
+    with patch("pdftl.operations.move.resolve_operation_spec", return_value=None):
+        with pytest.raises(UserCommandLineError, match="Failed to parse move specification"):
+            move_pages(mock_pdf, ["invalid", "args"])

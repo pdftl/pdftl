@@ -276,6 +276,16 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_slow)
 
 
+@pytest.fixture
+def temp_pdf():
+    """Provides a real PDF context to create valid PDF objects."""
+    import pikepdf
+
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        yield pdf
+
+
 @pytest.fixture(scope="module")
 def dummy_pdfs(tmp_path_factory, assets_dir):
     """A pytest fixture that creates a set of dummy PDF files

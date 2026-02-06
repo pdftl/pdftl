@@ -576,3 +576,39 @@ def test_write_named_dests_odd_length():
 
     with pytest.raises(ValueError, match="must have even length"):
         write_named_dests(pdf, odd_dests)
+
+
+import builtins
+import importlib
+from unittest.mock import patch
+
+import pdftl.pages.links
+
+
+def test_profile_initialization_safely():
+    """
+    Hits links.py:35-38 by temporarily hiding 'profile' from builtins.
+    Uses a dictionary patch to avoid RecursionError.
+    """
+    # 1. We patch the __dict__ of the builtins module.
+    # This removes 'profile' from the scope of hasattr() without
+    # replacing the hasattr function itself.
+    with patch.dict(builtins.__dict__):
+        if "profile" in builtins.__dict__:
+            del builtins.__dict__["profile"]
+
+        # 2. Now, when reload() runs, hasattr(builtins, "profile")
+        # will naturally return False.
+        importlib.reload(pdftl.pages.links)
+
+        # 3. Verify the module successfully defined the fallback
+        assert hasattr(builtins, "profile")
+
+        @pdftl.pages.links.profile
+        def sample():
+            return "safe"
+
+        assert sample() == "safe"
+
+    # After the 'with' block, builtins is restored to its original state
+    # by patch.dict, so no permanent pollution!

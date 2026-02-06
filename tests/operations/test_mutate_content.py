@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pikepdf
 import pytest
 
@@ -197,3 +199,26 @@ def test_mutate_content_complex_xobjects_recursion_and_deduplication(simple_pdf,
     assert cmds_outer[0].operator == pikepdf.Operator("w")
     assert list(cmds_outer[1].operands) == [0]
     assert cmds_outer[1].operator == pikepdf.Operator("g")
+
+
+def test_mutate_content_load_errors(tmp_path):
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from pdftl.operations.mutate_content import mutate_content
+
+    script = tmp_path / "broken.py"
+    script.write_text("def valid_func(instr, ctx): return instr")
+
+    pdf = MagicMock()
+
+    # Hit line 91: ImportError (Simulated by mocking spec_from_file_location to None)
+    with patch("importlib.util.spec_from_file_location", return_value=None):
+        with pytest.raises(ImportError, match="Could not load script module"):
+            mutate_content(pdf, [str(script)])
+
+    # Hit line 98: AttributeError (Function doesn't exist in script)
+    # We specify a function name that isn't in the script ('missing_func')
+    with pytest.raises(AttributeError, match="Function 'missing_func' not found"):
+        mutate_content(pdf, [f"{script}::missing_func"])

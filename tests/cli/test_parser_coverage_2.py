@@ -172,3 +172,31 @@ def test_duplicate_flags_are_accepted_and_deduplicated():
 
     # Check value option is captured
     assert options["owner_pw"] == "my_password"
+
+
+import pytest
+
+from pdftl.cli.parser import _recursive_group_pipelines, split_args_by_separator
+from pdftl.exceptions import InvalidArgumentError
+
+
+def test_parser_coverage_gaps():
+    # Line 321: Unclosed sub-pipeline
+    # Reaches 'StopIteration' while depth > 0
+    with pytest.raises(InvalidArgumentError, match="Unclosed sub-pipeline"):
+        list(_recursive_group_pipelines(iter(["JOB", "filter"])))
+
+    # Line 354: Unexpected SUB_END (DONE)
+    # Finds DONE when depth is 0
+    with pytest.raises(InvalidArgumentError, match="Unexpected 'DONE' found"):
+        split_args_by_separator(["filter", "DONE"])
+
+
+def test_parser_implicit_cat_coverage():
+    from pdftl.cli.parser import parse_cli_stage
+
+    # Line 286-287: Provide > 1 input with no operation keyword
+    # is_first_stage=True prevents it from trying to prepending '_'
+    stage = parse_cli_stage(["file1.pdf", "file2.pdf"], is_first_stage=True)
+
+    assert stage.operation == "cat"

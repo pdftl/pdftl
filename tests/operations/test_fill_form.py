@@ -252,3 +252,36 @@ def test_radio_exception_reraise_real_error():
     # realize it's not the "uncheck" error, and re-raise it.
     with pytest.raises(ValueError, match="Some catastrophic failure"):
         _set_form_field_value(field, "/AnyValue")
+
+
+import io
+
+import pikepdf
+import pytest
+
+from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.fill_form import _fill_form_from_fdf_data
+
+
+def test_fill_form_fdf_fields_not_array():
+    """Hits line 113: FDF /Fields is a Dictionary instead of an Array."""
+    # Create a dummy FDF-structured PDF
+    with pikepdf.new() as fdf:
+        # Create the /FDF entry in the Root
+        fdf.Root.FDF = pikepdf.Dictionary(
+            Fields=pikepdf.Dictionary(T="NotAnArray")  # Malformed: should be [ ... ]
+        )
+
+        # Get the raw bytes
+        out = io.BytesIO()
+        fdf.save(out)
+        malformed_data = out.getvalue()
+
+    # We need a dummy form object to satisfy the first argument
+    with pikepdf.new() as target_pdf:
+        from pikepdf.form import Form
+
+        form_proxy = Form(target_pdf)
+
+        with pytest.raises(UserCommandLineError, match="FDF fields is not an array"):
+            _fill_form_from_fdf_data(form_proxy, malformed_data)

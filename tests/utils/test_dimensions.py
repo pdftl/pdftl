@@ -44,3 +44,13 @@ def test_dim_str_to_pts_bad_percentage():
     # -> line 207 (strip pt) -> line 208 float('bad%') -> raises ValueError again.
     with pytest.raises(ValueError):
         dim_str_to_pts("bad%", 100)
+
+
+def test_dim_str_to_pts_error():
+    import pytest
+
+    from pdftl.utils.dimensions import dim_str_to_pts
+
+    # Hit line 32: Percentage without total_dimension
+    with pytest.raises(ValueError, match="requires a total dimension"):
+        dim_str_to_pts("50%", total_dimension=None)
