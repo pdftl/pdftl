@@ -128,16 +128,16 @@ def _get_pagelabels(info, labels):
         )
 
 
-def _get_bookmarks(info, pdf):
+def _get_bookmarks(info, pdf, page_map):
     from pikepdf.exceptions import OutlineStructureError
 
     try:
         with pdf.open_outline() as outline:
             if outline.root:
-                named_destinations = get_named_destinations(pdf)
-                pages_list = list(pdf.pages)
+                raw_dests = get_named_destinations(pdf)
+                named_dest_dict = {str(k): v for k, v in raw_dests.items()} if raw_dests else {}
                 info.bookmarks = _extract_bookmarks_recursive(
-                    list(outline.root), pages_list, named_destinations
+                    list(outline.root), page_map, named_dest_dict
                 )
     except OutlineStructureError as exc:
         logger.warning(
@@ -147,6 +147,7 @@ def _get_bookmarks(info, pdf):
 
 
 def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
+    page_map = {page.objgen: i + 1 for i, page in enumerate(pdf.pages)}
 
     info = PdfInfo(pages=len(pdf.pages), ids=pdf_id_metadata_as_strings(pdf))
     if extra_info:
@@ -162,7 +163,7 @@ def get_info(pdf, input_filename, extra_info=False) -> PdfInfo:
         labels = NumberTree(pdf.Root.PageLabels)
         _get_pagelabels(info, labels)
 
-    _get_bookmarks(info, pdf)
+    _get_bookmarks(info, pdf, page_map)
 
     return info
 
@@ -255,7 +256,7 @@ def _write_bookmarks(writer, bookmarks: list[BookmarkEntry] | None, escape_xml=T
 
 
 def _extract_bookmarks_recursive(
-    items, pages_list, named_destinations, level=1
+    items, page_map, named_destinations, level=1
 ) -> list[BookmarkEntry]:
     """Gather bookmarks into a list of dataclasses using original error handling."""
 
@@ -263,7 +264,7 @@ def _extract_bookmarks_recursive(
     for item in items:
         page_num = 0
         try:
-            page_num = resolve_page_number(item, pages_list, named_destinations)
+            page_num = resolve_page_number(item, page_map, named_destinations)
         except AssertionError as exc:
             logger.warning(
                 "Could not resolve page number for bookmark '%s': %s.\n  Using page number 0.",
@@ -280,7 +281,7 @@ def _extract_bookmarks_recursive(
 
         if item.children:
             entry.children = _extract_bookmarks_recursive(
-                item.children, pages_list, named_destinations, level + 1
+                item.children, page_map, named_destinations, level + 1
             )
 
         results.append(entry)
