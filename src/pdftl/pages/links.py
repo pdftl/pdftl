@@ -28,6 +28,11 @@ from pdftl.utils.progress import get_track_progress
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
+import builtins
+if not hasattr(builtins, 'profile'):
+    def profile(func):
+        return func
+    builtins.profile = profile
 
 
 @dataclass
@@ -105,7 +110,7 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
 
     return new_annot, new_named_dest_data
 
-
+@profile
 def _rebuild_annotations_for_page(
     new_page, source_page, page_idx, remapper: LinkRemapper, pikepdf: Any
 ):
