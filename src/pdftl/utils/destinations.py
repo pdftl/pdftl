@@ -10,6 +10,7 @@ class ResolvedDest(NamedTuple):
     dest_type: str
     args: list[Any]
 
+
 def get_page_map(pdf_pages) -> dict[tuple[int, int], int]:
     """
     Creates a O(1) lookup table for page objects.
@@ -17,7 +18,7 @@ def get_page_map(pdf_pages) -> dict[tuple[int, int], int]:
     """
     return {page.objgen: i + 1 for i, page in enumerate(pdf_pages)}
 
-        
+
 def get_named_destinations(pdf):
     from pikepdf import NameTree
 
@@ -36,7 +37,7 @@ def _find_page_index(page_obj, page_map) -> int | None:
     for i, page in enumerate(page_map):
         if hasattr(page, "objgen") and page.objgen == page_obj.objgen:
             return i + 1
-        
+
     return None
 
 
@@ -97,7 +98,7 @@ def resolve_dest_to_page_num(
             # This ensures your tests and other modules still work
             # but warns us that we're using the slow path
             page_num = _find_page_index(page_obj, pdf_pages)
-            
+
         if hasattr(page_obj, "objgen"):
             if page_num:
                 dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"

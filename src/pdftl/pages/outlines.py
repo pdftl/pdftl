@@ -147,15 +147,9 @@ def rebuild_outlines(
     with new_pdf.open_outline() as new_outline:
         for chunk in track(chunks, description="Bookmark chunk handling", transient=True):
             remapper.set_call_context(new_pdf, chunk.pdf, chunk.instance_num)
-            _process_chunk(chunk, remapper, new_outline)
+            chunk_dests = _process_chunk(chunk, remapper, new_outline)
+            new_dests_from_outlines.extend(chunk_dests)
 
-    # FIXME: this return value is always empty.
-    #
-    # The `_process_chunk` function appears to resolve
-    # destinations immediately (early binding), so this list
-    # is never populated. It is currently
-    # vestigial. Probably.  We are keeping it to satisfy the
-    # function signature until a future refactor.
     return new_dests_from_outlines
 
 
@@ -264,7 +258,7 @@ def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
 
     if not has_outlines:
         logger.debug("short-circuiting _process_chunk")
-        return
+        return []
 
     copier = OutlineCopier(remapper)
 
@@ -276,3 +270,5 @@ def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
                 source_item,
                 new_outline.root,  # Append to the new root
             )
+
+    return copier.new_dests_list

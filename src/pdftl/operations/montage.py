@@ -6,7 +6,7 @@
 
 """Impose pages onto a grid or custom layout."""
 
-from typing import TYPE_CHECKING, List, Tuple, Dict, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 if TYPE_CHECKING:
     from pikepdf import Page, Pdf
@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.page_specs import expand_specs_to_pages
 from pdftl.layouts import GridLayout
 from pdftl.utils.geometry import calculate_fit_metrics, calculate_placement_matrix
+from pdftl.utils.page_specs import expand_specs_to_pages
 
 _MONTAGE_LONG_DESC = """
 The `montage` operation allows you to impose multiple source pages onto a
@@ -62,6 +62,7 @@ _PAPER_SIZES = {
     "a5": (419.53, 595.28),
 }
 
+
 @register_operation(
     "montage",
     tags=["from_scratch", "imposition", "geometry"],
@@ -105,15 +106,15 @@ def montage_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
         if inputs:
             # Re-run expand with a default "take everything" approach if possible,
             # or manual fallback. For now, raise if empty.
-             raise ValueError("No source pages selected for montage.")
+            raise ValueError("No source pages selected for montage.")
 
     # 3. Setup Layout Strategy
     # Currently defaults to GridLayout based on parsed config
     layout_strategy = GridLayout(
-        columns=config['cols'],
-        rows=config['rows'],
-        margin=config['margin'],
-        gutter=config['gutter']
+        columns=config["cols"],
+        rows=config["rows"],
+        margin=config["margin"],
+        gutter=config["gutter"],
     )
 
     # 4. Execute Montage
@@ -121,8 +122,8 @@ def montage_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
         target_pdf=new_pdf,
         source_pages=[p.page for p in source_pages_to_process],
         strategy=layout_strategy,
-        canvas_size=config['canvas_size'],
-        preserve_aspect_ratio=config['preserve_aspect_ratio']
+        canvas_size=config["canvas_size"],
+        preserve_aspect_ratio=config["preserve_aspect_ratio"],
     )
 
     return OpResult(success=True, pdf=new_pdf)
@@ -140,8 +141,8 @@ def _parse_montage_config(specs: List[str], out_page_specs: List[str]) -> Dict[s
         "rows": 2,
         "margin": 0.0,
         "gutter": 0.0,
-        "canvas_size": _PAPER_SIZES["a4"], # Default A4 Portrait
-        "preserve_aspect_ratio": True
+        "canvas_size": _PAPER_SIZES["a4"],  # Default A4 Portrait
+        "preserve_aspect_ratio": True,
     }
 
     for token in specs:
@@ -170,7 +171,7 @@ def _parse_montage_config(specs: List[str], out_page_specs: List[str]) -> Dict[s
             elif key == "rows":
                 config["rows"] = int(val)
             elif key == "fit":
-                config["preserve_aspect_ratio"] = (val != "fill")
+                config["preserve_aspect_ratio"] = val != "fill"
         else:
             # Assume it's a page spec (e.g. "1-5", "even", "A")
             out_page_specs.append(token)
@@ -183,7 +184,7 @@ def _apply_montage_logic(
     source_pages: List["Page"],
     strategy: GridLayout,
     canvas_size: Tuple[float, float],
-    preserve_aspect_ratio: bool
+    preserve_aspect_ratio: bool,
 ):
     """
     The engine that combines Layout, Geometry, and Pikepdf to build the document.
@@ -192,9 +193,7 @@ def _apply_montage_logic(
 
     # Generate Layout Slots
     layout_stream = strategy.generate_slots(
-        item_count=len(source_pages),
-        canvas_width=target_w,
-        canvas_height=target_h
+        item_count=len(source_pages), canvas_width=target_w, canvas_height=target_h
     )
 
     # Cache output pages: index -> Page object
@@ -232,8 +231,8 @@ def _apply_montage_logic(
             scale_x=sx,
             scale_y=sy,
             rotate=0,
-            anchor_source="bottom-left", # fit_metrics assumes simple bottom-left box match
-            anchor_target="bottom-left"
+            anchor_source="bottom-left",  # fit_metrics assumes simple bottom-left box match
+            anchor_target="bottom-left",
         )
 
         # D. Stamp (Form XObject)

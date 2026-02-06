@@ -21,17 +21,20 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
-from pdftl.pages.link_remapper import LinkRemapper
-from pdftl.utils.progress import get_track_progress
-
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
 import builtins
-if not hasattr(builtins, 'profile'):
+
+from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
+from pdftl.pages.link_remapper import LinkRemapper
+from pdftl.utils.progress import get_track_progress
+
+if not hasattr(builtins, "profile"):
+
     def profile(func):
         return func
+
     builtins.profile = profile
 
 
@@ -109,6 +112,7 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
         new_annot.A = new_action
 
     return new_annot, new_named_dest_data
+
 
 @profile
 def _rebuild_annotations_for_page(
