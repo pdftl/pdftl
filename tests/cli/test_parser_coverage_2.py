@@ -174,10 +174,7 @@ def test_duplicate_flags_are_accepted_and_deduplicated():
     assert options["owner_pw"] == "my_password"
 
 
-import pytest
-
 from pdftl.cli.parser import _recursive_group_pipelines, split_args_by_separator
-from pdftl.exceptions import InvalidArgumentError
 
 
 def test_parser_coverage_gaps():

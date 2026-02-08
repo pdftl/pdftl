@@ -1,5 +1,3 @@
-import pytest
-
 from pdftl.layouts.base import LayoutSlot, LayoutStrategy
 from pdftl.layouts.grid import GridLayout
 

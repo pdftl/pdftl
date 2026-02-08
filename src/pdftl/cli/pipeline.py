@@ -499,7 +499,8 @@ class PipelineManager:
         HelpExample(
             desc=("Join a contract with a stamped copy of itself"),
             cmd=(
-                f"contract.pdf {SUB_START} contract.pdf stamp logo.pdf {SUB_END} output combined.pdf"
+                f"contract.pdf {SUB_START} contract.pdf stamp logo.pdf {SUB_END}"
+                " output combined.pdf"
             ),
         ),
     ],

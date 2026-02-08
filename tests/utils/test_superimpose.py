@@ -1,6 +1,6 @@
 import pikepdf
 import pytest
-from pikepdf import Array, Matrix, Name, Stream
+from pikepdf import Array, Matrix
 
 from pdftl.utils.superimpose import superimpose_page
 

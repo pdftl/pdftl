@@ -436,12 +436,12 @@ def test_process_result_implicit_passthrough():
     mock_input_pdf.close.assert_not_called()
 
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from pdftl.cli.pipeline import CliStage, InlineSubPipeline, PipelineManager
-from pdftl.exceptions import MissingArgumentError, UserCommandLineError
+from pdftl.cli.pipeline import InlineSubPipeline
+from pdftl.exceptions import MissingArgumentError
 
 
 def test_pipeline_missing_output_error():
@@ -490,7 +490,6 @@ def test_inline_pipeline_no_output_error():
 
 import pytest
 
-from pdftl.cli.pipeline import CliStage, InlineSubPipeline, PipelineManager
 from pdftl.core.registry import registry
 
 

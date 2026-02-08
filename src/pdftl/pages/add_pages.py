@@ -215,7 +215,7 @@ def process_source_pages(
 
 def _stash_page_source_data(new_page, source_page, page_data, instance_num):
     # Calculate metadata for variable expansion
-    from pikepdf import Dictionary, Name
+    from pikepdf import Dictionary
 
     filename = getattr(page_data.pdf, "filename", "")
     orig_rotation = int(source_page.get("/Rotate", 0))

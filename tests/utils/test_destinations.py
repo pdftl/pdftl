@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import pikepdf
-import pytest
 
 from pdftl.utils.destinations import (
     ResolvedDest,
@@ -64,11 +63,6 @@ def test_resolve_dest_to_page_num_catch_all():
         invalid_dest = pikepdf.Array([123, pikepdf.Name("/XYZ")])
         res = resolve_dest_to_page_num(invalid_dest, pdf.pages, None)
         assert res is None  # Hits line 108
-
-
-import pikepdf
-
-from pdftl.utils.destinations import ResolvedDest, get_named_destinations, resolve_dest_to_page_num
 
 
 def test_resolve_dest_explicit_array():
@@ -227,11 +221,6 @@ def test_resolve_dest_fallthrough():
         assert result_int is None
 
 
-from unittest.mock import MagicMock
-
-from pdftl.utils.destinations import _dest_from_outline_item, _find_page_index
-
-
 def test_find_page_index_no_objgen():
     """
     Covers line 25: if not hasattr(page_obj, "objgen"): return None
@@ -286,19 +275,6 @@ def test_find_page_index_fast_path_explicit():
 
     result = _find_page_index(mock_page, page_map)
     assert result == 1
-
-
-from unittest.mock import MagicMock
-
-import pikepdf
-import pytest
-
-from pdftl.utils.destinations import (
-    _find_page_index,
-    get_named_destinations,
-    get_page_map,
-    resolve_dest_to_page_num,
-)
 
 
 def test_resolve_dest_full_integration(temp_pdf):

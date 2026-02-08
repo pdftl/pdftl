@@ -8,24 +8,20 @@
 
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from pikepdf import Page
-
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import HelpExample, OpResult
-from pdftl.operations.parsers.place_parser import PlacementOp, parse_place_args
+from pdftl.operations.parsers.place_parser import parse_place_args
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.geometry import (
-    calculate_placement_matrix,
     transform_quadpoints,
     transform_rect_bbox,
 )
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 if TYPE_CHECKING:
-    from pikepdf import Page
+    pass
 
 _PLACE_LONG_DESC = """
 Applies geometric transformations (direct similarities) to the content of selected pages.

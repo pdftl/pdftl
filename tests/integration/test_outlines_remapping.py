@@ -1,5 +1,4 @@
 import pikepdf
-import pytest
 from pikepdf import Dictionary, Name
 
 from pdftl.pages.links import RebuildLinksPartialContext

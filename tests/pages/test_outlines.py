@@ -490,8 +490,6 @@ from unittest.mock import MagicMock
 
 import pikepdf
 
-from pdftl.pages.outlines import rebuild_outlines
-
 
 def test_rebuild_outlines_no_chunks():
     """Hits outlines.py:141-142."""

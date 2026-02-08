@@ -5,7 +5,7 @@ Geometric utilities for calculating PDF transformation matrices.
 Handles anchor resolution, rotation, and coordinate normalization.
 """
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pikepdf import Matrix, Page
@@ -48,7 +48,7 @@ def calculate_placement_matrix(
     return m_to_origin @ m_transform @ m_to_dest
 
 
-def transform_rect_bbox(rect: List[float], matrix: "Matrix") -> List[float]:
+def transform_rect_bbox(rect: list[float], matrix: "Matrix") -> list[float]:
     """
     Applies a matrix to a rectangle [x1, y1, x2, y2] and returns the
     new Axis-Aligned Bounding Box (AABB) that encloses the result.
@@ -68,7 +68,7 @@ def transform_rect_bbox(rect: List[float], matrix: "Matrix") -> List[float]:
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
-def transform_quadpoints(quads: List[float], matrix: "Matrix") -> List[float]:
+def transform_quadpoints(quads: list[float], matrix: "Matrix") -> list[float]:
     """
     Transforms a list of QuadPoints (x1, y1, x2, y2, ...).
     """
@@ -79,7 +79,7 @@ def transform_quadpoints(quads: List[float], matrix: "Matrix") -> List[float]:
     return new_quads
 
 
-def _transform_point(x: float, y: float, m: "Matrix") -> Tuple[float, float]:
+def _transform_point(x: float, y: float, m: "Matrix") -> tuple[float, float]:
     """Helper to apply pikepdf.Matrix to a raw (x,y) pair."""
     # x' = a*x + c*y + e
     # y' = b*x + d*y + f
@@ -87,7 +87,7 @@ def _transform_point(x: float, y: float, m: "Matrix") -> Tuple[float, float]:
     return (m_arr[0] * x + m_arr[2] * y + m_arr[4], m_arr[1] * x + m_arr[3] * y + m_arr[5])
 
 
-def _resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> Tuple[float, float]:
+def _resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> tuple[float, float]:
     """Parses 'center', 'top-left' etc into absolute coordinates."""
     anchor = anchor.lower().strip()
 
@@ -135,7 +135,7 @@ def calculate_fit_metrics(
     target_w: float,
     target_h: float,
     preserve_aspect_ratio: bool = True,
-) -> Tuple[float, float, float, float]:
+) -> tuple[float, float, float, float]:
     """
     Calculates scale factors and centering offsets to fit a source rectangle
     into a target rectangle.

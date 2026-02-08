@@ -98,9 +98,6 @@ def test_hprint_no_console():
             hprint_file("some markdown")
 
 
-import io
-from unittest.mock import patch
-
 import pytest
 
 from pdftl.cli.help_render import load_hprint

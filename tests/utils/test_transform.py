@@ -264,12 +264,9 @@ def test_rotate_pair_invalid_angle(caplog):
     assert y == 10
 
 
-import pikepdf
 import pytest
 
-from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.page_specs import PageTransform
-from pdftl.utils.transform import transform_pdf
 
 
 def test_transform_pdf_invalid_angle(dummy_pdf):

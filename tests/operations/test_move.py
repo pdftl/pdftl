@@ -188,7 +188,7 @@ def test_move_invalid_target_spec(two_page_pdf):
 
 
 import json
-from unittest.mock import mock_open, patch
+from unittest.mock import mock_open
 
 import pytest
 
@@ -218,7 +218,7 @@ def test_move_command_loads_json_spec():
 
 def test_move_parse_failure_coverage():
     """Hit move.py:102 - Failed to parse move specification."""
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from pdftl.exceptions import UserCommandLineError
     from pdftl.operations.move import move_pages

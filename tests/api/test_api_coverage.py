@@ -142,11 +142,6 @@ class TestIntrospection:
 
 import io
 
-import pikepdf
-import pytest
-
-from pdftl import api
-
 
 def test_process_user_input_with_bytes(temp_pdf):
     """

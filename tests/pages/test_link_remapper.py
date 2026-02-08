@@ -546,12 +546,8 @@ def test_copy_action_unconfigured_raises_error():
         remapper._copy_action({})
 
 
-from unittest.mock import MagicMock
-
 import pikepdf
 import pytest
-
-from pdftl.pages.link_remapper import LinkRemapper, RemapperContext
 
 
 @pytest.fixture

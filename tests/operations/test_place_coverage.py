@@ -192,9 +192,6 @@ def test_calculate_transformation_matrix_returns_id_when_dims_missing(monkeypatc
     assert result == pikepdf.Matrix()
 
 
-from pdftl.operations.place import place_content
-
-
 def test_place_content_skips_invalid_page_numbers(mocker):
     import pikepdf
 

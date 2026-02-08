@@ -1,5 +1,4 @@
 import pikepdf
-import pytest
 
 from pdftl.cli.main import main
 

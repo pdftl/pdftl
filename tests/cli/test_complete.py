@@ -5,7 +5,7 @@ import runpy
 import sys
 from unittest.mock import MagicMock, patch
 
-from pdftl.cli.complete import get_cache_dir, get_cache_path
+from pdftl.cli.complete import get_cache_path
 from pdftl.cli.complete import main as complete_main
 from pdftl.cli.complete import rebuild_cache, resolve_candidates
 

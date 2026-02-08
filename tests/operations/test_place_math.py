@@ -1,5 +1,4 @@
 # tests/operations/test_place_math.py
-import pytest
 
 # from pdftl.operations.place import _multiply_matrices
 

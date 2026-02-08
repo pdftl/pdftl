@@ -256,10 +256,8 @@ def test_radio_exception_reraise_real_error():
 
 import io
 
-import pikepdf
 import pytest
 
-from pdftl.exceptions import UserCommandLineError
 from pdftl.operations.fill_form import _fill_form_from_fdf_data
 
 

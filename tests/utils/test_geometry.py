@@ -84,11 +84,8 @@ def test_calculate_fit_metrics_edge_cases():
 
 
 import pytest
-from pikepdf import Matrix
 
 from pdftl.utils.geometry import (
-    _resolve_anchor,
-    calculate_placement_matrix,
     transform_quadpoints,
     transform_rect_bbox,
 )

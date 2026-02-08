@@ -1,13 +1,9 @@
-import marshal
 import os
-import sys
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 import pytest
 
 from pdftl.cli.complete import (
-    get_cache_dir,
-    get_parser,
     is_package_newer_than_cache,
     load_simple_cache,
     main,
@@ -72,11 +68,7 @@ def test_cache_io_flow(mock_cache_env):
         assert load_simple_cache() == {"key": ["val"]}
 
 
-from unittest.mock import mock_open, patch
-
 import pytest
-
-from pdftl.cli.complete import load_simple_cache, update_simple_cache
 
 
 def test_load_simple_cache_handles_corruption():
@@ -169,9 +161,6 @@ def test_directory_iteration_hit():
             assert is_package_newer_than_cache(cache_file) is True
 
 
-from unittest.mock import patch
-
-
 def test_nt_path_handling_hit():
     """Hits line 217: Windows APPDATA path resolution."""
     from pdftl.cli.complete import is_package_newer_than_cache
@@ -225,7 +214,6 @@ def test_is_package_newer_than_cache_logic_extended_final(tmp_path):
 
 def test_script_itself_is_newer():
     """Hits lines 238-239 by ensuring the script mtime is always the winner."""
-    import os
 
     from pdftl.cli.complete import _cache_check_results, is_package_newer_than_cache
 

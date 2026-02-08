@@ -69,8 +69,6 @@ def test_print_multiple_topics_separator():
     assert output.getvalue() != ""
 
 
-from unittest.mock import patch
-
 import pytest
 
 from pdftl.cli.help import print_main_help

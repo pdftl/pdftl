@@ -78,9 +78,6 @@ def test_call_unsuccessful_operation():
 import io
 
 import pikepdf
-import pytest
-
-from pdftl import api
 
 
 def test_normalize_inputs_with_list(temp_pdf):

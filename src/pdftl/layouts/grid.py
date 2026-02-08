@@ -1,7 +1,7 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
-from .base import LayoutSlot, LayoutStrategy
+from .base import LayoutSlot
 
 
 @dataclass
