@@ -76,3 +76,15 @@ bench_*
 .env
 .vscode/
 .pyre/
+
+
+# Debian build artifacts
+/debian/pdftl/
+/debian/pdftl-doc/
+/debian/tmp/
+/debian/bin/
+/debian/*.log
+/debian/*.substvars
+/debian/files
+/debian/debhelper-build-stamp
+/debian/pdftl.1
