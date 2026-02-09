@@ -109,46 +109,44 @@ def mock_pdf():
         yield pdf
 
 
+from unittest.mock import MagicMock, call, patch
+
+from pdftl.utils.transform import transform_pdf
+
+
 @patch("pdftl.utils.transform.apply_scaling")
-@patch("pdftl.utils.page_specs.parse_sub_page_spec")
+# We MUST patch the entry point transform_pdf uses
+@patch("pdftl.utils.transform.expand_specs_to_pages")
 def test_transform_pdf(
-    mock_parse_spec,
+    mock_expand,
     mock_apply_scaling,
     mock_pdf,
 ):
     """
-    Tests the orchestration logic of transform_pdf.
+    Tests the orchestration logic of transform_pdf by mocking the expansion.
     """
     # --- Arrange ---
     spec_str = "1,3"
 
-    # Define a side effect to return different specs based on input
-    def parser_side_effect(spec, total_pages):
-        m = MagicMock()
-        m.rotate = (90, True)
-        m.scale = 2.0
-        m.qualifiers = set()
-        m.omissions = []
+    # 1. Setup mock pages
+    # We use a list so identities (page1, page3) remain stable
+    mock_pages = [MagicMock(name=f"page{i}") for i in range(4)]
+    mock_pdf.pages = mock_pages
 
-        if spec == "1":
-            m.start = 1
-            m.end = 1
-        elif spec == "3":
-            m.start = 3
-            m.end = 3
-        else:
-            # Default fallback (shouldn't happen with "1,3")
-            m.start = 1
-            m.end = total_pages
-        return m
+    # 2. Define mock PageTransform objects
+    # These mimic the 'PageTransform' objects the debugger showed us
+    m1 = MagicMock(name="transform1")
+    m1.index = 0
+    m1.rotation = (90, True)
+    m1.scale = 2.0
 
-    mock_parse_spec.side_effect = parser_side_effect
+    m3 = MagicMock(name="transform3")
+    m3.index = 2
+    m3.rotation = (90, True)
+    m3.scale = 2.0
 
-    # Get references to the mock pages
-    page1 = mock_pdf.pages[0]
-    page2 = mock_pdf.pages[1]
-    page3 = mock_pdf.pages[2]
-    page4 = mock_pdf.pages[3]
+    # The loop in transform_pdf: for page_transform in expand_specs_to_pages(...):
+    mock_expand.return_value = [m1, m3]
 
     # --- Act ---
     returned_pdf = transform_pdf(mock_pdf, [spec_str])
@@ -156,21 +154,20 @@ def test_transform_pdf(
     # --- Assert ---
     assert returned_pdf is mock_pdf
 
-    # Check that our spec parsers were called correctly
-    expected_calls = [call("1", 4), call("3", 4)]
-    mock_parse_spec.assert_has_calls(expected_calls, any_order=True)
+    # Verify expand was called with the right context
+    mock_expand.assert_called_once_with([spec_str], opened_pdfs=[mock_pdf])
 
-    # Check transformations on PAGE 1
-    mock_apply_scaling.assert_any_call(page1, 2.0)
-    page1.rotate.assert_called_with(90, relative=True)
+    # Check transformations on PAGE 1 (index 0)
+    mock_apply_scaling.assert_any_call(mock_pages[0], 2.0)
+    mock_pages[0].rotate.assert_called_with(90, relative=True)
 
-    # Check transformations on PAGE 3
-    mock_apply_scaling.assert_any_call(page3, 2.0)
-    page3.rotate.assert_called_with(90, relative=True)
+    # Check transformations on PAGE 3 (index 2)
+    mock_apply_scaling.assert_any_call(mock_pages[2], 2.0)
+    mock_pages[2].rotate.assert_called_with(90, relative=True)
 
-    # Check that pages 2 and 4 were NOT touched
-    page2.rotate.assert_not_called()
-    page4.rotate.assert_not_called()
+    # Check that pages index 1 and 3 (pages 2 and 4) were NOT touched
+    mock_pages[1].rotate.assert_not_called()
+    mock_pages[3].rotate.assert_not_called()
 
 
 import pytest
