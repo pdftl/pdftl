@@ -21,7 +21,6 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.info.output_info import get_info, write_info
-from pdftl.utils.hooks import consume_output_option
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 
 # BUG: 000301.pdf: rounding errors. Does pdftk just always round? Or
@@ -168,7 +167,7 @@ _DUMP_DATA_EXAMPLES = [
 _SHORT_DUMP_DATA_DESC_PREFIX = "Metadata, page and bookmark info"
 
 
-def dump_data_cli_hook(result: OpResult, stage):
+def dump_data_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI-specific side effect: Writes the snapshot to stdout or a file.
     This function is only called by the CLI pipeline.
@@ -196,8 +195,6 @@ def dump_data_cli_hook(result: OpResult, stage):
 
             write_info(writer, result.data, escape_xml=escape_xml, extra_info=extra_info)
 
-    consume_output_option(stage)
-
 
 _DUMP_DATA_POS_ARGS = [c.OPERATION_NAME, c.INPUT_PDF, c.INPUT_FILENAME, c.OPERATION_ARGS]
 _DUMP_DATA_KW_ARGS = {"output_file": c.OUTPUT}
@@ -217,6 +214,7 @@ _DUMP_DATA_KW_ARGS = {"output_file": c.OUTPUT}
         _DUMP_DATA_KW_ARGS,
         {"escape_xml": False},
     ),
+    skip_pipeline_save=True,
 )
 @register_operation(
     "dump_data",
@@ -231,6 +229,7 @@ _DUMP_DATA_KW_ARGS = {"output_file": c.OUTPUT}
         _DUMP_DATA_POS_ARGS,
         _DUMP_DATA_KW_ARGS,
     ),
+    skip_pipeline_save=True,
 )
 def pdf_info(
     op_name,

@@ -411,7 +411,7 @@ def assert_dump_output(capsys):
         # 4. Manually trigger the CLI hook
         # We strip 'output_file' from kwargs to avoid duplicates in options
         opts = {"output_file": None, **kwargs}
-        hook(result, SimpleNamespace(options=opts))
+        hook(result, SimpleNamespace(options=opts), None)
 
         # 5. Assert
         out = capsys.readouterr().out

@@ -35,7 +35,7 @@ engines.
 """
 
 
-def dump_signatures_cli_hook(result: OpResult, _stage):
+def dump_signatures_cli_hook(result: OpResult, _stage, _pipeline):
     """
     CLI Hook for dump_signatures.
     Formats the list of signature dictionaries into the Stanza text format.

@@ -267,7 +267,7 @@ def test_dump_fields_cli_hook_meta_none():
     m_open = mock_open()
 
     with patch("pdftl.operations.dump_data_fields.smart_open_maybe_dash", m_open):
-        dump_fields_cli_hook(result, mock_stage)
+        dump_fields_cli_hook(result, mock_stage, None)
 
     # Assert file was opened (proving execution reached past line 110)
     m_open.assert_called_once_with("dummy.txt")

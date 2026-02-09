@@ -33,6 +33,28 @@ _BURST_EXAMPLES = [
 ]
 
 
+def burst_cli_hook(result: OpResult, stage, pipeline):
+    """
+    CLI-specific side effect: Writes the burst pages to disk.
+    This function is only called by the CLI pipeline.
+    """
+    # The generator yields (filename, pil_image) tuples
+
+    burst_generator = result.data
+
+    if not burst_generator:
+        logger.debug("No burst_generator")
+        return
+
+    logger.info("Bursting pages to disk...")
+    count = 0
+    for filename, pdf in burst_generator:
+        pipeline.save_pdf_file(pdf, filename, stage)
+        count += 1
+
+    logger.info("Burst to %s files.", count)
+
+
 @register_operation(
     "burst",
     tags=["from_scratch"],
@@ -47,6 +69,8 @@ _BURST_EXAMPLES = [
             c.OUTPUT_PATTERN: c.OUTPUT_PATTERN,
         },
     ),
+    cli_hook=burst_cli_hook,
+    skip_pipeline_save=True,
 )
 def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
     """Split one or more PDFs into single-page files.
@@ -57,8 +81,9 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
         output_pattern (str): A C-style format string for the output
                               filenames, e.g., "page_%03d.pdf".
 
-    Return: a generator outputting pairs (filename, pdf) for
-    saving to disk in callee
+    Return: the first input pdf (for pipeline chainability)
+
+    Note: Uses the hook side-effect to actually burst
 
     Bugs:
 
@@ -97,4 +122,8 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
                 )
                 yield (page_file, new_pdf)
 
-    return OpResult(success=True, pdf=_burst_generator())
+    return OpResult(
+        success=True,
+        data=_burst_generator(),  # for API or hook
+        pdf=opened_pdfs[0],  # for possible subsequent pipeline, NOT for saving
+    )

@@ -26,7 +26,7 @@ def test_dump_data_cli_hook_json(tmp_path):
         },
     )
 
-    dump_data_cli_hook(res, None)
+    dump_data_cli_hook(res, None, None)
 
     with open(output_file) as f:
         content = json.load(f)
@@ -37,7 +37,7 @@ def test_dump_data_cli_hook_missing_meta():
     """Test that hook raises AttributeError if meta is None."""
     res = OpResult(success=True, meta=None)
     with pytest.raises(AttributeError, match="No result metadata"):
-        dump_data_cli_hook(res, None)
+        dump_data_cli_hook(res, None, None)
 
 
 def test_pdf_info_argument_validation():

@@ -14,7 +14,7 @@ def test_dump_fields_cli_hook_no_data(capsys):
     mock_stage = MagicMock()
 
     # Should return immediately and print nothing
-    dump_fields_cli_hook(mock_result, mock_stage)
+    dump_fields_cli_hook(mock_result, mock_stage, None)
 
     captured = capsys.readouterr()
     assert captured.out == ""

@@ -97,7 +97,7 @@ _DUMP_DESTS_EXAMPLES = [
 ]
 
 
-def dump_dests_cli_hook(result: OpResult, _stage):
+def dump_dests_cli_hook(result: OpResult, _stage, _pipeline):
     """
     CLI Hook for dump_dests.
     Serializes the raw destinations data to a compacted JSON string and outputs it.

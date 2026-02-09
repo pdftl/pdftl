@@ -50,7 +50,7 @@ _RENDER_EXAMPLES = [
 ]
 
 
-def render_cli_hook(result: OpResult, _stage):
+def render_cli_hook(result: OpResult, _stage, _pipeline):
     """
     CLI-specific side effect: Writes the rendered images to disk.
     This function is only called by the CLI pipeline.
@@ -93,6 +93,7 @@ def render_cli_hook(result: OpResult, _stage):
             "output_pattern": c.OUTPUT_PATTERN,
         },
     ),
+    skip_pipeline_save=True,
 )
 def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
     if len(args) > 1:

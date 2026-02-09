@@ -35,7 +35,7 @@ def test_dump_files_operation(pdf_with_attachment, capsys):
     """Test the 'dump_files' operation (Lines 184-186)."""
     with pikepdf.open(pdf_with_attachment) as pdf:
         result = dump_files("fname", pdf, lambda x: x, output_dir=None)
-        dump_files_cli_hook(result, None)
+        dump_files_cli_hook(result, None, None)
 
     out = capsys.readouterr().out
     assert "test.txt" in out
@@ -47,7 +47,7 @@ def test_unpack_prompt(pdf_with_attachment, tmp_path):
     with pikepdf.open(pdf_with_attachment) as pdf:
         mock_input = lambda msg, **kwargs: str(tmp_path)
         result = unpack_files(pdf, mock_input, output_dir="PROMPT")
-        unpack_files_cli_hook(result, None)
+        unpack_files_cli_hook(result, None, None)
 
     assert (tmp_path / "test.txt").exists()
 
@@ -60,7 +60,7 @@ def test_unpack_invalid_dir(pdf_with_attachment, tmp_path):
     with pikepdf.open(pdf_with_attachment) as pdf:
         # Should catch ValueError and log error, returning None
         result = unpack_files(pdf, None, output_dir=str(file_path))
-        unpack_files_cli_hook(result, None)
+        unpack_files_cli_hook(result, None, None)
 
 
 def test_no_attachments_unpack(pdf_no_attachment, caplog):
@@ -68,7 +68,7 @@ def test_no_attachments_unpack(pdf_no_attachment, caplog):
     with caplog.at_level(logging.DEBUG, logger="pdftl"):
         with pikepdf.open(pdf_no_attachment) as pdf:
             result = unpack_files(pdf, None)
-            unpack_files_cli_hook(result, None)
+            unpack_files_cli_hook(result, None, None)
 
     assert "No attachments found" in caplog.text
 
@@ -77,7 +77,7 @@ def test_no_attachments_dump_files(pdf_no_attachment, capsys):
     """Test dump_files on PDF with no attachments (Line 155)."""
     with pikepdf.open(pdf_no_attachment) as pdf:
         result = dump_files("fname", pdf, None)
-        dump_files_cli_hook(result, None)
+        dump_files_cli_hook(result, None, None)
 
     out = capsys.readouterr().out
     assert "No attachments found" in out
@@ -92,6 +92,6 @@ def test_write_error(pdf_with_attachment, tmp_path, caplog):
         with patch("builtins.open") as mock_file:
             mock_file.side_effect = OSError("Disk full")
             result = unpack_files(pdf, None, output_dir=str(tmp_path))
-            unpack_files_cli_hook(result, None)
+            unpack_files_cli_hook(result, None, None)
 
     assert "Could not write file" in caplog.text

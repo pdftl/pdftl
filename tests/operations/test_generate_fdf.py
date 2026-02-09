@@ -66,7 +66,7 @@ def test_generate_fdf_structure(fdf_source_pdf, tmp_path):
     output = tmp_path / "out.fdf"
 
     result = generate_fdf(fdf_source_pdf, lambda x: x, str(output))
-    generate_fdf_cli_hook(result, None)
+    generate_fdf_cli_hook(result, None, None)
 
     # Read as bytes because FDF headers are binary
     content = output.read_bytes()
@@ -88,7 +88,7 @@ def test_generate_fdf_prompt(fdf_source_pdf, tmp_path):
         return str(output)
 
     result = generate_fdf(fdf_source_pdf, mock_input, "PROMPT")
-    generate_fdf_cli_hook(result, None)
+    generate_fdf_cli_hook(result, None, None)
 
     assert output.exists()
 
@@ -118,7 +118,7 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
 
             # Pass None as input_pdf because we mocked Form(pdf)
             result = generate_fdf(None, None, str(output))
-            generate_fdf_cli_hook(result, None)
+            generate_fdf_cli_hook(result, None, None)
 
             content = output.read_bytes()
             # Verify it fell back to unparse()
@@ -140,7 +140,7 @@ def test_generate_fdf_hook_failure():
 
     # Mock smart_open to ensure it is NOT called
     with patch("pdftl.operations.generate_fdf.smart_open") as mock_open:
-        generate_fdf_cli_hook(result, "post")
+        generate_fdf_cli_hook(result, "post", None)
         mock_open.assert_not_called()
 
 
@@ -337,7 +337,7 @@ def test_generate_fdf_cli_hook_stdout():
         mock_file_handle = MagicMock()
         mock_open.return_value.__enter__.return_value = mock_file_handle
 
-        generate_fdf_cli_hook(mock_result, stage=None)
+        generate_fdf_cli_hook(mock_result, None, None)
 
         # smart_open(None, ...) means stdout in this codebase
         mock_open.assert_called_with(None, mode="wb")

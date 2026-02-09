@@ -11,7 +11,7 @@ def test_dump_data_to_file(two_page_pdf, tmp_path):
     output_path = tmp_path / "data.txt"
     with pikepdf.open(two_page_pdf) as pdf:
         result = pdf_info("dump_data", pdf, "dummy.pdf", [], output_file=str(output_path))
-        dump_data_cli_hook(result, None)
+        dump_data_cli_hook(result, None, None)
 
     assert output_path.exists()
     content = output_path.read_text(encoding="utf-8")
@@ -22,7 +22,7 @@ def test_dump_annots_to_file(two_page_pdf, tmp_path):
     output_path = tmp_path / "annots.json"
     with pikepdf.open(two_page_pdf) as pdf:
         result = dump_annots(pdf, output_file=str(output_path))
-        dump_annots_cli_hook(result, None)
+        dump_annots_cli_hook(result, None, None)
     assert output_path.exists()
 
 
@@ -36,7 +36,7 @@ def test_dump_data_to_stdout(two_page_pdf, capsys):
         assert result.success
         assert result.is_discardable
 
-        dump_data_cli_hook(result, None)
+        dump_data_cli_hook(result, None, None)
 
     captured = capsys.readouterr()
     assert "NumberOfPages: 2" in captured.out

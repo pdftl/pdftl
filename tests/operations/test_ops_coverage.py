@@ -25,7 +25,7 @@ class TestOpsCoverage:
             mock_file_handle = MagicMock()
             mock_smart_open.return_value.__enter__.return_value = mock_file_handle
 
-            generate_fdf_cli_hook(result, None)
+            generate_fdf_cli_hook(result, None, None)
 
             mock_smart_open.assert_called_with(None, mode="wb")
 

@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [Unreleased]
+
+### Fixed
+
+- Bug fix: `render` should no longer save a PDF to the pattern file
+
 ## [0.11.0] - 2026-02-08
 
 ### Added

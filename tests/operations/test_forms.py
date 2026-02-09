@@ -65,7 +65,7 @@ def test_dump_data_fields(pdf_with_form, tmp_path):
     output = tmp_path / "fields.txt"
     result = dump_data_fields(pdf_with_form, output_file=str(output))
     mock_stage = SimpleNamespace(options={"output": str(output), "escape_xml": True})
-    dump_fields_cli_hook(result, mock_stage)
+    dump_fields_cli_hook(result, mock_stage, None)
 
     content = output.read_text(encoding="utf-8")
     assert "FieldName: MyTextField" in content
@@ -80,7 +80,7 @@ def test_dump_data_fields_stdout(pdf_with_form):
     with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
         result = dump_data_fields(pdf_with_form, output_file=None)
         mock_stage = SimpleNamespace(options={"output_file": None, "escape_xml": True})
-        dump_fields_cli_hook(result, mock_stage)
+        dump_fields_cli_hook(result, mock_stage, None)
         content = mock_stdout.getvalue()
 
     assert "FieldName: MyTextField" in content

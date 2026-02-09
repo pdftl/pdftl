@@ -89,7 +89,7 @@ def test_dump_data_annots_empty_report(caplog):
     """Mops lines 123-124: Warning when no data is available for report."""
     result = OpResult(success=True, data=None, meta={})
     with caplog.at_level(logging.WARNING):
-        dump_data_annots_cli_hook(result, "stage")
+        dump_data_annots_cli_hook(result, "stage", None)
         assert "No data available" in caplog.text
 
 

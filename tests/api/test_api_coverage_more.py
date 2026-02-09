@@ -45,7 +45,7 @@ def test_run_cli_hook_object_fallback():
     # Create a mock hook
     hook_called = False
 
-    def mock_hook(res, stage):
+    def mock_hook(res, stage, mgr):
         nonlocal hook_called
         hook_called = True
 

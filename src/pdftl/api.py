@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     import pikepdf
 
 import pdftl.core.constants as c
+from pdftl.cli.pipeline import PipelineManager
 from pdftl.core import executor
 from pdftl.exceptions import MissingArgumentError, OperationError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
@@ -205,7 +206,8 @@ def _run_cli_hook(op_name: str, result: Any, context: dict):
     if not hook:
         raise ValueError(f"Operation '{op_name}' does not support run_cli_hook.")
     mock_stage = types.SimpleNamespace(options=context[c.OPTIONS])
-    hook(result, mock_stage)
+    mgr = PipelineManager([mock_stage], context.get("input_context"))
+    hook(result, mock_stage, mgr)
 
 
 def _create_signature(op_name):

@@ -61,7 +61,7 @@ def test_dump_data_annots_pdftk_style(annot_pdf, capsys):
     assert str(result.data["PdfUriBase"]) == "http://example.com/"
 
     # 2. Run the hook to verify the text output formatting
-    dump_data_annots_cli_hook(result, None)
+    dump_data_annots_cli_hook(result, None, None)
 
     out = capsys.readouterr().out
     assert "PdfUriBase: http://example.com/" in out
@@ -78,7 +78,7 @@ def test_dump_annots_json(annot_pdf, capsys):
     assert result.data[0]["Properties"]["/Subtype"] == "/Link"
 
     # Run the hook to test JSON serialization to stdout
-    dump_annots_cli_hook(result, None)
+    dump_annots_cli_hook(result, None, None)
 
     out = capsys.readouterr().out
     assert '"/Subtype": "/Link"' in out
@@ -165,7 +165,7 @@ def test_dump_annots_pdftk_filters(annot_pdf, capsys):
     result = dump_data_annots(annot_pdf, output_file=None)
 
     # Run the CLI hook (which does the formatting)
-    dump_data_annots_cli_hook(result, None)
+    dump_data_annots_cli_hook(result, None, None)
 
     out = capsys.readouterr().out
 

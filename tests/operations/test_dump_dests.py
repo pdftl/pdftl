@@ -145,7 +145,7 @@ def test_dump_dests_no_dests_tree(mock_pdf, mock_stdout):
     mock_pdf.Root.Names.Dests = None
 
     result = dump_dests(mock_pdf, output_file=None)
-    dump_dests_cli_hook(result, None)
+    dump_dests_cli_hook(result, None, None)
 
     result = json.loads(mock_stdout.getvalue())
     assert result["dests"] == []
@@ -171,7 +171,7 @@ def test_dump_dests_success(mock_pdf, mock_stdout, patch_pikepdf_types):
 
     # 4. Run the function
     result = dump_dests(mock_pdf, output_file=None)
-    dump_dests_cli_hook(result, None)
+    dump_dests_cli_hook(result, None, None)
 
     # 5. Verify NameTree was called
     patch_pikepdf_types.assert_called_once_with(mock_pdf.Root.Names.Dests)
@@ -192,7 +192,7 @@ def test_dump_dests_nametree_init_fails(mock_pdf, mock_stdout, patch_pikepdf_typ
     patch_pikepdf_types.side_effect = ValueError("Bad tree structure")
 
     result = dump_dests(mock_pdf, output_file=None)
-    dump_dests_cli_hook(result, None)
+    dump_dests_cli_hook(result, None, None)
 
     result = json.loads(mock_stdout.getvalue())
     assert result["dests"] == []
@@ -215,7 +215,7 @@ def test_dump_dests_item_processing_fails(mock_pdf, mock_stdout, patch_pikepdf_t
     # Patch the helper function to fail
     with patch(f"{MODULE_PATH}._pdf_obj_to_json", side_effect=ValueError("JSON fail")):
         result = dump_dests(mock_pdf, output_file=None)
-        dump_dests_cli_hook(result, None)
+        dump_dests_cli_hook(result, None, None)
 
     result = json.loads(mock_stdout.getvalue())
     assert result["dests"] == []

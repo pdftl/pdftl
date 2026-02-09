@@ -11,7 +11,7 @@ def test_dump_layers_no_ocg(tmp_path):
     output_file = tmp_path / "out.json"
 
     result = dump_layers(pdf, output_file=str(output_file))
-    dump_layers_cli_hook(result, None)
+    dump_layers_cli_hook(result, None, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -40,7 +40,7 @@ def test_dump_layers_basic_hierarchy(tmp_path):
     pdf.Root.OCProperties = ocprops
 
     result = dump_layers(pdf, output_file=str(output_file))
-    dump_layers_cli_hook(result, None)
+    dump_layers_cli_hook(result, None, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -70,7 +70,7 @@ def test_dump_layers_usage_cleaning(tmp_path):
     pdf.Root.OCProperties = pikepdf.Dictionary(OCGs=[ocg], D=pikepdf.Dictionary())
 
     result = dump_layers(pdf, output_file=str(output_file))
-    dump_layers_cli_hook(result, None)
+    dump_layers_cli_hook(result, None, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -112,7 +112,7 @@ def test_dump_layers_complex_features(tmp_path):
     pdf.Root.OCProperties = ocprops
 
     result = dump_layers(pdf, output_file=str(output_file))
-    dump_layers_cli_hook(result, None)
+    dump_layers_cli_hook(result, None, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -138,7 +138,7 @@ def test_dump_layers_legacy_fallback(tmp_path):
     )
 
     result = dump_layers(pdf, output_file=str(output_file))
-    dump_layers_cli_hook(result, None)
+    dump_layers_cli_hook(result, None, None)
 
     with open(output_file) as f:
         res = json.load(f)
@@ -167,7 +167,7 @@ def test_dump_layers_extreme_edge_cases(tmp_path):
     )
 
     result = dump_layers(pdf, output_file=str(output_file))
-    dump_layers_cli_hook(result, None)
+    dump_layers_cli_hook(result, None, None)
 
     with open(output_file) as f:
         res = json.load(f)

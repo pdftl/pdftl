@@ -38,7 +38,7 @@ def test_unpack_files(pdf_with_attachment, tmp_path):
             get_input=mock_get_input,
             output_dir=str(tmp_path),
         )
-        unpack_files_cli_hook(result, None)
+        unpack_files_cli_hook(result, None, None)
 
         # Assertion: Check if file exists in output dir
         expected_file = tmp_path / "hello.txt"
@@ -56,14 +56,14 @@ def test_attachments_hooks_failures():
     # 1. Failure (success=False) -> Should return silently (Lines 76, 99)
     # We just ensure it doesn't raise exception
     fail_res = OpResult(success=False)
-    dump_files_cli_hook(fail_res, None)
-    unpack_files_cli_hook(fail_res, None)
+    dump_files_cli_hook(fail_res, None, None)
+    unpack_files_cli_hook(fail_res, None, None)
 
     # 2. Missing Metadata -> Should raise AttributeError (Lines 79, 102)
     success_no_meta = OpResult(success=True, meta=None)
 
     with pytest.raises(AttributeError, match="Missing metadata"):
-        dump_files_cli_hook(success_no_meta, None)
+        dump_files_cli_hook(success_no_meta, None, None)
 
     with pytest.raises(AttributeError, match="Missing metadata"):
-        unpack_files_cli_hook(success_no_meta, None)
+        unpack_files_cli_hook(success_no_meta, None, None)

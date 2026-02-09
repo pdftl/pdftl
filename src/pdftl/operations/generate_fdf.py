@@ -12,7 +12,7 @@ import pdftl.core.constants as c
 from pdftl.core.constants import FDF_END, FDF_START
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.hooks import consume_output_option, from_result_meta
+from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.user_input import filename_completer
 
@@ -32,14 +32,11 @@ _GENERATE_FDF_EXAMPLES = [
 ]
 
 
-def generate_fdf_cli_hook(result: OpResult, stage):
+def generate_fdf_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI Hook for generate_fdf.
     Writes the FDF data bytes to the output file.
     """
-    # prevent automatic overwriting by pipeline
-    consume_output_option(stage)
-
     if not result.success:
         return
 
@@ -66,6 +63,7 @@ def generate_fdf_cli_hook(result: OpResult, stage):
     usage="<input> generate_fdf [output <output>]",
     examples=_GENERATE_FDF_EXAMPLES,
     args=([c.INPUT_PDF, c.GET_INPUT], {"output_file": c.OUTPUT}),
+    skip_pipeline_save=True,
 )
 def generate_fdf(pdf, get_input, output_file) -> OpResult:
     """Output FDF data for the given PDF"""

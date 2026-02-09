@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.hooks import consume_output_option
 from pdftl.utils.user_input import dirname_completer
 
 _DUMP_FILES_LONG_DESC = """
@@ -71,11 +70,8 @@ _UNPACK_FILES_EXAMPLES = [
 ]
 
 
-def dump_files_cli_hook(result: OpResult, stage):
+def dump_files_cli_hook(result: OpResult, stage, _pipeline):
     """CLI Hook to print the file list."""
-
-    # prevent pipeline from automatically trying to write a pdf file to... the output directory
-    consume_output_option(stage)
 
     if not result.success:
         return
@@ -98,11 +94,8 @@ def dump_files_cli_hook(result: OpResult, stage):
         print(f"{item['size']:>9} {display_path}")
 
 
-def unpack_files_cli_hook(result: OpResult, stage):
+def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
     """CLI Hook to write extracted files to disk."""
-
-    # prevent pipeline from automatically trying to write a pdf file to... the output directory
-    consume_output_option(stage)
 
     if not result.success:
         return
@@ -153,6 +146,7 @@ def unpack_files_cli_hook(result: OpResult, stage):
         [c.INPUT_FILENAME, c.INPUT_PDF, c.GET_INPUT],
         {"output_dir": c.OUTPUT},
     ),
+    skip_pipeline_save=True,
 )
 def dump_files(input_filename, pdf, get_input, output_dir=None) -> OpResult:
     """
@@ -200,6 +194,7 @@ def _resolve_output_dir(output_dir, get_input):
         [c.INPUT_PDF, c.GET_INPUT],
         {"output_dir": c.OUTPUT},
     ),
+    skip_pipeline_save=True,
 )
 def unpack_files(pdf, get_input, output_dir=None) -> OpResult:
     """

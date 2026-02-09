@@ -104,9 +104,22 @@ class PipelineManager:
         self.is_inline = is_inline
         self.handles = handles or {}
 
+    def save_pdf_file(self, pdf, filename, stage):
+        # Pass stage.options directly.
+        # This ensures intermediate files don't inherit global flags like 'uncompress'.
+        save_options = stage.options
+
+        # Call save. _save_kw_options will handle the isolation logic.
+        save_content(
+            pdf,
+            filename,
+            self.input_context,
+            **self._save_kw_options(override_options=save_options),
+        )
+
     def run(self):
         """Executes all stages in the pipeline."""
-        logger.debug("Running pipeline with %s  stages", len(self.stages))
+        logger.debug("Running pipeline with %s stages", len(self.stages))
         try:
             for i, stage in enumerate(self.stages):
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
@@ -114,32 +127,27 @@ class PipelineManager:
                 stage_output = stage.options.get(c.OUTPUT)
                 logger.debug("stage_output=%s", stage_output)
 
+                op_entry = registry.operations.get(stage.operation, {})
+
                 # Check if we have an output file AND a PDF to save.
                 # Some operations (like dump_text) handle output themselves via hooks
                 # and leave pipeline_pdf as None. We must skip save_pdf in that case.
-                if stage_output and self.pipeline_pdf:
-                    # Pass stage.options directly.
-                    # This ensures intermediate files don't inherit global flags like 'uncompress'.
-                    save_options = stage.options
-
-                    # Call save. _save_kw_options will handle the isolation logic.
-                    save_content(
-                        self.pipeline_pdf,
+                #
+                # OR they can set skip_pipeline_save in the @register_operation decorator
+                #
+                skip_pipeline_save = op_entry.get("skip_pipeline_save", False)
+                if stage_output and self.pipeline_pdf and not skip_pipeline_save:
+                    self.save_pdf_file(self.pipeline_pdf, stage_output, stage)
+                else:
+                    logger.debug(
+                        (
+                            "Skipping save. skip_pipeline_save=%s, "
+                            "stage_output='%s', self.pipeline_pdf is truthy-%s"
+                        ),
+                        skip_pipeline_save,
                         stage_output,
-                        self.input_context,
-                        **self._save_kw_options(override_options=save_options),
+                        (True if self.pipeline_pdf else False),
                     )
-
-            # 4. Final Fallback Save
-            # If the last stage DID NOT save (no output arg), and we have a result...
-            # We check if the last stage options contained an output but for some reason
-            # (logic flow) it wasn't caught above, or if we need to warn.
-            # With global_options gone, we assume the Parser attached the 'output'
-            # option to the final stage if it was present on the CLI.
-
-            # NOTE: If the loop above ran for the last stage, it handled the save.
-            # The only case we might be here with an unsaved result is if the
-            # last stage had no 'output' option.
 
         finally:
             if self.pipeline_pdf is not None and not self.is_inline:
@@ -194,7 +202,7 @@ class PipelineManager:
             if not getattr(self.input_context, "is_api", False):
                 op_entry = registry.operations.get(stage.operation, {})
                 if hook := op_entry.get("cli_hook"):
-                    hook(result, stage)
+                    hook(result, stage, self)
 
             # Update the pipeline data
             result_val = result.pdf

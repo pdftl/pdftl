@@ -115,7 +115,7 @@ _DUMP_DATA_FIELDS_EXAMPLES = [
 # --- CLI Hook ---
 
 
-def dump_fields_cli_hook(result, stage):
+def dump_fields_cli_hook(result, stage, _pipeline):
     """Formats structured field data into the standard stanza-based text format."""
     if not result.data:
         return

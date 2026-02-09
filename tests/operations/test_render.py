@@ -84,7 +84,7 @@ def test_render_cli_hook_saving():
 
     result = OpResult(success=True, data=data)
 
-    render_cli_hook(result, "render_stage")
+    render_cli_hook(result, "render_stage", None)
 
     # Assert saving
     mock_img_1.save.assert_called_with("page_1.png")
@@ -99,7 +99,7 @@ def test_render_cli_hook_error_handling():
     result = OpResult(success=True, data=[("bad.file", mock_img)])
 
     with pytest.raises(InvalidArgumentError, match="Invalid render output template"):
-        render_cli_hook(result, "render_stage")
+        render_cli_hook(result, "render_stage", None)
 
 
 from unittest.mock import patch
@@ -218,7 +218,7 @@ def test_render_cli_hook_saving():
 
     result = OpResult(success=True, data=data)
 
-    render_cli_hook(result, "render_stage")
+    render_cli_hook(result, "render_stage", None)
 
     # Assert saving
     mock_img_1.save.assert_called_with("page_1.png")
@@ -233,10 +233,10 @@ def test_render_cli_hook_error_handling():
     result = OpResult(success=True, data=[("bad.file", mock_img)])
 
     with pytest.raises(InvalidArgumentError, match="Invalid render output template"):
-        render_cli_hook(result, "render_stage")
+        render_cli_hook(result, "render_stage", None)
 
 
 def test_render_cli_hook_empty():
     """Covers Line 61: Return early if data is empty."""
     # Should not raise error or try to loop
-    render_cli_hook(OpResult(success=True, data=[]), "stage")
+    render_cli_hook(OpResult(success=True, data=[]), "stage", None)

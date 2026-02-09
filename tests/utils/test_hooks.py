@@ -21,25 +21,25 @@ def test_text_dump_hook_scenarios(capsys, tmp_path):
 
     stage = SimpleNamespace(options={})
     # 1. Failure or empty data -> Return early
-    hooks.text_dump_hook(OpResult(success=False), stage)
+    hooks.text_dump_hook(OpResult(success=False), stage, None)
     out, _ = capsys.readouterr()
     assert out == ""
 
-    hooks.text_dump_hook(OpResult(success=True, data=""), stage)
+    hooks.text_dump_hook(OpResult(success=True, data=""), stage, None)
     out, _ = capsys.readouterr()
     assert out == ""
 
     # 2. No output path -> Stdout
     res = OpResult(success=True, data="stdout content")
     stage = SimpleNamespace(options={})
-    hooks.text_dump_hook(res, stage)
+    hooks.text_dump_hook(res, stage, None)
     out, _ = capsys.readouterr()
     assert "stdout content" in out
 
     # 3. Output path -> File
     output_file = tmp_path / "output.txt"
     stage = SimpleNamespace(options={"output": str(output_file)})
-    hooks.text_dump_hook(res, stage)
+    hooks.text_dump_hook(res, stage, None)
 
     assert output_file.exists()
     assert output_file.read_text().strip() == "stdout content"
@@ -53,20 +53,20 @@ def test_json_dump_hook_scenarios(capsys, tmp_path):
 
     # 1. Stdout
     stage = SimpleNamespace(options={})
-    hooks.json_dump_hook(res, stage)
+    hooks.json_dump_hook(res, stage, None)
     out, _ = capsys.readouterr()
     assert '"key": "value"' in out
 
     # 2. File
     output_file = tmp_path / "output.json"
     stage = SimpleNamespace(options={"output": str(output_file)})
-    hooks.json_dump_hook(res, stage)
+    hooks.json_dump_hook(res, stage, None)
 
     assert output_file.exists()
     assert '"key": "value"' in output_file.read_text()
 
     # 3. Failure -> No op
-    hooks.json_dump_hook(OpResult(success=False), None)
+    hooks.json_dump_hook(OpResult(success=False), None, None)
     # Implicit pass if no error raised
 
 
@@ -84,11 +84,11 @@ def test_text_dump_hook_early_returns():
     # Case 1: Failure
     res_fail = OpResult(success=False, data="Some error")
     # Should simply return None, not print, not write file
-    assert text_dump_hook(res_fail, stage) is None
+    assert text_dump_hook(res_fail, stage, None) is None
 
     # Case 2: No Data
     res_no_data = OpResult(success=True, data=None)
-    assert text_dump_hook(res_no_data, stage) is None
+    assert text_dump_hook(res_no_data, stage, None) is None
 
 
 def test_str_from_result_meta():
@@ -138,7 +138,7 @@ def test_text_dump_hook_appends_newline():
 
     m = mock_open()
     with patch("pdftl.utils.hooks.smart_open_maybe_dash", m):
-        text_dump_hook(result, stage)
+        text_dump_hook(result, stage, None)
 
     handle = m()
     # Check that we wrote the data AND a newline

@@ -24,7 +24,7 @@ def _get_output_path(stage):
     return stage.options.get("output", None)
 
 
-def text_dump_hook(result: OpResult, stage):
+def text_dump_hook(result: OpResult, stage, _pipeline):
     """
     Writes text to file (and consumes output option) or stdout.
     """
@@ -44,7 +44,7 @@ def text_dump_hook(result: OpResult, stage):
     consume_output_option(stage)
 
 
-def json_dump_hook(result: OpResult, stage):
+def json_dump_hook(result: OpResult, stage, _pipeline):
     """
     Writes JSON to file (and consumes output option) or stdout.
     """

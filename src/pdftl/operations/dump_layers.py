@@ -119,7 +119,7 @@ def _parse_usage(ocg):
     return usage_dict
 
 
-def dump_layers_cli_hook(result: OpResult, _stage):
+def dump_layers_cli_hook(result: OpResult, _stage, _pipeline):
     # Use smart_open to handle stdout vs file correctly
     import json
 

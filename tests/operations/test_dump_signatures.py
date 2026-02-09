@@ -99,7 +99,7 @@ def dump_sigs_helper(tmp_path):
 
         # 3. Run Command
         result = dump_signatures(pdf_path, pdf_obj, password, output_file=str(output_file))
-        dump_signatures_cli_hook(result, None)
+        dump_signatures_cli_hook(result, None, None)
 
         # 4. Return content
         return output_file.read_text(encoding="utf-8")
@@ -139,7 +139,7 @@ def test_dump_signatures_no_signatures(tmp_path, out_pdf_with_no_sigs):
     """Tests logic for documents without signatures."""
     output_file = tmp_path / "sig_dump.txt"
     result = dump_signatures("_", out_pdf_with_no_sigs, None, output_file=str(output_file))
-    dump_signatures_cli_hook(result, None)
+    dump_signatures_cli_hook(result, None, None)
     assert "No signatures found." in output_file.read_text()
 
 
@@ -162,7 +162,7 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
         with patch("pdftl.operations.dump_signatures.smart_open") as mock_open:
             mock_open.return_value.__enter__.return_value = output
             result = dump_signatures(signed_pdf_path, None, None)
-            dump_signatures_cli_hook(result, None)
+            dump_signatures_cli_hook(result, None, None)
             assert "SignatureModificationLevel: SUSPICIOUS (Exception)" in output.getvalue()
 
 
@@ -216,7 +216,7 @@ def test_dump_signatures_hook_multiple_sigs():
         mock_buffer = io.StringIO()
         mock_open.return_value.__enter__.return_value = mock_buffer
 
-        dump_signatures_cli_hook(op_result, "post_run")
+        dump_signatures_cli_hook(op_result, "post_run", None)
 
         output = mock_buffer.getvalue()
 
