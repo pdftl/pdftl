@@ -132,24 +132,10 @@ def test_get_project_version_no_pyproject(monkeypatch, patch_environment):
     assert helpmod.get_project_version() == "unknown-dev-version"
 
 
-def test_print_version_to_console(monkeypatch, patch_environment):
-    monkeypatch.setitem(
-        sys.modules,
-        "pikepdf",
-        types.SimpleNamespace(__version__="10.0", __libqpdf_version__="11.0"),
-    )
-    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
-    buf_out, buf_err = io.StringIO(), io.StringIO()
-    with patch("rich.console.Console") as MockConsole:
-        with redirect_stdout(buf_out), redirect_stderr(buf_err):
-            helpvermod.print_version()
-        MockConsole.return_value.print.assert_called_once()
-    # Optionally check that the output buffer is empty (since print_version uses console)
-    assert buf_out.getvalue() == ""
-    assert buf_err.getvalue() == ""
-
-
 def test_print_version_to_file(monkeypatch, patch_environment):
+    monkeypatch.setattr(sys.modules["pikepdf"], "__version__", "10.0")
+    monkeypatch.setattr(sys.modules["pikepdf"], "__libqpdf_version__", "11.0")
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -193,6 +179,15 @@ def test_print_help_variants(monkeypatch, caplog, cmd):
 
 
 def test_print_version_to_console(monkeypatch, patch_environment):
+    monkeypatch.setattr(
+        helpvermod,
+        "get_dependencies_status",
+        lambda: (
+            [("defusedxml", "0.7.1"), ("pikepdf", "10.0"), ("rich", "14.2.0")],
+            [],
+        ),
+    )
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -220,6 +215,15 @@ def test_print_version_to_console(monkeypatch, patch_environment):
 
 
 def test_print_version_to_file(monkeypatch, patch_environment):
+    monkeypatch.setattr(
+        helpvermod,
+        "get_dependencies_status",
+        lambda: (
+            [("defusedxml", "0.7.1"), ("pikepdf", "10.0"), ("rich", "14.2.0")],
+            [],
+        ),
+    )
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
     monkeypatch.setitem(
         sys.modules,
         "pikepdf",
@@ -294,15 +298,15 @@ def mock_metadata(mocker):
 # --- Tests ---
 
 
-def test_get_optional_dependencies_filtering(mock_metadata):
+def test_get_dependencies_filtering(mock_metadata):
     """
     Verifies that dev tools and self-references are filtered out,
     and only 'feature' extras remain.
     """
-    results = helpvermod.get_optional_dependencies_status()
+    results = helpvermod.get_dependencies_status()
 
     # Extract just the names for easy assertion
-    pkg_names = {r[0] for r in results}
+    pkg_names = {r[0] for r in results[1]}
 
     # Assertions
     assert "reportlab" in pkg_names, "Should include standard feature extras"
@@ -314,12 +318,12 @@ def test_get_optional_dependencies_filtering(mock_metadata):
     assert "pikepdf" not in pkg_names, "Should ignore core deps (no marker)"
 
 
-def test_get_optional_dependencies_status_detection(mock_metadata):
+def test_get_dependencies_status_detection(mock_metadata):
     """
     Verifies that installed packages return their version,
     and missing packages return None.
     """
-    results = dict(helpvermod.get_optional_dependencies_status())
+    results = dict(helpvermod.get_dependencies_status()[1])
 
     assert results["reportlab"] == "4.0.0", "Should return version for installed pkg"
     assert results["pypdfium2"] is None, "Should return None for missing pkg"
@@ -368,3 +372,16 @@ def test_print_version_no_metadata_crash(mocker):
     # Should still print core info, just no optional block
     assert "pdftl" in stdout
     assert "Optional dependencies:" not in stdout
+
+def test_print_version_pikepdf_not_found(monkeypatch, patch_environment):
+    monkeypatch.setattr(helpvermod, "get_dependencies_status", lambda: ([], []))
+    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
+    monkeypatch.setitem(sys.modules, "pikepdf", None)  # None causes ImportError on import
+
+    with patch.object(helpvermod, "get_console") as mock_get_console:
+        helpvermod.print_version()
+
+        args, _ = mock_get_console.return_value.print.call_args
+        printed_content = str(args[0])
+
+        assert "libqpdf (not found)" in printed_content

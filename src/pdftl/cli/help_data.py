@@ -14,6 +14,8 @@ VERSION_TEMPLATE = """
 {whoami} ({package}) {project_version}
 Copyright © {years} The {package} developers
 Homepage: <{homepage}>
+Docs: <{docspage}>
+
 License: MPL-2.0 <https://mozilla.org/MPL/2.0/>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.

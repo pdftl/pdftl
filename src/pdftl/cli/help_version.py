@@ -15,25 +15,38 @@ from pdftl.cli.console import get_console
 from pdftl.cli.help_data import (
     VERSION_TEMPLATE,
 )
-from pdftl.cli.metadata import get_optional_dependencies_status, get_project_version
-from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
+from pdftl.cli.metadata import get_dependencies_status, get_project_version
+from pdftl.cli.whoami import DOCSPAGE, HOMEPAGE, PACKAGE, WHOAMI
 
 
 def print_version(dest=None):
     """Prints detailed version information for the package, core, and optional deps."""
     from datetime import date
 
-    import pikepdf
+    not_found_str = "(not found)"
+    core_deps, optional_deps = get_dependencies_status()
 
     # --- 1. Core Dependencies ---
+    try:
+        import pikepdf
+
+        libqpdf_version = pikepdf.__libqpdf_version__
+    except ImportError:
+        libqpdf_version = not_found_str
+        pass
+
+    core_deps.append(("libqpdf", libqpdf_version))
+    core_deps.append(("python", sys.version.split()[0]))
+    core_deps = sorted(core_deps)
     dependencies = "\n".join(
         [
-            f"  - {name} {version}"
-            for name, version in [
-                ("python", sys.version.split()[0]),
-                ("pikepdf", pikepdf.__version__),
-                ("libqpdf", pikepdf.__libqpdf_version__),
-            ]
+            f"  - {name} {version if version else not_found_str}"
+            for name, version in core_deps
+            #  [
+            #     ("python", sys.version.split()[0]),
+            #     ("pikepdf", pikepdf.__version__),
+            #     ("libqpdf", pikepdf.__libqpdf_version__),
+            # ]
         ]
     )
 
@@ -46,15 +59,15 @@ def print_version(dest=None):
         project_version=get_project_version(),
         years=(str(start_year) if current_year <= start_year else f"{start_year}-{current_year}"),
         homepage=HOMEPAGE,
+        docspage=DOCSPAGE,
         dependencies=dependencies,
     )
 
     # Plain text append for optional deps
-    opts = get_optional_dependencies_status()
-    if opts:
+    if optional_deps:
         output += "\n\nOptional dependencies:\n"
-        for name, ver in opts:
-            status = ver if ver else "(not found)"
+        for name, ver in optional_deps:
+            status = ver if ver else not_found_str
             output += f"  - {name}: {status}\n"
 
     output = output.rstrip()

@@ -31,7 +31,7 @@ def get_project_version():
         return "unknown-dev-version"
 
 
-def get_optional_dependencies_status():
+def get_dependencies_status():
     import importlib.metadata
 
     from packaging.requirements import Requirement
@@ -39,8 +39,9 @@ def get_optional_dependencies_status():
     try:
         raw_reqs = importlib.metadata.requires("pdftl") or []
     except importlib.metadata.PackageNotFoundError:
-        return []
+        return [], []
 
+    required_pkgs = set()
     optional_pkgs = set()
 
     # We will ignore dependencies that ONLY exist for these extras
@@ -49,12 +50,13 @@ def get_optional_dependencies_status():
     for req_str in raw_reqs:
         req = Requirement(req_str)
 
-        # 1. Must be optional
-        if not req.marker:
+        # 1. Ignore self-references
+        if req.name == "pdftl":
             continue
 
-        # 2. Ignore self-references
-        if req.name == "pdftl":
+        # 2. Must be optional
+        if not req.marker:
+            required_pkgs.add(req.name)
             continue
 
         # 3. FILTER: Check if this requirement belongs to a "ignored" extra.
@@ -73,13 +75,18 @@ def get_optional_dependencies_status():
 
         optional_pkgs.add(req.name)
 
+    return _get_status(required_pkgs), _get_status(optional_pkgs)
+
+
+def _get_status(pkgs):
+    import importlib.metadata
+
     # Check status of each identified package
     results = []
-    for pkg in sorted(optional_pkgs):
+    for pkg in sorted(pkgs):
         try:
             ver = importlib.metadata.version(pkg)
             results.append((pkg, ver))
         except importlib.metadata.PackageNotFoundError:
             results.append((pkg, None))
-
     return results
