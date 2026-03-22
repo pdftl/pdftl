@@ -5,6 +5,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.11.2] - 2026-03-22
+
+### Added
+
+- `--version` now displays core dependencies (pikepdf, libqpdf, python) and optional dependencies, along with a docs URL
+
+### Fixed
+
+- `crop` with an invalid spec now prints a clean error message instead of a traceback
+
+- `--version` no longer crashes if pikepdf is not installed
+
 ## [0.11.1] - 2026-02-09
 
 ### Fixed

@@ -182,3 +182,13 @@ def test_apply_crop_rule_invalid_index():
         _apply_crop_rule_to_page(
             page_rule="some_rule", i=5, pdf=pdf, preview=False, fit_ctx=None, all_rules={}
         )
+
+def test_crop_invalid_spec_raises_user_error(tmp_path):
+    from pdftl.exceptions import UserCommandLineError
+    from pdftl.operations.crop import crop_pages
+
+    pdf = pikepdf.new()
+    pdf.pages.append(pikepdf.Page(pikepdf.Dictionary(Type=pikepdf.Name("/Page"), MediaBox=[0, 0, 612, 792])))
+
+    with pytest.raises(UserCommandLineError, match="foobar"):
+        crop_pages(pdf, ["foobar"])

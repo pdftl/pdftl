@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import UserCommandLineError
 from pdftl.operations.helpers.crop_fit import FitCropContext
 from pdftl.operations.parsers.crop_parser import parse_crop_content, specs_to_page_rules
 from pdftl.utils.affix_content import affix_content
@@ -90,7 +91,10 @@ def crop_pages(pdf: "Pdf", specs: list) -> OpResult:
     """
     Crop pages in a PDF using specs like '1-3(10pt,5%)'.
     """
-    page_rules, preview = specs_to_page_rules(specs, len(pdf.pages))
+    try:
+        page_rules, preview = specs_to_page_rules(specs, len(pdf.pages))
+    except ValueError as exc:
+        raise UserCommandLineError(exc) from exc
 
     # Initialize context for smart cropping (lazy loads engine if needed)
     fit_ctx = FitCropContext(pdf)
