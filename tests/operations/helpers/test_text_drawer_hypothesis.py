@@ -11,13 +11,6 @@ from pdftl.operations.helpers.text_drawer import (
     _resolve_dimension,
 )
 
-# Import custom exception for testing
-try:
-    from pdftl.exceptions import InvalidArgumentError
-except ImportError:
-    InvalidArgumentError = ValueError
-
-
 MockPageBox = _PageBox
 
 # --- Strategies for generating valid inputs ---

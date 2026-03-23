@@ -338,8 +338,6 @@ def _attach_attachment_to_page(pdf, attachment, page_num, num_previous_attachmen
     page = pdf.pages[page_num - 1]
     if "/Annots" not in page:
         page["/Annots"] = pikepdf.Array()
-    # with open(attachment.path, "rb") as file_handle:
-    #     attachment_stream = pikepdf.Stream(pdf, data=file_handle.read())
     note_dict = {
         "/Contents": pikepdf.String(attachment.path.name),
         "/Subtype": pikepdf.Name.FileAttachment,
@@ -367,22 +365,3 @@ def attach_files(pdf, op_args, get_input) -> OpResult:
     for attachment in _get_attachments_from_args(op_args, num_pages, get_input):
         _attach_attachment(pdf, attachment, num_attached_by_page)
     return OpResult(success=True, pdf=pdf)
-
-
-# def _parse_attach_files(args, i, options):
-#     """Parse arguments following the 'attach_files' option keyword"""
-#     keyword = "attach_files"
-
-#     def filename_q(x):
-#         # """Is x a valid filename for attach_files? Equivalently: is x
-#         # not an options keyword?"""
-#         # return not (x in _get_value_keywords() or x in _get_flag_keywords())
-#         return True
-
-#     consumed_count, current_pos = parse_keyword_with_multiple_arguments(
-#         "attach_files", args, i, filename_q
-#     )
-#     files = options.setdefault(keyword, [])
-#     for j in range(1, consumed_count):
-#         files.append(args[i + j])
-#     return (consumed_count, current_pos)

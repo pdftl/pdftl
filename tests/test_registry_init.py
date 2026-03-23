@@ -109,7 +109,7 @@ def test_discover_modules_logs_debug(monkeypatch, caplog):
         "pkgutil.iter_modules",
         lambda path: [(None, "alpha", False), (None, "beta", False)],
     )
-    monkeypatch.setattr("importlib.import_module", lambda name: types.ModuleType(name))
+    monkeypatch.setattr("importlib.import_module", types.ModuleType)
 
     caplog.set_level(logging.DEBUG, logger="pdftl.registry_init")
     loaded = reg_init._discover_modules([fake_pkg], "operation")

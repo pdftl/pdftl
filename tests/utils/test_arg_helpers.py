@@ -1,11 +1,12 @@
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from pdftl.utils.arg_helpers import resolve_operation_spec
+from pdftl.utils.arg_helpers import _load_spec_from_file, resolve_operation_spec
 
 # --- Fixtures & Mocks ---
 
@@ -112,60 +113,6 @@ def test_load_simple_dataclass_no_factory():
 
             assert isinstance(result, SimpleSpec)
             assert result.source == "s"  # No "_from_dict" appended
-
-
-# def test_load_valid_yaml():
-#     """Line 68: Test successfully loading a YAML file."""
-#     # Mock HAS_YAML to True
-#     with patch("pdftl.utils.arg_helpers.HAS_YAML", True):
-#         # We also need to mock the 'yaml' module usage inside the helper
-#         mock_yaml = MagicMock()
-#         mock_yaml.safe_load.return_value = {"source": "y_src", "target": "y_tgt"}
-
-#         with patch("pdftl.utils.arg_helpers.yaml", mock_yaml):
-#             with patch("pathlib.Path.exists", return_value=True):
-#                 with patch("builtins.open", mock_open(read_data="source: y_src")):
-
-#                     result = resolve_operation_spec(
-#                         ["@config.yaml"], mock_manual_parser, model_class=None
-#                     )
-
-#                     assert result == {"source": "y_src", "target": "y_tgt"}
-#                     mock_yaml.safe_load.assert_called_once()
-
-
-# def test_yaml_import_error():
-#     """Line 66-67: Test error when loading YAML without PyYAML."""
-#     with patch("pdftl.utils.arg_helpers.HAS_YAML", False):
-#         with patch("pathlib.Path.exists", return_value=True):
-#             with patch("builtins.open", mock_open(read_data="")):
-#                 with pytest.raises(ImportError) as exc:
-#                     resolve_operation_spec(["@config.yaml"], mock_manual_parser, MockSpec)
-#                 assert "PyYAML is required" in str(exc.value)
-
-
-# def test_import_error_block():
-#     """Line 10-11: Verify the top-level ImportError block logic."""
-#     import importlib
-#     import sys
-
-#     original_yaml = sys.modules.get("yaml")
-
-#     try:
-#         sys.modules["yaml"] = None
-#         import pdftl.utils.arg_helpers
-
-#         importlib.reload(pdftl.utils.arg_helpers)
-#         assert pdftl.utils.arg_helpers.HAS_YAML is False
-#     finally:
-#         if original_yaml:
-#             sys.modules["yaml"] = original_yaml
-#         importlib.reload(pdftl.utils.arg_helpers)
-
-
-import sys
-
-from pdftl.utils.arg_helpers import _load_spec_from_file
 
 
 # A dummy class to test object conversion

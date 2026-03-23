@@ -85,18 +85,6 @@ def test_cat(runner, temp_dir, six_page_pdf, spec):
 CAT_SPECS2 = ["x2", "x.5", "z1", "z0", "x1", "z-1", "x-1", "1-3z1", "1-3z-1"]
 CAT_SPECS3 = [x + y for x in CAT_SPECS if len(x) < 20 for y in CAT_SPECS2]
 
-# @pytest.mark.parametrize("spec", CAT_SPECS3)
-# def test_cat_scaling(runner, temp_dir, six_page_pdf, spec):
-#     """Compares the 'cat' operation for various page specifications"""
-#     """involving py-specific scaling."""
-#     run_test_case(
-#         runner, temp_dir,
-#         input_pdf_generator=lambda: Path("pdfs/1.pdf"),
-#         args_template=f'"{{input}}" cat {spec} output "{{output}}"',
-#         comparison_fns=[compare_page_count, compare_visuals],
-#         commands=["pdftl"]
-#     )
-
 SHUFFLE_SPECS = [
     "",
     "A B",

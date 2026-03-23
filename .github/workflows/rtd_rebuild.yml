@@ -1,5 +1,8 @@
 name: Refresh ReadTheDocs
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
   workflow_call:

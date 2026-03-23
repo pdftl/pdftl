@@ -5,7 +5,6 @@ import io
 import logging
 import sys
 import types
-from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -372,6 +371,7 @@ def test_print_version_no_metadata_crash(mocker):
     # Should still print core info, just no optional block
     assert "pdftl" in stdout
     assert "Optional dependencies:" not in stdout
+
 
 def test_print_version_pikepdf_not_found(monkeypatch, patch_environment):
     monkeypatch.setattr(helpvermod, "get_dependencies_status", lambda: ([], []))

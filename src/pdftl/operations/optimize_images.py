@@ -68,44 +68,6 @@ These options can be passed as arguments following `optimize_images`.
     * If `<n>` is 0, this is set automatically.
 """
 
-_OPTIMIZE_IMAGES_LONG_DESC = f"""
-
-The operation 'optimize_images' optimizes images in a PDF file.
-
-This features requires 'ocrmypdf' to be installed.
-
-Valid optimize_options:
-
-low (aliases: lossless, safe):
-  apply lossless optimizations only
-
-medium (aliases: lossy_medium, lossy):
-  also allow some lossy optimizations
-
-high (aliases: aggressive, high, lossy_high):
-  also allow more aggressive lossy optimizations
-
-jbig2_lossy:
-  JBIG2 lossy mode (see ocrmypdf documentation)
-  This is independent of the preceding options
-
-all (aliases: full):
-  use all of the above
-
-jpeg_quality=<n> (default: {DEFAULT_JPEG_QUALITY_STR})
-png_quality=<n>  (default: {DEFAULT_PNG_QUALITY_STR})
-quality=<n>
-  set JPEG and/or PNG quality to <n>.
-  <n> must be an integer between 0 and 100.
-  0 means use the default quality.
-  1 is the lowest possible quality.
-  100 is the highest possible quality.
-
-jobs=<n> (default: 0)
-  use parallel processing with <n> jobs.
-  if <n> is 0, this is set automatically.
-"""
-
 _OPTIMIZE_IMAGES_EXAMPLES = [
     {
         "cmd": "in.pdf optimize_images output out.pdf",
@@ -226,9 +188,6 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
     jpegs, pngs = extract_images_generic(pdf, root, options)
     transcode_jpegs(pdf, jpegs, root, options, executor)
     deflate_jpegs(pdf, root, options, executor)
-    # if options.optimize >= 2:
-    # # Try pngifying the jpegs
-    #      transcode_pngs(pdf, jpegs, jpg_name, root, options, executor)
     transcode_pngs(pdf, pngs, png_name, root, options, executor)
 
     jbig2_groups = extract_images_jbig2(pdf, root, options)

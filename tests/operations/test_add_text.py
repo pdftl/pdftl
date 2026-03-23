@@ -1,4 +1,4 @@
-# src/pdftl/operations/test_add_text.py
+# tests/operations/test_add_text.py
 
 import importlib
 import sys
@@ -11,12 +11,6 @@ from pikepdf import Array, Name, Pdf, Rectangle
 # --- Local Imports ---
 # We import the module to reload it during cleanup
 from pdftl.operations.add_text import _build_static_context, add_text_pdf
-
-# Handle optional exception import
-try:
-    from pdftl.exceptions import InvalidArgumentError
-except ImportError:
-    InvalidArgumentError = ValueError
 
 
 class TestAddTextLogic(unittest.TestCase):

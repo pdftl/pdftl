@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
@@ -107,11 +107,6 @@ def mock_pdf():
     # We patch .pages to return our list of mocks
     with patch.object(Pdf, "pages", new=mock_pages):
         yield pdf
-
-
-from unittest.mock import MagicMock, call, patch
-
-from pdftl.utils.transform import transform_pdf
 
 
 @patch("pdftl.utils.transform.apply_scaling")

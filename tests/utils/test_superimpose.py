@@ -48,4 +48,4 @@ def test_multiple_overlays(temp_pdfs):
 
     contents = get_page_content_bytes(target)
     # Verify we see two 'Do' commands in the combined streams
-    assert contents.count(b"Do") == 2
+    assert contents.count(b" Do ") == 2

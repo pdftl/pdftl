@@ -30,6 +30,6 @@ def superimpose_page(target_page: "Page", source_page: "Page", matrix: "Matrix")
 
     # Create the content stream command
     # q = save state, cm = apply matrix, Do = draw XObject, Q = restore state
-    cmd = b"q %s cm /%s Do Q" % (matrix_bytes, name)
+    cmd = b"q %s cm %s Do Q" % (matrix_bytes, name)
 
     target_page.contents_add(cmd)

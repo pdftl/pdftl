@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.cli.pipeline import CliStage, InlineSubPipeline
-from pdftl.core.constants import ALLOW_PERMISSIONS, ALLOW_PERMISSIONS_L
 from pdftl.core.registry import registry
 from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
@@ -69,7 +68,7 @@ def _raise_unknown_arg_error(arg, just_slurped_allow_index):
     """Generates and raises a detailed error for an unknown argument."""
     msg = f"Unknown argument in <option>... section: {arg}"
     if just_slurped_allow_index:
-        allow_kw_list = ", ".join(sorted(ALLOW_PERMISSIONS))
+        allow_kw_list = ", ".join(sorted(c.ALLOW_PERMISSIONS))
         msg += "\n  Maybe you wanted to give an additional 'allow' permission?"
         msg += f" Valid permissions are:\n  {allow_kw_list}"
     raise InvalidArgumentError(msg)
@@ -104,9 +103,9 @@ def _parse_allow_permissions(args, i, options):
 
     def allow_argument_q(x):
         """Is x a valid argument for allow?"""
-        return x.lower() in ALLOW_PERMISSIONS_L
+        return x.lower() in c.ALLOW_PERMISSIONS_L
 
-    allow_kw_list = ", ".join(sorted(ALLOW_PERMISSIONS))
+    allow_kw_list = ", ".join(sorted(c.ALLOW_PERMISSIONS))
     consumed_count, current_pos = _parse_multiple_arguments(
         keyword,
         args,
@@ -117,7 +116,7 @@ def _parse_allow_permissions(args, i, options):
     )
     permissions = options.setdefault(keyword, set())
     for j in range(1, consumed_count):
-        permissions.add(ALLOW_PERMISSIONS_L[args[i + j].lower()])
+        permissions.add(c.ALLOW_PERMISSIONS_L[args[i + j].lower()])
     return (consumed_count, current_pos)
 
 

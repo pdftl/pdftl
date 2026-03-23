@@ -9,7 +9,6 @@
 import os
 
 import pdftl.core.constants as c
-from pdftl.core.constants import FDF_END, FDF_START
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.utils.hooks import from_result_meta
@@ -80,11 +79,11 @@ def generate_fdf(pdf, get_input, output_file) -> OpResult:
     import io
 
     buffer = io.BytesIO()
-    buffer.write(FDF_START)  # FDF_START is bytes
+    buffer.write(c.FDF_START)  # FDF_START is bytes
     form = Form(pdf)
     for field_name, field in form.items():
         _write_field_as_fdf_to_file(field_name, field, buffer)
-    buffer.write(FDF_END)
+    buffer.write(c.FDF_END)
     buffer.seek(0)
 
     return OpResult(success=True, data=buffer, meta={c.META_OUTPUT_FILE: output_file})

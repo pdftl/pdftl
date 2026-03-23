@@ -22,6 +22,7 @@ from pdftl.cli.parser import (
     split_args_by_separator,
 )
 from pdftl.cli.pipeline import CliStage
+from pdftl.core import constants as constants_module
 
 # --- Import Exceptions ---
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
@@ -52,8 +53,8 @@ def mock_constants(mocker):
 
     mocker.patch.object(parser_module, "_get_flag_keywords", return_value=mock_flags)
     mocker.patch.object(parser_module, "_get_value_keywords", return_value=mock_values)
-    mocker.patch.object(parser_module, "ALLOW_PERMISSIONS", mock_allow)
-    mocker.patch.object(parser_module, "ALLOW_PERMISSIONS_L", mock_allow_l)
+    mocker.patch.object(constants_module, "ALLOW_PERMISSIONS", mock_allow)
+    mocker.patch.object(constants_module, "ALLOW_PERMISSIONS_L", mock_allow_l)
 
 
 @pytest.fixture(autouse=True)

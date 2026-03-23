@@ -4,6 +4,8 @@ import pikepdf
 import pytest
 from pikepdf import Dictionary, Name, Pdf
 
+import pdftl.pages.add_pages as add_pages_module
+
 # --- Import module and functions to test ---
 from pdftl.pages.add_pages import (
     _apply_rotation,
@@ -334,25 +336,6 @@ def test_add_page_rotated_dimensions(tmp_path):
     # 100x200 Portrait
     page = pdf.add_blank_page(page_size=(100, 200))
     page.Rotate = 90  # Visually Landscape (200x100)
-
-    # 2. Logic invocation
-    # Assuming the logic is used when adding a new page based on this one.
-    # We simulate the conditions manually if we can't invoke the CLI command easily.
-
-    # If testing the internal logic isn't possible, we verify the result:
-    # If we add a new page "after" this one, it should inherit the visual dimensions.
-
-    # (Pseudocode for the operation that uses that logic)
-    # result_page = add_blank_page_logic(pdf, reference_page_index=0)
-    # assert result_page.MediaBox == [0, 0, 200, 100]
-    pass
-
-
-from unittest.mock import patch
-
-import pytest
-
-import pdftl.pages.add_pages as add_pages_module
 
 
 # Create a mock PageTransform object since we only need attribute access

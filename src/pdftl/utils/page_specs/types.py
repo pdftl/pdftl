@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Set, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -11,7 +11,7 @@ class PageTransform:
 
     pdf: "Pdf"
     index: int
-    rotation: Tuple[int | float, bool]
+    rotation: tuple[int | float, bool]
     scale: float
 
 
@@ -21,10 +21,10 @@ class PageSpec:
 
     start: int
     end: int
-    rotate: Tuple[int, bool]
+    rotate: tuple[int, bool]
     scale: float
-    qualifiers: Set[str]
-    omissions: List[Tuple[int, int]]
+    qualifiers: set[str]
+    omissions: list[tuple[int, int]]
 
     def __tuple__(self):
         return (

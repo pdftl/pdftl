@@ -503,7 +503,7 @@ def test_advanced_page_box_logic():
     # --- Run Extraction ---
     # We patch dependencies to ensure strings match our expectations
     with patch("pdftl.info.output_info.pdf_id_metadata_as_strings", return_value=[]):
-        with patch("pdftl.info.output_info.pdf_rect_to_string", side_effect=lambda x: str(x)):
+        with patch("pdftl.info.output_info.pdf_rect_to_string", side_effect=str):
             info = get_info(mock_pdf, "boxes.pdf")
 
     # --- Assertions ---

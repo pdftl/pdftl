@@ -38,4 +38,6 @@ jobs:
   rtd-sync:
     needs: pypi-publish
     uses: ./.github/workflows/rtd_rebuild.yml
+    permissions:
+      contents: read
     secrets: inherit

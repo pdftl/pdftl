@@ -142,7 +142,6 @@ def _calculate_transformation_matrix(page, operations):
         elif op.name == "scale" or op.name == "spin":
             # --- RESTORED ANCHOR LOGIC ---
             # 1. Determine the anchor point (ax, ay) in absolute page coordinates
-            ax, ay = 0.0, 0.0
 
             if op.params.get("anchor_type") == "coord":
                 # Case A: Explicit coordinates (e.g. "50% 10pt")

@@ -299,11 +299,7 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
 
     # Create a main PDF with plenty of pages (e.g., 20)
     main_pdf_path = tmp_path / "main_20_page.pdf"
-    main_pdf = create_custom_pdf(main_pdf_path, pages=20)
-    # pikepdf.Pdf.new()
-    # for _ in range(20):
-    #     main_pdf.add_blank_page()
-    # main_pdf.save(main_pdf_path)
+    create_custom_pdf(main_pdf_path, pages=20)
 
     # Create a smaller PDF for overlays, stamps, etc.
     overlay_pdf = pikepdf.Pdf.new()

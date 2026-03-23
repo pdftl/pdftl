@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.operations.crop import crop_pages
+from pdftl.operations.crop import _apply_crop_rule_to_page, crop_pages
 
 
 def _read_page_content(page):
@@ -101,9 +101,6 @@ def test_crop_missing_mediabox(pdf, caplog):
     assert "no valid MediaBox" in caplog.text
 
 
-import pytest
-
-
 def test_crop_fit_mode_execution(minimal_pdf):
     """
     Covers line 152: return fit_ctx.calculate_rect(...)
@@ -163,11 +160,6 @@ def test_crop_preview_rotated_page(minimal_pdf):
     assert True
 
 
-import pytest
-
-from pdftl.operations.crop import _apply_crop_rule_to_page
-
-
 def test_apply_crop_rule_invalid_index():
     """
     Covers crop.py line 111:
@@ -183,12 +175,15 @@ def test_apply_crop_rule_invalid_index():
             page_rule="some_rule", i=5, pdf=pdf, preview=False, fit_ctx=None, all_rules={}
         )
 
+
 def test_crop_invalid_spec_raises_user_error(tmp_path):
     from pdftl.exceptions import UserCommandLineError
     from pdftl.operations.crop import crop_pages
 
     pdf = pikepdf.new()
-    pdf.pages.append(pikepdf.Page(pikepdf.Dictionary(Type=pikepdf.Name("/Page"), MediaBox=[0, 0, 612, 792])))
+    pdf.pages.append(
+        pikepdf.Page(pikepdf.Dictionary(Type=pikepdf.Name("/Page"), MediaBox=[0, 0, 612, 792]))
+    )
 
     with pytest.raises(UserCommandLineError, match="foobar"):
         crop_pages(pdf, ["foobar"])

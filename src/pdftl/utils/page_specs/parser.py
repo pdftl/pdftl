@@ -1,7 +1,6 @@
 import logging
 import math
 import re
-from collections.abc import Generator
 
 from pdftl.exceptions import InvalidArgumentError
 

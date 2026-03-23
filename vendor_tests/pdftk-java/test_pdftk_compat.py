@@ -317,7 +317,7 @@ class TestCrypto:
         run_pdftl([blank, "output", str(encrypted), "user_pw", "pw"])
 
         res = run_pdftl([str(encrypted), "output", "-"], expect_exit_code=1)
-        expected = "OWNER OR USER PASSWORD REQUIRED"  # pdftk
+        # expected = "OWNER OR USER PASSWORD REQUIRED"  # pdftk
         expected = "is encrypted and requires a password"  # pdftl
         assert expected in res.stderr.decode(errors="ignore")
 
@@ -328,7 +328,7 @@ class TestCrypto:
 
         res = run_pdftl([str(encrypted), "input_pw", "wrong", "output", "-"], expect_exit_code=1)
         # Note: Error message might vary slightly by pdftl implementation, but pdftk says:
-        expected = "OWNER OR USER PASSWORD REQUIRED"  # pdftk
+        # expected = "OWNER OR USER PASSWORD REQUIRED"  # pdftk
         expected = "invalid password"
         assert expected in res.stderr.decode(errors="ignore")
 
@@ -346,7 +346,8 @@ def blockify(lines):
 def assert_blocky_equal(a_lines, b_lines):
     a_blocks = blockify(a_lines)
     b_blocks = blockify(b_lines)
-    assert (n := len(a_blocks)) == len(b_blocks)
+    n = len(a_blocks)
+    assert n == len(b_blocks)
     for i in range(n):
         assert len(a_blocks[i]) == len(b_blocks[i])
         assert set(a_blocks[i]) == set(b_blocks[i])
@@ -539,7 +540,7 @@ class TestData:
             input_data="\n".join(data),
             expect_exit_code=3,
         )
-        expect_tk = "page 42 not found"
+        # expect_tk = "page 42 not found"
         expect_tl = "Nonexistent page 42"
         assert expect_tl in res.stderr.decode("utf-8", errors="ignore")
 
@@ -547,7 +548,7 @@ class TestData:
         pdf = get_test_file("test/files/refs.pdf")
         data = ["PageMediaBegin", "PageMediaNumber: 3", "PageMediaRotation: 45"]
         res = run_pdftl([pdf, "update_info", "-", "output", "-"], input_data="\n".join(data))
-        expected_tk = "page media record not valid"
+        # expected_tk = "page media record not valid"
         expected_tl = "angle that is not a multiple of 90"
         assert expected_tl in res.stderr.decode("utf-8", errors="ignore")
 
@@ -555,7 +556,7 @@ class TestData:
         pdf = get_test_file("test/files/refs.pdf")
         data = ["PageMediaBegin", "PageMediaNumber: 3", "PageMediaRect: 1 1 611"]
         res = run_pdftl([pdf, "update_info", "-", "output", "-"], input_data="\n".join(data))
-        expected_tk = "page media record not valid"
+        # expected_tk = "page media record not valid"
         expected_tl = "object is not a rectangle"
         assert expected_tl in res.stderr.decode("utf-8", errors="ignore")
 
@@ -616,8 +617,6 @@ class TestForm:
     def generate_fdf_test_runner(
         self, test_pdf_filename, expected_fdf_filename, run_pdftl, get_test_file
     ):
-        import re
-
         pdf = get_test_file(test_pdf_filename)
         expected = slurp_bytes(get_test_file(expected_fdf_filename))
         res = run_pdftl([pdf, "generate_fdf", "output", "-"])
@@ -720,7 +719,7 @@ class TestMultiple:
 class TestReader:
     @pytest.mark.parametrize("suffix", ["", "_mutated"])
     def test_mergerequest21(self, run_pdftl, get_test_file, suffix):
-        expected_tk = "Invalid reference on Kids"
+        # expected_tk = "Invalid reference on Kids"
         expected_tl = "Loop detected in /Pages"
         pdf = get_test_file("test/files/CVE-2007-0103_AcrobatReader" + suffix)
         res = run_pdftl([pdf, "output", "/dev/null"], expect_exit_code=1)

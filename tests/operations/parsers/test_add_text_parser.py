@@ -630,12 +630,6 @@ class TestAddTextParserHypothesis(unittest.TestCase):
             parse_add_text_specs_to_rules([invalid_spec], total_pages=10)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-import unittest
-
-
 class TestAddTextFiltering(unittest.TestCase):
 
     def test_line_135_omissions(self):

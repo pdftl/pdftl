@@ -33,7 +33,6 @@ def print_version(dest=None):
         libqpdf_version = pikepdf.__libqpdf_version__
     except ImportError:
         libqpdf_version = not_found_str
-        pass
 
     core_deps.append(("libqpdf", libqpdf_version))
     core_deps.append(("python", sys.version.split()[0]))

@@ -342,13 +342,8 @@ class PipelineManager:
             logger.debug("Reading PDF from stdin for first stage")
             if sys.stdin.isatty():
                 raise UserCommandLineError("Expected PDF data from stdin, but none was provided.")
-            # data = sys.stdin.buffer.read()
-            # import pikepdf
 
             try:
-                # if password:
-                #     return pikepdf.open(io.BytesIO(data), password=password)
-                # return pikepdf.open(io.BytesIO(data))
                 return smart_pikepdf_open(None, password)
             except pikepdf.PasswordError as exc:
                 msg = (
