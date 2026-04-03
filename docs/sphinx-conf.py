@@ -1,5 +1,5 @@
 project = "pdftl"
-copyright = "2025-2026, The pdftl developers"
+project_copyright = "2025-%Y, The pdftl developers"
 author = "The pdftl developers"
 html_theme = "sphinx_rtd_theme"
 extensions = [

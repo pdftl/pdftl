@@ -73,22 +73,29 @@ def test_render_pdf_generator_success(mock_ensure):
 
 # --- Test CLI Hook (render_cli_hook) ---
 
+def test_render_cli_hook_jpg_extension():
+    mock_img = MagicMock()
+    data = [("page_1.jpg", mock_img)]
+    result = OpResult(success=True, data=data)
+    render_cli_hook(result, "render_stage", None)
+    mock_img.save.assert_called_with("page_1.jpg", format="JPEG")
 
 def test_render_cli_hook_saving():
     """Test that the CLI hook iterates the generator and saves images."""
     mock_img_1 = MagicMock()
     mock_img_2 = MagicMock()
+    mock_img_3 = MagicMock()
 
     # Data is a generator/list of (filename, image)
-    data = [("page_1.png", mock_img_1), ("page_2", mock_img_2)]  # No extension, triggers fallback
+    data = [("page_1.png", mock_img_1), ("page_2", mock_img_2), ("page_3.jpg", mock_img_3)]  # No extension, triggers fallback
 
     result = OpResult(success=True, data=data)
 
     render_cli_hook(result, "render_stage", None)
 
     # Assert saving
-    mock_img_1.save.assert_called_with("page_1.png")
-    mock_img_2.save.assert_called_with("page_2", format="png")
+    mock_img_1.save.assert_called_with("page_1.png", format="PNG")
+    mock_img_2.save.assert_called_with("page_2", format="PNG")
 
 
 def test_render_cli_hook_error_handling():
@@ -221,8 +228,8 @@ def test_render_cli_hook_saving():
     render_cli_hook(result, "render_stage", None)
 
     # Assert saving
-    mock_img_1.save.assert_called_with("page_1.png")
-    mock_img_2.save.assert_called_with("page_2", format="png")
+    mock_img_1.save.assert_called_with("page_1.png", format="PNG")
+    mock_img_2.save.assert_called_with("page_2", format="PNG")
 
 
 def test_render_cli_hook_error_handling():

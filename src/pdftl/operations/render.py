@@ -66,10 +66,13 @@ def render_cli_hook(result: OpResult, _stage, _pipeline):
     for filename, image in image_generator:
         _, extension = os.path.splitext(filename)
         if not extension:
-            image.save(filename, format="png")
+            image.save(filename, format="PNG")
         else:
+            fmt = extension.lstrip(".").upper()
+            if fmt == "JPG":
+                fmt = "JPEG"
             try:
-                image.save(filename)
+                image.save(filename, format=fmt)
             except ValueError as exc:
                 raise InvalidArgumentError(f"Invalid render output template. Details: {exc}")
 
