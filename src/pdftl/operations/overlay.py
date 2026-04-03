@@ -93,7 +93,7 @@ def _register_overlay_op(name, desc, long_desc, examples):
         examples=examples,
         tags=["in_place", "overlay"],
         type="single input operation",
-        args=([c.INPUT_PDF, c.OVERLAY_PDF], {c.MULTI: c.MULTI, c.ON_TOP: c.ON_TOP}),
+        args=([c.INPUT_PDF, c.OVERLAY_PDF], {}, {c.MULTI: "multi" in name, c.ON_TOP: "stamp" in name}),
     )
 
 
@@ -134,10 +134,7 @@ def apply_overlay(
     """
     import pikepdf
 
-    def debug(x):
-        logger.debug(x)
-
-    debug(
+    logger.debug(
         f"  input_pdf={input_pdf}, "
         f"overlay_filename={overlay_filename}, "
         f"multi={multi}, on_top={on_top}, "

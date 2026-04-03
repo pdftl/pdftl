@@ -314,8 +314,6 @@ class PipelineManager:
             c.OPERATION_ARGS: stage.operation_args,
             c.ALIASES: stage.handles,
             c.OVERLAY_PDF: _first_or_none(stage.operation_args),
-            c.ON_TOP: "stamp" in operation,
-            c.MULTI: "multi" in operation,
             c.OUTPUT: stage.options.get(c.OUTPUT, None),
             c.OUTPUT_PATTERN: output_pattern,
             c.GET_INPUT: self.input_context.get_input,
