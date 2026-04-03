@@ -575,11 +575,11 @@ class TestForm:
 
         def canonicalize(text):
             # 1. Normalize whitespace: collapse newlines/spaces to a single space
-            text = re.sub(b"\s+", b" ", text).strip()
+            text = re.sub(rb"\s+", b" ", text).strip()
 
             # 2. Find the /Fields [...] block
             #    Matches '/Fields [' followed by content, ending with ']'
-            match = re.search(b"/Fields\s*\[(.*?)\]", text)
+            match = re.search(rb"/Fields\s*\[(.*?)\]", text)
 
             if match:
                 # Get the content inside the brackets

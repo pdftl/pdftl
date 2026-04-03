@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-import pdftl.operations.parsers.crop_parser as cp
+import pdftl.operations.parsers.rebox_parser as cp
 from pdftl.utils.dimensions import dim_str_to_pts
 
 # ---------------------------
@@ -80,7 +80,7 @@ def test_parse_paper_spec_property(paper_spec):
 
 
 @given(parts=st.lists(st_margin_value_str, min_size=1, max_size=4))
-def test_parse_crop_margins_shorthand_property(parts):
+def test_parse_rebox_margins_shorthand_property(parts):
     """
     Tests the 1, 2, 3, and 4-value shorthand logic for margins.
     """
@@ -92,7 +92,7 @@ def test_parse_crop_margins_shorthand_property(parts):
     parsed_parts = [dim_str_to_pts(p, page_width) for p in parts]
 
     # Parse using the function
-    left, top, right, bottom = cp.parse_crop_margins(spec_str, page_width, page_height)
+    left, top, right, bottom = cp.parse_rebox_margins(spec_str, page_width, page_height, "dummy_op")
 
     if len(parts) == 1:
         # 1 value: [all sides]
@@ -149,7 +149,7 @@ def test_specs_to_page_rules_property(page_range, margin_spec, has_preview, tota
     if has_preview:
         specs.append("preview")
 
-    page_rules, preview = cp.specs_to_page_rules(specs, total_pages)
+    page_rules, preview = cp.specs_to_page_rules(specs, total_pages, "dummy_op")
 
     # Test preview flag
     assert preview == has_preview

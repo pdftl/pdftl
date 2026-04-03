@@ -11,7 +11,7 @@ import pytest
 
 from pdftl.core.types import OpResult
 from pdftl.operations.add_text import _build_static_context, add_text_pdf
-from pdftl.operations.crop import _apply_crop_rule_to_page
+from pdftl.operations.rebox import _apply_rule_to_page
 from pdftl.operations.dump_annots import (
     _data_item_to_string_helper,
     dump_data_annots_cli_hook,
@@ -63,7 +63,7 @@ def test_crop_invalid_mediabox(caplog):
     mock_pdf.pages = [mock_page]
 
     with caplog.at_level(logging.WARNING):
-        _apply_crop_rule_to_page("rule", 0, mock_pdf, False, None, {})
+        _apply_rule_to_page("rule", 0, mock_pdf, False, None, {}, operation="crop")
         assert "no valid MediaBox" in caplog.text
 
 
@@ -76,9 +76,9 @@ def test_crop_negative_dimensions_skip(caplog):
     mock_pdf.pages = [mock_page]
 
     # Mock calculation to return None (invalid dimensions)
-    with patch("pdftl.operations.crop._calculate_new_box", return_value=None):
+    with patch("pdftl.operations.rebox._calculate_new_box", return_value=None):
         with caplog.at_level(logging.WARNING):
-            _apply_crop_rule_to_page("rule", 0, mock_pdf, False, None, {})
+            _apply_rule_to_page("rule", 0, mock_pdf, False, None, {}, operation="crop")
             assert "zero or negative dimensions" in caplog.text
 
 

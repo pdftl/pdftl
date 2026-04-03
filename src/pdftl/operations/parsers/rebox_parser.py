@@ -2,21 +2,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# src/pdftl/operations/parsers/crop_parser.py
+# src/pdftl/operations/parsers/rebox_parser.py
 
-"""Parser for crop arguments"""
+"""Parser for rebox arguments"""
 
 import logging
 import re
 
 logger = logging.getLogger(__name__)
-from pdftl.core.constants import PAPER_SIZES
+from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 
-def specs_to_page_rules(specs, total_pages):
-    """Generate "page rules" for crop from a user-supplied string"""
+def specs_to_page_rules(specs, total_pages, operation):
+    """Generate "page rules" for a rebox operation from a user-supplied string"""
     page_rules = {}
     spec_pattern = re.compile(r"^([^(]*)?\((.*?)\)$")
     preview = False
@@ -27,7 +27,7 @@ def specs_to_page_rules(specs, total_pages):
             continue
         if not (match := spec_pattern.match(spec)):
             raise ValueError(
-                f"Invalid crop specification format: '{spec}'. "
+                f"Invalid {operation} specification format: '{spec}'. "
                 "Expected a format like '1-5(10pt)' or '1-end(fit)'."
             )
         page_range_str, content_str = match.groups()
@@ -38,10 +38,10 @@ def specs_to_page_rules(specs, total_pages):
         # We pass (0, 0) as dimensions because we don't care about the numeric result
         # of percentages here, only the structural validity.
         try:
-            parse_crop_content(content_str, 1000, 1000)
+            parse_rebox_content(content_str, 1000, 1000, "dummy_op")
         except (ValueError, TypeError, AttributeError) as e:
             raise ValueError(
-                f"Error parsing crop content '{content_str}' in spec '{spec}': {e}"
+                f"Error parsing {operation} content '{content_str}' in spec '{spec}': {e}"
             ) from e
         # -----------------------
 
@@ -52,32 +52,55 @@ def specs_to_page_rules(specs, total_pages):
     return page_rules, preview
 
 
-def parse_crop_content(content_str, page_width, page_height):
+def parse_rebox_content(content_str, page_width, page_height, operation):
     """
     Master parser for the content string inside the parentheses.
-    Dispatches to Smart Crop, Paper Size, or Margin parsers in order.
+    Dispatches to Smart rebox, Paper Size, or Margin parsers in order.
 
     Returns a dict with a 'type' key:
       - {'type': 'fit', 'mode': 'fit'|'fit-group', 'source': str|None, 'padding': (l,t,r,b)}
       - {'type': 'paper', 'size': (w, h)}
       - {'type': 'margin', 'values': (l, t, r, b)}
+      - {'type': 'abs', 'values': (x0, y0, x1, y1)}
     """
-    # 1. Try Smart Crop (fit/fit-group)
-    smart_crop = parse_smart_crop_spec(content_str, page_width, page_height)
-    if smart_crop:
-        return smart_crop
+    # 1. Try fit/fit-group
+    smart_rebox = parse_smart_rebox_spec(content_str, page_width, page_height, operation)
+    if smart_rebox:
+        return smart_rebox
 
     # 2. Try Paper Size (e.g. "a4", "a4_l")
     paper_size = parse_paper_spec(content_str)
     if paper_size:
         return {"type": "paper", "size": paper_size}
 
-    # 3. Default: Margins (e.g. "10pt, 20pt")
-    margins = parse_crop_margins(content_str, page_width, page_height)
+    # 3. Try absolute box
+    abs_box = parse_abs_box(content_str, page_width, page_height)
+    if abs_box:
+        return {"type": "abs", "values": abs_box}
+
+    # 4. Default: Margins (e.g. "10pt, 20pt")
+    margins = parse_rebox_margins(content_str, page_width, page_height, operation)
     return {"type": "margin", "values": margins}
 
 
-def parse_smart_crop_spec(spec_str, page_width, page_height):
+def parse_abs_box(spec_str, page_width, page_height):
+    parts = [p.strip() for p in spec_str.split(",")]
+    head = parts[0].lower()
+
+    if not head.startswith("abs"):
+        return None
+
+    if not len(parts) == 5:
+        raise ValueError(f"Should have 4 comma-separated values following `abs`, got {parts[1:]}")
+
+    x0 = dim_str_to_pts(parts[1], page_width)
+    y0 = dim_str_to_pts(parts[2], page_height)
+    x1 = dim_str_to_pts(parts[3], page_width)
+    y1 = dim_str_to_pts(parts[4], page_height)
+    return x0, y0, x1, y1
+
+
+def parse_smart_rebox_spec(spec_str, page_width, page_height, operation):
     """
     Parses 'fit' or 'fit-group' syntax.
     Format: mode[=source], [padding...]
@@ -113,39 +136,15 @@ def parse_smart_crop_spec(spec_str, page_width, page_height):
         padding = (0.0, 0.0, 0.0, 0.0)
     else:
         # Reuse the existing robust margin parser for padding
-        padding = parse_crop_margins(padding_str, page_width, page_height)
+        padding = parse_rebox_margins(padding_str, page_width, page_height, operation)
 
     return {"type": "fit", "mode": mode, "source": source_spec, "padding": padding}
 
 
-def parse_paper_spec(spec_str):
+
+def parse_rebox_margins(spec_str, page_width, page_height, operation):
     """
-    Parses a spec string to determine if it's a paper size (e.g., 'a4', 'a4_l', '4x6').
-    Returns a (width, height) tuple in points, or None if not a paper spec.
-    """
-    spec_lower = spec_str.lower()
-    landscape = False
-    if spec_lower.endswith("_l"):
-        landscape = True
-        spec_lower = spec_lower[:-2]
-
-    paper_size = PAPER_SIZES.get(spec_lower)
-    if not paper_size:
-        # Try parsing custom inch dimensions like "4x6"
-        match = re.match(r"^(\d*\.?\d+)x(\d*\.?\d+)$", spec_lower)
-        if match:
-            width_in, height_in = float(match.group(1)), float(match.group(2))
-            paper_size = (width_in * 72, height_in * 72)
-
-    if paper_size and landscape:
-        return paper_size[1], paper_size[0]  # Swap width and height
-
-    return paper_size
-
-
-def parse_crop_margins(spec_str, page_width, page_height):
-    """
-    Parses a comma-separated crop spec string into four point values
+    Parses a comma-separated rebox spec string into four point values
     for left, top, right, and bottom margins.
     """
     parts = [p.strip() for p in spec_str.split(",")]
@@ -153,7 +152,7 @@ def parse_crop_margins(spec_str, page_width, page_height):
 
     if not 1 <= num_parts <= 4:
         raise ValueError(
-            "Crop spec must have between 1 and 4 comma-separated values, "
+            "{operation} spec must have between 1 and 4 comma-separated values, "
             f"but found {num_parts}."
         )
 

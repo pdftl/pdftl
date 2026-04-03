@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.operations.crop import _apply_crop_rule_to_page, crop_pages
+from pdftl.operations.rebox import _apply_rule_to_page, crop_or_clip_pages
 
 
 def _read_page_content(page):
@@ -58,7 +58,7 @@ def pdf():
 def test_crop_preview(pdf):
     """Test preview mode (Lines 141-147)."""
     specs = ["preview", "1-end(10)"]
-    crop_pages(pdf, specs)
+    crop_or_clip_pages(pdf, specs)
 
     # Use helper to handle array conversion
     content = _read_page_content(pdf.pages[0])
@@ -70,7 +70,7 @@ def test_crop_paper_size(pdf):
     pdf.pages[0].mediabox = [0, 0, 1000, 1000]
 
     specs = ["1-end(a4)"]
-    crop_pages(pdf, specs)
+    crop_or_clip_pages(pdf, specs)
 
     mbox = pdf.pages[0].mediabox
     width = float(mbox[2]) - float(mbox[0])
@@ -82,7 +82,7 @@ def test_crop_invalid_dimensions(pdf):
     # 100 width - 60 left - 60 right = -20 width
     specs = ["1-end(60,0,60,0)"]
 
-    crop_pages(pdf, specs)
+    crop_or_clip_pages(pdf, specs)
 
     # MediaBox should remain unchanged
     mbox = pdf.pages[0].mediabox
@@ -95,8 +95,8 @@ def test_crop_missing_mediabox(pdf, caplog):
     # where MediaBox is missing or invalid.
     caplog.set_level(logging.DEBUG)
 
-    with patch("pdftl.operations.crop.get_visible_page_dimensions", return_value=None):
-        crop_pages(pdf, ["1-end(10)"])
+    with patch("pdftl.operations.rebox.get_visible_page_dimensions", return_value=None):
+        crop_or_clip_pages(pdf, ["1-end(10)"])
 
     assert "no valid MediaBox" in caplog.text
 
@@ -113,7 +113,7 @@ def test_crop_fit_mode_execution(minimal_pdf):
     # 2. Run crop with a 'fit' spec
     # The actual calculation result isn't vital here, just hitting the dispatch line.
     args = ["1(fit)"]
-    result = crop_pages(minimal_pdf, args)
+    result = crop_or_clip_pages(minimal_pdf, args)
 
     assert result.success
 
@@ -133,7 +133,7 @@ def test_crop_updates_existing_boxes(minimal_pdf):
 
     # Apply a simple margin crop
     args = ["1(10)"]  # 10 units from all edges
-    crop_pages(minimal_pdf, args)
+    crop_or_clip_pages(minimal_pdf, args)
 
     # Verify they were modified
     new_rect = [10, 10, 90, 90]
@@ -151,7 +151,7 @@ def test_crop_preview_rotated_page(minimal_pdf):
 
     # Run in preview mode
     args = ["1(10)", "preview"]
-    crop_pages(minimal_pdf, args)
+    crop_or_clip_pages(minimal_pdf, args)
 
     # The preview overlay should have been created.
     # We can check if the crop function completed without error
@@ -171,14 +171,19 @@ def test_apply_crop_rule_invalid_index():
 
     # Try to access index 5
     with pytest.raises(ValueError, match="is too large"):
-        _apply_crop_rule_to_page(
-            page_rule="some_rule", i=5, pdf=pdf, preview=False, fit_ctx=None, all_rules={}
+        _apply_rule_to_page(
+            page_rule="some_rule",
+            i=5,
+            pdf=pdf,
+            preview=False,
+            fit_ctx=None,
+            all_rules={},
+            operation="crop",
         )
 
 
 def test_crop_invalid_spec_raises_user_error(tmp_path):
     from pdftl.exceptions import UserCommandLineError
-    from pdftl.operations.crop import crop_pages
 
     pdf = pikepdf.new()
     pdf.pages.append(
@@ -186,4 +191,4 @@ def test_crop_invalid_spec_raises_user_error(tmp_path):
     )
 
     with pytest.raises(UserCommandLineError, match="foobar"):
-        crop_pages(pdf, ["foobar"])
+        crop_or_clip_pages(pdf, ["foobar"], operation="crop")

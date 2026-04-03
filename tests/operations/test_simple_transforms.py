@@ -1,7 +1,7 @@
 import pikepdf
 import pytest
 
-from pdftl.operations.crop import crop_pages
+from pdftl.operations.rebox import crop_or_clip_pages
 from pdftl.operations.delete import delete_pages
 from pdftl.operations.delete_annots import delete_annots
 from pdftl.operations.filter import filter_pdf
@@ -14,7 +14,7 @@ PARAMS = [
     (rotate_pdf, ["1-endeast"], 0),  # Rotation keeps page count
     (place_content, ["1-end(spin=45)"], 0),  # Spin keeps page count
     (delete_pages, ["2"], -1),  # Deleting 1 page reduces count by 1
-    (crop_pages, ["1-end(0,0,100,100)"], 0),  # Crop keeps page count
+    (crop_or_clip_pages, ["1-end(0,0,100,100)"], 0),  # Crop keeps page count
     (filter_pdf, [], 0),  # Filter usually just passes through
     (delete_annots, [], 0),  # Removing annots keeps page count
     # modify_annots usually requires specific args, passing empty list usually does nothing safe

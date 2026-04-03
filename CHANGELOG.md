@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+### Added
+
+- `clip` operation: enclose page content in a clipping rectangle
+
+- absolute rectangle specifications for `crop` and `clip`
+
 ## [0.11.2] - 2026-03-22
 
 ### Added

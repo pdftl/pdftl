@@ -93,7 +93,11 @@ def _register_overlay_op(name, desc, long_desc, examples):
         examples=examples,
         tags=["in_place", "overlay"],
         type="single input operation",
-        args=([c.INPUT_PDF, c.OVERLAY_PDF], {}, {c.MULTI: "multi" in name, c.ON_TOP: "stamp" in name}),
+        args=(
+            [c.INPUT_PDF, c.OVERLAY_PDF],
+            {},
+            {c.MULTI: "multi" in name, c.ON_TOP: "stamp" in name},
+        ),
     )
 
 
