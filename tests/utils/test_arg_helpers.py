@@ -54,7 +54,7 @@ def test_resolve_detects_json_file():
         with patch("pathlib.Path.exists", return_value=True):
 
             args = ["@config.json"]
-            result = resolve_operation_spec(args, mock_manual_parser, MockSpec)
+            _result = resolve_operation_spec(args, mock_manual_parser, MockSpec)
 
             f_args, f_kwargs = mock_file.call_args
             assert f_args[0] == Path("config.json")

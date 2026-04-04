@@ -33,9 +33,6 @@ def remapper_setup(mocker):
     # Create a real explicit destination array
     source_dest_array = Array([source_page.obj, Name.XYZ, 0, 800, 1])
 
-    # Create a real named destination
-    source_dests_dict = Dictionary(MyDest=source_dest_array)
-
     # --- 3. Create Target Page (to simulate output) ---
     pdf.add_blank_page(page_size=(1200, 1600))  # 2x scale
     target_page = pdf.pages[0]

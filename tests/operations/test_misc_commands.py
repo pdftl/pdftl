@@ -17,10 +17,6 @@ def test_chop_basic(two_page_pdf):
         result = chop_pages(pdf, specs).pdf
 
         assert len(result.pages) == 4
-        # Verify page size changed (height should be halved)
-        # We assume standard A4 or Letter, just checking it's smaller
-        original_height = 1000  # arbitrary, dependent on fixture
-        # But we can check they are equal to each other
         assert result.pages[0].mediabox == result.pages[1].mediabox
 
 

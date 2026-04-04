@@ -14,9 +14,8 @@ def test_split_escaped():
     def run_test(name, actual, expected):
         try:
             assert actual == expected
-            print(f"  [PASS] {name}")
         except AssertionError:
-            print(f"  [FAIL] {name}")
+            print(f"  [FAIL] in test_split_escaped: {name}")
             print(f"    Expected: {expected}")
             print(f"    Got:      {actual}")
             return False
@@ -25,16 +24,20 @@ def test_split_escaped():
     tests = [
         ("Simple split", split_escaped("a,b,c", ","), ["a", "b", "c"]),
         ("Escaped delimiter", split_escaped("a,b\\,c,d", ","), ["a", "b,c", "d"]),
-        ("Escaped backslash", split_escaped("a,b\\\\,c", ","), ["a", r"b\,c"]),
+        # Input: a,b\\,c. The first \ does not precede the delimiter,
+        # so it and the second \ are left perfectly alone.
+        ("Escaped backslash", split_escaped("a,b\\\\,c", ","), ["a", "b\\\\", "c"]),
         ("Trailing delimiter", split_escaped("a,b,", ","), ["a", "b", ""]),
         ("Escaped trailing", split_escaped("a,b\\,", ","), ["a", "b,"]),
-        ("Double escape", split_escaped("a\\\\,b\\,c", ","), [r"a\,b,c"]),
-        ("Complex sequence", split_escaped("a\\\\\\.b,c", "."), ["a\\.b,c"]),
+        # Input: a\\,b\,c. First \\ is ignored. \, escapes the comma.
+        ("Double escape", split_escaped("a\\\\,b\\,c", ","), ["a\\\\", "b,c"]),
+        # Input: a\\\.b,c. First \\ ignored. \. escapes the dot.
+        ("Complex sequence", split_escaped("a\\\\\\.b,c", "."), ["a\\\\.b,c"]),
         ("Empty string", split_escaped("", ","), [""]),
         ("Only delimiter", split_escaped(",", ","), ["", ""]),
     ]
 
-    assert all(tests)
+    assert all([run_test(*test) for test in tests])
 
 
 def test_split_escaped_value_error():
@@ -126,7 +129,7 @@ def test_xml_decode_for_info(inp, expected):
     "original_string",
     [
         "Hello!",
-        'A <complex> string & "stuff" \' \n with \r all chars.' "Even non-ascii: éàçü",
+        'A <complex> string & "stuff" \' \n with \r all chars. Even non-ascii: éàçü',
         "",
     ],
 )

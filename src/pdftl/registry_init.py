@@ -45,7 +45,6 @@ def _discover_external_operations():
         if py_file.stem == "__init__":
             continue
 
-        module_name = py_file.stem
         module_name = f"pdftl.external.{py_file.stem}"
         try:
             spec = importlib.util.spec_from_file_location(module_name, py_file)

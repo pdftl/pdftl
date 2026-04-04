@@ -92,7 +92,7 @@ def test_duplicate_argument_raises_error():
     ]
 
     with pytest.raises(DuplicateArgumentError) as excinfo:
-        specs, options = parse_options_and_specs(args)
+        _specs, _options = parse_options_and_specs(args)
 
     # Verify the error message mentions the correct keyword
     assert "Duplicate keyword: owner_pw" in str(excinfo.value)

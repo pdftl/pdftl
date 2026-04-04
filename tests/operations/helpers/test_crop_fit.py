@@ -296,7 +296,7 @@ def test_calculate_rect_no_visible_content():
 
         parsed = {"mode": "fit-group", "source": "1", "padding": (0, 0, 0, 0)}
         # Line 135 will return (0,0,0,0) or if we force found_any=False, it triggers line 88 logic
-        res = ctx.calculate_rect(0, parsed, "rule", {0: "rule"})
+        _res = ctx.calculate_rect(0, parsed, "rule", {0: "rule"})
         # Adjusting the mock to trigger line 88 specifically depends on your _calculate_group_union return
 
 

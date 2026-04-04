@@ -27,7 +27,6 @@ def test_stub_file_completeness():
     Verify that the production stub generator logic creates a definition
     for every operation currently in the registry.
     """
-    stub_gen = get_stub_generator()
 
     # We simulate the generation to a string to verify content
     # This logic matches scripts/generate_stubs.py exactly
@@ -67,7 +66,7 @@ def test_signature_parameters():
     """
     from pdftl.core import constants as c
 
-    stub_gen = get_stub_generator()
+    _stub_gen = get_stub_generator()
     # We inspect a sample output line from the generator
     # We'll just test the 'cat' operation specifically if it exists
     op_to_test = "cat" if "cat" in registry.operations else list(registry.operations.keys())[0]

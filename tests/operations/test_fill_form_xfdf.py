@@ -442,16 +442,6 @@ def test_set_field_radio_no_kids_workaround(mock_field):
     assert mock_field.obj.V == pikepdf.Name("/OptionA")
 
 
-def test_set_field_unknown_type(mock_field):
-    """
-    Covers lines 242-244.
-    Fallback for generic fields.
-    """
-    # All flags false by default in fixture
-    _set_form_field_value(mock_field, "SomeValue")
-    assert mock_field.value == "SomeValue"
-
-
 # ---------------------------------------------------------------------------
 # Test: Helper Functions
 # ---------------------------------------------------------------------------

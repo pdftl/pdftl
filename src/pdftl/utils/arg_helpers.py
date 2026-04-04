@@ -79,10 +79,9 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     try:
         import yaml
 
-        HAS_YAML = True
+        has_yaml = True
     except ImportError:
-        HAS_YAML = False
-        yaml = None
+        has_yaml = False
 
     path = Path(path_str)
     if not path.exists():
@@ -91,7 +90,7 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     with open(path, encoding="utf-8") as f:
         # Simple extension check
         if path.suffix.lower() in (".yaml", ".yml"):
-            if not HAS_YAML or yaml is None:
+            if not has_yaml:
                 raise ImportError(
                     "PyYAML is required to load .yaml files. Install it with: pip install pyyaml"
                 )

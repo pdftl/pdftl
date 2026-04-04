@@ -2,7 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import io
 import logging
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -11,12 +10,12 @@ import pytest
 
 from pdftl.core.types import OpResult
 from pdftl.operations.add_text import _build_static_context, add_text_pdf
-from pdftl.operations.rebox import _apply_rule_to_page
 from pdftl.operations.dump_annots import (
     _data_item_to_string_helper,
     dump_data_annots_cli_hook,
 )
 from pdftl.operations.modify_annots import modify_annots
+from pdftl.operations.rebox import _apply_rule_to_page
 from pdftl.utils.dimensions import get_visible_page_dimensions
 
 # --- ADD_TEXT MOPPING ---
@@ -106,7 +105,6 @@ def test_dump_annots_string_convert_fallback():
 def test_modify_annots_execution():
     """Mops lines 83-84, 107-110: Logic for applying annotation modifications."""
     # Create a real mini PDF with a link annotation
-    out = io.BytesIO()
     with pikepdf.new() as pdf:
         pdf.add_blank_page(page_size=(100, 100))
         # Create a basic link

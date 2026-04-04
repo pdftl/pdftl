@@ -249,11 +249,8 @@ def runner(temp_dir):
 
 
 def pytest_addoption(parser):
-    parser.addoption("--pdftk", action="store", default=None)
-
-
-def pytest_addoption(parser):
     """Add command-line options to pytest."""
+    parser.addoption("--pdftk", action="store", default=None)
     parser.addoption("--skip-slow", action="store_true", default=False, help="skip slow tests")
 
 

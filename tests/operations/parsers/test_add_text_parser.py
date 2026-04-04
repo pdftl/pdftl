@@ -552,9 +552,6 @@ st_invalid_structure = st.one_of(
 @st.composite
 def st_invalid_specs(draw):
     """Builds a full, invalid spec string."""
-    base_spec = draw(st_full_spec())
-    parts = base_spec.split(" ")
-
     case = draw(st.integers(0, 2))
     if case == 0:  # Replace options
         invalid_opts = draw(st_invalid_options)
