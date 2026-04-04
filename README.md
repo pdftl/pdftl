@@ -73,9 +73,11 @@ A simple `pip install pdftl[full]` install is also supported.
 ### ✂️ Geometry & splitting
 
 * **Rotate:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages (absolute or relative).
-* **Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) to margins or standard paper sizes (e.g., "A4").
+* **Clip** and **Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) pages to margins or standard paper sizes (e.g., "A4"), or keep pages unchanged and [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) to hide content outside a given region.
 * **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows (e.g., split a scanned spread into two pages).
 * **Shift, scale and spin** page content *inside* the page boundaries using [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
+* **Montage:** [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html) multiple pages onto a grid layout for contact sheets and N-up handouts.
+* **Booklet:** create a print-ready [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html) with optional RTL support and signature splitting.
 
 ### 📝 Forms & annotations
 
@@ -196,10 +198,12 @@ See the **[API Tutorial][4]** for more details.
 | [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages                    |
 | [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |
+| [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html)                             | Impose pages into printable booklet signatures                  |
 | [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into individual page files                   |
 | [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF                |
 | [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html)                                   | Chop pages into multiple smaller pieces                         |
-| [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages                                                      |
+| [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html)                                   | Clip page content to a rectangle                                |
+| [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages to a rectangle                                       |
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
@@ -219,6 +223,7 @@ See the **[API Tutorial][4]** for more details.
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
 | [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |
+| [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html)                             | Impose pages onto a grid layout                                 |
 | [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html)                                   | Move pages to a new location                                    |
 | [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html)             | Use multiple pages as backgrounds                               |
 | [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html)                       | Stamp multiple pages onto an input PDF                          |

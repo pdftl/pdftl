@@ -5,11 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.12.0] - 2026-04-04
+
 ### Added
 
 - `clip` operation: enclose page content in a clipping rectangle
 
-- absolute rectangle specifications for `crop` and `clip`
+- Absolute rectangle specifications for `crop` and `clip`
+
+- `montage` operation: impose multiple pages onto a grid layout, useful for contact sheets and N-up handouts. Supports configurable grid size, canvas, margins, gutters, and aspect ratio control (`fit=contain|fill`).
+
+- `booklet` operation: reorder and impose pages for duplex booklet printing. Automatically pads to a multiple of 4, supports signature-based chunking (`sig=N`), custom canvas size, and right-to-left binding (`rtl=true`).
 
 ## [0.11.2] - 2026-03-22
 

@@ -20,6 +20,7 @@ from pdftl.core.types import OpResult
 from pdftl.exceptions import UserCommandLineError
 from pdftl.operations.parsers.insert_parser import InsertSpec, parse_insert_args
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
+from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
@@ -113,12 +114,7 @@ def insert_pages(pdf: "Pdf", args: list) -> OpResult:
     count_inserted = 0
     for insert_idx, media_box, crop_box, trim_box in actions:
         for _ in range(spec.insert_count):
-            new_page = dummy_pdf.add_blank_page()
-            new_page.MediaBox = list(media_box)  # type: ignore[call-overload]
-            if crop_box:
-                new_page.CropBox = list(crop_box)  # type: ignore[call-overload]
-            if trim_box:
-                new_page.TrimBox = list(trim_box)  # type: ignore[call-overload]
+            new_page = make_blank_page(dummy_pdf, media_box, crop_box, trim_box)
 
             pdf.pages.insert(insert_idx, new_page)
             count_inserted += 1

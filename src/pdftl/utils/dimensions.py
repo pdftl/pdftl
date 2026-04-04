@@ -46,16 +46,20 @@ def dim_str_to_pts(val_str, total_dimension=None):
     return float(numeric_part)
 
 
-def get_visible_page_dimensions(page: "pikepdf.Page"):
+def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox"):
     """Safely retrieves the page's visible dimensions using
-    /CropBox if present, or /MediaBox otherwise.
+    /TrimBox (if box is "trimbox" and /TrimBox is present)
+    or /CropBox if present, or /MediaBox otherwise.
 
     Returns:
         origin_x, origin_y, signed_width, signed_height, or None on error.
 
     """
     try:
-        rect = page.cropbox
+        if box=="trimbox":
+            rect = page.trimbox
+        else:
+            rect = page.cropbox
         x0, y0, x1, y1 = float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])
         return x0, y0, x1 - x0, y1 - y0
     except (TypeError, IndexError, ValueError, AttributeError):
