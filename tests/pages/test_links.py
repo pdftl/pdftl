@@ -1,9 +1,13 @@
+import builtins
+import importlib
 import logging
 from unittest.mock import MagicMock, call, patch
 
 import pikepdf
 import pytest
 from pikepdf import Array, Dictionary, Name, NameTree, Pdf, String
+
+import pdftl.pages.links
 
 try:
     from pikepdf.exceptions import ForeignObjectError
@@ -576,13 +580,6 @@ def test_write_named_dests_odd_length():
 
     with pytest.raises(ValueError, match="must have even length"):
         write_named_dests(pdf, odd_dests)
-
-
-import builtins
-import importlib
-from unittest.mock import patch
-
-import pdftl.pages.links
 
 
 def test_profile_initialization_safely():

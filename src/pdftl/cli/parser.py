@@ -7,14 +7,15 @@
 """Parser for CLI interface"""
 
 import logging
-
-logger = logging.getLogger(__name__)
+from contextlib import suppress
 
 import pdftl.core.constants as c
 from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.cli.pipeline import CliStage, InlineSubPipeline
 from pdftl.core.registry import registry
 from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
+
+logger = logging.getLogger(__name__)
 
 
 def _get_registry_data_entries(main_key, sub_key, test, transform=None):
@@ -199,10 +200,8 @@ def _handle_pipeline_input(inputs, handles, is_first_stage):
         for handle in handles:
             handles[handle] += 1
     if "_" not in handles:
-        try:
+        with suppress(ValueError):
             handles["_"] = inputs.index("_")
-        except ValueError:
-            pass
     return (inputs, handles)
 
 

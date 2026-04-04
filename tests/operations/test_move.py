@@ -50,7 +50,7 @@ def numbered_pdf():
         # We'll attach a custom attribute to the python object for testing if possible,
         # but pikepdf regenerates wrappers.
         # Instead, we'll verify by list manipulation logic or set a specific box size.
-        page = pdf.add_blank_page(page_size=(100, 100 + i))  # Height = 100 + index
+        pdf.add_blank_page(page_size=(100, 100 + i))  # Height = 100 + index
         # Index 0 -> Height 100
         # Index 5 -> Height 105
     return pdf

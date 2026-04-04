@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import logging
 import types
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -256,10 +257,8 @@ def _create_signature(op_name):
     return_annotation = inspect.Signature.empty
     op_function = op_data.get("function")
     if op_function:
-        try:
+        with suppress(ValueError, TypeError):
             return_annotation = inspect.signature(op_function).return_annotation
-        except (ValueError, TypeError):
-            pass
     return inspect.Signature(parameters, return_annotation=return_annotation)
 
 

@@ -9,7 +9,9 @@ def test_parse_rebox_content_abs_valid():
     Tests successful parsing of an absolute box specification.
     """
     # Assuming dim_str_to_pts translates raw string numbers to float/int points
-    result = parse_rebox_content("abs, 10, 20, 90, 80", page_width=100, page_height=100, operation="dummy_op")
+    result = parse_rebox_content(
+        "abs, 10, 20, 90, 80", page_width=100, page_height=100, operation="dummy_op"
+    )
 
     assert result["type"] == "abs"
     assert result["values"] == (10, 20, 90, 80)
@@ -21,7 +23,9 @@ def test_parse_rebox_content_abs_invalid_length():
     Tests the ValueError raised when 'abs' doesn't have exactly 4 values.
     """
     with pytest.raises(ValueError, match="Should have 4 comma-separated values following `abs`"):
-        parse_rebox_content("abs, 10, 20, 90", page_width=100, page_height=100, operation="dummy_op")
+        parse_rebox_content(
+            "abs, 10, 20, 90", page_width=100, page_height=100, operation="dummy_op"
+        )
 
 
 import pikepdf

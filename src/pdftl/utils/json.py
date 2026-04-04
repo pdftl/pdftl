@@ -13,13 +13,6 @@ logger = logging.getLogger(__name__)
 from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.whatisit import is_page
 
-# def _abbreviate_debug_string(s: str, max_len: int = 250, head: int = 200, tail: int = 50) -> str:
-#     """Abbreviates a string for logging if it exceeds a maximum length."""
-#     if len(s) > max_len:
-#         return f"{s[:head]} ...<ABBREVIATED>... {s[-tail:]}"
-#     return s
-
-
 KEY_ACTION_TYPE = "/S"
 KEY_DESTINATION = "/D"
 ACTION_GOTO = "/GoTo"

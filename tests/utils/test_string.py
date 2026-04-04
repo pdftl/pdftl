@@ -1,12 +1,22 @@
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pikepdf
 import pytest
 
 from pdftl.utils.string_utils import (
+    before_space,
+    compact_json_string,
     fix_mojibake,
+    pdf_num_to_string,
+    pdf_obj_to_string,
+    pdf_rect_to_string,
+    recursive_decode,
     sensible_decode,
     split_escaped,
     split_string_respecting_quotes,
+    xml_decode_for_info,
+    xml_encode_for_info,
 )
 
 
@@ -14,9 +24,8 @@ def test_split_escaped():
     def run_test(name, actual, expected):
         try:
             assert actual == expected
-            print(f"  [PASS] {name}")
         except AssertionError:
-            print(f"  [FAIL] {name}")
+            print(f"  [FAIL] in test_split_escaped: {name}")
             print(f"    Expected: {expected}")
             print(f"    Got:      {actual}")
             return False
@@ -25,16 +34,20 @@ def test_split_escaped():
     tests = [
         ("Simple split", split_escaped("a,b,c", ","), ["a", "b", "c"]),
         ("Escaped delimiter", split_escaped("a,b\\,c,d", ","), ["a", "b,c", "d"]),
-        ("Escaped backslash", split_escaped("a,b\\\\,c", ","), ["a", r"b\,c"]),
+        # Input: a,b\\,c. The first \ does not precede the delimiter,
+        # so it and the second \ are left perfectly alone.
+        ("Escaped backslash", split_escaped("a,b\\\\,c", ","), ["a", "b\\\\", "c"]),
         ("Trailing delimiter", split_escaped("a,b,", ","), ["a", "b", ""]),
         ("Escaped trailing", split_escaped("a,b\\,", ","), ["a", "b,"]),
-        ("Double escape", split_escaped("a\\\\,b\\,c", ","), [r"a\,b,c"]),
-        ("Complex sequence", split_escaped("a\\\\\\.b,c", "."), ["a\\.b,c"]),
+        # Input: a\\,b\,c. First \\ is ignored. \, escapes the comma.
+        ("Double escape", split_escaped("a\\\\,b\\,c", ","), ["a\\\\", "b,c"]),
+        # Input: a\\\.b,c. First \\ ignored. \. escapes the dot.
+        ("Complex sequence", split_escaped("a\\\\\\.b,c", "."), ["a\\\\.b,c"]),
         ("Empty string", split_escaped("", ","), [""]),
         ("Only delimiter", split_escaped(",", ","), ["", ""]),
     ]
 
-    assert all(tests)
+    assert all([run_test(*test) for test in tests])
 
 
 def test_split_escaped_value_error():
@@ -42,13 +55,12 @@ def test_split_escaped_value_error():
         split_escaped("", "ab")
 
 
-from pdftl.utils.string_utils import recursive_decode
-
-
 def test_recursive_decode():
     """Test the recursive dictionary/list walker."""
+
     # Define a simple decoder: uppercase everything
-    decoder = lambda x: x.upper()
+    def decoder(x):
+        return x.upper()
 
     data = {
         "simple": "hello",
@@ -67,20 +79,6 @@ def test_recursive_decode():
     # Test base case (non-container, non-string)
     assert recursive_decode(123, decoder) == 123
 
-
-from decimal import Decimal
-
-import pikepdf
-
-from pdftl.utils.string_utils import (
-    before_space,
-    compact_json_string,
-    pdf_num_to_string,
-    pdf_obj_to_string,
-    pdf_rect_to_string,
-    xml_decode_for_info,
-    xml_encode_for_info,
-)
 
 # =======================================================================
 #  Tests for XML encoding/decoding
@@ -126,7 +124,7 @@ def test_xml_decode_for_info(inp, expected):
     "original_string",
     [
         "Hello!",
-        'A <complex> string & "stuff" \' \n with \r all chars.' "Even non-ascii: éàçü",
+        'A <complex> string & "stuff" \' \n with \r all chars. Even non-ascii: éàçü',
         "",
     ],
 )
@@ -206,7 +204,8 @@ def test_pdf_rect_to_string():
         # --- CORRECTED based on failure ---
         # The list is joined by spaces, not str()
         (["a", "list"], "a list"),
-        (True, "True"),  # fixme, should it be 'true'?
+        # Booleans are represented using Python's str() result
+        (True, "True"),
         (False, "False"),
     ],
 )

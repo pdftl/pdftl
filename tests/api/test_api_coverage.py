@@ -81,7 +81,6 @@ class TestApiCall:
         mock_run.return_value = OpResult(success=True, summary="Did things")
 
         # We explicitly target the 'pdftl' logger which api.call uses
-        logger = logging.getLogger("pdftl")
         with caplog.at_level(logging.INFO, logger="pdftl"):
             api.call("noop")
 

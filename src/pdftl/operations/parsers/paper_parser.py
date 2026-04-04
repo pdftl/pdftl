@@ -10,6 +10,7 @@ import re
 
 from pdftl.core.constants import PAPER_SIZES
 
+
 def parse_paper_spec(spec_str):
     """
     Parses a spec string to determine if it's a paper size (e.g., 'a4', 'a4_l', '4x6').
@@ -33,4 +34,3 @@ def parse_paper_spec(spec_str):
         return paper_size[1], paper_size[0]  # Swap width and height
 
     return paper_size
-

@@ -81,7 +81,7 @@ specifying the rectangle, except that instead of cropping to the
 rectangle (by changing the page boundaries), all page content is
 enclosed in a clipping rectangle. The effect is then that any content
 outside that rectangle is hidden, while the page boundaries are
-unnchanged.
+unchanged.
 
 To find out how to specify the rectangle, read the help for `crop`. Or
 see below:

@@ -234,7 +234,7 @@ class TestPrivateHelpers:
         ]
 
         with pytest.raises(InvalidArgumentError, match="Unknown argument.*attach_files"):
-            specs, options = parse_options_and_specs(args)
+            _specs, _options = parse_options_and_specs(args)
 
     def testparse_options_and_specs(self, mock_constants):
         """Integration test for the main options parser."""
@@ -361,35 +361,6 @@ class TestPrivateHelpers:
 
 
 class TestParserIntegration:
-    def test_parse_cli_stage_specs_and_options(self, mock_registry, mock_constants):
-        """
-        Tests parsing a full command with specs, flags, and value keywords.
-        """
-        # Note: No mocks for private helpers
-        args = [
-            "in.pdf",
-            "cat",
-            "1-5",
-            "end",  # Specs
-            "uncompress",  # Flag keyword
-            "output",
-            "out.pdf",  # Value keyword
-            "allow",
-            "Printing",
-            "Copying",  # Multi-value keyword
-        ]
-
-        stage = parse_cli_stage(args, is_first_stage=True)
-
-        assert stage.operation == "cat"
-        assert stage.inputs == ["in.pdf"]
-        assert stage.operation_args == ["1-5", "end"]
-        assert stage.options == {
-            "uncompress": True,
-            "output": "out.pdf",
-            "allow": {"Printing", "Copying"},
-        }
-
     def test_parse_cli_stage_specs_and_options(self, mock_registry, mock_constants):
         """
         Tests parsing a full command with specs, flags, and value keywords.

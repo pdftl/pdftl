@@ -155,8 +155,6 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     # --- Step 3: Run the Command ---
     # CRITICAL: We run inside work_dir. The tool sees "a.pdf" and finds it locally.
     result = subprocess.run(command_to_run, capture_output=True, text=False, cwd=work_dir)
-    stdout_str = result.stdout.decode("utf-8", errors="replace")
-    stderr_str = result.stderr.decode("utf-8", errors="replace")
 
     # --- Step 4: Assert Success ---
     assert result.returncode == 0, (

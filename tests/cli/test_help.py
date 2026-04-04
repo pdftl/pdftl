@@ -37,16 +37,6 @@ def patch_environment(monkeypatch, tmp_path):
         "examples": [HelpExample(desc="Save", cmd="output file.pdf")],
         "long_desc": "More info",
     }
-    fake_cli = {
-        "options": {"output": fake_opt},
-        "extra help topics": {
-            "topic1": {
-                "title": "topic1",
-                "desc": "desc",
-                "examples": [HelpExample(desc="x", cmd="y")],
-            }
-        },
-    }
 
     # Patch registry with a dict-like object
     class FakeRegistry:
@@ -67,7 +57,6 @@ def patch_environment(monkeypatch, tmp_path):
             return key in ("operations", "options")
 
     monkeypatch.setattr(helpmod, "registry", FakeRegistry())
-    # monkeypatch.setattr(helpmod, "CLI_DATA", fake_cli)
     monkeypatch.setattr(helpmod, "SPECIAL_HELP_TOPICS_MAP", {("input", "in"): "help input"})
     monkeypatch.setattr(helpmod, "SYNOPSIS_TEMPLATE", "Usage: {whoami} [{special_help_topics}]")
     monkeypatch.setattr(
@@ -129,21 +118,6 @@ def test_get_project_version_no_pyproject(monkeypatch, patch_environment):
 
     # 4. Now it must take the final fallback
     assert helpmod.get_project_version() == "unknown-dev-version"
-
-
-def test_print_version_to_file(monkeypatch, patch_environment):
-    monkeypatch.setattr(sys.modules["pikepdf"], "__version__", "10.0")
-    monkeypatch.setattr(sys.modules["pikepdf"], "__libqpdf_version__", "11.0")
-    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
-    monkeypatch.setitem(
-        sys.modules,
-        "pikepdf",
-        types.SimpleNamespace(__version__="10.0", __libqpdf_version__="11.0"),
-    )
-    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
-    buf = io.StringIO()
-    helpvermod.print_version(dest=buf)
-    assert "1.0.0" in buf.getvalue()
 
 
 @pytest.mark.parametrize("cmd", [None, "combine", "output_options", "examples", "all", "nonsense"])

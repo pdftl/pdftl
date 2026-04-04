@@ -247,7 +247,6 @@ def test_copy_item_uses_action(mock_remapper):
 
     mock_remapper.remap_goto_action.return_value = (None, None)  # Prune
     new_parent_list = []
-    new_dests_list = []
 
     # 2. Act
     copier = OutlineCopier(mock_remapper)

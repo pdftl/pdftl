@@ -141,7 +141,6 @@ def parse_smart_rebox_spec(spec_str, page_width, page_height, operation):
     return {"type": "fit", "mode": mode, "source": source_spec, "padding": padding}
 
 
-
 def parse_rebox_margins(spec_str, page_width, page_height, operation):
     """
     Parses a comma-separated rebox spec string into four point values

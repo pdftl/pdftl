@@ -25,8 +25,6 @@ def test_unpack_files(pdf_with_attachment, tmp_path):
     """Test extracting attachments to a directory."""
     with pikepdf.open(pdf_with_attachment) as pdf:
         # Prepare arguments
-        # input_filename is mainly for logging/reference
-        input_filename = "dummy_input.pdf"
 
         # get_input is a callable, likely used if specific files need to be selected
         # We pass a dummy lambda that returns empty or None

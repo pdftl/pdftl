@@ -3,6 +3,7 @@ import os
 import posixpath
 import runpy
 import sys
+import warnings
 from unittest.mock import MagicMock, patch
 
 from pdftl.cli.complete import get_cache_path
@@ -64,24 +65,6 @@ def test_coverage_gap_main_edge_cases(monkeypatch):
         with patch("sys.stdout", new_callable=io.StringIO):
             result = complete_main()
             assert result is None
-
-
-def test_coverage_gap_module_entrypoint():
-    """Targets line 166: The __main__ execution block."""
-    import sys
-
-    # We need to make sure sys.argv exists so main() doesn't crash
-    with patch.object(sys, "argv", ["complete.py"]):
-        # We patch get_parser to return None so main() exits at line 134.
-        # This is safe and hits the __main__ block execution.
-        with patch("pdftl.cli.complete.get_parser", return_value=None):
-            try:
-                runpy.run_module("pdftl.cli.complete", run_name="__main__")
-            except SystemExit:
-                pass  # In case your main() eventually adds a sys.exit()
-
-
-import warnings
 
 
 def test_coverage_gap_module_entrypoint(capsys):

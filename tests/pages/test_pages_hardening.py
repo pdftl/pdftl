@@ -47,7 +47,7 @@ def test_link_transform_is_idempotent():
 
     def pdf_hash(pdf):
         with io.BytesIO() as buffer:
-            data = pdf.save(buffer)
+            pdf.save(buffer)
             return hashlib.sha256(buffer.getvalue()).hexdigest()
 
     src = pikepdf.new()

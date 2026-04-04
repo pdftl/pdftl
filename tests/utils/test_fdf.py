@@ -64,7 +64,6 @@ def test_extract_main_fdf_dict_simple():
     Tests extracting the simple FDF dictionary.
     """
     # The expected slice is the content *after* /FDF and *before* the final >>
-    expected_bytes = b" << /Fields [ <</T(name)/V(John)>> ] >>"
 
     # The function first finds the full dict:
     full_dict_bytes = FDF_DICT_SIMPLE_CORE.strip()  # << /FDF ... >> >>

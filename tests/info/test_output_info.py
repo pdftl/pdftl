@@ -743,44 +743,45 @@ def test_write_info_bookmarks():
     assert "BookmarkLevel: 2" in calls
     assert "BookmarkPageNumber: 2" in calls
 
-    def test_get_info_redundant_boxes(self, mock_pdf, mock_constants):
-        """
-        Test coverage for line 190:
-        Ensures redundant boxes (e.g., TrimBox == MediaBox when CropBox is default)
-        are skipped/pruned from the output.
-        """
-        # 1. Setup the iteration order to ensure we process Media -> Crop -> Trim
-        mock_constants.INFO_TO_PAGE_BOXES_MAP = {
-            "media_rect": "MediaBox",
-            "crop_rect": "CropBox",
-            "trim_rect": "TrimBox",
-        }
 
-        # 2. Define a standard rectangle
-        rect_data = [0.0, 0.0, 500.0, 800.0]
+def test_get_info_redundant_boxes(mock_pdf, mock_constants):
+    """
+    Test coverage for line 190:
+    Ensures redundant boxes (e.g., TrimBox == MediaBox when CropBox is default)
+    are skipped/pruned from the output.
+    """
+    # 1. Setup the iteration order to ensure we process Media -> Crop -> Trim
+    mock_constants.INFO_TO_PAGE_BOXES_MAP = {
+        "media_rect": "MediaBox",
+        "crop_rect": "CropBox",
+        "trim_rect": "TrimBox",
+    }
 
-        # 3. Configure the page
-        page = MagicMock()
-        page.get.return_value = 0
+    # 2. Define a standard rectangle
+    rect_data = [0.0, 0.0, 500.0, 800.0]
 
-        # Scenario:
-        # - MediaBox is defined.
-        # - CropBox is NOT defined (defaults to MediaBox).
-        # - TrimBox IS defined but is identical to MediaBox.
-        page.MediaBox = rect_data
-        del page.CropBox  # Ensure hasattr(page, 'CropBox') is False or returns None
-        page.TrimBox = rect_data
+    # 3. Configure the page
+    page = MagicMock()
+    page.get.return_value = 0
 
-        mock_pdf.pages = [page]
+    # Scenario:
+    # - MediaBox is defined.
+    # - CropBox is NOT defined (defaults to MediaBox).
+    # - TrimBox IS defined but is identical to MediaBox.
+    page.MediaBox = rect_data
+    del page.CropBox  # Ensure hasattr(page, 'CropBox') is False or returns None
+    page.TrimBox = rect_data
 
-        # 4. Run
-        info = get_info(mock_pdf, "redundant.pdf")
+    mock_pdf.pages = [page]
 
-        # 5. Assert
-        # The TrimBox should be STRIPPED because it matches MediaBox and there is no CropBox.
-        # This forces execution of: (saved_crop_box is None and box_list == saved_media_box)
-        assert info.page_media[0].media_rect == rect_data
-        assert info.page_media[0].trim_rect is None
+    # 4. Run
+    info = get_info(mock_pdf, "redundant.pdf")
+
+    # 5. Assert
+    # The TrimBox should be STRIPPED because it matches MediaBox and there is no CropBox.
+    # This forces execution of: (saved_crop_box is None and box_list == saved_media_box)
+    assert info.page_media[0].media_rect == rect_data
+    assert info.page_media[0].trim_rect is None
 
 
 def test_info_bookmark_resolution_none(mocker):

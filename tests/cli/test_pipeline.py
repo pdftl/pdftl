@@ -200,7 +200,7 @@ def test_open_input_pdfs_success(monkeypatch):
     manager = PipelineManager(stages=[stage_final], input_context=MagicMock())
 
     # Even if is_first=False, keep_final_id should capture the ID of the opened PDFs
-    pdfs = manager._open_input_pdfs(stage_final, is_first=False)
+    _pdfs = manager._open_input_pdfs(stage_final, is_first=False)
     assert manager.kept_id == ["id1", "id2"]
 
 

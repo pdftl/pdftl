@@ -11,23 +11,7 @@ from pdftl.utils.destinations import (
     resolve_dest_to_page_num,
 )
 
-# --- 1. RESTORE ORIGINAL INTEGRATION TESTS (Lines 23-27, 63-65, 88) ---
-
-
-def test_resolve_named_dest_dictionary_path():
-    """Hits Line 63: Named dest points to a Dict with a /D key."""
-    with pikepdf.new() as pdf:
-        pdf.add_blank_page()
-        dest_dict = pikepdf.Dictionary(
-            {"/D": pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")])}
-        )
-        named_dests = {"Complex": dest_dict}
-
-        res = resolve_dest_to_page_num("Complex", pdf.pages, named_dests)
-        assert res.dest_type == "Fit"
-
-
-# --- 2. OUTLINE & ACTION FALLBACKS (Lines 47-53, 81) ---
+# --- OUTLINE & ACTION FALLBACKS (Lines 47-53, 81) ---
 
 
 def test_outline_item_action_fallback():
@@ -48,21 +32,7 @@ def test_outline_item_action_fallback():
         assert res.page_num == 1
 
 
-# --- 3. EDGE CASE FAILURES (Lines 33, 108) ---
-
-
-def test_find_page_index_missing_objgen():
-    """Hits Line 33: Object has no objgen attribute."""
-    assert _find_page_index(object(), []) is None
-
-
-def test_resolve_dest_to_page_num_catch_all():
-    """Hits Line 108: Array is valid but contains invalid page data."""
-    with pikepdf.new() as pdf:
-        # Array with an integer instead of a Page Dictionary
-        invalid_dest = pikepdf.Array([123, pikepdf.Name("/XYZ")])
-        res = resolve_dest_to_page_num(invalid_dest, pdf.pages, None)
-        assert res is None  # Hits line 108
+# --- EDGE CASE FAILURES (Lines 33, 108) ---
 
 
 def test_resolve_dest_explicit_array():

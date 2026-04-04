@@ -31,8 +31,6 @@ def compare_visuals(path_py: Path, path_tk: Path, tolerance: float = 10.0):
     num_pages = len(doc_py)
 
     # check page sizes
-    py_sizes = [p.rect for p in doc_py]
-    tk_sizes = [q.rect for q in doc_tk]
     for i, (p, q) in enumerate(zip(doc_py, doc_tk)):
         assert all(
             [math.isclose(p.rect[k], q.rect[k], rel_tol=0.00001) for k in range(4)]

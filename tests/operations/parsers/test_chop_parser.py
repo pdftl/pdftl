@@ -244,26 +244,17 @@ def test_parse_chop_specs_to_rules_with_range_qualifier(monkeypatch):
     assert set(result.keys()) == {3, 5}
 
 
-import pytest
-
-from pdftl.operations.parsers.chop_parser import (
-    MAX_PIECES,
-    _parse_integer_spec,
-    parse_chop_spec,
-)
-
-
 def test_chop_parser_max_pieces_exceeded():
     """
     Covers line 201: raise ValueError(...larger than MAX_PIECES...)
     We call _parse_integer_spec directly to ensure we are testing the integer
     limit logic, not the fallback behavior of the main parser.
     """
-    huge_number = MAX_PIECES + 1
+    huge_number = cp.MAX_PIECES + 1
     total_dim = 1000
 
     with pytest.raises(ValueError) as exc:
-        _parse_integer_spec(str(huge_number), total_dim)
+        cp._parse_integer_spec(str(huge_number), total_dim)
 
     assert "Number of pieces is larger than MAX_PIECES" in str(exc.value.__cause__)
 
@@ -280,6 +271,6 @@ def test_chop_parser_comma_spec_excessive_size():
     spec_str = "rows2000pt"
 
     with pytest.raises(ValueError) as exc:
-        parse_chop_spec(spec_str, page_rect)
+        cp.parse_chop_spec(spec_str, page_rect)
 
     assert "Sum of fixed sizes in chop spec exceeds page dimensions" in str(exc.value)
