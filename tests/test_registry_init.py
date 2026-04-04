@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import pdftl.registry_init as reg_init
-from pdftl.registry_init import _discover_external_operations, _discover_modules
 
 
 @pytest.fixture(autouse=True)
@@ -131,7 +130,7 @@ def test_discover_modules_skips_no_path(caplog):
     mock_module = types.ModuleType("mock_file_module")
 
     with caplog.at_level(logging.WARNING):
-        loaded = _discover_modules([mock_module], "test_label")
+        loaded = reg_init._discover_modules([mock_module], "test_label")
 
     # 2. Assertions
     assert len(loaded) == 0
@@ -183,7 +182,7 @@ def test_registry_syntax_error():
             )
 
             # Execute
-            _discover_external_operations()
+            reg_init._discover_external_operations()
 
             # Verify the new mechanism was called
             mock_spec_func.assert_called()
@@ -208,6 +207,6 @@ def test_registry_no_config_dir():
 
         # We verify the early return by checking that sys.path was NOT modified
         with patch("pdftl.registry_init.sys.path", []) as mock_sys_path:
-            _discover_external_operations()
+            reg_init._discover_external_operations()
 
             assert len(mock_sys_path) == 0

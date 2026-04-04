@@ -109,7 +109,7 @@ def test_prove_hardening_is_required():
     add_pages(dest, [src], transforms)
 
     p1 = dest.pages[0]
-    p2 = dest.pages[1]
+    _p2 = dest.pages[1]
 
     # The /P key of the annotation on Page 1 must point to Page 1
     p1_annot_parent = p1.Annots[0].get("/P")

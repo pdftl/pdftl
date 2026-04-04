@@ -350,7 +350,6 @@ def test_handle_no_specs(mock_pdfs_fixture):
 
 def test_resolve_alias_and_spec(mock_pdfs_fixture):
     """Tests the _resolve_alias_and_spec helper."""
-    aliases = mock_pdfs_fixture["aliases"]
     pdf_A = mock_pdfs_fixture["pdf_A"]
     pdf_B = mock_pdfs_fixture["pdf_B"]
     opened_pdfs_by_alias = {

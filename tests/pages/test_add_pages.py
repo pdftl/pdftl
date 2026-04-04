@@ -4,11 +4,10 @@ import pikepdf
 import pytest
 from pikepdf import Dictionary, Name, Pdf
 
-import pdftl.pages.add_pages as add_pages_module
-
 # --- Import module and functions to test ---
 from pdftl.pages.add_pages import (
     _apply_rotation,
+    _stash_page_source_data,
     add_pages,
     process_source_pages,
 )
@@ -382,7 +381,7 @@ def test_stash_page_source_data_rotation_swap():
     page_data = MockPageTransform(pdf=mock_pdf, index=0)
 
     # 2. Execute
-    add_pages_module._stash_page_source_data(mock_new_page, mock_source_page, page_data, 0)
+    _stash_page_source_data(mock_new_page, mock_source_page, page_data, 0)
 
     # 3. Verification
     assert mock_new_page.__setitem__.called

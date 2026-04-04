@@ -51,7 +51,7 @@ def test_insert_parser(args, expected):
 def simple_pdf(tmp_path):
     """Creates a simple 1-page PDF (100x100) for testing."""
     pdf = pikepdf.new()
-    page = pdf.add_blank_page(page_size=(100, 100))
+    pdf.add_blank_page(page_size=(100, 100))
     return pdf
 
 
@@ -102,7 +102,7 @@ def test_insert_relative_units(simple_pdf):
 def test_insert_model_mode(simple_pdf):
     """Test copying geometry from a specific model page."""
     # 1. Add a second page with distinct size (200x200) to act as the model
-    page2 = simple_pdf.add_blank_page(page_size=(200, 200))
+    simple_pdf.add_blank_page(page_size=(200, 200))
 
     # 2. Insert AFTER page 1, but using PAGE 2 (model=2) as the geometry source
     # The new page will be at index 1 (between page 1 and 2)

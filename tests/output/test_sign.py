@@ -7,7 +7,6 @@ from cryptography.x509.oid import NameOID
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign.validation import validate_pdf_signature
 
-import pdftl.cli.main
 import pdftl.cli.parser
 import pdftl.output.sign
 from pdftl.cli.main import main

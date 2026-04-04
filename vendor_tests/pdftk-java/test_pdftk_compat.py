@@ -336,7 +336,7 @@ class TestCrypto:
 def blockify(lines):
     blocks = []
     for line in lines:
-        if line == "---":
+        if line == "---" or not blocks:
             blocks.append([line])
         else:
             blocks[-1].append(line)
@@ -410,7 +410,7 @@ class TestData:
         run_pdftl([pdf, "update_info", "-", "output", str(output)], input_data=dump)
         # 3. Check logs
         # Note: Java checks stderr is empty.
-        pass
+        # But we do nothing
 
     def test_update_info_incomplete_record(self, run_pdftl, get_test_file):
         pdf = get_test_file("test/files/blank.pdf")

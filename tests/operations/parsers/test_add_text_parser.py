@@ -61,11 +61,10 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
         raise
 
 
-import pdftl.operations.parsers.add_text_parser
-
 # Now, we can import the functions to be tested from the *new* module path
 # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
 from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
+    PRESET_POSITIONS,
     _compile_text_renderer,
     _parse_options_content,
     _parse_options_string,
@@ -443,9 +442,7 @@ st_rotate = st.builds(
     st.floats(min_value=-360, max_value=360, allow_nan=False, allow_infinity=False),
 )
 
-st_pos_preset = st.just(
-    f"position={st.one_of(st.sampled_from(pdftl.operations.parsers.add_text_parser.PRESET_POSITIONS))}"
-)
+st_pos_preset = st.just(f"position={st.one_of(st.sampled_from(PRESET_POSITIONS))}")
 
 st_dim_floats = st.floats(min_value=0, max_value=1000, allow_nan=False, allow_infinity=False)
 st_unit = st.one_of(st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just(""))
@@ -552,9 +549,6 @@ st_invalid_structure = st.one_of(
 @st.composite
 def st_invalid_specs(draw):
     """Builds a full, invalid spec string."""
-    base_spec = draw(st_full_spec())
-    parts = base_spec.split(" ")
-
     case = draw(st.integers(0, 2))
     if case == 0:  # Replace options
         invalid_opts = draw(st_invalid_options)
@@ -613,8 +607,6 @@ class TestAddTextParserHypothesis(unittest.TestCase):
 
         except ValueError:
             pass  # Expected
-        except InvalidArgument:
-            pass
         except Exception as e:
             # Catch any other unexpected exceptions
             self.fail(f"Parser crashed on specs: '{specs}'\nError: {e}")

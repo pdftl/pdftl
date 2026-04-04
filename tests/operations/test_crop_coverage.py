@@ -106,11 +106,8 @@ def test_crop_fit_mode_execution(minimal_pdf):
     Covers line 152: return fit_ctx.calculate_rect(...)
     Triggered when spec type is 'fit'.
     """
-    # 1. Add some content to ensure fit calculation has something to work with
-    # (Though even without content, the path is taken, it just might return None/Empty)
-    page = minimal_pdf.pages[0]
 
-    # 2. Run crop with a 'fit' spec
+    # Run crop with a 'fit' spec
     # The actual calculation result isn't vital here, just hitting the dispatch line.
     args = ["1(fit)"]
     result = crop_or_clip_pages(minimal_pdf, args)

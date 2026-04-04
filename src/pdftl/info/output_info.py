@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
-from pdftl.core.constants import PAGE_LABEL_STYLE_MAP
 from pdftl.info.info_types import (
     BookmarkEntry,
     DocInfoEntry,
@@ -113,7 +112,9 @@ def _get_pagelabels(info, labels):
     for page_idx, entry in labels.items():
         style_code = getattr(entry, "S", None)
         try:
-            found_style = next(k for k, v in PAGE_LABEL_STYLE_MAP.items() if v == str(style_code))
+            found_style = next(
+                k for k, v in c.PAGE_LABEL_STYLE_MAP.items() if v == str(style_code)
+            )
         except StopIteration:
             found_style = "NoNumber"
         if info.page_labels is None:

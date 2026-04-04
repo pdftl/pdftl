@@ -8,6 +8,7 @@ from pdftl.cli import help as helpmod
 from pdftl.cli import help_version as helpvermod
 from pdftl.cli import main as mainmod
 from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
+from pdftl.cli.main import main as cli_main
 from pdftl.exceptions import UserCommandLineError
 
 
@@ -313,7 +314,7 @@ def test_main_uses_sys_argv_if_none_provided():
             try:
                 main()
             except SystemExit:
-                pass
+                pass  # expected
 
             # This assertion still works because the mock was called before it raised the exception
             assert mock_special.called
@@ -344,7 +345,7 @@ def test_main_special_flags_returns_early(mocker):
     assert main() == 0
 
 
-def test_main_operation_error_exit_code(mocker):
+def test_main_operation_error_exit_code(mocker, capfd):
     """
     Covers line 59: if isinstance(e, OperationError): return 3
     """
@@ -364,17 +365,18 @@ def test_main_operation_error_exit_code(mocker):
     # Force the pipeline.run() to raise an OperationError
     mock_pipeline.run.side_effect = OperationError("Something went wrong during processing")
 
-    # Capture stderr to keep the test clean (optional validation of error message)
-    capsys = mocker.patch("sys.stderr")
-
     # Run main
     exit_code = main()
 
     # Assert that OperationError results in exit code 3
     assert exit_code == 3
 
+    # Capture the output to keep the terminal clean and verify the message
+    captured = capfd.readouterr()
 
-from pdftl.cli.main import main as cli_main
+    # Check both stdout and stderr just in case
+    output = captured.err + captured.out
+    assert "Something went wrong during processing" in output
 
 
 def test_cli_handles_completion_flag():

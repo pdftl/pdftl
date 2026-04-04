@@ -7,6 +7,7 @@
 """Modify properties of existing annotations"""
 
 import logging
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -126,12 +127,10 @@ def _parse_value_to_python(val_str: str):
         return Name(val_str)
 
     # Handle Numbers or Fallback Strings
-    try:
+    with suppress(ValueError, TypeError):
         # Check if it looks like a number before converting to float
         if val_str.replace(".", "", 1).lstrip("-+").isdigit():
             return float(val_str)
-    except (ValueError, TypeError):
-        pass
 
     # Final validation for malformed selector-like characters
     if (val_str.count("(") != val_str.count(")")) or (val_str.count("[") != val_str.count("]")):

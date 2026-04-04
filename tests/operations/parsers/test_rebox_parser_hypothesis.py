@@ -87,12 +87,10 @@ def test_parse_rebox_margins_shorthand_property(parts):
     spec_str = ",".join(parts)
     page_width, page_height = 600, 800
 
-    # We need to parse the values * ourselves* to check the logic
-    # This is a bit complex but necessary to validate the test.
-    parsed_parts = [dim_str_to_pts(p, page_width) for p in parts]
-
     # Parse using the function
-    left, top, right, bottom = cp.parse_rebox_margins(spec_str, page_width, page_height, "dummy_op")
+    left, top, right, bottom = cp.parse_rebox_margins(
+        spec_str, page_width, page_height, "dummy_op"
+    )
 
     if len(parts) == 1:
         # 1 value: [all sides]

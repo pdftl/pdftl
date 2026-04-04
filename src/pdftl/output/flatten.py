@@ -32,7 +32,7 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
 
         has_renderer = True
     except ImportError:
-        pass
+        pass  # with has_renderer = False
 
     # 2. Strategy A: High-Fidelity Rendering (If installed)
     if has_renderer and pdfium is not None:

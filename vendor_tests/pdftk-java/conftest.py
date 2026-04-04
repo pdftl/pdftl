@@ -52,25 +52,6 @@ def run_pdftl(tmp_path):
     return _run
 
 
-# @pytest.fixture
-# def compare_pdfs_as_svg():
-#     """Visual comparison fixture"""
-#     def _compare(pdf_bytes_a, pdf_bytes_b):
-#         def to_svg(pdf_data):
-#             if not shutil.which("pdftocairo"):
-#                 pytest.skip("pdftocairo missing")
-#             proc = subprocess.run(
-#                 ["pdftocairo", "-svg", "-", "-"],
-#                 input=pdf_data,
-#                 capture_output=True,
-#                 check=True
-#             )
-#             return proc.stdout
-
-#         assert to_svg(pdf_bytes_a) == to_svg(pdf_bytes_b)
-#     return _compare
-
-
 @pytest.fixture
 def compare_pdfs_as_svg(tmp_path):
     """Visual comparison fixture with debugging for broken PDFs"""

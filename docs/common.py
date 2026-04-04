@@ -8,25 +8,16 @@ from pathlib import Path
 
 # Add the project's 'src' directory to the Python path to allow direct imports.
 # This assumes the script is run from the project root (e.g., python docs/script.py)
-try:
-    print("--- [common.py] Trying to import pdftl modules...")
-    src_path = str(Path(__file__).parent.parent / "src")
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
+src_path = str(Path(__file__).parent.parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
-    from pdftl.cli.help import get_synopsis
-    from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
-    from pdftl.core.registry import registry
-    from pdftl.registry_init import initialize_registry
-
-    print("--- [common.py] Imports successful.")
-except ImportError as e:
-    print(
-        "Error: Could not import from 'pdftl'. Is 'src' the correct source directory?",
-        file=sys.stderr,
-    )
-    print(f"Details: {e}", file=sys.stderr)
-    sys.exit(1)
+# Let Python raise a standard ImportError if these fail.
+# No side-effects or sys.exit() calls at the module level!
+from pdftl.cli.help import get_synopsis
+from pdftl.cli.whoami import HOMEPAGE, PACKAGE, WHOAMI
+from pdftl.core.registry import registry
+from pdftl.registry_init import initialize_registry
 
 
 def get_docs_data():
@@ -92,12 +83,6 @@ def get_docs_data():
         print("--- [common.py] 'output_options' topic created successfully.")
     else:
         print("--- [common.py] No output options found to document.")
-
-    # # For all topics, rename 'long_desc' to 'details' for consistency.
-    # for name, data in all_topics.items():
-    #     desc_key = "long_desc" if "long_desc" in data else None
-    #     if desc_key:
-    #         data["details"] = data.pop(desc_key)
 
     print(f"--- [common.py] Finished data prep. Returning {len(all_topics)} total topics.")
     return app_info, all_topics

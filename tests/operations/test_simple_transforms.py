@@ -1,12 +1,12 @@
 import pikepdf
 import pytest
 
-from pdftl.operations.rebox import crop_or_clip_pages
 from pdftl.operations.delete import delete_pages
 from pdftl.operations.delete_annots import delete_annots
 from pdftl.operations.filter import filter_pdf
 from pdftl.operations.modify_annots import modify_annots
 from pdftl.operations.place import place_content
+from pdftl.operations.rebox import crop_or_clip_pages
 from pdftl.operations.rotate import rotate_pdf
 
 # Define the cases: (Function, Specs List, Expected Page Count Change)
@@ -33,9 +33,9 @@ def test_simple_transform(two_page_pdf, func, specs, page_diff):
         # Some functions allow empty specs, others might handle it differently.
         # Filter doesn't take specs in your signature: def filter_pdf(pdf)
         if func == filter_pdf:
-            result = func(pdf)
+            _result = func(pdf)
         else:
-            result = func(pdf, specs)
+            _result = func(pdf, specs)
 
         # Some commands return the PDF, others modify in-place and return None.
         # We check the 'pdf' object itself for validity.
