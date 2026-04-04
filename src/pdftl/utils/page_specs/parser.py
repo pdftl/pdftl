@@ -80,13 +80,20 @@ class SpecParser:
         if token_str is None:
             return None
         is_end_token = token_str.lower() == "end"
+        if not is_end_token:
+            try:
+                token_int = int(token_str)
+            except ValueError as e:
+                raise InvalidArgumentError(
+                    f"Could not parse page token '{token_str}' as an integer"
+                ) from e
         if is_reverse:
             if is_end_token:
                 return 1  # 'rend' means page 1
-            return self.total_pages - int(token_str) + 1
+            return self.total_pages - token_int + 1
         if is_end_token:
             return self.total_pages
-        return int(token_str)
+        return token_int
 
     def _parse_range_part(self, spec):
         range_match = self.spec_regex.match(spec)

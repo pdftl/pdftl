@@ -50,6 +50,7 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
     count = 0
     for filename, pdf in burst_generator:
         pipeline.save_pdf_file(pdf, filename, stage)
+        pdf.close()
         count += 1
 
     logger.info("Burst to %s files.", count)
@@ -107,20 +108,24 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
         if "%" not in pattern:
             raise ValueError("Output pattern must include a format specifier (e.g., %d)")
 
-        for source_pdf in opened_pdfs:
-            logger.debug("source_pdf=%s", source_pdf)
-            for page in source_pdf.pages:
-                page_counter += 1
-                page_file = pattern % page_counter
-                new_pdf = pikepdf.Pdf.new()
-                new_pdf.pages.append(page)
-                logger.debug(
-                    "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",
-                    page_file,
-                    source_pdf,
-                    page.objgen,
-                )
-                yield (page_file, new_pdf)
+        try:
+            for source_pdf in opened_pdfs:
+                logger.debug("source_pdf=%s", source_pdf)
+                for page in source_pdf.pages:
+                    page_counter += 1
+                    page_file = pattern % page_counter
+                    new_pdf = pikepdf.Pdf.new()
+                    new_pdf.pages.append(page)
+                    logger.debug(
+                        "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",
+                        page_file,
+                        source_pdf,
+                        page.objgen,
+                    )
+                    yield (page_file, new_pdf)
+        finally:
+            for source_pdf in opened_pdfs:
+                source_pdf.close()
 
     return OpResult(
         success=True,

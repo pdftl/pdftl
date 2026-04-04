@@ -25,8 +25,25 @@ class FitCropContext:
 
     def __init__(self, pdf: "pikepdf.Pdf"):
         self.pikepdf_doc = pdf
+        self._pdf_buffer: io.BytesIO | None = None
         self._pdfium_doc: pdfium.PdfDocument | None = None
         self._group_cache: dict[str, Any] = {}
+
+    def close(self):
+        """Explicitly release PDFium resources and memory buffers."""
+        if self._pdfium_doc is not None:
+            if hasattr(self._pdfium_doc, "close"):
+                self._pdfium_doc.close()
+            self._pdfium_doc = None
+
+        if self._pdf_buffer is not None:
+            if hasattr(self._pdf_buffer, "close"):
+                self._pdf_buffer.close()
+            self._pdf_buffer = None
+
+    def __del__(self):
+        """Ensure resources are freed if the object is garbage collected."""
+        self.close()
 
     @property
     def doc(self) -> "pdfium.PdfDocument":
@@ -50,10 +67,10 @@ class FitCropContext:
 
         import pypdfium2 as pdfium
 
-        pdf_buffer = io.BytesIO()
-        self.pikepdf_doc.save(pdf_buffer)
-        pdf_buffer.seek(0)
-        self._pdfium_doc = pdfium.PdfDocument(pdf_buffer)
+        self._pdf_buffer = io.BytesIO()
+        self.pikepdf_doc.save(self._pdf_buffer)
+        self._pdf_buffer.seek(0)
+        self._pdfium_doc = pdfium.PdfDocument(self._pdf_buffer)
 
     def calculate_rect(
         self, page_idx: int, parsed: dict, rule_str: str, all_rules: dict

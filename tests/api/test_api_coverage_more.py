@@ -108,3 +108,25 @@ def test_process_bytes_input():
 
     assert final_inputs == ["<bytes-obj-0>"]
     assert isinstance(final_opened[0], pikepdf.Pdf)
+
+
+from pdftl.api import _normalize_inputs
+
+
+@patch("pdftl.api._process_user_input")
+def test_normalize_inputs_closes_opened_pdfs_on_exception(mock_process):
+    mock_pdf_1 = MagicMock()
+
+    def mock_process_side_effect(i, item, password, final_inputs, final_opened):
+        if i == 0:
+            # FIX: Just return a new list containing the mock PDF directly
+            return final_inputs + [item], [mock_pdf_1]
+        elif i == 1:
+            raise ValueError("Simulated corruption on file 2")
+
+    mock_process.side_effect = mock_process_side_effect
+
+    with pytest.raises(ValueError, match="Simulated corruption on file 2"):
+        _normalize_inputs(["file1.pdf", "file2.pdf"], [], "")
+
+    mock_pdf_1.close.assert_called_once()

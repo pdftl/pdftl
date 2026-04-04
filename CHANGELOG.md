@@ -5,6 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+### Fixed
+
+- Improved memory manangement
+
 ## [0.12.0] - 2026-04-04
 
 ### Added

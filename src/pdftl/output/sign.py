@@ -43,7 +43,7 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
     buffer.seek(0)
 
     # Verify the buffer
-    if b"/Encrypt" in buffer.getvalue():
+    if b"/Encrypt" in buffer.read(4096):
         logger.debug("SUCCESS: Buffer is now encrypted.")
     else:
         logger.debug("ERROR: Buffer still missing /Encrypt. Check if pdf object is modified.")

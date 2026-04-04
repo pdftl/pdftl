@@ -6,7 +6,7 @@
 
 """Impose pages onto a grid or custom layout."""
 
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pikepdf import Page, Pdf
@@ -16,8 +16,8 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
-from pdftl.utils.geometry import calculate_fit_metrics, calculate_placement_matrix
 from pdftl.utils.dimensions import get_visible_page_dimensions
+from pdftl.utils.geometry import calculate_fit_metrics, calculate_placement_matrix
 from pdftl.utils.page_specs import expand_specs_to_pages
 
 _MONTAGE_LONG_DESC = """
@@ -118,7 +118,7 @@ def montage_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     return OpResult(success=True, pdf=new_pdf)
 
 
-def _parse_montage_config(specs: List[str], out_page_specs: List[str]) -> Dict[str, Any]:
+def _parse_montage_config(specs: list[str], out_page_specs: list[str]) -> dict[str, Any]:
     """
     Parses the raw argument list.
     - Key=Value pairs are treated as config.
@@ -139,34 +139,8 @@ def _parse_montage_config(specs: List[str], out_page_specs: List[str]) -> Dict[s
             key, val = token.split("=", 1)
             key = key.lower().strip()
             val = val.lower().strip()
+            config = _update_config_from_keyval(key, val, config)
 
-            if key == "grid":
-                # Parse "2x2"
-                try:
-                    cols, rows = val.split("x")
-                    config["cols"] = int(cols)
-                    config["rows"] = int(rows)
-                except ValueError:
-                    raise ValueError(f"Invalid grid format: '{val}'. Expected format: 'cols x rows', e.g. '2x2'.")
-            elif key == "canvas":
-                # Use standard pdftl parser (e.g. "a4", "a4_l", "4x6")
-                parsed_size = parse_paper_spec(val)
-                if parsed_size:
-                    config["canvas_size"] = parsed_size
-                else:
-                    raise ValueError(
-                        f"Unknown canvas size or format: '{val}'. Try standard sizes like 'a4', 'letter', 'a4_l'."
-                    )
-            elif key == "margin":
-                config["margin"] = float(val)
-            elif key == "gutter":
-                config["gutter"] = float(val)
-            elif key == "cols":
-                config["cols"] = int(val)
-            elif key == "rows":
-                config["rows"] = int(val)
-            elif key == "fit":
-                config["preserve_aspect_ratio"] = val != "fill"
         else:
             # Assume it's a page spec (e.g. "1-5", "even", "A")
             out_page_specs.append(token)
@@ -174,11 +148,46 @@ def _parse_montage_config(specs: List[str], out_page_specs: List[str]) -> Dict[s
     return config
 
 
+def _update_config_from_keyval(key, val, config):
+    if key == "grid":
+        # Parse "2x2"
+        try:
+            cols, rows = val.split("x")
+            config["cols"] = int(cols)
+            config["rows"] = int(rows)
+        except ValueError:
+            raise ValueError(
+                f"Invalid grid format: '{val}'. " "Expected format: 'cols x rows', e.g. '2x2'."
+            )
+    elif key == "canvas":
+        # Use standard pdftl parser (e.g. "a4", "a4_l", "4x6")
+        parsed_size = parse_paper_spec(val)
+        if parsed_size:
+            config["canvas_size"] = parsed_size
+        else:
+            raise ValueError(
+                f"Unknown canvas size or format: '{val}'. "
+                "Try standard sizes like 'a4', 'letter', 'a4_l'."
+            )
+    elif key == "margin":
+        config["margin"] = float(val)
+    elif key == "gutter":
+        config["gutter"] = float(val)
+    elif key == "cols":
+        config["cols"] = int(val)
+    elif key == "rows":
+        config["rows"] = int(val)
+    elif key == "fit":
+        config["preserve_aspect_ratio"] = val != "fill"
+
+    return config
+
+
 def _apply_montage_logic(
     target_pdf: "Pdf",
-    source_pages: List["Page"],
+    source_pages: list["Page"],
     strategy: GridLayout,
-    canvas_size: Tuple[float, float],
+    canvas_size: tuple[float, float],
     preserve_aspect_ratio: bool,
 ):
     """

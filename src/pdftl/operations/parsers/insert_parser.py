@@ -28,43 +28,14 @@ def parse_insert_args(args: list[str]) -> InsertSpec:
       - `insert 5`: Insert 1 page after page 5.
       - `insert 2 after 5`: Insert 2 pages after page 5.
     """
-    # Defaults
-    insert_count = 1
-    geometry_spec = None
+    remaining_args = args
+
+    insert_count, geometry_spec, remaining_args = _parse_definitions(remaining_args)
+
     mode = "after"
     target_page_spec = "1-end"
 
-    remaining_args = args
-
-    # 1. Parse the Definition: [N][(geometry)]
-    if remaining_args:
-        first_arg = remaining_args[0]
-        match = re.match(r"^(\d+)?(?:\((.*)\))?$", first_arg)
-
-        if match:
-            c_str, g_str = match.groups()
-
-            is_definition = False
-
-            # Case A: Contains geometry `(...)`. Always a definition.
-            if g_str is not None:
-                is_definition = True
-
-            # Case B: Pure number `N`.
-            # Ambiguous: could be count "2" or page "2".
-            # Rule: It is a count ONLY if the NEXT word is a keyword.
-            elif c_str is not None:
-                if len(remaining_args) > 1 and remaining_args[1].lower() in ("after", "before"):
-                    is_definition = True
-
-            if is_definition:
-                if c_str:
-                    insert_count = int(c_str)
-                if g_str:
-                    geometry_spec = g_str
-                remaining_args = remaining_args[1:]
-
-    # 2. Parse Mode and Range
+    # Parse Mode and Range
     if remaining_args:
         if remaining_args[0].lower() in ("after", "before"):
             mode = remaining_args[0].lower()
@@ -77,3 +48,41 @@ def parse_insert_args(args: list[str]) -> InsertSpec:
             target_page_spec = " ".join(remaining_args)
 
     return InsertSpec(insert_count, geometry_spec, mode, target_page_spec)
+
+
+def _parse_definitions(remaining_args):
+    # Defaults
+    insert_count = 1
+    geometry_spec = None
+
+    # 1. Parse the Definition: [N][(geometry)]
+    if remaining_args:
+        first_arg = remaining_args[0]
+        match = re.match(r"^(\d+)?(?:\((.*)\))?$", first_arg)
+
+        if match:
+            c_str, g_str = match.groups()
+
+            if _is_definition(remaining_args, c_str, g_str):
+                if c_str:
+                    insert_count = int(c_str)
+                if g_str:
+                    geometry_spec = g_str
+                remaining_args = remaining_args[1:]
+
+    return insert_count, geometry_spec, remaining_args
+
+
+def _is_definition(remaining_args, c_str, g_str):
+    # Case A: Contains geometry `(...)`. Always a definition.
+    if g_str is not None:
+        return True
+
+    # Case B: Pure number `N`.
+    # Ambiguous: could be count "2" or page "2".
+    # Rule: It is a count ONLY if the NEXT word is a keyword.
+    if c_str is not None:
+        if len(remaining_args) > 1 and remaining_args[1].lower() in ("after", "before"):
+            return True
+
+    return False

@@ -116,7 +116,7 @@ def page_number_matches_page_spec(n, page_spec_str, total_pages) -> bool:
     specs = parse_compound_page_spec(page_spec_str)
     for s in specs:
         p = parse_sub_page_spec(s, total_pages)
-        (start, end) = (p.start, p.end) if p.start <= p.end else (p.end, p.start)
+        start, end = (p.start, p.end) if p.start <= p.end else (p.end, p.start)
 
         if "even" in p.qualifiers and n % 2 == 1:
             continue

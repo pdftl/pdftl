@@ -9,6 +9,7 @@
 from typing import TYPE_CHECKING
 
 from pdftl.core.constants import UNITS
+from pdftl.exceptions import InvalidArgumentError
 
 if TYPE_CHECKING:
     import pikepdf
@@ -32,18 +33,27 @@ def dim_str_to_pts(val_str, total_dimension=None):
             raise ValueError(f"Percentage value '{val_str}' requires a total dimension.")
         try:
             return (float(numeric_part) / 100.0) * total_dimension
-        except ValueError:
-            # Let it fall through to the float conversion below which will raise error
-            pass
+        except ValueError as e:
+            raise InvalidArgumentError(
+                f"Could not parse percentage dimension: '{numeric_part}'"
+            ) from e
 
     for unit, multiplier in UNITS.items():
         if val_str.endswith(unit):
             numeric_part = val_str[: -len(unit)]
-            return float(numeric_part) * multiplier
+            try:
+                return float(numeric_part) * multiplier
+            except ValueError as e:
+                raise InvalidArgumentError(
+                    f"Could not parse numeric dimension with unit: '{numeric_part}'"
+                ) from e
 
     # Default to points, stripping an optional 'pt' suffix.
     numeric_part = re.sub(r"pts?$", "", val_str)
-    return float(numeric_part)
+    try:
+        return float(numeric_part)
+    except ValueError as e:
+        raise InvalidArgumentError(f"Could not parse numeric dimension: '{numeric_part}'") from e
 
 
 def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox"):
@@ -56,7 +66,7 @@ def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox"):
 
     """
     try:
-        if box=="trimbox":
+        if box == "trimbox":
             rect = page.trimbox
         else:
             rect = page.cropbox

@@ -59,48 +59,52 @@ def _parse_operations(ops_str: str) -> list[PlacementOp]:
         val = val.strip()
 
         if key == "shift":
-            # syntax: shift=dx,dy
-            if "," not in val:
-                raise UserCommandLineError(
-                    f"Shift requires x,y coordinates (e.g. shift=10,20), got '{val}'"
-                )
-
-            dx_str, dy_str = val.split(",", 1)
-
-            ops.append(
-                PlacementOp("shift", {"dx": _split_math(dx_str), "dy": _split_math(dy_str)})
-            )
-
+            ops.append(_parse_shift(val))
         elif key in ("scale", "spin"):
-            # syntax: scale=0.5  OR  scale=0.5:anchor
-            value_part = val
-            anchor_part = None
-
-            if ":" in val:
-                value_part, anchor_part = val.split(":", 1)
-
-            params: dict[str, Any] = {"value": value_part.strip()}
-
-            if anchor_part:
-                anchor_part = anchor_part.strip()
-                if "," in anchor_part:
-                    ax, ay = anchor_part.split(",", 1)
-                    params["anchor_type"] = "coord"
-                    params["anchor_x"] = _split_math(ax)
-                    params["anchor_y"] = _split_math(ay)
-                else:
-                    params["anchor_type"] = "named"
-                    params["anchor_name"] = anchor_part
-            else:
-                params["anchor_type"] = "named"
-                params["anchor_name"] = "center"
-
-            ops.append(PlacementOp(key, params))
-
+            ops.append(_parse_scale_or_spin(val, key))
         else:
             raise UserCommandLineError(f"Unknown operation: '{key}'")
 
     return ops
+
+
+def _parse_scale_or_spin(val, key):
+    # syntax: scale=0.5  OR  scale=0.5:anchor
+    value_part = val
+    anchor_part = None
+
+    if ":" in val:
+        value_part, anchor_part = val.split(":", 1)
+
+    params: dict[str, Any] = {"value": value_part.strip()}
+
+    if anchor_part:
+        anchor_part = anchor_part.strip()
+        if "," in anchor_part:
+            ax, ay = anchor_part.split(",", 1)
+            params["anchor_type"] = "coord"
+            params["anchor_x"] = _split_math(ax)
+            params["anchor_y"] = _split_math(ay)
+        else:
+            params["anchor_type"] = "named"
+            params["anchor_name"] = anchor_part
+    else:
+        params["anchor_type"] = "named"
+        params["anchor_name"] = "center"
+
+    return PlacementOp(key, params)
+
+
+def _parse_shift(val):
+    # syntax: shift=dx,dy
+    if "," not in val:
+        raise UserCommandLineError(
+            f"Shift requires x,y coordinates (e.g. shift=10,20), got '{val}'"
+        )
+
+    dx_str, dy_str = val.split(",", 1)
+
+    return PlacementOp("shift", {"dx": _split_math(dx_str), "dy": _split_math(dy_str)})
 
 
 def _split_math(s: str) -> list[str]:

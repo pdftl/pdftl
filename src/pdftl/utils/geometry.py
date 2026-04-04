@@ -91,9 +91,6 @@ def _resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> tupl
     """Parses 'center', 'top-left' etc into absolute coordinates."""
     anchor = anchor.lower().strip()
 
-    if anchor == "center":
-        return x + w / 2.0, y + h / 2.0
-
     h_pos, v_pos = "center", "center"
 
     if "-" in anchor:
@@ -107,11 +104,15 @@ def _resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> tupl
             if len(parts) > 1:
                 v_pos = parts[1]
     else:
-        if anchor in ["top", "bottom"]:
+        if anchor in ["top", "bottom", "center"]:
             v_pos = anchor
-        elif anchor in ["left", "right"]:
+        elif anchor in ["left", "right", "center"]:
             h_pos = anchor
 
+    return _text_positions_to_coords(h_pos, v_pos, x, y, w, h)
+
+
+def _text_positions_to_coords(h_pos, v_pos, x, y, w, h):
     if h_pos == "left":
         rx = x
     elif h_pos == "right":

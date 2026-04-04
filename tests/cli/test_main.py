@@ -224,17 +224,15 @@ def test_verbose_option_execution():
     _verbose_option()
 
 
-def test_parsing_failure_warning(caplog):
-    # Covers lines 74-78
-    # Force parse_cli_stage to return None for a specific input
+def test_parsing_failure_raises():
     with patch(
         "pdftl.cli.main.parse_options_and_specs", return_value=(["bad_arg"], {"verbose": True})
     ):
         with patch("pdftl.cli.main.parse_cli_stage", side_effect=[None, MagicMock()]):
-            # We need at least one valid stage or it raises UserCommandLineError
-            # But the first iteration will hit the logger.warning
-            _prepare_pipeline_from_remaining_args(["bad_arg"])
-            assert "Pipeline stage argument parsing failed" in caplog.text
+            with pytest.raises(
+                UserCommandLineError, match="Failed to parse pipeline stage arguments"
+            ):
+                _prepare_pipeline_from_remaining_args(["bad_arg"])
 
 
 def test_main_as_script():

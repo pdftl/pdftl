@@ -1,7 +1,8 @@
 import pytest
 
-from pdftl.exceptions import UserCommandLineError
+from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
 from pdftl.utils.page_specs import _expand_square_brackets, _flatten_spec_list
+from pdftl.utils.page_specs.parser import SpecParser
 
 
 def test_expand_square_brackets_logic():
@@ -102,3 +103,9 @@ def test_parse_specs_pipeline_integration():
     # Check scaling from the group expansion
     assert results[3].start == 6 and results[3].scale == 2.0
     assert results[4].start == 7 and results[4].scale == 2.0
+
+
+def test_resolve_page_token_non_integer():
+    parser = SpecParser(total_pages=10)
+    with pytest.raises(InvalidArgumentError, match="Could not parse page token"):
+        parser._resolve_page_token("abc", is_reverse=False)

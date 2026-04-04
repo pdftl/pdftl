@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.exceptions import UserCommandLineError
+from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
 from pdftl.operations.parsers.insert_parser import InsertSpec, parse_insert_args
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
@@ -168,7 +168,7 @@ def _resolve_geometry(
                     w = dim_str_to_pts(parts[0], total_dimension=ref_w)
                     h = dim_str_to_pts(parts[1], total_dimension=ref_h)
                     paper_size = (w, h)
-                except ValueError:
+                except InvalidArgumentError:
                     # Fallthrough to unknown spec error
                     pass
 

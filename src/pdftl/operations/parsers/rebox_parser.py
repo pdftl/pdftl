@@ -10,6 +10,7 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -39,7 +40,7 @@ def specs_to_page_rules(specs, total_pages, operation):
         # of percentages here, only the structural validity.
         try:
             parse_rebox_content(content_str, 1000, 1000, "dummy_op")
-        except (ValueError, TypeError, AttributeError) as e:
+        except (ValueError, TypeError, AttributeError, InvalidArgumentError) as e:
             raise ValueError(
                 f"Error parsing {operation} content '{content_str}' in spec '{spec}': {e}"
             ) from e

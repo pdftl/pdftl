@@ -6,7 +6,6 @@
 
 """Types for the insert operation"""
 
-
 from typing import NamedTuple
 
 

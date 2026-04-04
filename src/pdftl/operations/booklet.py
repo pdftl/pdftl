@@ -6,10 +6,10 @@
 
 """Impose pages into printable booklet signatures."""
 
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pikepdf import Page, Pdf
+    from pikepdf import Page
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -138,7 +138,7 @@ def booklet_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     return OpResult(success=True, pdf=new_pdf)
 
 
-def _parse_booklet_config(specs: List[str], out_page_specs: List[str]) -> Dict[str, Any]:
+def _parse_booklet_config(specs: list[str], out_page_specs: list[str]) -> dict[str, Any]:
     """Parses booklet configuration from the command line."""
     config = {
         "sig": 0,  # 0 means one giant signature
@@ -153,28 +153,33 @@ def _parse_booklet_config(specs: List[str], out_page_specs: List[str]) -> Dict[s
             key, val = token.split("=", 1)
             key = key.lower().strip()
             val = val.lower().strip()
+            config = _update_config_from_keyval(key, val, config)
 
-            if key in ["sig", "signature"]:
-                config["sig"] = int(val)
-            elif key == "canvas":
-                parsed_size = parse_paper_spec(val)
-                if parsed_size:
-                    config["canvas_size"] = parsed_size
-                else:
-                    raise ValueError(f"Unknown canvas size: '{val}'")
-            elif key == "margin":
-                config["margin"] = float(val)
-            elif key == "gutter":
-                config["gutter"] = float(val)
-            elif key == "rtl":
-                config["rtl"] = val in ["true", "1", "yes"]
         else:
             out_page_specs.append(token)
 
     return config
 
 
-def _build_booklet_permutation(raw_pages: List["Page"], sig: int, rtl: bool) -> List["Page"]:
+def _update_config_from_keyval(key, val, config):
+    if key in ["sig", "signature"]:
+        config["sig"] = int(val)
+    elif key == "canvas":
+        parsed_size = parse_paper_spec(val)
+        if parsed_size:
+            config["canvas_size"] = parsed_size
+        else:
+            raise ValueError(f"Unknown canvas size: '{val}'")
+    elif key == "margin":
+        config["margin"] = float(val)
+    elif key == "gutter":
+        config["gutter"] = float(val)
+    elif key == "rtl":
+        config["rtl"] = val in ["true", "1", "yes"]
+    return config
+
+
+def _build_booklet_permutation(raw_pages: list["Page"], sig: int, rtl: bool) -> list["Page"]:
     """
     Chunks the document into signatures and calculates the 2-up permutation
     required for standard duplex booklet printing.

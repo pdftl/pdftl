@@ -29,6 +29,7 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
     pdfium = None
     try:
         import pypdfium2 as pdfium
+        import pypdfium2.raw as pdfium_c
 
         has_renderer = True
     except ImportError:
@@ -44,14 +45,25 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
 
             # Load into Renderer
             pdfium_doc = pdfium.PdfDocument(in_buffer)
+            del in_buffer
+            pdfium_doc.init_forms()
 
             # Initialize form environment
             # If the PDF is malformed, this might not set the internal state correctly.
-            pdfium_doc.init_forms()
 
             # Render & Flatten
+            page_num = 0
             for page in pdfium_doc:
-                page.flatten(flag=0)
+                page_num = page_num + 1
+                try:
+                    page.flatten()
+                except RuntimeError as re:
+                    # Bypass pypdfium2 wrapper bug: page.flatten() raises this if the PDF
+                    # has no AcroForms, even if init_forms() was successfully called.
+                    if "before page retrieval" in str(re):
+                        pdfium_c.FPDFPage_Flatten(page, pdfium_c.FLAT_NORMALDISPLAY)
+                    else:
+                        raise re
 
             # Save back to buffer
             out_buffer = io.BytesIO()

@@ -53,10 +53,15 @@ def _normalize_inputs(
         return (final_inputs, final_opened)
     if not user_inputs:
         return ([], final_opened)
-    for i, item in enumerate(user_inputs):
-        final_inputs, final_opened = _process_user_input(
-            i, item, password, final_inputs, final_opened
-        )
+    try:
+        for i, item in enumerate(user_inputs):
+            final_inputs, final_opened = _process_user_input(
+                i, item, password, final_inputs, final_opened
+            )
+    except Exception:
+        for pdf in final_opened:
+            pdf.close()
+        raise
     return (final_inputs, final_opened)
 
 
@@ -82,7 +87,7 @@ def _process_user_input(i, item, password, final_inputs, final_opened):
             )
             final_opened[i] = pdf
             final_inputs.append(item_str)
-        except Exception as e:
+        except (pikepdf.PdfError, pikepdf.PasswordError, OSError) as e:
             raise ValueError(f"Failed to open input '{item}': {e}") from e
     elif isinstance(item, pikepdf.Pdf):
         final_opened[i] = item

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import OperationError
 from pdftl.utils.io_helpers import smart_pikepdf_open
 
 # Shared implementation for stamp, multistamp, background, multibackground
@@ -149,23 +150,23 @@ def apply_overlay(
     source: str | None = overlay_filename
     if source == "-":
         source = None
-    overlay_pdf = smart_pikepdf_open(source)
-    base_pages = input_pdf.pages
-    overlay_pages_all = overlay_pdf.pages
-    if not overlay_pages_all:
-        raise ValueError("Overlay PDF has no pages")
+    with smart_pikepdf_open(source) as overlay_pdf:
+        base_pages = input_pdf.pages
+        overlay_pages_all = overlay_pdf.pages
+        if not overlay_pages_all:
+            raise OperationError(f"The overlay file '{overlay_filename}' contains no pages.")
 
-    for i, base_page in enumerate(base_pages):
-        overlay_idx = min(i, len(overlay_pages_all) - 1) if multi else 0
-        overlay_page = overlay_pages_all[overlay_idx]
-        rect = (
-            pikepdf.Rectangle(*map(float, base_page.trimbox or base_page.MediaBox))
-            if scale_to_fit
-            else None
-        )
-        if on_top:
-            base_page.add_overlay(overlay_page, rect=rect)
-        else:
-            base_page.add_underlay(overlay_page, rect=rect)
+        for i, base_page in enumerate(base_pages):
+            overlay_idx = min(i, len(overlay_pages_all) - 1) if multi else 0
+            overlay_page = overlay_pages_all[overlay_idx]
+            rect = (
+                pikepdf.Rectangle(*map(float, base_page.trimbox or base_page.MediaBox))
+                if scale_to_fit
+                else None
+            )
+            if on_top:
+                base_page.add_overlay(overlay_page, rect=rect)
+            else:
+                base_page.add_underlay(overlay_page, rect=rect)
 
     return OpResult(success=True, pdf=input_pdf)

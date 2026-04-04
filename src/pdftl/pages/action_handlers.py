@@ -11,7 +11,6 @@ remapping tasks. It preserves the original API by acting as a compatibility
 layer over the robust, class-based implementation in `link_remapper.py`.
 """
 
-
 from pdftl.pages.link_remapper import LinkRemapper
 
 

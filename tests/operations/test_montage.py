@@ -5,8 +5,8 @@ import pytest
 
 from pdftl.operations.montage import _parse_montage_config, montage_pages
 
-
 # --- Helpers ---
+
 
 def make_pdf(*sizes):
     """Create an in-memory PDF with pages of given (w, h) sizes."""
@@ -18,20 +18,24 @@ def make_pdf(*sizes):
 
 # --- PART 1: Parser ---
 
-@pytest.mark.parametrize("specs, expected", [
-    # Defaults
-    ([], {"cols": 2, "rows": 2, "margin": 0.0, "gutter": 0.0}),
-    # Grid
-    (["grid=3x4"], {"cols": 3, "rows": 4}),
-    # Margin and gutter
-    (["margin=10", "gutter=5"], {"margin": 10.0, "gutter": 5.0}),
-    # Fit fill
-    (["fit=fill"], {"preserve_aspect_ratio": False}),
-    # Fit contain (default)
-    (["fit=contain"], {"preserve_aspect_ratio": True}),
-    # Explicit cols/rows
-    (["cols=3", "rows=1"], {"cols": 3, "rows": 1}),
-])
+
+@pytest.mark.parametrize(
+    "specs, expected",
+    [
+        # Defaults
+        ([], {"cols": 2, "rows": 2, "margin": 0.0, "gutter": 0.0}),
+        # Grid
+        (["grid=3x4"], {"cols": 3, "rows": 4}),
+        # Margin and gutter
+        (["margin=10", "gutter=5"], {"margin": 10.0, "gutter": 5.0}),
+        # Fit fill
+        (["fit=fill"], {"preserve_aspect_ratio": False}),
+        # Fit contain (default)
+        (["fit=contain"], {"preserve_aspect_ratio": True}),
+        # Explicit cols/rows
+        (["cols=3", "rows=1"], {"cols": 3, "rows": 1}),
+    ],
+)
 def test_parse_montage_config(specs, expected):
     page_specs = []
     config = _parse_montage_config(specs, page_specs)
@@ -66,6 +70,7 @@ def test_parse_montage_config_page_specs_passthrough():
 
 
 # --- PART 2: Execution ---
+
 
 def test_montage_basic_2x2():
     """4 pages onto a 2x2 grid should produce 1 output page."""
@@ -128,17 +133,18 @@ def test_montage_mixed_page_sizes():
     assert result.success
     assert len(result.pdf.pages) == 1
 
+
 # Add to test_montage.py
 
-from pdftl.operations.montage import _apply_montage_logic
 from pdftl.layouts import GridLayout
+from pdftl.operations.montage import _apply_montage_logic
 
 
 def test_montage_aliases_branch():
     """Cover line 89: aliases dict used as default page source."""
     pdf = make_pdf((100, 100), (100, 100))
-    from pdftl.utils.page_specs import expand_specs_to_pages
-    # Build aliases the way the pipeline does: key -> (pdf, index) 
+
+    # Build aliases the way the pipeline does: key -> (pdf, index)
     # Instead, just verify the branch is hit by passing aliases with no page_specs in specs
     result = montage_pages(
         inputs=[],

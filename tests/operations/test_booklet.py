@@ -9,8 +9,8 @@ from pdftl.operations.booklet import (
     booklet_pages,
 )
 
-
 # --- Helpers ---
+
 
 def make_pdf(*sizes):
     pdf = pikepdf.new()
@@ -25,16 +25,20 @@ def make_uniform_pdf(n, w=100, h=100):
 
 # --- PART 1: Parser ---
 
-@pytest.mark.parametrize("specs, expected", [
-    ([], {"sig": 0, "margin": 0.0, "gutter": 0.0, "rtl": False}),
-    (["sig=4"], {"sig": 4}),
-    (["signature=2"], {"sig": 2}),
-    (["margin=10", "gutter=5"], {"margin": 10.0, "gutter": 5.0}),
-    (["rtl=true"], {"rtl": True}),
-    (["rtl=1"], {"rtl": True}),
-    (["rtl=yes"], {"rtl": True}),
-    (["rtl=false"], {"rtl": False}),
-])
+
+@pytest.mark.parametrize(
+    "specs, expected",
+    [
+        ([], {"sig": 0, "margin": 0.0, "gutter": 0.0, "rtl": False}),
+        (["sig=4"], {"sig": 4}),
+        (["signature=2"], {"sig": 2}),
+        (["margin=10", "gutter=5"], {"margin": 10.0, "gutter": 5.0}),
+        (["rtl=true"], {"rtl": True}),
+        (["rtl=1"], {"rtl": True}),
+        (["rtl=yes"], {"rtl": True}),
+        (["rtl=false"], {"rtl": False}),
+    ],
+)
 def test_parse_booklet_config(specs, expected):
     page_specs = []
     config = _parse_booklet_config(specs, page_specs)
@@ -60,6 +64,7 @@ def test_parse_booklet_config_page_specs_passthrough():
 
 
 # --- PART 2: Permutation Logic ---
+
 
 def _make_pages(n):
     """Create a list of n distinct mock page objects."""
@@ -119,6 +124,7 @@ def test_permutation_padding_inserts_none():
 
 # --- PART 3: Execution ---
 
+
 def test_booklet_basic():
     """Basic 4-page booklet produces 2 output sheets."""
     pdf = make_uniform_pdf(4)
@@ -176,6 +182,7 @@ def test_booklet_sig():
     assert result.success
     assert len(result.pdf.pages) == 4
 
+
 # Add to test_booklet.py
 
 
@@ -197,6 +204,6 @@ def test_booklet_no_source_pages_after_resolution():
     with pytest.raises(ValueError, match="No source pages"):
         booklet_pages(
             inputs=["A"],
-            specs=["1~1"], 
+            specs=["1~1"],
             opened_pdfs=[pdf],
         )

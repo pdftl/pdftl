@@ -377,7 +377,10 @@ class PipelineManager:
             )
             raise UserCommandLineError(msg) from exc
         except (FileNotFoundError, pikepdf.PdfError) as exception:
-            raise UserCommandLineError(exception) from exception
+            raise UserCommandLineError(
+                f"Could not open '{filename}': the file may be corrupted or is not a valid PDF.\n"
+                f"  (Details: {exception})"
+            ) from exception
 
     def _open_input_pdfs(self, stage, is_first):
         """Opens all PDF inputs required for a stage."""

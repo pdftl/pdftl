@@ -76,11 +76,9 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
         stage_args_core, stage_options = parse_options_and_specs(stage_args)
         stage = parse_cli_stage(stage_args_core, is_first_stage=i == 0)
         if stage_options and not stage:
-            logger.warning(
-                "Pipeline stage argument parsing failed, deleting arguments and proceeding: %s",
-                stage_args_core,
+            raise UserCommandLineError(
+                f"Failed to parse pipeline stage arguments: {stage_args_core}"
             )
-            stage = parse_cli_stage([], is_first_stage=i == 0)
         if stage:
             stage.options.update(stage_options)
             parsed_stages.append(stage)

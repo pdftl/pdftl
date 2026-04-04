@@ -66,7 +66,7 @@ def test_flatten_uses_renderer_if_available(fresh_flatten_module):
     mock_pikepdf = MagicMock(spec=pikepdf.Pdf)
 
     # Patch pypdfium2 to be our mock
-    with patch.dict(sys.modules, {"pypdfium2": mock_pdfium_mod}):
+    with patch.dict(sys.modules, {"pypdfium2": mock_pdfium_mod, "pypdfium2.raw": MagicMock()}):
         with patch("pikepdf.Pdf.open") as mock_pikepdf_open:
 
             # Reload so the module imports our mock_pdfium_mod
@@ -87,7 +87,7 @@ def test_flatten_pypdfium2_runtime_error(mock_pdf, caplog, fresh_flatten_module)
     mock_pypdfium = MagicMock()
     mock_pypdfium.PdfDocument.side_effect = RuntimeError("PDFium exploded")
 
-    with patch.dict(sys.modules, {"pypdfium2": mock_pypdfium}):
+    with patch.dict(sys.modules, {"pypdfium2": mock_pypdfium, "pypdfium2.raw": MagicMock()}):
 
         importlib.reload(fresh_flatten_module)
 
@@ -114,3 +114,79 @@ def test_flatten_appearance_generation_error(mock_pdf, caplog, fresh_flatten_mod
         assert "Could not generate appearance streams" in caplog.text
         assert "Bad stream" in caplog.text
         mock_pdf.flatten_annotations.assert_called()
+
+
+def test_flatten_pypdfium2_bug_fallback(mock_pdf, fresh_flatten_module):
+    """Coverage for lines 63-64: The C-API fallback logic."""
+    mock_pypdfium = MagicMock()
+    mock_pypdfium_raw = MagicMock()
+
+    mock_page = MagicMock()
+    # Trigger the exact error string we are trying to catch
+    mock_page.flatten.side_effect = RuntimeError(
+        "FPDF_InitLibrary() needs to be called before page retrieval"
+    )
+
+    # Bypass MagicMock iterator weirdness with an explicit fake class
+    class FakePdfiumDoc:
+        def init_forms(self):
+            pass
+
+        def save(self, buf):
+            pass
+
+        def __iter__(self):
+            return iter([mock_page])
+
+        def close(self):
+            pass
+
+    mock_pypdfium.PdfDocument.return_value = FakePdfiumDoc()
+    mock_pypdfium.raw = mock_pypdfium_raw
+
+    with patch.dict(
+        "sys.modules", {"pypdfium2": mock_pypdfium, "pypdfium2.raw": mock_pypdfium_raw}
+    ):
+        with patch("pikepdf.Pdf.open", return_value=mock_pdf):
+            importlib.reload(fresh_flatten_module)
+
+            # This should NOT raise an exception, because the fallback catches it
+            fresh_flatten_module.flatten_pdf(mock_pdf)
+
+    # Prove the C-API bypass was executed
+    mock_pypdfium_raw.FPDFPage_Flatten.assert_called_once_with(
+        mock_page, mock_pypdfium_raw.FLAT_NORMALDISPLAY
+    )
+
+
+def test_flatten_pypdfium2_other_runtime_error(mock_pdf, fresh_flatten_module):
+    """Coverage for line 66: Re-raising unrelated RuntimeErrors."""
+    mock_pypdfium = MagicMock()
+    mock_pypdfium_raw = MagicMock()
+
+    mock_page = MagicMock()
+
+    # Trigger an error string that does NOT contain "before page retrieval"
+    mock_page.flatten.side_effect = RuntimeError("Some completely different error")
+
+    class FakePdfiumDoc:
+        def init_forms(self):
+            pass
+
+        def save(self, buf):
+            pass
+
+        def close(self):
+            pass
+
+        def __iter__(self):
+            return iter([mock_page])
+
+    mock_pypdfium.PdfDocument.return_value = FakePdfiumDoc()
+
+    with patch.dict(
+        "sys.modules", {"pypdfium2": mock_pypdfium, "pypdfium2.raw": mock_pypdfium_raw}
+    ):
+        with patch("pikepdf.Pdf.open", return_value=mock_pdf):
+            importlib.reload(fresh_flatten_module)
+            fresh_flatten_module.flatten_pdf(mock_pdf)

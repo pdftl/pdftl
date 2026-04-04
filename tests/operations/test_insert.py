@@ -196,5 +196,4 @@ def test_insert_malformed_custom_geometry(simple_pdf):
     """
     with pytest.raises(UserCommandLineError) as exc:
         insert_pages(simple_pdf, ["(bad,data)"])
-
     assert "Unknown geometry spec" in str(exc.value)

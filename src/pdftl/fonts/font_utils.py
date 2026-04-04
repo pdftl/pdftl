@@ -11,6 +11,7 @@
 # under the MPL-2.0, Copyright (c) 2025 qooxzuub
 
 """Font utilities"""
+
 import logging
 from typing import Any, cast
 

@@ -1,5 +1,6 @@
 import pytest
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.dimensions import dim_str_to_pts
 
 # ---------------------------
@@ -29,7 +30,7 @@ def test_dim_str_to_pts(val_str, total_dimension, expected_pts):
 
 
 def test_dim_str_to_pts_invalid():
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidArgumentError, match="Could not parse numeric dimension"):
         dim_str_to_pts("foo", 800)
 
 
@@ -42,7 +43,7 @@ def test_dim_str_to_pts_bad_percentage():
     """
     # "bad%" -> triggers line 197 (ValueError) -> line 199 (pass)
     # -> line 207 (strip pt) -> line 208 float('bad%') -> raises ValueError again.
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidArgumentError, match="Could not parse percentage dimension"):
         dim_str_to_pts("bad%", 100)
 
 
@@ -54,3 +55,8 @@ def test_dim_str_to_pts_error():
     # Hit line 32: Percentage without total_dimension
     with pytest.raises(ValueError, match="requires a total dimension"):
         dim_str_to_pts("50%", total_dimension=None)
+
+
+def test_dim_str_to_pts_invalid_numeric_with_unit():
+    with pytest.raises(InvalidArgumentError, match="Could not parse numeric dimension with unit"):
+        dim_str_to_pts("abcin")
