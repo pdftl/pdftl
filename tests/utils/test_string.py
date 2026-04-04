@@ -51,7 +51,8 @@ from pdftl.utils.string_utils import recursive_decode
 def test_recursive_decode():
     """Test the recursive dictionary/list walker."""
     # Define a simple decoder: uppercase everything
-    decoder = lambda x: x.upper()
+    def decoder(x):
+        return x.upper()
 
     data = {
         "simple": "hello",
