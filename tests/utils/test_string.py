@@ -126,7 +126,7 @@ def test_xml_decode_for_info(inp, expected):
     "original_string",
     [
         "Hello!",
-        'A <complex> string & "stuff" \' \n with \r all chars.' "Even non-ascii: éàçü",
+        "A <complex> string & \"stuff\" ' \n with \r all chars. Even non-ascii: éàçü",
         "",
     ],
 )
