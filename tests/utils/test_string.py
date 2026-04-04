@@ -209,7 +209,8 @@ def test_pdf_rect_to_string():
         # --- CORRECTED based on failure ---
         # The list is joined by spaces, not str()
         (["a", "list"], "a list"),
-        (True, "True"),  # fixme, should it be 'true'?
+        # Booleans are represented using Python's str() result
+        (True, "True"),
         (False, "False"),
     ],
 )
