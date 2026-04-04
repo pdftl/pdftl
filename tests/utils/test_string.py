@@ -7,6 +7,7 @@ from pdftl.utils.string_utils import (
     sensible_decode,
     split_escaped,
     split_string_respecting_quotes,
+    recursive_decode,
 )
 
 
@@ -45,7 +46,6 @@ def test_split_escaped_value_error():
         split_escaped("", "ab")
 
 
-from pdftl.utils.string_utils import recursive_decode
 
 
 def test_recursive_decode():
