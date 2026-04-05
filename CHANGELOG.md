@@ -5,9 +5,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.12.1] - 2026-04-06
+
 ### Fixed
 
 - Improved memory manangement
+
+- Fixed `chop`, `place`, and `booklet` operations to correctly calculate physical boundaries on pages with non-zero origins or non-standard `/Rotate` flags
+
+### Changed
+
+- Paper spec parser now falls back to landscape when missing an underscore (e.g., `a4l` to `a4_l`).
+
+- Pipeline execution now fails with an error if stage arguments cannot be parsed, rather than warning and proceeding.
+
+- Improved error messages for corrupted or invalid PDF files.
 
 ## [0.12.0] - 2026-04-04
 

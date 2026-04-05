@@ -56,7 +56,7 @@ def dim_str_to_pts(val_str, total_dimension=None):
         raise InvalidArgumentError(f"Could not parse numeric dimension: '{numeric_part}'") from e
 
 
-def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox"):
+def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox", apply_rotate=True):
     """Safely retrieves the page's visible dimensions using
     /TrimBox (if box is "trimbox" and /TrimBox is present)
     or /CropBox if present, or /MediaBox otherwise.
@@ -71,6 +71,9 @@ def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox"):
         else:
             rect = page.cropbox
         x0, y0, x1, y1 = float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])
-        return x0, y0, x1 - x0, y1 - y0
+        w, h = x1 - x0, y1 - y0
+        if apply_rotate and getattr(page, "Rotate", None) and (page.Rotate % 360) in (90, 270):
+            return x0, y0, h, w
+        return x0, y0, w, h
     except (TypeError, IndexError, ValueError, AttributeError):
         return None

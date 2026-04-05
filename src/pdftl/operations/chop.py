@@ -200,40 +200,57 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
     The function uses the provided chopping specification (`chop_spec_to_use`) to determine
     how the page should be divided. Each resulting smaller page is appended to the output
     PDF.
-
-    Parameters:
-
-        pdf (Pdf): The input PDF document.
-
-        source_page (Page): The page to be chopped.
-
-        chop_spec_to_use (str): The chop specification, which determines how the page should
-                                be split (e.g., into equal pieces, by a ratio, or by custom
-                                sizes).
-
-    Returns:
-
-        list: A list of the newly created chopped pages.
-
     """
-    chop_rects = parse_chop_spec(chop_spec_to_use, source_page.mediabox)
+    import pikepdf
+
+    # 1. Extract absolute raw physical bounds and rotation
+    raw_x0, raw_y0, raw_x1, raw_y1 = [float(x) for x in source_page.mediabox]
+    raw_w = raw_x1 - raw_x0
+    raw_h = raw_y1 - raw_y0
+    rotation = int(source_page.get("/Rotate", 0)) % 360
+
+    # 2. Determine visual dimensions (what the user sees on screen)
+    if rotation in (90, 270):
+        visual_w, visual_h = raw_h, raw_w
+    else:
+        visual_w, visual_h = raw_w, raw_h
+
+    # 3. Get visual chopped rectangles (rooted at 0,0) from the parser
+    visual_mediabox = [0.0, 0.0, visual_w, visual_h]
+    visual_rects = parse_chop_spec(chop_spec_to_use, visual_mediabox)
 
     def make_new_chopped_page(rect):
-        import pikepdf
-
-        # duplicate source_page to create new_page
         pdf.pages.append(source_page)
         new_page = pdf.pages[-1]
 
-        # Transform the duplicate
-        x0, y0, x1, y1 = rect
-        chop_width = float(x1 - x0)
-        chop_height = float(y1 - y0)
-        new_page.mediabox = pikepdf.Array([0, 0, chop_width, chop_height])
+        # Extract visual coordinates (vx, vy)
+        vx0, vy0, vx1, vy1 = [float(val) for val in rect]
 
-        # Create a content stream transformation to shift the content
-        transform_matrix = f"1 0 0 1 {-x0:.4f} {-y0:.4f} cm ".encode()
-        new_page.contents_add(transform_matrix, prepend=True)
+        # 4. Map the visual rectangle back to the physical canvas space
+        if rotation == 0:
+            px0, px1 = vx0, vx1
+            py0, py1 = vy0, vy1
+        elif rotation == 90:  # 90 degrees clockwise
+            px0, px1 = raw_w - vy1, raw_w - vy0
+            py0, py1 = vx0, vx1
+        elif rotation == 180:  # 180 degrees (upside down)
+            px0, px1 = raw_w - vx1, raw_w - vx0
+            py0, py1 = raw_h - vy1, raw_h - vy0
+        elif rotation == 270:  # 270 degrees clockwise (90 CCW)
+            px0, px1 = vy0, vy1
+            py0, py1 = raw_h - vx1, raw_h - vx0
+
+        # Shift by the physical origin (in case original page wasn't rooted at 0,0)
+        new_page.mediabox = pikepdf.Array([px0 + raw_x0, py0 + raw_y0, px1 + raw_x0, py1 + raw_y0])
+
+        # 5. Clean up other bounding boxes so they don't hide the new MediaBox
+        for box in ("/CropBox", "/TrimBox", "/BleedBox", "/ArtBox"):
+            if box in new_page:
+                del new_page[box]
+
+        # Note: We DO NOT delete new_page.Rotate and DO NOT inject a content transform!
+        # The physical MediaBox and the native rotation flag handle everything gracefully.
+
         return new_page
 
-    return [make_new_chopped_page(rect) for rect in chop_rects]
+    return [make_new_chopped_page(rect) for rect in visual_rects]

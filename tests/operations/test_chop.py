@@ -1,6 +1,53 @@
 from unittest.mock import MagicMock, patch
 
+import pikepdf
+
 from pdftl.operations.chop import chop_pages
+
+
+def test_chop_basic(two_page_pdf):
+    """Test chopping pages into rows (horizontal split)."""
+    with pikepdf.open(two_page_pdf) as pdf:
+        # "rows" defaults to 2 equal pieces per page
+        # 2 input pages * 2 pieces = 4 output pages
+        specs = ["rows"]
+        result = chop_pages(pdf, specs).pdf
+
+        assert len(result.pages) == 4
+
+        # Extract the boxes
+        box0 = result.pages[0].mediabox
+        box1 = result.pages[1].mediabox
+
+        # Calculate width and height for Piece 0
+        w0 = box0[2] - box0[0]
+        h0 = box0[3] - box0[1]
+
+        # Calculate width and height for Piece 1
+        w1 = box1[2] - box1[0]
+        h1 = box1[3] - box1[1]
+
+        # Assert they have the same dimensions
+        assert w0 == w1
+        assert h0 == h1
+
+
+def test_chop_specific_spec(two_page_pdf):
+    """Test chopping with a specific column spec."""
+    with pikepdf.open(two_page_pdf) as pdf:
+        # "cols3" -> 3 vertical columns
+        # 2 input pages * 3 pieces = 6 output pages
+        specs = ["cols3"]
+        result = chop_pages(pdf, specs).pdf
+        assert len(result.pages) == 6
+
+
+def test_chop_no_spec_defaults(two_page_pdf):
+    """Test that empty specs default to 'cols' (2 columns)."""
+    with pikepdf.open(two_page_pdf) as pdf:
+        result = chop_pages(pdf, []).pdf
+        # 2 pages * 2 cols = 4 pages
+        assert len(result.pages) == 4
 
 
 def test_chop_unmatched_page_pass_through():
@@ -28,3 +75,39 @@ def test_chop_unmatched_page_pass_through():
     # The function deletes all pages and extends with final_pages.
     # We expect p2 (the one without a rule) to be in the final list unmodified.
     assert p2 in mock_pdf.pages
+
+
+def test_chop_rotated_page(two_page_pdf):
+    """
+    Test that chopping a rotated page preserves the rotation flag
+    and correctly maps visual cuts into physical coordinate cuts.
+    """
+    with pikepdf.open(two_page_pdf) as pdf:
+        # 1. Force a known physical size: Width 400, Height 600
+        # (This is unrotated physical canvas space)
+        pdf.pages[0].mediabox = [0, 0, 400, 600]
+
+        # 2. Rotate 90 degrees clockwise.
+        # Visually, the page on-screen is now Width 600, Height 400.
+        pdf.pages[0].Rotate = 90
+
+        # 3. Chop into 2 "rows".
+        # This means visually splitting the on-screen height (400) in half.
+        result = chop_pages(pdf, ["rows"]).pdf
+
+        # First check: The rotation flag MUST be preserved on the chopped pieces
+        assert int(result.pages[0].get("/Rotate", 0)) == 90
+        assert int(result.pages[1].get("/Rotate", 0)) == 90
+
+        # Second check: Geometry.
+        # A visual horizontal split (rows) on a 90-degree rotated page
+        # means we must physically cut the original X-axis (width of 400).
+        # The resulting physical boxes should be 200 wide and 600 high.
+        box0 = result.pages[0].mediabox
+
+        w0 = box0[2] - box0[0]
+        h0 = box0[3] - box0[1]
+
+        # Assert physical dimensions match the mathematically correct cut
+        assert w0 == 200
+        assert h0 == 600

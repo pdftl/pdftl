@@ -27,16 +27,16 @@ def parse_paper_spec(spec_str):
 
     paper_size = PAPER_SIZES.get(spec_lower)
 
+    if not paper_size:
+        # Try parsing custom inch dimensions like "4x6"
+        match = re.match(r"^(\d*\.?\d+)x(\d*\.?\d+)$", spec_lower)
+        if match:
+            width_in, height_in = float(match.group(1)), float(match.group(2))
+            paper_size = (width_in * 72, height_in * 72)
+
     if paper_size:
         if landscape:
             return paper_size[1], paper_size[0]  # Swap width and height
-        return paper_size
-
-    # Try parsing custom inch dimensions like "4x6"
-    match = re.match(r"^(\d*\.?\d+)x(\d*\.?\d+)$", spec_lower)
-    if match:
-        width_in, height_in = float(match.group(1)), float(match.group(2))
-        paper_size = (width_in * 72, height_in * 72)
         return paper_size
 
     if spec_lower.endswith("l") and not landscape:
