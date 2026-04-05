@@ -18,7 +18,7 @@ from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import get_visible_page_dimensions
 from pdftl.utils.geometry import calculate_fit_metrics, calculate_placement_matrix
-from pdftl.utils.page_specs import expand_specs_to_pages
+from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _MONTAGE_LONG_DESC = """
 The `montage` operation allows you to impose multiple source pages onto a
@@ -50,7 +50,7 @@ _MONTAGE_EXAMPLES = [
         "desc": "Create 4x4 thumbnails with margins",
     },
     {
-        "cmd": "A=front.pdf B=back.pdf montage A1 B1 grid=2x1 output side_by_side.pdf",
+        "cmd": "A=front.pdf B=back.pdf cat A1 B1 --- montage grid=2x1 output side_by_side.pdf",
         "desc": "Place page 1 of front.pdf and page 1 of back.pdf side-by-side",
     },
 ]
@@ -59,18 +59,14 @@ _MONTAGE_EXAMPLES = [
 @register_operation(
     "montage",
     tags=["from_scratch", "imposition", "geometry"],
+    type="single input operation",
     desc="Impose pages onto a grid layout",
     usage="<input>... montage <spec>... output <file>",
     long_desc=_MONTAGE_LONG_DESC,
     examples=_MONTAGE_EXAMPLES,
-    args=(
-        [c.INPUTS, c.OPERATION_ARGS, c.OPENED_PDFS],
-        {c.ALIASES: c.ALIASES},
-    ),
-    # grammar_spec is not yet properly implemented! so omit
-    # grammar_spec="token+", # Accepts a mix of page specs and config tokens
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def montage_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
+def montage_pages(pdf, operation_args) -> OpResult:
     """
     Imposes pages onto new canvas pages based on a grid or layout strategy.
     """
@@ -80,19 +76,14 @@ def montage_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
 
     # 1. Separate Page Selectors from Config Arguments
     page_specs = []
-    config = _parse_montage_config(specs, page_specs)
+    config = _parse_montage_config(operation_args, page_specs)
 
     # 2. Resolve Source Pages
     # If no page specs were provided, default to all pages from all aliases/inputs
     if not page_specs:
-        if aliases:
-            page_specs = list(aliases.keys())
-        elif inputs:
-            # FIX: Use "1-end" instead of the raw file path (`inputs[0]`)
-            # so the spec parser correctly grabs the entire default document.
-            page_specs = ["1-end"]
+        page_specs = ["1-end"]
 
-    source_pages_to_process = expand_specs_to_pages(page_specs, aliases, inputs, opened_pdfs)
+    source_pages_to_process = page_numbers_matching_page_specs(page_specs, len(pdf.pages))
 
     if not source_pages_to_process:
         raise ValueError("No source pages selected for montage.")
@@ -109,7 +100,7 @@ def montage_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     # 4. Execute Montage
     _apply_montage_logic(
         target_pdf=new_pdf,
-        source_pages=[p.pdf.pages[p.index] for p in source_pages_to_process],
+        source_pages=[pdf.pages[p - 1] for p in source_pages_to_process],
         strategy=layout_strategy,
         canvas_size=config["canvas_size"],
         preserve_aspect_ratio=config["preserve_aspect_ratio"],

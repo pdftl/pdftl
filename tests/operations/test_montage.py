@@ -76,9 +76,8 @@ def test_montage_basic_2x2():
     """4 pages onto a 2x2 grid should produce 1 output page."""
     pdf = make_pdf(*[(100, 100)] * 4)
     result = montage_pages(
-        inputs=["A"],
-        specs=["grid=2x2", "canvas=a4"],
-        opened_pdfs=[pdf],
+        pdf,
+        ["grid=2x2", "canvas=a4"],
     )
     assert result.success
     assert len(result.pdf.pages) == 1
@@ -88,34 +87,26 @@ def test_montage_overflow_creates_extra_pages():
     """5 pages onto a 2x2 grid should produce 2 output pages."""
     pdf = make_pdf(*[(100, 100)] * 5)
     result = montage_pages(
-        inputs=["A"],
-        specs=["grid=2x2", "canvas=a4"],
-        opened_pdfs=[pdf],
+        pdf,
+        ["grid=2x2", "canvas=a4"],
     )
     assert result.success
     assert len(result.pdf.pages) == 2
-
-
-def test_montage_no_pages_raises():
-    """No resolvable pages should raise ValueError."""
-    with pytest.raises(ValueError, match="no inputs or opened pdfs"):
-        montage_pages(inputs=[], specs=[], opened_pdfs=[])
 
 
 def test_montage_invalid_canvas_raises():
     pdf = make_pdf((100, 100))
     with pytest.raises(ValueError):
         montage_pages(
-            inputs=["A"],
-            specs=["canvas=NONSENSE"],
-            opened_pdfs=[pdf],
+            pdf,
+            ["canvas=NONSENSE"],
         )
 
 
 def test_montage_default_canvas_is_a4():
     """Default canvas when none specified should be A4."""
     pdf = make_pdf((100, 100))
-    result = montage_pages(inputs=["A"], specs=[], opened_pdfs=[pdf])
+    result = montage_pages(pdf, [])
     assert result.success
     page = result.pdf.pages[0]
     w = float(page.mediabox[2]) - float(page.mediabox[0])
@@ -125,11 +116,7 @@ def test_montage_default_canvas_is_a4():
 def test_montage_mixed_page_sizes():
     """Mixed source page sizes should not crash."""
     pdf = make_pdf((100, 100), (200, 300), (150, 150), (50, 400))
-    result = montage_pages(
-        inputs=["A"],
-        specs=["grid=2x2", "canvas=a4"],
-        opened_pdfs=[pdf],
-    )
+    result = montage_pages(pdf, ["grid=2x2", "canvas=a4"])
     assert result.success
     assert len(result.pdf.pages) == 1
 
@@ -146,12 +133,7 @@ def test_montage_aliases_branch():
 
     # Build aliases the way the pipeline does: key -> (pdf, index)
     # Instead, just verify the branch is hit by passing aliases with no page_specs in specs
-    result = montage_pages(
-        inputs=[],
-        specs=[],
-        opened_pdfs=[pdf],
-        aliases={"A": 0},
-    )
+    result = montage_pages(pdf, [])
     assert result.success
 
 
@@ -159,11 +141,7 @@ def test_montage_no_source_pages_after_resolution():
     """Cover line 98: valid inputs but spec resolves to no pages."""
     pdf = make_pdf((100, 100))
     with pytest.raises(ValueError, match="No source pages"):
-        montage_pages(
-            inputs=["A"],
-            specs=["1~1"],
-            opened_pdfs=[pdf],
-        )
+        montage_pages(pdf, ["1~1"])
 
 
 def test_apply_montage_logic_invalid_canvas_size():

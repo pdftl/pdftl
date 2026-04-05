@@ -128,7 +128,7 @@ def test_permutation_padding_inserts_none():
 def test_booklet_basic():
     """Basic 4-page booklet produces 2 output sheets."""
     pdf = make_uniform_pdf(4)
-    result = booklet_pages(inputs=["A"], specs=[], opened_pdfs=[pdf])
+    result = booklet_pages(pdf, operation_args=[])
     assert result.success
     # 4 pages / 2 per sheet = 2 output pages
     assert len(result.pdf.pages) == 2
@@ -137,14 +137,14 @@ def test_booklet_basic():
 def test_booklet_pads_and_produces_correct_sheet_count():
     """6 pages padded to 8 produces 4 output sheets."""
     pdf = make_uniform_pdf(6)
-    result = booklet_pages(inputs=["A"], specs=[], opened_pdfs=[pdf])
+    result = booklet_pages(pdf=pdf, operation_args=[])
     assert result.success
     assert len(result.pdf.pages) == 4
 
 
 def test_booklet_explicit_canvas():
     pdf = make_uniform_pdf(4)
-    result = booklet_pages(inputs=["A"], specs=["canvas=a4_l"], opened_pdfs=[pdf])
+    result = booklet_pages(pdf=pdf, operation_args=["canvas=a4_l"])
     assert result.success
     page = result.pdf.pages[0]
     w = float(page.mediabox[2]) - float(page.mediabox[0])
@@ -155,7 +155,7 @@ def test_booklet_explicit_canvas():
 def test_booklet_auto_canvas_is_double_width():
     """Auto canvas should be twice the source page width."""
     pdf = make_uniform_pdf(4, w=200, h=300)
-    result = booklet_pages(inputs=["A"], specs=[], opened_pdfs=[pdf])
+    result = booklet_pages(pdf=pdf, operation_args=[])
     assert result.success
     page = result.pdf.pages[0]
     w = float(page.mediabox[2]) - float(page.mediabox[0])
@@ -165,20 +165,15 @@ def test_booklet_auto_canvas_is_double_width():
 def test_booklet_rtl():
     """RTL booklet should not crash and should produce same sheet count."""
     pdf = make_uniform_pdf(4)
-    result = booklet_pages(inputs=["A"], specs=["rtl=true"], opened_pdfs=[pdf])
+    result = booklet_pages(pdf=pdf, operation_args=["rtl=true"])
     assert result.success
     assert len(result.pdf.pages) == 2
-
-
-def test_booklet_no_pages_raises():
-    with pytest.raises(ValueError, match="no inputs or opened pdfs"):
-        booklet_pages(inputs=[], specs=[], opened_pdfs=[])
 
 
 def test_booklet_sig():
     """sig=1 on 8 pages: 2 signatures of 4 pages = 4 output sheets."""
     pdf = make_uniform_pdf(8)
-    result = booklet_pages(inputs=["A"], specs=["sig=1"], opened_pdfs=[pdf])
+    result = booklet_pages(pdf=pdf, operation_args=["sig=1"])
     assert result.success
     assert len(result.pdf.pages) == 4
 
@@ -186,24 +181,11 @@ def test_booklet_sig():
 # Add to test_booklet.py
 
 
-def test_booklet_aliases_branch():
-    """Cover line 94: aliases dict used as default page source."""
-    pdf = make_uniform_pdf(4)
-    result = booklet_pages(
-        inputs=[],
-        specs=[],
-        opened_pdfs=[pdf],
-        aliases={"A": 0},
-    )
-    assert result.success
-
-
 def test_booklet_no_source_pages_after_resolution():
     """Cover line 101: valid inputs but spec resolves to no pages."""
     pdf = make_uniform_pdf(4)
     with pytest.raises(ValueError, match="No source pages"):
         booklet_pages(
-            inputs=["A"],
-            specs=["1~1"],
-            opened_pdfs=[pdf],
+            pdf=pdf,
+            operation_args=["1~1"],
         )

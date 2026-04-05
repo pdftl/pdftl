@@ -19,7 +19,7 @@ from pdftl.operations.montage import _apply_montage_logic
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import get_visible_page_dimensions
-from pdftl.utils.page_specs import expand_specs_to_pages
+from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _BOOKLET_LONG_DESC = """
 The `booklet` operation arranges pages so they can be printed as a foldable booklet.
@@ -67,16 +67,14 @@ _BOOKLET_EXAMPLES = [
 @register_operation(
     "booklet",
     tags=["from_scratch", "imposition", "page_order"],
+    type="single input operation",
     desc="Impose pages into printable booklet signatures",
     usage="<input>... booklet <spec>... output <file>",
     long_desc=_BOOKLET_LONG_DESC,
     examples=_BOOKLET_EXAMPLES,
-    args=(
-        [c.INPUTS, c.OPERATION_ARGS, c.OPENED_PDFS],
-        {c.ALIASES: c.ALIASES},
-    ),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
-def booklet_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
+def booklet_pages(pdf, operation_args) -> OpResult:
     """
     Imposes pages into a booklet sequence.
     """
@@ -86,21 +84,18 @@ def booklet_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
 
     # 1. Separate Page Selectors from Config Arguments
     page_specs = []
-    config = _parse_booklet_config(specs, page_specs)
+    config = _parse_booklet_config(operation_args, page_specs)
 
     # 2. Resolve Source Pages
     if not page_specs:
-        if aliases:
-            page_specs = list(aliases.keys())
-        elif inputs:
-            page_specs = ["1-end"]
+        page_specs = ["1-end"]
 
-    source_pages_to_process = expand_specs_to_pages(page_specs, aliases, inputs, opened_pdfs)
+    source_pages_to_process = page_numbers_matching_page_specs(page_specs, len(pdf.pages))
 
     if not source_pages_to_process:
         raise ValueError("No source pages selected for booklet.")
 
-    raw_pages = [p.pdf.pages[p.index] for p in source_pages_to_process]
+    raw_pages = [pdf.pages[p - 1] for p in source_pages_to_process]
 
     # 3. Determine Canvas Size
     if config["canvas_size"]:
