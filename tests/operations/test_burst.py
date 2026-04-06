@@ -82,6 +82,7 @@ def test_burst_pdf_default_pattern():
     mock_pdf = MagicMock()
     mock_page = MagicMock()
     mock_pdf.pages = [mock_page]
+    del mock_pdf.Root.PageLabels  # so dump_data call doesn't complain
 
     # We patch pikepdf.Pdf so that Pdf.new() returns a Mock instead of a real object.
     # This prevents the TypeError when appending our mock_page.

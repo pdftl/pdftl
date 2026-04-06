@@ -127,6 +127,11 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
             for source_pdf in opened_pdfs:
                 source_pdf.close()
 
+    # pdftk does this so we must!
+    from pdftl.operations.dump_data import pdf_info
+
+    pdf_info("dump_data", opened_pdfs[0], "", [], output_file="doc_data.txt")
+
     return OpResult(
         success=True,
         data=_burst_generator(),  # for API or hook

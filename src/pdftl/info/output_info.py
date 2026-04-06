@@ -64,7 +64,8 @@ def _get_docinfo(info, pdf_docinfo):
                     key_str,
                 )
                 continue
-            info.doc_info.append(DocInfoEntry(key=key_str, value=str(value)))
+            if value:
+                info.doc_info.append(DocInfoEntry(key=key_str, value=str(value)))
 
 
 def _get_page_info(info, i, page):
