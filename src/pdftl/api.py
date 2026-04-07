@@ -59,7 +59,7 @@ def _normalize_inputs(
                 i, item, password, final_inputs, final_opened
             )
     except Exception:
-        for pdf in final_opened:
+        for pdf in final_opened.values():
             pdf.close()
         raise
     return (final_inputs, final_opened)
