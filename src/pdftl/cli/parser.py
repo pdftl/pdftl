@@ -80,17 +80,15 @@ def _parse_multiple_arguments(option, args, i, argument_q, allow_no_args=False, 
     if i + 1 >= len(args):
         if allow_no_args:
             return (1, i + 1)
-        else:
-            raise MissingArgumentError(f"Missing value for option '{option}': {args[i]}")
+        raise MissingArgumentError(f"Missing value for option '{option}': {args[i]}")
     if not argument_q(args[i + 1]):
         if allow_no_args:
             return (1, i + 1)
-        else:
-            raise InvalidArgumentError(
-                f"Invalid argument '{args[i + 1]}' following '{option}' keyword." + (" " + hint)
-                if hint
-                else ""
-            )
+        raise InvalidArgumentError(
+            f"Invalid argument '{args[i + 1]}' following '{option}' keyword." + (" " + hint)
+            if hint
+            else ""
+        )
     current_pos = i + 1
     while current_pos < len(args) and argument_q(args[current_pos]):
         current_pos += 1
@@ -314,9 +312,9 @@ def _recursive_group_pipelines(arg_iter, depth=0):
     while True:
         try:
             token = next(arg_iter)
-        except StopIteration:
+        except StopIteration as exc:
             if depth > 0:
-                raise InvalidArgumentError(f"Unclosed sub-pipeline, missing {SUB_END}.")
+                raise InvalidArgumentError(f"Unclosed sub-pipeline, missing {SUB_END}.") from exc
             break
 
         is_named_sub = isinstance(token, str) and token.endswith("=" + SUB_START)
@@ -348,15 +346,17 @@ def _recursive_group_pipelines(arg_iter, depth=0):
             result.append(pipeline_obj)
 
         elif token == SUB_END:
-            if depth == 0:
-                raise InvalidArgumentError(
-                    f"Unexpected '{SUB_END}' found without opening '{SUB_START}'."
-                )
+            _validate_final_depth(depth)
             return result
         else:
             result.append(token)
 
     return result
+
+
+def _validate_final_depth(depth):
+    if depth == 0:
+        raise InvalidArgumentError(f"Unexpected '{SUB_END}' found without opening '{SUB_START}'.")
 
 
 def _split_flat_by_separator(argv, separator="---"):

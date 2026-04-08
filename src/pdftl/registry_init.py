@@ -21,14 +21,17 @@ import pathlib
 import sys
 
 
+def _get_config_base():
+    if os.name == "nt":
+        return os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+
+
 def _discover_external_operations():
     """Discover user-provided operations in the config directory."""
     import importlib.util
 
-    if os.name == "nt":
-        base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    base = _get_config_base()
 
     op_dir = pathlib.Path(os.path.join(base, "pdftl", "operations"))
 

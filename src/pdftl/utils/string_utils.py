@@ -267,17 +267,15 @@ def split_string_respecting_quotes(text, delimiter=","):
             current.append(char)
             if char == quote_char:
                 quote_char = None  # Closed the quote
+        elif char == delimiter:
+            # Found a split point!
+            result.append("".join(current))
+            current = []
         else:
-            # We are not in a quote
-            if char == delimiter:
-                # Found a split point!
-                result.append("".join(current))
-                current = []
-            else:
-                current.append(char)
-                # If this is a start of a quote, track it
-                if char in ('"', "'"):
-                    quote_char = char
+            current.append(char)
+            # If this is a start of a quote, track it
+            if char in ('"', "'"):
+                quote_char = char
 
     if quote_char:
         raise ValueError(f"Unbalanced quote in string: {text}")

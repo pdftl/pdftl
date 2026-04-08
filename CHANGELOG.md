@@ -5,6 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+### Fixed
+
+- Completions updated
+
 ## [0.12.1] - 2026-04-06
 
 ### Fixed

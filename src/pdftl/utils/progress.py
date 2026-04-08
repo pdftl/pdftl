@@ -12,5 +12,5 @@ def _real_get_track_progress(interactive=False):
         import rich.progress
 
         return rich.progress.track
-    else:
-        return lambda x, **kwargs: x
+
+    return lambda x, **kwargs: x

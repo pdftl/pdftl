@@ -51,12 +51,11 @@ def main(argv=None):
     except (UserCommandLineError, PackageError, OperationError) as e:
         if "debug" in found_flags:
             raise
-        else:
-            print(f"Error: {e}", file=sys.stderr)
-            logger.debug("A user command line error occurred", exc_info=True)
-            if isinstance(e, OperationError):
-                return 3
-            return 1
+        print(f"Error: {e}", file=sys.stderr)
+        logger.debug("A user command line error occurred", exc_info=True)
+        if isinstance(e, OperationError):
+            return 3
+        return 1
 
 
 ##################################################
@@ -181,7 +180,7 @@ def _handle_special_flags(nonverbose_cli_args):
         return _print_help_and_chill(command)
 
     try:
-        i, completion_arg = next(
+        i, _completion_arg = next(
             x for x in enumerate(nonverbose_cli_args) if (x[1] == "--completion")
         )
         if i + 1 >= len(nonverbose_cli_args):

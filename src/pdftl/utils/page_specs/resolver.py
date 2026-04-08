@@ -67,7 +67,7 @@ def _create_page_tuples_from_numbers(
 def _new_tuples_from_spec_str(
     spec_str, opened_pdfs_by_alias, default_alias
 ) -> list[PageTransform]:
-    pdf, page_spec_full, alias = _resolve_alias_and_spec(
+    pdf, page_spec_full, _alias = _resolve_alias_and_spec(
         spec_str, opened_pdfs_by_alias, default_alias
     )
 

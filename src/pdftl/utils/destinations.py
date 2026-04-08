@@ -61,7 +61,8 @@ def _resolve_named_dest_to_array(dest, named_destinations):
 
     if isinstance(dest_obj, Dictionary) and "/D" in dest_obj:
         return dest_obj["/D"]
-    elif isinstance(dest_obj, Array):
+
+    if isinstance(dest_obj, Array):
         return dest_obj
 
     return None
@@ -89,20 +90,26 @@ def resolve_dest_to_page_num(
 
     # 3. Extract Data from [page_obj /Type ...]
     if isinstance(dest, Array) and len(dest) > 0:
-        page_obj = dest[0]
+        return _resolve_dest_array_to_page_num(dest, pdf_pages)
 
-        # use dictionary if available (fast)
-        if isinstance(pdf_pages, dict):
-            page_num = pdf_pages.get(page_obj.objgen)
-        else:
-            # This ensures your tests and other modules still work
-            # but warns us that we're using the slow path
-            page_num = _find_page_index(page_obj, pdf_pages)
+    return None
 
-        if hasattr(page_obj, "objgen"):
-            if page_num:
-                dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
-                dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
-                return ResolvedDest(page_num, dest_type, dest_args)
+
+def _resolve_dest_array_to_page_num(dest, pdf_pages):
+    page_obj = dest[0]
+
+    # use dictionary if available (fast)
+    if isinstance(pdf_pages, dict):
+        page_num = pdf_pages.get(page_obj.objgen)
+    else:
+        # This ensures your tests and other modules still work
+        # but warns us that we're using the slow path
+        page_num = _find_page_index(page_obj, pdf_pages)
+
+    if hasattr(page_obj, "objgen"):
+        if page_num:
+            dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
+            dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
+            return ResolvedDest(page_num, dest_type, dest_args)
 
     return None

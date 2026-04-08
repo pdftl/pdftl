@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 
 def smart_pikepdf_open(filename: str | None, password: str | None = None) -> "pikepdf.Pdf":
-
     import io
-    import sys
 
     import pikepdf
 

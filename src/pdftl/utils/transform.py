@@ -37,10 +37,10 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
         # i is 0-based, like pikepdf
         try:
             page = source_pdf.pages[i]
-        except IndexError:
+        except IndexError as exc:
             raise InvalidArgumentError(
                 f"Page {i+1} does not exist in the PDF (total pages: {total_pages})."
-            )
+            ) from exc
 
         if scale != 1.0:
             apply_scaling(page, scale)

@@ -51,7 +51,7 @@ def mock_cache_env(tmp_path):
 )
 def test_simple_cache_key_logic(context, expected):
     """Comprehensive check for cache key branches (Lines 318-332)."""
-    assert simple_cache_key(context, "") == expected
+    assert simple_cache_key(context) == expected
 
 
 # --- CACHE I/O TESTS ---

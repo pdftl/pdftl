@@ -1,9 +1,13 @@
+import hashlib
+import io
+import math
 from pathlib import Path
 
 import pikepdf
 import pytest
 from pikepdf import Array, Dictionary, Name
 
+import pdftl
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import PageTransform
 
@@ -40,10 +44,6 @@ def test_link_transform_is_idempotent():
     """
     Applying the same transform twice must produce identical results.
     """
-    import hashlib
-    import io
-
-    import pikepdf
 
     def pdf_hash(pdf):
         with io.BytesIO() as buffer:
@@ -69,10 +69,6 @@ def test_link_transform_is_idempotent():
 
 
 def test_link_scaled_correctly():
-    import math
-
-    import pdftl
-
     def get_rect(pdf, idx=0):
         annots = pdftl.dump_annots(pdf)
         return list(map(float, annots[idx]["Properties"]["/Rect"]))

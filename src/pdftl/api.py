@@ -18,14 +18,14 @@ import types
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
-if TYPE_CHECKING:
-    import pikepdf
-
 import pdftl.core.constants as c
 from pdftl.cli.pipeline import PipelineManager
 from pdftl.core import executor
 from pdftl.exceptions import MissingArgumentError, OperationError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
+
+if TYPE_CHECKING:
+    import pikepdf
 
 initialize_registry()
 logger = logging.getLogger(__name__)
@@ -224,8 +224,6 @@ def _create_signature(op_name):
     import inspect
 
     import pikepdf
-
-    from pdftl.core import executor
 
     op_data = executor.registry.operations.get(op_name, {})
     parameters = []

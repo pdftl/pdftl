@@ -1,21 +1,14 @@
 import builtins
 import importlib
 import logging
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pikepdf
 import pytest
 from pikepdf import Array, Dictionary, Name, NameTree, Pdf, String
+from pikepdf.exceptions import ForeignObjectError
 
 import pdftl.pages.links
-
-try:
-    from pikepdf.exceptions import ForeignObjectError
-except ImportError:
-    from pikepdf import ForeignObjectError
-
-# --- Import the module and functions to test ---
-# --- Import the class/functions we need to mock OR test ---
 from pdftl.pages.link_remapper import LinkRemapper, _build_link_caches
 from pdftl.pages.links import (
     RebuildLinksPartialContext,
@@ -109,7 +102,6 @@ def test_build_link_caches(mock_source_pdf):
     p2_gen = mock_source_pdf.pages[1].obj.objgen
 
     # 2. Act
-    # This now calls the correctly imported function
     caches = _build_link_caches(source_pages, source_pdfs)
     rev_maps, dest_caches, include_inst, include_pdf = caches
 
@@ -132,7 +124,6 @@ def test_build_link_caches_no_dests(mock_source_pdf):
     source_pdfs = {mock_source_pdf}
 
     # Act
-    # This now calls the correctly imported function
     _, dest_caches, _, _ = _build_link_caches(source_pages, source_pdfs)
 
     # Assert
@@ -363,8 +354,6 @@ def test_rebuild_links_orchestration(
     )
 
     # 2. Assert annotations are rebuilt for each page
-    from unittest.mock import ANY
-
     assert mock_rebuild_annots.call_count == 2
     mock_rebuild_annots.assert_has_calls(
         [
@@ -539,13 +528,7 @@ def test_rebuild_links_empty_context(mock_rebuild_annots):
     mock_rebuild_annots.assert_not_called()
 
 
-import pytest
-
-
 def test_links_unconfigured_remapper_guards():
-    from pdftl.pages.link_remapper import LinkRemapper
-    from pdftl.pages.links import _process_annotation, _rebuild_annotations_for_page
-
     # 1. Satisfy the required 'context' argument with a mock
     # This creates a remapper where .pdf and .source_pdf default to None
     mock_context = MagicMock()
@@ -562,9 +545,6 @@ def test_links_unconfigured_remapper_guards():
         _rebuild_annotations_for_page(
             new_page=None, source_page=None, page_idx=0, remapper=remapper, pikepdf=None
         )
-
-
-import pytest
 
 
 def test_write_named_dests_odd_length():

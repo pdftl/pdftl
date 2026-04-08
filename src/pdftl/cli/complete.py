@@ -12,7 +12,7 @@ import sys
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "2"
+GRAMMAR_VERSION = "3"
 
 HARDCODED_KEYWORDS = [
     "JOB",
@@ -21,9 +21,11 @@ HARDCODED_KEYWORDS = [
     "attach_files",
     "background",
     "background_layer",
+    "booklet",
     "burst",
     "cat",
     "chop",
+    "clip",
     "crop",
     "delete",
     "delete_annots",
@@ -44,6 +46,7 @@ HARDCODED_KEYWORDS = [
     "inject",
     "insert",
     "modify_annots",
+    "montage",
     "move",
     "multibackground",
     "multistamp",
@@ -94,11 +97,10 @@ def get_cache_dir():
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
         return os.path.join(base, "pdftl", "Cache", completions_subdir_name)
-    else:
-        # Mac / Linux (XDG)
-        # XDG_CACHE_HOME defaults to ~/.cache if not set
-        base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-        return os.path.join(base, "pdftl", completions_subdir_name)
+    # Mac / Linux (XDG)
+    # XDG_CACHE_HOME defaults to ~/.cache if not set
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+    return os.path.join(base, "pdftl", completions_subdir_name)
 
 
 def get_cache_path(cache_name="grammar", cache_dir=None, cache_format=PICKLER):
@@ -314,7 +316,7 @@ def resolve_candidates(allowed_tokens, parser):
     return candidates
 
 
-def simple_cache_key(context, current_partial):
+def simple_cache_key(context):
     if len(context) == 0:
         return "__zero"
     lastword = context[-1]
@@ -352,7 +354,7 @@ def main():
         current_partial = ""
         context = []
 
-    simple_context_key = simple_cache_key(context, current_partial)
+    simple_context_key = simple_cache_key(context)
 
     # Initialize simple_cache to be in scope for the update call later
     simple_cache = {}

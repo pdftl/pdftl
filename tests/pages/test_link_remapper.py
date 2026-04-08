@@ -1,5 +1,7 @@
 import logging
+from unittest.mock import MagicMock, patch
 
+import pikepdf
 import pytest
 from pikepdf import Array, Dictionary, Name, Pdf, String
 
@@ -411,11 +413,6 @@ def test_copy_unsupported_action_no_S_key(remapper_setup, caplog):
     assert "Unsupported action type 'Unknown' copied" in caplog.text
 
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-
 # Mock pikepdf.Name for property access (e.g., Name.XYZ)
 class MockName:
     XYZ = "/XYZ"
@@ -521,9 +518,6 @@ def test_find_remapped_page_invalid_target_ref():
     assert result is None
 
 
-import pytest
-
-
 def test_copy_action_unconfigured_raises_error():
     """Hits link_remapper.py line 110 by calling _copy_action without context."""
     # Initialize with empty context, but don't call set_call_context()
@@ -541,10 +535,6 @@ def test_copy_action_unconfigured_raises_error():
     # Attempting to copy an action should now trigger the ValueError
     with pytest.raises(ValueError, match="Unconfigured LinkRemapper"):
         remapper._copy_action({})
-
-
-import pikepdf
-import pytest
 
 
 @pytest.fixture

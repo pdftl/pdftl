@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, call, patch
 
+import pikepdf
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
@@ -11,8 +12,12 @@ from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.pages.links import RebuildLinksPartialContext
 
 # --- Import the module and functions to test ---
-from pdftl.pages.outlines import _build_outline_chunks  # We test the new one
-from pdftl.pages.outlines import OutlineCopier, rebuild_outlines
+from pdftl.pages.outlines import (
+    OutlineCopier,
+    _build_outline_chunks,
+    _get_source_action,
+    rebuild_outlines,
+)
 
 # Mark all tests in this file as using hypothesis
 pytestmark = pytest.mark.hypothesis
@@ -426,13 +431,6 @@ def test_build_chunks_invariant(processed_page_info):
             assert p_curr[1] + 1 == p_next[1], "Must be contiguous source pages"
 
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from pdftl.pages.outlines import _get_source_action
-
-
 def test_build_outline_chunks_malformed_data(caplog):
     """Covers lines 199-203: Malformed processed_page_info."""
     # Passing a list with a tuple that has the wrong number of elements
@@ -446,8 +444,6 @@ def test_build_outline_chunks_malformed_data(caplog):
 
 def test_get_source_action_non_goto_action():
     """Covers line 111-114 logic: Action exists but is not GoTo."""
-    from pikepdf import Name
-
     mock_item = MagicMock()
     mock_item.destination = None
     # Simulate a URI action instead of GoTo
@@ -483,11 +479,6 @@ def test_copy_item_recursion_and_pruning():
     assert len(new_parent_list) == 1
     # Verify child was processed (remapper called twice: parent + child)
     assert mock_remapper.remap_goto_action.call_count == 2
-
-
-from unittest.mock import MagicMock
-
-import pikepdf
 
 
 def test_rebuild_outlines_no_chunks():

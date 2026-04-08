@@ -21,9 +21,6 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
        fallback to 'pikepdf' structural flatten.
     """
 
-    # Lazy Import: pikepdf
-    import pikepdf
-
     # 1. Check for pypdfium2 availability
     has_renderer = False
     pdfium = None
@@ -38,43 +35,7 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
     # 2. Strategy A: High-Fidelity Rendering (If installed)
     if has_renderer and pdfium is not None:
         try:
-            # Save pikepdf state to buffer
-            in_buffer = io.BytesIO()
-            pikepdf_doc.save(in_buffer)
-            in_buffer.seek(0)
-
-            # Load into Renderer
-            pdfium_doc = pdfium.PdfDocument(in_buffer)
-            del in_buffer
-            pdfium_doc.init_forms()
-
-            # Initialize form environment
-            # If the PDF is malformed, this might not set the internal state correctly.
-
-            # Render & Flatten
-            page_num = 0
-            for page in pdfium_doc:
-                page_num = page_num + 1
-                try:
-                    page.flatten()
-                except RuntimeError as re:
-                    # Bypass pypdfium2 wrapper bug: page.flatten() raises this if the PDF
-                    # has no AcroForms, even if init_forms() was successfully called.
-                    if "before page retrieval" in str(re):
-                        pdfium_c.FPDFPage_Flatten(page, pdfium_c.FLAT_NORMALDISPLAY)
-                    else:
-                        raise re
-
-            # Save back to buffer
-            out_buffer = io.BytesIO()
-            pdfium_doc.save(out_buffer)
-
-            # Clean up C++ resources
-            pdfium_doc.close()
-
-            # Re-open as pikepdf
-            out_buffer.seek(0)
-            return pikepdf.Pdf.open(out_buffer)
+            return _flatten_pdf_strategy_a(pikepdf_doc, pdfium, pdfium_c)
 
         except RuntimeError as e:
             # This catches the RuntimeError from pypdfium2 when init_forms()
@@ -90,6 +51,8 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
             "To fix: install pdftl[flatten] or pdftl[full]"
         )
 
+    import pikepdf
+
     # Attempt to generate appearances for simple shapes (Checkbox/Radio)
     if "/AcroForm" in pikepdf_doc.Root:
         pikepdf_doc.Root.AcroForm.NeedAppearances = True
@@ -102,3 +65,45 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
     pikepdf_doc.flatten_annotations(mode="all")
 
     return pikepdf_doc
+
+
+def _flatten_pdf_strategy_a(pikepdf_doc, pdfium, pdfium_c):
+    import pikepdf
+
+    # Save pikepdf state to buffer
+    in_buffer = io.BytesIO()
+    pikepdf_doc.save(in_buffer)
+    in_buffer.seek(0)
+
+    # Load into Renderer
+    pdfium_doc = pdfium.PdfDocument(in_buffer)
+    del in_buffer
+    pdfium_doc.init_forms()
+
+    # Initialize form environment
+    # If the PDF is malformed, this might not set the internal state correctly.
+
+    # Render & Flatten
+    page_num = 0
+    for page in pdfium_doc:
+        page_num = page_num + 1
+        try:
+            page.flatten()
+        except RuntimeError as re:
+            # Bypass pypdfium2 wrapper bug: page.flatten() raises this if the PDF
+            # has no AcroForms, even if init_forms() was successfully called.
+            if "before page retrieval" in str(re):
+                pdfium_c.FPDFPage_Flatten(page, pdfium_c.FLAT_NORMALDISPLAY)
+            else:
+                raise re
+
+    # Save back to buffer
+    out_buffer = io.BytesIO()
+    pdfium_doc.save(out_buffer)
+
+    # Clean up C++ resources
+    pdfium_doc.close()
+
+    # Re-open as pikepdf
+    out_buffer.seek(0)
+    return pikepdf.Pdf.open(out_buffer)

@@ -190,27 +190,7 @@ class TextDrawer:
             text_width = self.canvas.stringWidth(text, font_name, font_size)
             pos = rule.get("position", "")
 
-            align = rule.get("align")
-            if align is None:
-                if "right" in pos:
-                    align = "right"
-                elif "center" in pos:
-                    align = "center"
-                else:
-                    align = "left"
-
-            draw_x = 0.0
-            if align == "center":
-                draw_x = -text_width / 2
-            elif align == "right":
-                draw_x = -text_width
-
-            draw_y = 0.0
-            if "top" in pos:
-                draw_y = -font_size
-            elif "mid" in pos:
-                draw_y = -font_size / 2
-
+            draw_x, draw_y = self._get_draw_position(rule.get("align"), pos, text_width, font_size)
             # 7. Apply to canvas
             self.canvas.saveState()
             self.canvas.setFillColorRGB(*color_tuple)
@@ -223,6 +203,29 @@ class TextDrawer:
         except (ValueError, TypeError, KeyError, AttributeError) as e:
             logger.warning("Skipping one text rule due to invalid data: %s", e)
             logger.debug("Detailed traceback:", exc_info=True)
+
+    def _get_draw_position(self, align, pos, text_width, font_size):
+        if align is None:
+            if "right" in pos:
+                align = "right"
+            elif "center" in pos:
+                align = "center"
+            else:
+                align = "left"
+
+        draw_x = 0.0
+        if align == "center":
+            draw_x = -text_width / 2
+        elif align == "right":
+            draw_x = -text_width
+
+        draw_y = 0.0
+        if "top" in pos:
+            draw_y = -font_size
+        elif "mid" in pos:
+            draw_y = -font_size / 2
+
+        return draw_x, draw_y
 
     def save(self) -> bytes:
         self.canvas.save()

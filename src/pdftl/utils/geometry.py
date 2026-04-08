@@ -19,7 +19,7 @@ def calculate_placement_matrix(
     scale_y: float = 1.0,
     rotate: float = 0.0,
     anchor_source: str = "center",
-    anchor_target: str = "bottom-left",
+    anchor_target: str = "bottom-left",  # FIXME: unused
 ) -> "Matrix":
     """
     Calculates the affine transformation matrix to place a source page onto

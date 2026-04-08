@@ -267,47 +267,53 @@ def _extract_button_options(field) -> list:
     Crucially, this uses a list to preserve the *discovery order* of options
     (traversing Kids then AP keys), which matches pdftk's behavior (e.g. "1", "Off", "2").
     """
-    import pikepdf
 
     options_list = []
     seen = set()
 
-    def add_opt(opt_name):
-        s_opt = str(opt_name).lstrip("/")
-        if s_opt not in seen:
-            seen.add(s_opt)
-            options_list.append(s_opt)
-
-    def get_states_from_node(node):
-        """Helper to safely extract keys from /AP/N, /AP/D, and /AP/R."""
-        # Dictionary access via .get() is safer/more robust than getattr for raw pdf objs
-        ap = node.get("/AP")
-        if not ap:
-            return
-
-        # Check Normal (N), Down (D), and Rollover (R) appearances.
-        for appearance_type in ["/N", "/D", "/R"]:
-            sub_dict = ap.get(appearance_type)
-            if isinstance(sub_dict, pikepdf.Dictionary):
-                # SORTING FIX: Ensure deterministic output order by sorting keys.
-                # This often yields "1", then "Off" (if "1" < "Off" alphabetically is false...
-                # wait, "1" < "O". So "1" comes first. This matches pdftk behavior.)
-                for k in sorted(sub_dict.keys()):
-                    add_opt(k)
+    def add_opts(opt_names):
+        for opt_name in opt_names:
+            s_opt = str(opt_name).lstrip("/")
+            if s_opt not in seen:
+                seen.add(s_opt)
+                options_list.append(s_opt)
 
     # 1. Try children widgets (Radio Groups)
     # pdftk traverses Kids depth-first, collecting states as it finds them.
     if hasattr(field.obj, "Kids") and field.obj.Kids:
         for kid in field.obj.Kids:
-            get_states_from_node(kid)
+            add_opts(_get_states_from_node(kid))
 
     # 2. Try the field itself (Checkboxes or single-widget buttons)
     # If it was a leaf node (Checkbox), or a parent holding the AP (rare for radios),
     # we check this. We only check this if we haven't found options yet, or to supplement.
     # For a standard Checkbox, this is where the options are found.
-    get_states_from_node(field.obj)
+    add_opts(_get_states_from_node(field.obj))
 
     return options_list
+
+
+def _get_states_from_node(node):
+    """Helper to safely extract keys from /AP/N, /AP/D, and /AP/R."""
+    import pikepdf
+
+    states = []
+    # Dictionary access via .get() is safer/more robust than getattr for raw pdf objs
+    ap = node.get("/AP")
+    if not ap:
+        return states
+
+    # Check Normal (N), Down (D), and Rollover (R) appearances.
+    for appearance_type in ["/N", "/D", "/R"]:
+        sub_dict = ap.get(appearance_type)
+        if isinstance(sub_dict, pikepdf.Dictionary):
+            # SORTING FIX: Ensure deterministic output order by sorting keys.
+            # This often yields "1", then "Off" (if "1" < "Off" alphabetically is false...
+            # wait, "1" < "O". So "1" comes first. This matches pdftk behavior.)
+            for k in sorted(sub_dict.keys()):
+                states.append(k)
+
+    return states
 
 
 def _extract_field_justification(field, field_type_out: str | None = None) -> str:

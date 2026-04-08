@@ -187,10 +187,11 @@ class Registry:
 def _to_help_example_helper(ex, name):
     if isinstance(ex, dict):
         return HelpExample(**ex)
-    elif isinstance(ex, HelpExample):
+
+    if isinstance(ex, HelpExample):
         return ex
-    else:
-        raise ValueError(f"Invalid example format in operation '{name}'")
+
+    raise ValueError(f"Invalid example format in operation '{name}'")
 
 
 registry = Registry()

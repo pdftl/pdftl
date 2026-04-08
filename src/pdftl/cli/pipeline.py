@@ -146,7 +146,7 @@ class PipelineManager:
                         ),
                         skip_pipeline_save,
                         stage_output,
-                        (True if self.pipeline_pdf else False),
+                        bool(self.pipeline_pdf),
                     )
 
         finally:
@@ -395,55 +395,18 @@ class PipelineManager:
 
             if isinstance(item, InlineSubPipeline):
                 logger.debug("Detected InlineSubPipeline input at index %s", i)
-
-                # [CHANGE] Construct the handle scope for the child
-                # 1. Start with inherited handles (from outer scopes)
-                child_handles = self.handles.copy()
-                # 2. Add sibling handles defined earlier in THIS stage
-                # (e.g., in 'A=a.pdf B=JOB', B can see A)
-                for h_name, h_idx in stage.handles.items():
-                    if h_idx < i:
-                        child_handles[h_name] = opened_pdfs[h_idx]
-
-                # 1. Create a FRESH PipelineManager for the inline stages.
-                #    We pass the same input_context (for prompts/stdin),
-                #    but the handle scope is implicitly reset because it's a new instance.
-                sub_manager = PipelineManager(
-                    stages=item.stages,
-                    input_context=self.input_context,
-                    is_inline=True,
-                    handles=child_handles,
-                )
-
-                # 2. Execute the inner pipeline
-                sub_manager.run()
-
-                # 3. The result is our input.
-                # If pipeline_pdf is None (inner pipe had no output), this logic handles it
-                # by raising the appropriate error inside the sub-manager or returning None here.
-                if sub_manager.pipeline_pdf is None:
-                    # This usually happens if the inner pipeline was purely side-effects
-                    # or failed silently. Treated as an error for process substitution.
-                    raise UserCommandLineError("Inline pipeline returned no output PDF.")
-
-                pdf_obj = sub_manager.pipeline_pdf
-                # Transfer ownership of the object so we don't double-close incorrectly later,
-                # though sub_manager's finally block handles its own cleanup.
-                # Ideally, we want the result object to stay open.
-                sub_manager.pipeline_pdf = None
-
+                pdf_obj = self._get_subpipeline_output_pdf(stage, i, item, opened_pdfs)
             # [CHANGE] Check if item is a sibling handle defined in THIS stage
             elif isinstance(item, str) and item in stage.handles and stage.handles[item] < i:
                 pdf_obj = opened_pdfs[stage.handles[item]]
-
             elif isinstance(item, str) and item in self.handles:
                 # Use the existing object from the outer scope
                 pdf_obj = self.handles[item]
-
             elif item in ["-", "_"]:
                 pdf_obj = self._open_pdf_from_special_input(password, is_first)
             else:
                 pdf_obj = self._open_pdf_from_file(item, password)
+
             opened_pdfs.append(pdf_obj)
             if (
                 final_stage_options.get("keep_first_id")
@@ -457,6 +420,45 @@ class PipelineManager:
             self.kept_id = list(opened_pdfs[-1].trailer.ID)
 
         return opened_pdfs
+
+    def _get_subpipeline_output_pdf(self, stage, item_idx, item, opened_pdfs):
+        # [CHANGE] Construct the handle scope for the child
+        # 1. Start with inherited handles (from outer scopes)
+        child_handles = self.handles.copy()
+        # 2. Add sibling handles defined earlier in THIS stage
+        # (e.g., in 'A=a.pdf B=JOB', B can see A)
+        for h_name, h_idx in stage.handles.items():
+            if h_idx < item_idx:
+                child_handles[h_name] = opened_pdfs[h_idx]
+
+        # 1. Create a FRESH PipelineManager for the inline stages.
+        #    We pass the same input_context (for prompts/stdin),
+        #    but the handle scope is implicitly reset because it's a new instance.
+        sub_manager = PipelineManager(
+            stages=item.stages,
+            input_context=self.input_context,
+            is_inline=True,
+            handles=child_handles,
+        )
+
+        # 2. Execute the inner pipeline
+        sub_manager.run()
+
+        # 3. The result is our input.
+        # If pipeline_pdf is None (inner pipe had no output), this logic handles it
+        # by raising the appropriate error inside the sub-manager or returning None here.
+        if sub_manager.pipeline_pdf is None:
+            # This usually happens if the inner pipeline was purely side-effects
+            # or failed silently. Treated as an error for process substitution.
+            raise UserCommandLineError("Inline pipeline returned no output PDF.")
+
+        pdf_obj = sub_manager.pipeline_pdf
+        # Transfer ownership of the object so we don't double-close incorrectly later,
+        # though sub_manager's finally block handles its own cleanup.
+        # Ideally, we want the result object to stay open.
+        sub_manager.pipeline_pdf = None
+
+        return pdf_obj
 
 
 @register_help_topic(
