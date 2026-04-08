@@ -14,11 +14,12 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.layouts import GridLayout
 from pdftl.operations.montage import _apply_montage_logic
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
-from pdftl.utils.dimensions import get_visible_page_dimensions
+from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _BOOKLET_LONG_DESC = """
@@ -93,7 +94,7 @@ def booklet_pages(pdf, operation_args) -> OpResult:
     source_pages_to_process = page_numbers_matching_page_specs(page_specs, len(pdf.pages))
 
     if not source_pages_to_process:
-        raise ValueError("No source pages selected for booklet.")
+        raise InvalidArgumentError("No source pages selected for booklet.")
 
     raw_pages = [pdf.pages[p - 1] for p in source_pages_to_process]
 
@@ -158,19 +159,25 @@ def _parse_booklet_config(specs: list[str], out_page_specs: list[str]) -> dict[s
 
 def _update_config_from_keyval(key, val, config):
     if key in ["sig", "signature"]:
-        config["sig"] = int(val)
+        try:
+            config["sig"] = int(val)
+        except ValueError as e:
+            raise InvalidArgumentError(f"Could not parse {key} value '{val}' as an integer. ({e})")
     elif key == "canvas":
         parsed_size = parse_paper_spec(val)
         if parsed_size:
             config["canvas_size"] = parsed_size
         else:
-            raise ValueError(f"Unknown canvas size: '{val}'")
+            raise InvalidArgumentError(
+                f"Unknown canvas size or format: '{val}'. "
+                "Try standard sizes like 'a4', 'letter', 'a4_l'."
+            )
     elif key == "margin":
-        config["margin"] = float(val)
+        config["margin"] = dim_str_to_pts(val)
     elif key == "gutter":
-        config["gutter"] = float(val)
+        config["gutter"] = dim_str_to_pts(val)
     elif key == "rtl":
-        config["rtl"] = val in ["true", "1", "yes"]
+        config["rtl"] = val.lower() in ["true", "1", "yes", "y"]
     return config
 
 

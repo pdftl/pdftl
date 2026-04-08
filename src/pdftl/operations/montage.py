@@ -14,9 +14,10 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
-from pdftl.utils.dimensions import get_visible_page_dimensions
+from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.geometry import calculate_fit_metrics, calculate_placement_matrix
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
@@ -86,7 +87,7 @@ def montage_pages(pdf, operation_args) -> OpResult:
     source_pages_to_process = page_numbers_matching_page_specs(page_specs, len(pdf.pages))
 
     if not source_pages_to_process:
-        raise ValueError("No source pages selected for montage.")
+        raise InvalidArgumentError("No source pages selected for montage.")
 
     # 3. Setup Layout Strategy
     # Currently defaults to GridLayout based on parsed config
@@ -147,7 +148,7 @@ def _update_config_from_keyval(key, val, config):
             config["cols"] = int(cols)
             config["rows"] = int(rows)
         except ValueError:
-            raise ValueError(
+            raise InvalidArgumentError(
                 f"Invalid grid format: '{val}'. " "Expected format: 'cols x rows', e.g. '2x2'."
             )
     elif key == "canvas":
@@ -156,18 +157,19 @@ def _update_config_from_keyval(key, val, config):
         if parsed_size:
             config["canvas_size"] = parsed_size
         else:
-            raise ValueError(
+            raise InvalidArgumentError(
                 f"Unknown canvas size or format: '{val}'. "
                 "Try standard sizes like 'a4', 'letter', 'a4_l'."
             )
     elif key == "margin":
-        config["margin"] = float(val)
+        config["margin"] = dim_str_to_pts(val)
     elif key == "gutter":
-        config["gutter"] = float(val)
-    elif key == "cols":
-        config["cols"] = int(val)
-    elif key == "rows":
-        config["rows"] = int(val)
+        config["gutter"] = dim_str_to_pts(val)
+    elif key in ("cols", "rows"):
+        try:
+            config[key] = int(val)
+        except ValueError as e:
+            raise InvalidArgumentError(f"Could not parse {key} value '{val}' as an integer. ({e})")
     elif key == "fit":
         config["preserve_aspect_ratio"] = val != "fill"
 
@@ -189,7 +191,7 @@ def _apply_montage_logic(
     try:
         target_w, target_h = canvas_size
     except TypeError:
-        raise ValueError(f"Invalid canvas_size: {canvas_size}")
+        raise InvalidArgumentError(f"Invalid canvas_size: {canvas_size}")
 
     # Generate Layout Slots
     layout_stream = strategy.generate_slots(

@@ -3,6 +3,7 @@
 import pikepdf
 import pytest
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.montage import _parse_montage_config, montage_pages
 
 # --- Helpers ---
@@ -53,12 +54,12 @@ def test_parse_montage_config_canvas_a4():
 
 
 def test_parse_montage_config_unknown_canvas():
-    with pytest.raises(ValueError, match="Unknown canvas"):
+    with pytest.raises(InvalidArgumentError, match="Unknown canvas"):
         _parse_montage_config(["canvas=NONSENSE"], [])
 
 
 def test_parse_montage_config_invalid_grid():
-    with pytest.raises(ValueError, match="Invalid grid"):
+    with pytest.raises(InvalidArgumentError, match="Invalid grid"):
         _parse_montage_config(["grid=NOTGRID"], [])
 
 
@@ -96,7 +97,7 @@ def test_montage_overflow_creates_extra_pages():
 
 def test_montage_invalid_canvas_raises():
     pdf = make_pdf((100, 100))
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidArgumentError):
         montage_pages(
             pdf,
             ["canvas=NONSENSE"],
@@ -140,7 +141,7 @@ def test_montage_aliases_branch():
 def test_montage_no_source_pages_after_resolution():
     """Cover line 98: valid inputs but spec resolves to no pages."""
     pdf = make_pdf((100, 100))
-    with pytest.raises(ValueError, match="No source pages"):
+    with pytest.raises(InvalidArgumentError, match="No source pages"):
         montage_pages(pdf, ["1~1"])
 
 
@@ -148,11 +149,26 @@ def test_apply_montage_logic_invalid_canvas_size():
     """Cover lines 191-192: TypeError on invalid canvas_size."""
     pdf = make_pdf((100, 100))
     strategy = GridLayout(columns=2, rows=1, margin=0, gutter=0)
-    with pytest.raises(ValueError, match="Invalid canvas_size"):
+    with pytest.raises(InvalidArgumentError, match="Invalid canvas_size"):
         _apply_montage_logic(
             target_pdf=pikepdf.new(),
             source_pages=list(pdf.pages),
             strategy=strategy,
             canvas_size=None,
             preserve_aspect_ratio=True,
+        )
+
+
+def test_montage_invalid_integer_keys():
+    """Cover invalid integer key handling."""
+    pdf = make_pdf(*[(100, 100)] * 4)
+    with pytest.raises(InvalidArgumentError, match="cols.*oops1.*integer"):
+        montage_pages(
+            pdf=pdf,
+            operation_args=["cols=oops1"],
+        )
+    with pytest.raises(InvalidArgumentError, match="rows.*oops2.*integer"):
+        montage_pages(
+            pdf=pdf,
+            operation_args=["rows=oops2"],
         )

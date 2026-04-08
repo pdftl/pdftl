@@ -22,6 +22,8 @@ from pdftl.core.types import OpResult
 from pdftl.output.dump import dump
 
 # FIXME: compare this with json.py
+# FIXME: should be able to update this
+# FIXME: can we dump un-named dests too?
 
 
 def _pdf_obj_to_json(obj, page_object_to_num_map, visited=None):
@@ -114,7 +116,7 @@ def dump_dests_cli_hook(result: OpResult, _stage, _pipeline):
     tags=["info", "links"],
     cli_hook=dump_dests_cli_hook,
     type="single input operation",
-    desc="Print PDF named destinations data to the console",
+    desc="Print named destination data to the console",
     long_desc=_DUMP_DESTS_LONG_DESC,
     usage="<input> dump_dests",
     examples=_DUMP_DESTS_EXAMPLES,

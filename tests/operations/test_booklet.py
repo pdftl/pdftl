@@ -3,6 +3,7 @@
 import pikepdf
 import pytest
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.booklet import (
     _build_booklet_permutation,
     _parse_booklet_config,
@@ -53,7 +54,7 @@ def test_parse_booklet_config_canvas():
 
 
 def test_parse_booklet_config_unknown_canvas():
-    with pytest.raises(ValueError, match="Unknown canvas"):
+    with pytest.raises(InvalidArgumentError, match="Unknown canvas"):
         _parse_booklet_config(["canvas=NONSENSE"], [])
 
 
@@ -184,8 +185,18 @@ def test_booklet_sig():
 def test_booklet_no_source_pages_after_resolution():
     """Cover line 101: valid inputs but spec resolves to no pages."""
     pdf = make_uniform_pdf(4)
-    with pytest.raises(ValueError, match="No source pages"):
+    with pytest.raises(InvalidArgumentError, match="No source pages"):
         booklet_pages(
             pdf=pdf,
             operation_args=["1~1"],
+        )
+
+
+def test_booklet_invalid_integer_keys():
+    """Cover invalid integer key handling."""
+    pdf = make_uniform_pdf(4)
+    with pytest.raises(InvalidArgumentError, match="sig.*oops.*integer"):
+        booklet_pages(
+            pdf=pdf,
+            operation_args=["sig=oops"],
         )
