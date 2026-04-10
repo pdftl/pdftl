@@ -52,7 +52,7 @@ def test_burst_invalid_pattern(two_page_pdf):
         result = burst_pdf([pdf], output_pattern="bad_filename.pdf")
 
         # The ValueError is raised inside the generator, so we must access
-        # result.pdf and try to iterate it to trigger the error.
+        # result.data (the result pdf) and try to iterate it to trigger the error.
         with pytest.raises(InvalidArgumentError, match="Output pattern must include"):
             list(result.data)
 
@@ -64,7 +64,7 @@ def test_burst_multiple_inputs(two_page_pdf):
         result = burst_pdf([pdf, pdf])
         assert result.success
 
-        # Unwrap result.pdf
+        # Unwrap result.data (the result pdf)
         results = list(result.data)
 
         # 2 pages * 2 inputs = 4 output files
