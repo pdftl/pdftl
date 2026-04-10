@@ -36,6 +36,7 @@ makezip*
 code[2_]*
 ./test_*
 1
+doc_data.txt
 
 pdfs/
 xfdf/

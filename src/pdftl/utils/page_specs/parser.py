@@ -63,6 +63,7 @@ class SpecParser:
         # 2. Sequentially parse modifiers
         # Note: Order matters. We consume parts of the string.
         qualifiers, modifier_str = self._parse_qualifiers(modifier_str.lower())
+        step, modifier_str = self._parse_step(modifier_str)
         rotate, modifier_str = self._parse_rotation(modifier_str)
         scale, modifier_str = self._parse_scaling(modifier_str)
         omissions, modifier_str = self._parse_omissions(modifier_str)
@@ -70,6 +71,7 @@ class SpecParser:
         return PageSpec(
             start=start,
             end=end,
+            step=step,
             rotate=rotate,
             scale=scale,
             qualifiers=qualifiers,
@@ -117,12 +119,37 @@ class SpecParser:
         return start, end, modifier_str
 
     def _parse_qualifiers(self, modifier_str):
+        """Parse simple boolean keyword modifiers, like even, odd"""
         qualifiers = set()
         for qual in QUALIFIER_MAP:
             if qual in modifier_str:
                 qualifiers.add(qual)
                 modifier_str = modifier_str.replace(qual, "", 1)
         return qualifiers, modifier_str
+
+    def _parse_step(self, modifier_str):
+        step_re = re.compile(r"((step|by|every) *[=]? *([+-]? *\d*))")
+        step_match = step_re.search(modifier_str)
+        if not step_match:
+            return 1, modifier_str
+        match_groups = step_match.groups()
+        kw_match = match_groups[1]  # (step|by|every)
+        matched_digits = match_groups[2]
+        logger.debug("kw_match='%s', matched_digits='%s'", kw_match, matched_digits)
+        if not matched_digits:
+            raise InvalidArgumentError(
+                f"Empty {kw_match} value. Example: use {kw_match}3 to select every 3rd page"
+            )
+        step_val = int(matched_digits)
+        logger.debug("step_val=%s", step_val)
+        if not step_val >= 1:
+            raise InvalidArgumentError(
+                f"Invalid {kw_match} value {step_val}. Should be at least 1."
+            )
+
+        modifier_str = step_re.sub("", modifier_str, 1)
+
+        return step_val, modifier_str
 
     def _parse_rotation(self, modifier_str):
         for key, value in ROTATION_MAP.items():

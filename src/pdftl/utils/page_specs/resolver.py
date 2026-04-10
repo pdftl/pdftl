@@ -77,8 +77,12 @@ def _new_tuples_from_spec_str(
     parser = SpecParser(len(pdf.pages))
     page_spec = parser.parse(page_spec_full)
 
-    step = 1 if page_spec.start <= page_spec.end else -1
-    initial_page_numbers = list(range(page_spec.start, page_spec.end + step, step))
+    direction_sign = 1
+    if page_spec.end < page_spec.start:
+        direction_sign = -1
+    initial_page_numbers = list(
+        range(page_spec.start, page_spec.end + direction_sign, direction_sign)
+    )
 
     # apply even/odd and omissions
     final_page_numbers = _filter_page_numbers(

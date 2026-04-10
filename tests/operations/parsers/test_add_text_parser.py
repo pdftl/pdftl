@@ -22,7 +22,7 @@ UNITS = {"pt": 1.0, "in": 72.0, "cm": 72.0 / 2.54}
 
 # Mock pdftl.utils.page_specs
 # A simple mock of parse_sub_page_spec to return what the parser expects.
-MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "qualifiers", "omissions"])
+MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "step", "qualifiers", "omissions"])
 
 
 def mock_parse_sub_page_spec(page_range_part, total_pages):
@@ -41,22 +41,22 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
         qualifiers = set()
 
     if not page_range_part or page_range_part == "1-end":
-        return MockPageSpec(1, total_pages, qualifiers, [])
+        return MockPageSpec(1, total_pages, 1, qualifiers, [])
 
     if page_range_part == "even":
-        return MockPageSpec(1, total_pages, {"even"}, [])
+        return MockPageSpec(1, total_pages, 1, {"even"}, [])
     if page_range_part == "odd":
-        return MockPageSpec(1, total_pages, {"odd"}, [])
+        return MockPageSpec(1, total_pages, 1, {"odd"}, [])
 
     if "-" in page_range_part:
         start_str, end_str = page_range_part.split("-")
         start = 1 if not start_str else int(start_str)
         end = total_pages if end_str == "end" or not end_str else int(end_str)
-        return MockPageSpec(start, end, qualifiers, [])
+        return MockPageSpec(start, end, 1, qualifiers, [])
 
     try:
         page_num = int(page_range_part)
-        return MockPageSpec(page_num, page_num, qualifiers, [])
+        return MockPageSpec(page_num, page_num, 1, qualifiers, [])
     except ValueError:
         raise
 

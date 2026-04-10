@@ -14,22 +14,39 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+import pdftl.api
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _BURST_LONG_DESC = """
 
 The `burst` operation splits a single input PDF into multiple
 single-page PDF files. An optional output template can be provided.
 
+`split_spec` is an optional page specification, giving the 'split
+points', i.e.,, the initial page of each split chunk. The list of
+split points will be sorted and deduplicated before it is used, so
+order is irrelevant here. If omitted, burst defaults to splitting into
+single pages (equivalent to `split_spec` being `1-end`).
+
 """
 
 _BURST_EXAMPLES = [
     {
         "cmd": "my.pdf burst",
-        "desc": "Burst a file into page_1.pdf, page_2.pdf, etc.:",
-    }
+        "desc": "Burst a file into page_1.pdf, page_2.pdf, etc.",
+    },
+    {
+        "cmd": "my.pdf burst output out%04d.pdf",
+        "desc": "Burst a file into single-page files out0001.pdf, out0002.pdf, etc.",
+    },
+    {
+        "cmd": "my.pdf burst step3 output out%04d.pdf",
+        "desc": "Burst a file into chunks out0001.pdf with pages 1-3, out0002.pdf with pages 4-6, etc.",
+    },
 ]
 
 
@@ -63,9 +80,9 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
     desc="Split a single PDF into individual page files",
     long_desc=_BURST_LONG_DESC,
     examples=_BURST_EXAMPLES,
-    usage="<input> burst [output <template>]",
+    usage="<input> burst [split_spec...] [output <template>]",
     args=(
-        [c.OPENED_PDFS],
+        [c.OPENED_PDFS, c.OPERATION_ARGS],
         {
             c.OUTPUT_PATTERN: c.OUTPUT_PATTERN,
         },
@@ -73,11 +90,14 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
     cli_hook=burst_cli_hook,
     skip_pipeline_save=True,
 )
-def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
-    """Split one or more PDFs into single-page files.
+def burst_pdf(opened_pdfs, operation_args=None, output_pattern="pg_%04d.pdf") -> OpResult:
+    """Split one or more PDFs into multiple files,
+    single-page files by default.
 
     Args:
-        opened_pdfs (list): A list of opened PDF files to burst.
+        opened_pdfs (list): A list of opened PDF files to burst
+
+        operation_args (list): User-supplied arguments
 
         output_pattern (str): A C-style format string for the output
                               filenames, e.g., "page_%03d.pdf".
@@ -92,48 +112,42 @@ def burst_pdf(opened_pdfs, output_pattern="pg_%04d.pdf") -> OpResult:
       relevant to single-page files, e.g., internal links
 
     """
-
-    def _burst_generator():
-        import pikepdf
-
-        logger.debug("%s: opened_pdfs=%s", __name__, opened_pdfs)
-        logger.debug("%s: output_pattern=%s", __name__, output_pattern)
-
-        pattern = output_pattern
-        if pattern is None:
-            pattern = "pg_%04d.pdf"
-
-        page_counter = 0
-
-        if "%" not in pattern:
-            raise ValueError("Output pattern must include a format specifier (e.g., %d)")
-
-        try:
-            for source_pdf in opened_pdfs:
-                logger.debug("source_pdf=%s", source_pdf)
-                for page in source_pdf.pages:
-                    page_counter += 1
-                    page_file = pattern % page_counter
-                    new_pdf = pikepdf.Pdf.new()
-                    new_pdf.pages.append(page)
-                    logger.debug(
-                        "Burst: yielding. page_file=%s. source_pdf=%s. page.objgen=%s.",
-                        page_file,
-                        source_pdf,
-                        page.objgen,
-                    )
-                    yield (page_file, new_pdf)
-        finally:
-            for source_pdf in opened_pdfs:
-                source_pdf.close()
-
-    # pdftk does this so we must!
-    from pdftl.operations.dump_data import pdf_info
-
-    pdf_info("dump_data", opened_pdfs[0], "", [], output_file="doc_data.txt")
-
+    specs = operation_args or ["1-end"]
     return OpResult(
         success=True,
-        data=_burst_generator(),  # for API or hook
+        data=_generate_burst_chunks(opened_pdfs, specs, output_pattern),  # for API or hook
         pdf=opened_pdfs[0],  # for possible subsequent pipeline, NOT for saving
     )
+
+
+def _generate_burst_chunks(opened_pdfs, specs, output_pattern):
+    import pikepdf
+
+    pattern = output_pattern or "pg_%04d.pdf"
+    if "%" not in pattern:
+        raise InvalidArgumentError("Output pattern must include a format specifier (e.g., %d)")
+
+    chunk_counter = 0
+    try:
+        for source_pdf in opened_pdfs:
+            previous_page_num = 1
+            logger.debug("source_pdf=%s", source_pdf)
+            pages = source_pdf.pages
+            split_points = sorted(list(set(page_numbers_matching_page_specs(specs, len(pages)))))
+            logger.debug("split_points = %s", split_points)
+            for page_num in [*split_points, len(pages) + 1]:
+                chunk_pages = pages[previous_page_num - 1 : page_num - 1]
+                if not chunk_pages:
+                    logger.debug("Empty chunk: %s to %s", previous_page_num, page_num)
+                    continue
+                previous_page_num = page_num
+                chunk_counter += 1
+                page_file = pattern % chunk_counter
+                new_pdf = pikepdf.Pdf.new()
+                new_pdf.pages.extend(chunk_pages)
+                yield (page_file, new_pdf)
+    finally:
+        if opened_pdfs:
+            pdftl.api.dump_data(opened_pdfs[0], output="doc_data.txt", run_cli_hook=True)
+            for source_pdf in opened_pdfs:
+                source_pdf.close()

@@ -19,6 +19,7 @@ page_numbers_matching_page_spec(page_spec, total_pages) -> [int]
 page_numbers_matching_page_specs(specs, total_pages) -> [int]
 """
 
+import logging
 from collections.abc import Generator
 
 from .help import _help_topic_page_specs
@@ -36,6 +37,9 @@ from .resolver import (  # Internals exposed for tests
     _resolve_alias_and_spec,
 )
 from .types import PageSpec, PageTransform
+
+logger = logging.getLogger(__name__)
+
 
 # --- Facade API Implementation ---
 
@@ -116,17 +120,21 @@ def page_number_matches_page_spec(n, page_spec_str, total_pages) -> bool:
     specs = parse_compound_page_spec(page_spec_str)
     for s in specs:
         p = parse_sub_page_spec(s, total_pages)
+        logger.debug("step=%s", p.step)
         start, end = (p.start, p.end) if p.start <= p.end else (p.end, p.start)
 
-        if "even" in p.qualifiers and n % 2 == 1:
+        if (
+            ("even" in p.qualifiers and n % 2 == 1)
+            or ("odd" in p.qualifiers and n % 2 == 0)
+            or (n - p.start) % p.step != 0
+            or n < start
+            or n > end
+            or any(omission[0] <= n <= omission[1] for omission in p.omissions)
+        ):
             continue
-        if "odd" in p.qualifiers and n % 2 == 0:
-            continue
-        if n < start or n > end:
-            continue
-        if any(omission[0] <= n <= omission[1] for omission in p.omissions):
-            continue
+
         return True
+
     return False
 
 

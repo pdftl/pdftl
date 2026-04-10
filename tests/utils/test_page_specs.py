@@ -138,14 +138,14 @@ def test_parse_omissions(modifier_str, expected_omissions, expected_remaining):
     with patch("pdftl.utils.page_specs.parse_sub_page_spec") as mock_parse:
         # Define the side effects for the recursive calls
         if "~even" in modifier_str:
-            mock_parse.return_value = PageSpec(1, 10, (0, False), 1.0, {"even"}, [])
+            mock_parse.return_value = PageSpec(1, 10, 1, (0, False), 1.0, {"even"}, [])
         elif "~1-3~5-7" in modifier_str:
             mock_parse.side_effect = [
-                PageSpec(1, 3, (0, False), 1.0, set(), []),
-                PageSpec(5, 7, (0, False), 1.0, set(), []),
+                PageSpec(1, 3, 1, (0, False), 1.0, set(), []),
+                PageSpec(5, 7, 1, (0, False), 1.0, set(), []),
             ]
         else:  # ~1-5
-            mock_parse.return_value = PageSpec(1, 5, (0, False), 1.0, set(), [])
+            mock_parse.return_value = PageSpec(1, 5, 1, (0, False), 1.0, set(), [])
 
         omissions, remaining = _parse_omissions(modifier_str, TOTAL_PAGES)
 
@@ -172,36 +172,36 @@ def test_parse_omissions_invalid_token():
     "spec, total_pages, expected_spec",
     [
         # Simple ranges
-        ("1-5", 10, PageSpec(1, 5, (0, False), 1.0, set(), [])),
-        ("1", 10, PageSpec(1, 1, (0, False), 1.0, set(), [])),
-        ("end", 10, PageSpec(10, 10, (0, False), 1.0, set(), [])),
+        ("1-5", 10, PageSpec(1, 5, 1, (0, False), 1.0, set(), [])),
+        ("1", 10, PageSpec(1, 1, 1, (0, False), 1.0, set(), [])),
+        ("end", 10, PageSpec(10, 10, 1, (0, False), 1.0, set(), [])),
         (
             "",
             10,
-            PageSpec(1, 10, (0, False), 1.0, set(), []),
+            PageSpec(1, 10, 1, (0, False), 1.0, set(), []),
         ),  # Empty spec means all pages
         # Reverse ranges
-        ("r1", 10, PageSpec(10, 10, (0, False), 1.0, set(), [])),  # r1 = page 10
-        ("r5", 10, PageSpec(6, 6, (0, False), 1.0, set(), [])),  # r5 = 10 - 5 + 1 = 6
-        ("r1-r5", 10, PageSpec(10, 6, (0, False), 1.0, set(), [])),  # 10 down to 6
-        ("5-1", 10, PageSpec(5, 1, (0, False), 1.0, set(), [])),  # 5 down to 1
-        ("rend-r1", 10, PageSpec(1, 10, (0, False), 1.0, set(), [])),  # 1 to 10
+        ("r1", 10, PageSpec(10, 10, 1, (0, False), 1.0, set(), [])),  # r1 = page 10
+        ("r5", 10, PageSpec(6, 6, 1, (0, False), 1.0, set(), [])),  # r5 = 10 - 5 + 1 = 6
+        ("r1-r5", 10, PageSpec(10, 6, 1, (0, False), 1.0, set(), [])),  # 10 down to 6
+        ("5-1", 10, PageSpec(5, 1, 1, (0, False), 1.0, set(), [])),  # 5 down to 1
+        ("rend-r1", 10, PageSpec(1, 10, 1, (0, False), 1.0, set(), [])),  # 1 to 10
         (
             "r0",
             10,
-            PageSpec(11, 11, (0, False), 1.0, set(), []),
+            PageSpec(11, 11, 1, (0, False), 1.0, set(), []),
         ),  # r0 = 10 - 0 + 1 = 11
         # Modifiers
-        ("1-5even", 10, PageSpec(1, 5, (0, False), 1.0, {"even"}, [])),
-        ("odd", 10, PageSpec(1, 10, (0, False), 1.0, {"odd"}, [])),
-        ("1-endright", 10, PageSpec(1, 10, (90, True), 1.0, set(), [])),
-        ("1-10x2.0", 10, PageSpec(1, 10, (0, False), 2.0, set(), [])),
-        ("z-1", 10, PageSpec(1, 10, (0, False), 1 / math.sqrt(2), set(), [])),
+        ("1-5even", 10, PageSpec(1, 5, 1, (0, False), 1.0, {"even"}, [])),
+        ("odd", 10, PageSpec(1, 10, 1, (0, False), 1.0, {"odd"}, [])),
+        ("1-endright", 10, PageSpec(1, 10, 1, (90, True), 1.0, set(), [])),
+        ("1-10x2.0", 10, PageSpec(1, 10, 1, (0, False), 2.0, set(), [])),
+        ("z-1", 10, PageSpec(1, 10, 1, (0, False), 1 / math.sqrt(2), set(), [])),
         # Complex combination
         (
             "r5-r1oddleftx1.5~2-3",
             10,
-            PageSpec(6, 10, (-90, True), 1.5, {"odd"}, [(2, 3)]),
+            PageSpec(6, 10, 1, (-90, True), 1.5, {"odd"}, [(2, 3)]),
         ),
     ],
 )
@@ -244,8 +244,8 @@ def test_parse_range_part_invalid():
 
 def test_page_spec_tuple():
     """Tests the __tuple__ method of the dataclass for completeness."""
-    spec = PageSpec(1, 10, (90, True), 2.0, {"even"}, [(2, 3)])
-    expected = (1, 10, (90, True), 2.0, {"even"}, [(2, 3)])
+    spec = PageSpec(1, 10, 1, (90, True), 2.0, {"even"}, [(2, 3)])
+    expected = (1, 10, 1, (90, True), 2.0, {"even"}, [(2, 3)])
     assert spec.__tuple__() == expected
 
 
@@ -261,6 +261,10 @@ def test_page_spec_tuple():
         (3, "even", 10, False),
         (3, "1-5odd", 10, True),
         (2, "1-5odd", 10, False),
+        (3, "1-10oddevery3", 10, False),
+        (7, "1-10by3odd", 10, True),
+        (9, "1-10oddby3", 10, False),
+        (1, "1-10oddstep3", 10, True),
         (4, "1-10~3-5", 10, False),  # Page 4 is in omission
         (6, "1-10~3-5", 10, True),
         (8, "r5-r1", 10, True),  # Range 6-10

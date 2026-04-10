@@ -49,8 +49,8 @@ _CAT_EXAMPLES = [
         ),
     },
     {
-        "cmd": "A=a.pdf B=b.pdf cat A1-5 B3-end output result.pdf",
-        "desc": "Concatenate pages 1-5 from a.pdf with pages 3 onwards from b.pdf",
+        "cmd": "A=a.pdf B=b.pdf cat A1-5 B3-endstep3 output result.pdf",
+        "desc": "Concatenate pages 1-5 from a.pdf with pages 3,6,9,... from b.pdf",
     },
 ]
 

@@ -210,6 +210,7 @@ class DummyPageSpec:
     def __init__(self, start, end, qualifiers=None):
         self.start = start
         self.end = end
+        self.step = 1
         self.qualifiers = qualifiers if qualifiers is not None else set()
         self.omissions = []
 

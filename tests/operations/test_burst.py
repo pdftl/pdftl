@@ -1,8 +1,11 @@
+from unittest.mock import MagicMock, call, patch
+
 import pikepdf
 import pytest
 
 from pdftl.core.types import OpResult
-from pdftl.operations.burst import burst_pdf
+from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.burst import burst_cli_hook, burst_pdf
 
 
 def test_burst_basic(two_page_pdf):
@@ -44,13 +47,13 @@ def test_burst_custom_pattern(two_page_pdf):
 
 
 def test_burst_invalid_pattern(two_page_pdf):
-    """Test that the ValueError is raised for bad patterns."""
+    """Test that the InvalidArgumentError is raised for bad patterns."""
     with pikepdf.open(two_page_pdf) as pdf:
         result = burst_pdf([pdf], output_pattern="bad_filename.pdf")
 
         # The ValueError is raised inside the generator, so we must access
         # result.pdf and try to iterate it to trigger the error.
-        with pytest.raises(ValueError, match="Output pattern must include"):
+        with pytest.raises(InvalidArgumentError, match="Output pattern must include"):
             list(result.data)
 
 
@@ -71,35 +74,17 @@ def test_burst_multiple_inputs(two_page_pdf):
         assert results[3][0] == "pg_0004.pdf"
 
 
-from unittest.mock import MagicMock, patch
-
-
-def test_burst_pdf_default_pattern():
+def test_burst_pdf_default_pattern(two_page_pdf):
     """
     Covers line 78: pattern = "pg_%04d.pdf" when pattern is None.
     """
-    # Setup a mock PDF with one page
-    mock_pdf = MagicMock()
-    mock_page = MagicMock()
-    mock_pdf.pages = [mock_page]
-    del mock_pdf.Root.PageLabels  # so dump_data call doesn't complain
+    result = burst_pdf([pikepdf.open(two_page_pdf)], output_pattern=None)
 
-    # We patch pikepdf.Pdf so that Pdf.new() returns a Mock instead of a real object.
-    # This prevents the TypeError when appending our mock_page.
-    with patch("pikepdf.Pdf") as MockPdf:
-        # Call burst with None. This creates the generator.
-        result = burst_pdf([mock_pdf], output_pattern=None)
+    # We must iterate the generator to execute the body of the function
+    generated_files = list(result.data)
 
-        # We must iterate the generator to execute the body of the function
-        generated_files = list(result.data)
-
-        # Verify the default pattern was applied (pg_0001.pdf)
-        assert generated_files[0][0] == "pg_0001.pdf"
-
-
-from unittest.mock import call
-
-from pdftl.operations.burst import burst_cli_hook
+    # Verify the default pattern was applied (pg_0001.pdf)
+    assert generated_files[0][0] == "pg_0001.pdf"
 
 
 def test_burst_cli_hook_success():

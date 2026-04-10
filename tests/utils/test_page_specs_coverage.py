@@ -45,6 +45,19 @@ def test_flatten_spec_list_ignores_none():
     assert result == ["1", "2", "3"]
 
 
+def test_flatten_spec_list_handles_empty_or_whitespace_only():
+    """
+    Tests that whitespace-only entries are converted to empty entries.
+    """
+    specs = ["1", "", "2,3"]
+    result = _flatten_spec_list(specs)
+    assert result == ["1", "", "2", "3"]
+
+    specs = ["1", " ", "2,3"]
+    result = _flatten_spec_list(specs)
+    assert result == ["1", "", "2", "3"]
+
+
 import unittest
 
 
@@ -109,3 +122,15 @@ def test_resolve_page_token_non_integer():
     parser = SpecParser(total_pages=10)
     with pytest.raises(InvalidArgumentError, match="Could not parse page token"):
         parser._resolve_page_token("abc", is_reverse=False)
+
+
+def test_spec_parser_invalid_step_errors():
+    parser = SpecParser(total_pages=10)
+    with pytest.raises(InvalidArgumentError, match="Empty step value"):
+        parser.parse("1-10stepeven")
+    with pytest.raises(InvalidArgumentError, match="Empty step value"):
+        parser.parse("1-10step")
+    with pytest.raises(InvalidArgumentError, match="Invalid step value"):
+        parser.parse("1-10step-4")
+    with pytest.raises(InvalidArgumentError, match="Invalid step value"):
+        parser.parse("1-10step0")

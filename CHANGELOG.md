@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+### Added
+
+- page ranges accept `step<n>` to step through a range in regular intervals
+
+- `burst` accepts page specs for chunk split points
+
 ### Fixed
 
 - Completions updated
