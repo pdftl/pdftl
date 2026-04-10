@@ -188,6 +188,15 @@ def six_page_pdf(pdf_factory):
     return pdf_factory(6)
 
 
+@pytest.fixture(scope="session")
+def twelve_page_pdf(pdf_factory):
+    """
+    Ensures a standard two-page PDF exists for testing and returns its path.
+    This now uses the pdf_factory for consistency.
+    """
+    return pdf_factory(12)
+
+
 class Runner:
     """A helper class to run CLI commands and manage test files."""
 

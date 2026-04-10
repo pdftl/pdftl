@@ -37,8 +37,11 @@ def test_dump_text_password_none():
             mock_extract.assert_called_once()
 
 
-def test_dump_text_real_iteration():
+def test_dump_text_real_iteration(two_page_pdf):
     """Test iteration logic using mocks."""
+    import pikepdf
+
+    in_pdf = pikepdf.open(two_page_pdf)
     mock_page = MagicMock()
     mock_page.get_textpage.return_value.get_text_range.return_value = "Text"
 
@@ -54,6 +57,6 @@ def test_dump_text_real_iteration():
         with patch("pypdfium2.PdfDocument") as MockDoc:
             MockDoc.return_value.__enter__.return_value = mock_pdf
 
-            result = pdftl.operations.dump_text.dump_text("dummy.pdf", "pass")
+            result = pdftl.operations.dump_text.dump_text(in_pdf, "pass")
             assert result.success is True
             assert "Text" in result.data

@@ -81,7 +81,7 @@ def _new_tuples_from_spec_str(
     if page_spec.end < page_spec.start:
         direction_sign = -1
     initial_page_numbers = list(
-        range(page_spec.start, page_spec.end + direction_sign, direction_sign)
+        range(page_spec.start, page_spec.end + direction_sign, direction_sign * page_spec.step)
     )
 
     # apply even/odd and omissions

@@ -43,11 +43,15 @@ def test_dump_data_to_stdout(two_page_pdf, capsys):
 
 
 def test_dump_text_to_stdout(two_page_pdf, capsys):
-    dump_text(str(two_page_pdf), input_password="", output_file=None)
+    import pikepdf
+    data = dump_text(pikepdf.open(two_page_pdf), input_password="", output_file=None).data
 
     captured = capsys.readouterr()
     # Assuming the dummy PDF is empty text, just check for no crash/errors
     assert captured.err == ""
+    assert "Page 1" in data
+    assert "Page 2" in data
+    assert "Page 3" not in data
 
 
 def test_dump_annots_to_stdout(two_page_pdf, capsys):
