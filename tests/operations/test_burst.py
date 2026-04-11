@@ -153,3 +153,71 @@ def test_burst_cli_hook_empty_generator():
 
     # Assertions
     mock_pipeline.save_pdf_file.assert_not_called()
+
+
+# --- Imports from your module ---
+from pdftl.operations.burst import get_effective_specs
+
+
+@pytest.fixture
+def mock_pdf():
+    """Provides a dummy PDF object for the tests."""
+    return MagicMock(name="SourcePDF")
+
+
+# --- 1. Testing Valid Specs ---
+@pytest.mark.parametrize(
+    "input_specs, mock_pages, expected_calls, expected_output",
+    [
+        # Case 1: Standard specs are ignored and passed through
+        (["1-5", "odd", "even"], [], [], ["1-5", "odd", "even"]),
+        # Case 2: Basic "level" spec is processed (case-insensitive)
+        (["level2"], [1, 5, 12], [(2, False)], ["1,5,12"]),
+        (["LEVEL2"], [1, 5, 12], [(2, False)], ["1,5,12"]),
+        # Case 3: "level<n>onl" spec is processed (last_level_only=True)
+        (["level3only"], [4, 8], [(3, True)], ["4,8"]),
+        (["Level3Only"], [4, 8], [(3, True)], ["4,8"]),
+        # Case 4: Mixed list of standard specs and level specs
+        (["1-3", "level1", "end-5"], [10, 20], [(1, False)], ["1-3", "10,20", "end-5"]),
+        # Case 5: Multiple level specs in the same list
+        (["level1", "level2only"], [7, 9], [(1, False), (2, True)], ["7,9", "7,9"]),
+    ],
+)
+@patch("pdftl.operations.burst.get_outlines_to_level_pages")
+def test_get_effective_specs_valid(
+    mock_get_pages, mock_pdf, input_specs, mock_pages, expected_calls, expected_output
+):
+    # Setup the mock to return our predetermined list of pages
+    mock_get_pages.return_value = mock_pages
+
+    # Run the function
+    result = get_effective_specs(mock_pdf, input_specs)
+
+    # Assert the output matches exactly what we expect
+    assert result == expected_output
+
+    # Assert the mocked helper was called the correct number of times
+    assert mock_get_pages.call_count == len(expected_calls)
+
+    # Assert the mocked helper was called with the correct arguments
+    for level, eq_flag in expected_calls:
+        mock_get_pages.assert_any_call(mock_pdf, level, last_level_only=eq_flag)
+
+
+# --- 2. Testing Invalid Inputs and Exceptions ---
+@pytest.mark.parametrize(
+    "bad_spec, expected_error_match",
+    [
+        ("level0", "must be at least 1"),
+        ("level-5", "must be at least 1"),
+        ("levelabc", "invalid literal for int"),
+        ("levelXYZonly", "invalid literal for int"),
+    ],
+)
+@patch("pdftl.operations.burst.get_outlines_to_level_pages")
+def test_get_effective_specs_invalid(mock_get_pages, mock_pdf, bad_spec, expected_error_match):
+    # We don't expect the helper to ever be called because it should fail during parsing
+    with pytest.raises(InvalidArgumentError, match=expected_error_match):
+        get_effective_specs(mock_pdf, [bad_spec])
+
+    mock_get_pages.assert_not_called()

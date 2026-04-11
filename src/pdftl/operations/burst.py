@@ -19,6 +19,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.outline_select import get_outlines_to_level_pages
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _BURST_LONG_DESC = """
@@ -32,6 +33,16 @@ split points will be sorted and deduplicated before it is used, so
 order is irrelevant here. If omitted, burst defaults to splitting into
 single pages (equivalent to `split_spec` being `1-end`).
 
+You can also use `level<n>` as a `split_spec`, where `<n>` is a
+positive integer, to choose all bookmarks (a.k.a. outlines) at level
+up to n as split points. Similarly, `level<n>only` splits using only
+bookmarks at level `<n>`.
+
+What is a bookmark level? The highest level of the bookmark heirarchy
+is level 1, and this is the level of the root of the bookmark tree and
+its siblings. Children of these bookmark items have level 2, and so
+on.
+
 """
 
 _BURST_EXAMPLES = [
@@ -42,6 +53,14 @@ _BURST_EXAMPLES = [
     {
         "cmd": "my.pdf burst output out%04d.pdf",
         "desc": "Burst a file into single-page files out0001.pdf, out0002.pdf, etc.",
+    },
+    {
+        "cmd": "my.pdf burst level2 output out%04d.pdf",
+        "desc": "Burst a file into files with split points from the bookmarks at levels 1 and 2",
+    },
+    {
+        "cmd": "my.pdf burst level2only output out%04d.pdf",
+        "desc": "Burst a file into files with split points from the bookmarks at level 2 only",
     },
     {
         "cmd": "my.pdf burst step3 output out%04d.pdf",
@@ -139,7 +158,10 @@ def _generate_burst_chunks(opened_pdfs, specs, output_pattern):
             previous_page_num = 1
             logger.debug("source_pdf=%s", source_pdf)
             pages = source_pdf.pages
-            split_points = sorted(list(set(page_numbers_matching_page_specs(specs, len(pages)))))
+            effective_specs = get_effective_specs(source_pdf, specs)
+            split_points = sorted(
+                list(set(page_numbers_matching_page_specs(effective_specs, len(pages))))
+            )
             logger.debug("split_points = %s", split_points)
             for page_num in [*split_points, len(pages) + 1]:
                 chunk_pages = pages[previous_page_num - 1 : page_num - 1]
@@ -155,3 +177,26 @@ def _generate_burst_chunks(opened_pdfs, specs, output_pattern):
     finally:
         for source_pdf in opened_pdfs:
             source_pdf.close()
+
+
+def get_effective_specs(source_pdf, specs):
+    effective_specs = specs
+    for i, spec in enumerate(effective_specs):
+        if spec.lower().startswith("level"):
+            spec = spec[len("level") :]
+            try:
+                eq = spec.lower().endswith("only")
+                if eq:
+                    spec = spec[: -len("only")]
+                level = int(spec)
+                if level <= 0:
+                    raise ValueError("must be at least 1")
+            except ValueError as exc:
+                raise InvalidArgumentError(f"Invalid bookmark level '{spec}': {exc}")
+            effective_specs[i] = ",".join(
+                [
+                    str(x)
+                    for x in get_outlines_to_level_pages(source_pdf, level, last_level_only=eq)
+                ]
+            )
+    return effective_specs
