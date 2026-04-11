@@ -96,16 +96,19 @@ def test_burst_cli_hook_success():
     # Create dummy data to be yielded by the generator
     dummy_pdf_1 = MagicMock()
     dummy_pdf_2 = MagicMock()
+    dummy_input_pdf = pikepdf.new()
 
     def mock_generator():
         yield ("page_1.pdf", dummy_pdf_1)
         yield ("page_2.pdf", dummy_pdf_2)
 
     # Wrap in OpResult
-    result = OpResult(success=True, data=mock_generator())
+    result = OpResult(success=True, data=mock_generator(), pdf=dummy_input_pdf)
 
     # 2. Execute hook
-    burst_cli_hook(result, mock_stage, mock_pipeline)
+    with patch("pdftl.operations.burst.pdftl.api.dump_data") as mock_dump:
+        burst_cli_hook(result, mock_stage, mock_pipeline)
+        mock_dump.assert_called_once_with(result.pdf, output="doc_data.txt", run_cli_hook=True)
 
     # 3. Assertions
     # Verify pipeline.save_pdf_file was called for each yielded item
@@ -144,7 +147,9 @@ def test_burst_cli_hook_empty_generator():
 
     result = OpResult(success=True, data=empty_gen())
 
-    burst_cli_hook(result, mock_stage, mock_pipeline)
+    with patch("pdftl.operations.burst.pdftl.api.dump_data") as mock_dump:
+        burst_cli_hook(result, mock_stage, mock_pipeline)
+        mock_dump.assert_called_once_with(result.pdf, output="doc_data.txt", run_cli_hook=True)
 
     # Assertions
     mock_pipeline.save_pdf_file.assert_not_called()

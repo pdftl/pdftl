@@ -45,7 +45,10 @@ _BURST_EXAMPLES = [
     },
     {
         "cmd": "my.pdf burst step3 output out%04d.pdf",
-        "desc": "Burst a file into chunks out0001.pdf with pages 1-3, out0002.pdf with pages 4-6, etc.",
+        "desc": (
+            "Burst a file into chunks out0001.pdf with pages 1-3, "
+            "out0002.pdf with pages 4-6, etc."
+        ),
     },
 ]
 
@@ -71,6 +74,7 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
         count += 1
 
     logger.info("Burst to %s files.", count)
+    pdftl.api.dump_data(result.pdf, output="doc_data.txt", run_cli_hook=True)
 
 
 @register_operation(
@@ -116,7 +120,9 @@ def burst_pdf(opened_pdfs, operation_args=None, output_pattern="pg_%04d.pdf") ->
     return OpResult(
         success=True,
         data=_generate_burst_chunks(opened_pdfs, specs, output_pattern),  # for API or hook
-        pdf=opened_pdfs[0],  # for possible subsequent pipeline, NOT for saving
+        pdf=opened_pdfs[
+            0
+        ],  # for possible subsequent pipeline (and dump_data call), NOT for saving
     )
 
 
@@ -147,7 +153,5 @@ def _generate_burst_chunks(opened_pdfs, specs, output_pattern):
                 new_pdf.pages.extend(chunk_pages)
                 yield (page_file, new_pdf)
     finally:
-        if opened_pdfs:
-            pdftl.api.dump_data(opened_pdfs[0], output="doc_data.txt", run_cli_hook=True)
-            for source_pdf in opened_pdfs:
-                source_pdf.close()
+        for source_pdf in opened_pdfs:
+            source_pdf.close()
