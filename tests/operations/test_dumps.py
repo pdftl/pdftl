@@ -44,6 +44,7 @@ def test_dump_data_to_stdout(two_page_pdf, capsys):
 
 def test_dump_text_to_stdout(two_page_pdf, capsys):
     import pikepdf
+
     data = dump_text(pikepdf.open(two_page_pdf), input_password="", output_file=None).data
 
     captured = capsys.readouterr()

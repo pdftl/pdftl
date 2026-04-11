@@ -14,7 +14,7 @@ PICKLER = "cloudpickle"
 # if grammar.py output changes: update this!
 GRAMMAR_VERSION = "3"
 
-HARDCODED_KEYWORDS = [
+HARDCODED_KEYWORDS = {
     "JOB",
     "DONE",
     "add_text",
@@ -88,7 +88,7 @@ HARDCODED_KEYWORDS = [
     "uncompress",
     "user_pw",
     "verbose",
-]
+}
 
 
 def get_cache_dir():
@@ -287,32 +287,35 @@ def resolve_candidates(allowed_tokens, parser):
         "VERSION_FLAG": "--version",
         "DEBUG_FLAG": "--debug",
     }
-
+    terminal_lookup = None
     for name in allowed_tokens:
         if name in literal_map:
             candidates.add(literal_map[name])
-        elif name == "HELP_SUB_KW":
-            # Ask the parser what the literal values for this terminal are
-            for t in parser.terminals:
-                if t.name == "HELP_SUB_KW":
+        else:
+            if terminal_lookup is None:
+                terminal_lookup = {t.name: t for t in parser.terminals}
+            if name == "HELP_SUB_KW":
+                # O(1) lookup
+                t = terminal_lookup.get("HELP_SUB_KW")
+                if t:
                     # This extracts "help", "sign", etc. from the Lark terminal pattern
                     options = t.pattern.value[3:-1].split("|")
                     candidates.update(opt.strip('" ') for opt in options)
-        elif name == "PDF_PATH":
-            candidates.add("__PDF_FILE__")
-        elif name == "FILE_PATH":
-            candidates.add("__FILE__")
-        elif name == "CHAIN_SEP":
-            candidates.add("---")
-        elif name.startswith("KW_"):
-            # This handles dynamic registry operations/options
-            # It tries to find the literal string Lark is looking for
-            for t in parser.terminals:
-                if t.name == name:
+            elif name == "PDF_PATH":
+                candidates.add("__PDF_FILE__")
+            elif name == "FILE_PATH":
+                candidates.add("__FILE__")
+            elif name == "CHAIN_SEP":
+                candidates.add("---")
+            elif name.startswith("KW_"):
+                # This handles dynamic registry operations/options
+                # It tries to find the literal string Lark is looking for
+                t = terminal_lookup.get(name)
+                if t:
                     # Clean up the literal (remove quotes)
                     val = t.pattern.value.strip('"').strip("'")
                     candidates.add(val)
-                    break
+
     return candidates
 
 
