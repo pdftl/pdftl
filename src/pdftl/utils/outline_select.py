@@ -1,4 +1,4 @@
-# src/pdftl/utils/outline_select.[py
+# src/pdftl/utils/outline_select.py
 
 from typing import TYPE_CHECKING
 
