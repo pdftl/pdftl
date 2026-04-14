@@ -78,13 +78,14 @@ def test_burst_pdf_default_pattern(two_page_pdf):
     """
     Covers line 78: pattern = "pg_%04d.pdf" when pattern is None.
     """
-    result = burst_pdf([pikepdf.open(two_page_pdf)], output_pattern=None)
+    with pikepdf.open(two_page_pdf) as pdf:
+        result = burst_pdf([pdf], output_pattern=None)
 
-    # We must iterate the generator to execute the body of the function
-    generated_files = list(result.data)
+        # We must iterate the generator to execute the body of the function
+        generated_files = list(result.data)
 
-    # Verify the default pattern was applied (pg_0001.pdf)
-    assert generated_files[0][0] == "pg_0001.pdf"
+        # Verify the default pattern was applied (pg_0001.pdf)
+        assert generated_files[0][0] == "pg_0001.pdf"
 
 
 def test_burst_cli_hook_success():
