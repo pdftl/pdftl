@@ -168,7 +168,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handling of features with missing dependencies should be
   more consistent.
 
-## [0.8.0] - 2026-17-01
+## [0.8.0] - 2026-01-17
 
 ### Added
 
