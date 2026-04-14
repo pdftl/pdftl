@@ -8,7 +8,6 @@ import pytest
 from pikepdf import Array, Dictionary, Name, NameTree, Pdf, String
 from pikepdf.exceptions import ForeignObjectError
 
-import pdftl.pages.links
 from pdftl.pages.link_remapper import LinkRemapper, _build_link_caches
 from pdftl.pages.links import (
     RebuildLinksPartialContext,
@@ -570,6 +569,7 @@ def test_profile_initialization_safely():
     # 1. We patch the __dict__ of the builtins module.
     # This removes 'profile' from the scope of hasattr() without
     # replacing the hasattr function itself.
+    import pdftl
     with patch.dict(builtins.__dict__):
         if "profile" in builtins.__dict__:
             del builtins.__dict__["profile"]

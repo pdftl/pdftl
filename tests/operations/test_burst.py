@@ -222,3 +222,118 @@ def test_get_effective_specs_invalid(mock_get_pages, mock_pdf, bad_spec, expecte
         get_effective_specs(mock_pdf, [bad_spec])
 
     mock_get_pages.assert_not_called()
+
+
+import pytest
+
+from pdftl.operations.burst import _parse_size_to_bytes
+
+
+def test_parse_size_to_bytes():
+    # Test Megabytes
+    assert _parse_size_to_bytes("5M") == 5 * 1024 * 1024
+    assert _parse_size_to_bytes("2.5MB") == int(2.5 * 1024 * 1024)
+
+    # Test Kilobytes
+    assert _parse_size_to_bytes("500K") == 500 * 1024
+    assert _parse_size_to_bytes("100.5KB") == int(100.5 * 1024)
+
+    # Test Raw Bytes
+    assert _parse_size_to_bytes("1048576") == 1048576
+
+    # Test Error Handling (Lines 299-300)
+    with pytest.raises(InvalidArgumentError, match="Invalid size format"):
+        _parse_size_to_bytes("5GB")  # Unsupported unit
+
+    with pytest.raises(InvalidArgumentError, match="Invalid size format"):
+        _parse_size_to_bytes("not_a_number")
+
+
+def test_burst_multiple_sizes_raises_error():
+    # You may need to mock 'opened_pdfs' depending on your existing fixtures.
+    # A simple list with a dummy object usually works for argument routing tests.
+    mock_pdfs = ["dummy_pdf_object"]
+
+    with pytest.raises(InvalidArgumentError, match="More than one `size` spec passed"):
+        burst_pdf(mock_pdfs, operation_args=["size5M", "size10M"])
+
+
+import logging
+
+from pdftl.operations.burst import _generate_burst_chunks, get_chunk_size
+
+
+@pytest.fixture
+def dummy_5_page_pdf():
+    """Helper fixture to generate a real, empty 5-page PDF in memory."""
+    pdf = pikepdf.Pdf.new()
+    for _ in range(5):
+        pdf.add_blank_page(page_size=(612, 792))
+    return pdf
+
+
+def test_burst_page_exceeds_max_size_warning(dummy_5_page_pdf, caplog):
+    """Tests lines 240-250 where a single page is bigger than max_bytes."""
+
+    # Force max_bytes to be ridiculously small (10 bytes) so even 1 page fails the limit
+    max_bytes = 10
+
+    with caplog.at_level(logging.WARNING):
+        generator = _generate_burst_chunks(
+            opened_pdfs=[dummy_5_page_pdf],
+            specs=["1"],
+            output_pattern="foo%03d.pdf",
+            max_bytes=max_bytes,
+        )
+        results = list(generator)
+
+    # CHANGED: It processed a 5 page PDF where every page failed the size check,
+    # so it should fallback to yielding all 5 individual pages.
+    assert len(results) == 5
+    assert len(results[0][1].pages) == 1
+
+    # Ensure the warning was triggered
+    assert "exceeds the maximum limit" in caplog.text
+
+
+def test_burst_by_size_binary_search(dummy_5_page_pdf):
+    # PDF libraries heavily compress/deduplicate identical blank pages.
+    # To guarantee a max of 2 pages, we measure the exact sizes dynamically.
+    two_page_size = get_chunk_size(dummy_5_page_pdf, 0, 1)
+    three_page_size = get_chunk_size(dummy_5_page_pdf, 0, 2)
+
+    # Set max_bytes right between a 2-page and 3-page document
+    max_bytes = (two_page_size + three_page_size) // 2
+
+    generator = _generate_burst_chunks(
+        opened_pdfs=[dummy_5_page_pdf],
+        specs=["1"],
+        output_pattern="chunk_%02d.pdf",
+        max_bytes=max_bytes,
+    )
+
+    results = list(generator)
+
+    # We expect 5 pages split into chunks of max 2 pages -> 3 total chunks (2, 2, 1)
+    assert len(results) == 3
+
+    assert results[0][0] == "chunk_01.pdf"
+    assert len(results[0][1].pages) == 2
+
+    assert results[1][0] == "chunk_02.pdf"
+    assert len(results[1][1].pages) == 2
+
+    assert results[2][0] == "chunk_03.pdf"
+    assert len(results[2][1].pages) == 1
+
+
+def test_burst_pdf_standard_spec_routing():
+    """Covers line 165 by routing a standard, non-size spec through the wrapper."""
+    mock_pdfs = ["dummy_pdf_object"]
+
+    # Passing "1-3" triggers the `else` block (line 165)
+    # Passing "size5M" triggers the `if` block
+    result = burst_pdf(mock_pdfs, operation_args=["1-3", "size5M"])
+
+    assert result.success is True
+    assert result.pdf == "dummy_pdf_object"

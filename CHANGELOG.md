@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - page ranges accept `step<n>` to step through a range in regular intervals
 
-- `burst` accepts page specs or bookmark levels for chunk split points
+- `burst` accepts page specs or bookmark levels for chunk split points, and chunk size limits
 
 ### Fixed
 

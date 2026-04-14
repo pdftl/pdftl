@@ -1,6 +1,7 @@
 import io
+import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -8,8 +9,9 @@ from pdftl.cli import help as helpmod
 from pdftl.cli import help_version as helpvermod
 from pdftl.cli import main as mainmod
 from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
+from pdftl.cli.main import _prepare_pipeline_from_remaining_args, _verbose_option
 from pdftl.cli.main import main as cli_main
-from pdftl.exceptions import UserCommandLineError
+from pdftl.exceptions import OperationError, UserCommandLineError
 
 
 @pytest.fixture(autouse=True)
@@ -212,12 +214,6 @@ def test_main_handles_pipeline_user_error(monkeypatch):
     fake_sys.exit.assert_not_called()
 
 
-from unittest.mock import patch
-
-import pytest
-
-from pdftl.cli.main import _prepare_pipeline_from_remaining_args, _verbose_option
-
 
 def test_verbose_option_execution():
     # Covers line 31
@@ -248,12 +244,6 @@ def test_main_as_script():
                 mock_main()
     # Alternatively, use a subprocess test if you want to be 100% literal
 
-
-import sys
-
-import pytest
-
-from pdftl.cli.main import main
 
 
 def test_main_execution_block():
@@ -288,8 +278,6 @@ def test_prepare_pipeline_no_stages(monkeypatch):
     assert "No pipeline stages found" in fake_stderr.getvalue()
 
 
-import pytest
-
 
 def test_main_debug_reraise():
     """Hits line 52 by ensuring debug is in found_flags when an error occurs."""
@@ -310,7 +298,7 @@ def test_main_uses_sys_argv_if_none_provided():
         # Add side_effect=SystemExit here
         with patch("pdftl.cli.main._handle_special_flags", side_effect=SystemExit) as mock_special:
             try:
-                main()
+                cli_main()
             except SystemExit:
                 pass  # expected
 
@@ -320,9 +308,6 @@ def test_main_uses_sys_argv_if_none_provided():
 
 # tests/cli/test_main.py
 
-import pytest
-
-from pdftl.exceptions import OperationError
 
 
 def test_main_special_flags_returns_early(mocker):
@@ -340,7 +325,7 @@ def test_main_special_flags_returns_early(mocker):
     mocker.patch("pdftl.cli.main.initialize_registry")
 
     # The function should return 0 immediately without parsing pipeline
-    assert main() == 0
+    assert cli_main() == 0
 
 
 def test_main_operation_error_exit_code(mocker, capfd):
@@ -364,7 +349,7 @@ def test_main_operation_error_exit_code(mocker, capfd):
     mock_pipeline.run.side_effect = OperationError("Something went wrong during processing")
 
     # Run main
-    exit_code = main()
+    exit_code = cli_main()
 
     # Assert that OperationError results in exit code 3
     assert exit_code == 3
@@ -395,7 +380,6 @@ def test_cli_handles_completion_flag():
         mock_setup.assert_called_once_with("bash")
 
 
-import pytest
 
 
 def test_main_completion_missing_equals():

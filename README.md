@@ -66,7 +66,7 @@ A simple `pip install pdftl[full]` install is also supported.
 ### 📄 Standard operations
 
 * **Combine:** [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html) (interleave pages from multiple docs).
-* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages.
+* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages, by bookmarks, by size,...), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages.
 * **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html).
 * **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html) (single page), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
 
@@ -199,7 +199,7 @@ See the **[API Tutorial][4]** for more details.
 | [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |
 | [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html)                             | Impose pages into printable booklet signatures                  |
-| [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into individual page files                   |
+| [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into multiple files                          |
 | [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF                |
 | [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html)                                   | Chop pages into multiple smaller pieces                         |
 | [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html)                                   | Clip page content to a rectangle                                |

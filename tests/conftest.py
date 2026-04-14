@@ -483,10 +483,10 @@ def clean_registry():
                 # If reload fails (e.g. module was deleted), just ignore
                 pass
 
-    from pdftl.registry_init import initialize_registry
+    #from pdftl.registry_init import initialize_registry
 
     # Now run the official init to catch anything else
-    initialize_registry()
+    pdftl.registry_init.initialize_registry()
 
     return registry
 
