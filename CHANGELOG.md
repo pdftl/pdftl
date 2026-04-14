@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Improved memory manangement
+- Improved memory management
 
 - Fixed `chop`, `place`, and `booklet` operations to correctly calculate physical boundaries on pages with non-zero origins or non-standard `/Rotate` flags
 
