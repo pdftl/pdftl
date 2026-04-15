@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.exceptions import InvalidArgumentError
 from pdftl.info.output_info import get_info, write_info
+from pdftl.utils.dump import get_json_flag
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 
 # BUG: 000301.pdf: rounding errors. Does pdftk just always round? Or
@@ -207,7 +207,7 @@ _DUMP_DATA_KW_ARGS = {"output_file": c.OUTPUT}
     desc=_SHORT_DUMP_DATA_DESC_PREFIX + " (in UTF-8)",
     long_desc=_DUMP_DATA_UTF8_LONG_DESC,
     cli_hook=dump_data_cli_hook,
-    usage="<input> dump_data_utf8 [output <output>]",
+    usage="<input> dump_data_utf8 [json] [output <output>]",
     examples=_DUMP_DATA_UTF8_EXAMPLES,
     args=(
         _DUMP_DATA_POS_ARGS,
@@ -223,7 +223,7 @@ _DUMP_DATA_KW_ARGS = {"output_file": c.OUTPUT}
     desc=_SHORT_DUMP_DATA_DESC_PREFIX + " (XML-escaped or JSON)",
     long_desc=_DUMP_DATA_LONG_DESC,
     cli_hook=dump_data_cli_hook,
-    usage="<input> dump_data [output <output>] [json]",
+    usage="<input> dump_data [json] [output <output>]",
     examples=_DUMP_DATA_EXAMPLES,
     args=(
         _DUMP_DATA_POS_ARGS,
@@ -243,18 +243,7 @@ def pdf_info(
     """
     Imitate pdftk's dump_data output, writing to a file or stdout.
     """
-    json_output = False
-    if len(op_args) > 1:
-        raise InvalidArgumentError("Too many arguments for '{op_name}', at most one is allowed.")
-    if len(op_args) == 1:
-        if op_args[0].strip().lower() == "json":
-            json_output = True
-        else:
-            raise InvalidArgumentError(
-                "Invalid '{op_name}' argument. "
-                "Only valid argument is 'json', to select JSON output."
-            )
-
+    json_output = get_json_flag(op_args, op_name)
     info = get_info(pdf, input_filename, extra_info=extra_info)
 
     return OpResult(

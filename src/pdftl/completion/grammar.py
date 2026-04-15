@@ -13,7 +13,7 @@ from pdftl.registry_init import initialize_registry
 
 # ============================== IMPORTANT ==============================
 # bump this if grammar output changes, both here and in complete.py
-GRAMMAR_VERSION = "3"
+GRAMMAR_VERSION = "4"
 # =======================================================================
 
 

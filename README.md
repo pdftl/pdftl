@@ -86,7 +86,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 ### 🔐 Security
 * **Decryption:** using [`input_pw`](https://pdftl.readthedocs.io/en/latest/general/input.html).
-* **Encryption:** using [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw) and [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), optionally setting permissions with [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm).
+* **Encryption:** using [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw) and [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), optionally setting permissions with [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm). Read permissions/encryption data with [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html)
 * **Signatures:** add secure signatures using [`sign_key`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file) and [`sign_cert`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file). List and verify signatures using [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html) (powered by [`pyHanko`][6]).
 
 ### 🛠️ Advanced
@@ -213,6 +213,7 @@ See the **[API Tutorial][4]** for more details.
 | [`dump_data_fields_utf8`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields_utf8.html) | Print PDF form field data in UTF-8                              |
 | [`dump_data_utf8`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_utf8.html)               | Metadata, page and bookmark info (in UTF-8)                     |
 | [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html)                       | Print PDF named destinations data to the console                |
+| [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html)             | Print PDF encryption details and permissions                    |
 | [`dump_files`](https://pdftl.readthedocs.io/en/latest/operations/dump_files.html)                       | List file attachments                                           |
 | [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)                     | Dump layer info (JSON)                                          |
 | [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html)             | List and validate digital signatures                            |

@@ -12,7 +12,7 @@ import sys
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "3"
+GRAMMAR_VERSION = "4"
 
 HARDCODED_KEYWORDS = {
     "JOB",
@@ -36,6 +36,7 @@ HARDCODED_KEYWORDS = {
     "dump_data_fields_utf8",
     "dump_data_utf8",
     "dump_dests",
+    "dump_encryption",
     "dump_files",
     "dump_layers",
     "dump_signatures",
