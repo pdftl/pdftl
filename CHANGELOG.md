@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_encryption` operation
 
+### Fixed
+
+- `pdftk` compatibility: default to all permissions denied
+
 ## [0.13.0] - 2026-04-15
 
 ### Added

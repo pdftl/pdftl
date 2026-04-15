@@ -225,7 +225,7 @@ def _build_permissions_object(allow_options: list):
     import pikepdf
 
     # default if no options explicitly selected is same as "AllFeatures"
-    if not allow_options or "AllFeatures" in allow_options:
+    if "AllFeatures" in allow_options:
         # The default pikepdf.Permissions constructor seems to allow all
         # except for assembly. So we specify that.
         return pikepdf.Permissions(modify_assembly=True)

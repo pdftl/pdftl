@@ -236,29 +236,30 @@ def test_build_permissions_object_all_features(mocker):
 
 def test_build_permissions_object_empty(mocker):
     """
-    Tests building with no 'allow' options (defaults to All Permitted).
-    Note: The code treats empty list [] as 'allow everything', avoiding the
-    restrictive _default_permissions_object helper.
+    Tests building with no 'allow' options (defaults to All Denied).
+    Note: To match pdftk behavior, the code treats empty list [] as
+    'deny everything', using the restrictive _default_permissions_object helper.
     """
     # 1. Patch the class constructor
     mock_permissions_cls = mocker.patch("pikepdf.Permissions", autospec=True)
     mock_instance = mock_permissions_cls.return_value
 
-    # 2. Patch the helper (we expect this NOT to be called)
+    # 2. Patch the helper (we expect this TO be called now)
     mock_default_helper = mocker.patch("pdftl.output.save._default_permissions_object")
+    # Give the mock a fake dictionary to return so the kwargs unpack doesn't crash
+    fake_restrictive_dict = {"print_highres": False, "extract": False}
+    mock_default_helper.return_value = fake_restrictive_dict
 
     # 3. Run the function with empty list
     result = _build_permissions_object([])
 
     # 4. Assertions
-    # The helper should NOT be called (because we are not restricting permissions)
-    mock_default_helper.assert_not_called()
+    # The helper SHOULD be called (because we restrict permissions by default)
+    mock_default_helper.assert_called_once()
 
-    # The constructor should be called with the default "allow all" setting
-    # (checking implementation detail from save.py line 209)
-    mock_permissions_cls.assert_called_once_with(modify_assembly=True)
-
-    assert result is mock_instance
+    # Ensure pikepdf.Permissions was initialized using the restrictive dictionary
+    mock_permissions_cls.assert_called_once_with(**fake_restrictive_dict)
+    assert result == mock_instance
 
 
 def test_build_permissions_object_specific(mocker):
@@ -617,3 +618,39 @@ def test_save_unknown_type(tmp_path):
 
     with pytest.raises(TypeError, match="Unknown content object type"):
         save_content(bad_gen(), str(tmp_path), None)
+
+
+def test_pdftl_aes_encryption_forces_accessibility(tmp_path, mock_input_context):
+    """
+    Tests that when pdftl saves a locked-down AES-128 file, the underlying
+    qpdf behavior overrides the accessibility permission to True (-3392 flag).
+    """
+    out_path = tmp_path / "aes_locked.pdf"
+
+    # 1. Create a minimal blank PDF
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    # 2. Use pdftl's own save method with the exact options parsed by the CLI
+    # Omitting an 'allow' list triggers pdftl's _default_permissions_object (deny all)
+    options = {"output": str(out_path), "encrypt_aes128": True}
+
+    # Execute the pdftl save routine
+    save_pdf(pdf, out_path, mock_input_context, options=options)
+    pdf.close()
+
+    # 3. Re-open and verify the final binary output
+    with pikepdf.Pdf.open(out_path, password="") as encrypted_pdf:
+        perms = encrypted_pdf.allow
+
+        # Accessibility MUST be True (overridden by qpdf during pdftl's save)
+        assert perms.accessibility is True, "qpdf failed to force accessibility=True"
+
+        # Ensure pdftl still correctly locked down everything else
+        assert perms.extract is False
+        assert perms.print_highres is False
+
+        # Verify the raw permission flag mathematically (-3392 instead of -3904)
+        encrypt_dict = encrypted_pdf.trailer.get("/Encrypt")
+        raw_p = int(encrypt_dict.get("/P", 0))
+        assert raw_p == -3392, f"Expected raw AES permissions flag -3392, got {raw_p}"
