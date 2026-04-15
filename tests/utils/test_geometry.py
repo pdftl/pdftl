@@ -1,8 +1,16 @@
+from unittest.mock import MagicMock
+
 import pikepdf
 import pytest
 from pikepdf import Matrix
 
-from pdftl.utils.geometry import _resolve_anchor, calculate_fit_metrics, calculate_placement_matrix
+from pdftl.utils.geometry import (
+    _resolve_anchor,
+    calculate_fit_metrics,
+    calculate_placement_matrix,
+    transform_quadpoints,
+    transform_rect_bbox,
+)
 
 
 @pytest.fixture
@@ -83,14 +91,6 @@ def test_calculate_fit_metrics_edge_cases():
     assert dy == 100.0
 
 
-import pytest
-
-from pdftl.utils.geometry import (
-    transform_quadpoints,
-    transform_rect_bbox,
-)
-
-
 def test_transform_quadpoints():
     """Hits lines 75-79: Tests point-pair transformations."""
     # Quadpoints are usually sets of 8 (4 points), but the function
@@ -153,3 +153,95 @@ def test_transform_rect_bbox():
     assert bbox[1] == pytest.approx(0.0, abs=1e-3)  # Min Y
     assert bbox[2] == pytest.approx(7.071, abs=1e-3)  # Max X
     assert bbox[3] == pytest.approx(14.142, abs=1e-3)  # Max Y
+
+
+def test_calculate_placement_matrix_compensates_for_rotation_shift():
+    """
+    Tests that rotating a page by -90 degrees correctly shifts the
+    visual bounding box so the content doesn't render off-grid.
+    """
+    # 1. Setup a Mock Page (100 pts wide, 200 pts high)
+    mock_page = MagicMock()
+    mock_page.trimbox = [0.0, 0.0, 100.0, 200.0]
+
+    dest_x = 50.0
+    dest_y = 50.0
+
+    # 2. Calculate the matrix with a -90 degree rotation
+    matrix = calculate_placement_matrix(
+        source_page=mock_page,
+        dest_x=dest_x,
+        dest_y=dest_y,
+        scale_x=1.0,
+        scale_y=1.0,
+        rotate=-90.0,
+        anchor_source="bottom-left",
+    )
+
+    # 3. Analyze what we expect
+    # A 100x200 page rotated -90 degrees around (0,0) falls into the negative Y space.
+    # The bottom-right corner (100, 0) swings down to (0, -100).
+    # To place this at a destination of Y=50, the matrix MUST shift the Y axis up
+    # by an extra 100 points to prevent the page from hanging below the destination line.
+    # Therefore, the final Y translation (matrix.f) should be 150 (50 + 100), not 50.
+
+    # Check transformation (rotation) components using pytest.approx
+    # to handle tiny floating-point artifacts from math.cos/sin
+    assert matrix.a == pytest.approx(0.0, abs=1e-9)  # cos(-90)
+    assert matrix.b == pytest.approx(-1.0, abs=1e-9)  # sin(-90)
+    assert matrix.c == pytest.approx(1.0, abs=1e-9)  # -sin(-90)
+    assert matrix.d == pytest.approx(0.0, abs=1e-9)  # cos(-90)
+
+    # Check the translation components!
+    # BUGGY CODE would return e=50, f=50.
+    # FIXED CODE will return e=50, f=150.
+    assert matrix.e == pytest.approx(50.0, abs=1e-9)
+    assert matrix.f == pytest.approx(150.0, abs=1e-9)
+
+
+def test_calculate_placement_matrix_handles_cropped_origin():
+    """
+    Tests that a cropped page (non-zero origin) rotates correctly
+    around its own visual boundary, not the absolute document origin.
+    """
+    # 1. Setup a Mock Cropped Page
+    # The page was cropped, so its visual boundary starts at X=100, Y=100.
+    # It has a width of 100 (200-100) and a height of 200 (300-100).
+    mock_page = MagicMock()
+    mock_page.trimbox = [100.0, 100.0, 200.0, 300.0]
+
+    dest_x = 50.0
+    dest_y = 50.0
+
+    # 2. Calculate matrix with a +90 degree rotation
+    matrix = calculate_placement_matrix(
+        source_page=mock_page,
+        dest_x=dest_x,
+        dest_y=dest_y,
+        scale_x=1.0,
+        scale_y=1.0,
+        rotate=90.0,
+        anchor_source="bottom-left",
+    )
+
+    # 3. Analyze what we expect
+    # The page is 100x200.
+    # Step A: The function shifts it by (-100, -100) so its bottom-left is at (0,0).
+    # Step B: It rotates +90. The 100x200 box now points left, sitting in the negative X space.
+    #         The original top-left corner (0, 200) swings to (-200, 0).
+    # Step C: The function detects the bounding box is between X=[-200, 0] and Y=[0, 100].
+    # Step D: It aligns this visual bounding box to (0,0) by adding (+200, 0).
+    # Step E: It moves it to the destination (50, 50).
+    #
+    # When we multiply all these matrices together for pikepdf (v_new = v @ Matrix):
+    # - Original X coordinate needs a total translation of +350.
+    # - Original Y coordinate needs a total translation of -50.
+
+    assert matrix.a == pytest.approx(0.0, abs=1e-9)  # cos(90)
+    assert matrix.b == pytest.approx(1.0, abs=1e-9)  # sin(90)
+    assert matrix.c == pytest.approx(-1.0, abs=1e-9)  # -sin(90)
+    assert matrix.d == pytest.approx(0.0, abs=1e-9)  # cos(90)
+
+    # Check the translation components!
+    assert matrix.e == pytest.approx(350.0, abs=1e-9)
+    assert matrix.f == pytest.approx(-50.0, abs=1e-9)

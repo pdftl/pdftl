@@ -214,7 +214,6 @@ def test_main_handles_pipeline_user_error(monkeypatch):
     fake_sys.exit.assert_not_called()
 
 
-
 def test_verbose_option_execution():
     # Covers line 31
     _verbose_option()
@@ -243,7 +242,6 @@ def test_main_as_script():
             if hasattr(main_module, "__name__"):
                 mock_main()
     # Alternatively, use a subprocess test if you want to be 100% literal
-
 
 
 def test_main_execution_block():
@@ -278,7 +276,6 @@ def test_prepare_pipeline_no_stages(monkeypatch):
     assert "No pipeline stages found" in fake_stderr.getvalue()
 
 
-
 def test_main_debug_reraise():
     """Hits line 52 by ensuring debug is in found_flags when an error occurs."""
     from pdftl.cli.main import main
@@ -307,7 +304,6 @@ def test_main_uses_sys_argv_if_none_provided():
 
 
 # tests/cli/test_main.py
-
 
 
 def test_main_special_flags_returns_early(mocker):
@@ -378,8 +374,6 @@ def test_cli_handles_completion_flag():
         # ASSERT
         assert mock_setup.called, "The mock was never called!"
         mock_setup.assert_called_once_with("bash")
-
-
 
 
 def test_main_completion_missing_equals():

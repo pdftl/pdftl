@@ -570,6 +570,7 @@ def test_profile_initialization_safely():
     # This removes 'profile' from the scope of hasattr() without
     # replacing the hasattr function itself.
     import pdftl
+
     with patch.dict(builtins.__dict__):
         if "profile" in builtins.__dict__:
             del builtins.__dict__["profile"]

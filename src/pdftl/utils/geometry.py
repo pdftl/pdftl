@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pikepdf import Matrix, Page
 
+import math
+
 
 def calculate_placement_matrix(
     source_page: "Page",
@@ -23,7 +25,7 @@ def calculate_placement_matrix(
 ) -> "Matrix":
     """
     Calculates the affine transformation matrix to place a source page onto
-    a destination canvas.
+    a destination canvas, accounting for bounding box shifts during rotation.
     """
     from pikepdf import Matrix
 
@@ -33,19 +35,48 @@ def calculate_placement_matrix(
     src_w = float(box[2]) - src_x
     src_h = float(box[3]) - src_y
 
-    # 2. Resolve Source Anchor
-    handle_x, handle_y = _resolve_anchor(anchor_source, src_x, src_y, src_w, src_h)
+    # 2. Shift the raw bottom-left to the origin
+    m_to_origin = Matrix().translated(-src_x, -src_y)
 
-    # 3. Build the Matrix Chain
-    # PDF uses Row Vectors: v_new = v @ Matrix.
-    # We want: v -> [Shift to Origin] -> [Rotate/Scale] -> [Shift to Dest]
-    # Therefore: Matrix = M_origin @ M_transform @ M_dest
+    # 3. Apply Rotation
+    m_rotate = Matrix().rotated(rotate)
 
-    m_to_origin = Matrix().translated(-handle_x, -handle_y)
-    m_transform = Matrix().rotated(rotate).scaled(scale_x, scale_y)
+    # 4. Calculate visual bounding box shift
+    # Track the 4 corners of the page relative to the origin
+    corners = [(0, 0), (src_w, 0), (src_w, src_h), (0, src_h)]
+
+    rad = math.radians(rotate)
+    cos_r = math.cos(rad)
+    sin_r = math.sin(rad)
+
+    # Calculate rotated coordinates: x' = x*cos(θ) - y*sin(θ), y' = x*sin(θ) + y*cos(θ)
+    rotated_corners = [(x * cos_r - y * sin_r, x * sin_r + y * cos_r) for x, y in corners]
+
+    # Find the bounds of the newly rotated shape
+    min_x = min(x for x, y in rotated_corners)
+    min_y = min(y for x, y in rotated_corners)
+    max_x = max(x for x, y in rotated_corners)
+    max_y = max(y for x, y in rotated_corners)
+
+    vis_w = max_x - min_x
+    vis_h = max_y - min_y
+
+    # Shift so the new VISUAL bottom-left sits exactly at (0, 0)
+    m_align = Matrix().translated(-min_x, -min_y)
+
+    # 5. Resolve anchors based on the VISUAL dimensions
+    handle_x, handle_y = _resolve_anchor(anchor_source, 0, 0, vis_w, vis_h)
+
+    # Move the chosen visual anchor to (0,0)
+    m_anchor = Matrix().translated(-handle_x, -handle_y)
+
+    # 6. Apply Scaling (scaling must happen around the anchor point)
+    m_scale = Matrix().scaled(scale_x, scale_y)
+
+    # 7. Move to destination coordinates
     m_to_dest = Matrix().translated(dest_x, dest_y)
 
-    return m_to_origin @ m_transform @ m_to_dest
+    return m_to_origin @ m_rotate @ m_align @ m_anchor @ m_scale @ m_to_dest
 
 
 def transform_rect_bbox(rect: list[float], matrix: "Matrix") -> list[float]:

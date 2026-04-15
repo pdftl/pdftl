@@ -214,6 +214,8 @@ def _apply_montage_logic(
         # B. Calculate Fit
         _, _, src_w, src_h = get_visible_page_dimensions(src_page, box="trimbox")
 
+        src_rotation = int(src_page.get("/Rotate", 0))
+
         sx, sy, off_x, off_y = calculate_fit_metrics(
             src_w, src_h, slot.width, slot.height, preserve_aspect_ratio
         )
@@ -230,7 +232,7 @@ def _apply_montage_logic(
             dest_y=final_y,
             scale_x=sx,
             scale_y=sy,
-            rotate=0,
+            rotate=src_rotation,
             anchor_source="bottom-left",  # fit_metrics assumes simple bottom-left box match
             anchor_target="bottom-left",
         )
