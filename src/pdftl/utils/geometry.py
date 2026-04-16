@@ -8,21 +8,21 @@ Handles anchor resolution, rotation, and coordinate normalization.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pikepdf import Matrix, Page
+    from pikepdf import Matrix
 
 import math
 
 
 def calculate_placement_matrix(
-    source_page: "Page",
+    source_page,
     dest_x: float,
     dest_y: float,
     scale_x: float = 1.0,
     scale_y: float = 1.0,
     rotate: float = 0.0,
     anchor_source: str = "center",
-    anchor_target: str = "bottom-left",  # FIXME: unused
-) -> "Matrix":
+    anchor_target: str = "bottom-left",
+):
     """
     Calculates the affine transformation matrix to place a source page onto
     a destination canvas, accounting for bounding box shifts during rotation.

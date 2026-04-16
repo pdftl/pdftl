@@ -29,10 +29,6 @@ def make_pdf(*sizes):
         (["grid=3x4"], {"cols": 3, "rows": 4}),
         # Margin and gutter
         (["margin=10", "gutter=5"], {"margin": 10.0, "gutter": 5.0}),
-        # Fit fill
-        (["fit=fill"], {"preserve_aspect_ratio": False}),
-        # Fit contain (default)
-        (["fit=contain"], {"preserve_aspect_ratio": True}),
         # Explicit cols/rows
         (["cols=3", "rows=1"], {"cols": 3, "rows": 1}),
     ],
@@ -155,7 +151,6 @@ def test_apply_montage_logic_invalid_canvas_size():
             source_pages=list(pdf.pages),
             strategy=strategy,
             canvas_size=None,
-            preserve_aspect_ratio=True,
         )
 
 

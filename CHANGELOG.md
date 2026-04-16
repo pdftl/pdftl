@@ -11,9 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_encryption` operation
 
+### Changed
+
+- `montage`: removed `fit` parameter
+
 ### Fixed
 
 - `pdftk` compatibility: default to all permissions denied
+
+- `montage` and `booklet` bug handling pages with negative rotation fixed
 
 ## [0.13.0] - 2026-04-15
 

@@ -9,12 +9,6 @@
 import io
 import logging
 
-logger = logging.getLogger(__name__)
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
-
 import pdftl.api
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -22,6 +16,8 @@ from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.outline_select import get_outlines_to_level_pages
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+
+logger = logging.getLogger(__name__)
 
 _BURST_LONG_DESC = """
 

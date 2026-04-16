@@ -128,7 +128,8 @@ def dump_encryption_cli_hook(result: OpResult, stage, _pipeline):
 
 
 def _determine_algorithm(v: int, length: int, encrypt_dict) -> tuple[str, int]:
-    """Determines the encryption algorithm name and actual key length based on /V and CryptFilters."""
+    """Determines the encryption algorithm name
+    and actual key length based on /V and CryptFilters."""
     if v == 1:
         return "RC4 (40-bit)", length or 40
     if v == 2:
@@ -144,7 +145,6 @@ def _determine_algorithm(v: int, length: int, encrypt_dict) -> tuple[str, int]:
 
 
 def _determine_v4_algorithm(length: int, encrypt_dict) -> tuple[str, int]:
-    import pikepdf
 
     algo_name = "AES / RC4 (128-bit)"
     try:

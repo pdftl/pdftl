@@ -133,9 +133,8 @@ def test_dump_encryption_v4_rc4(mock_get_json_flag, patch_pikepdf_dict):
     result = dump_encryption(pdf)
     assert result.data["Encryption"]["EncryptionAlgorithm"] == "RC4 (128-bit)"
 
-@pytest.mark.parametrize(
-    "cf", [{}, "invalid", {"/StdCF": {}}, {"/StdCF": {"/CFM": []}}]
-)
+
+@pytest.mark.parametrize("cf", [{}, "invalid", {"/StdCF": {}}, {"/StdCF": {"/CFM": []}}])
 def test_dump_encryption_v4_rc4_missing_keys(mock_get_json_flag, cf, patch_pikepdf_dict):
     """Test V=4 falling back to CryptFilters for RC4 extraction"""
     encrypt_dict = {"/Filter": "/Standard", "/V": 4, "/Length": 128, "/CF": cf}

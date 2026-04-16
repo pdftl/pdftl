@@ -6,10 +6,8 @@
 
 """Impose pages onto a grid or custom layout."""
 
+import logging
 from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from pikepdf import Page, Pdf
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -17,9 +15,13 @@ from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
-from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
-from pdftl.utils.geometry import calculate_fit_metrics, calculate_placement_matrix
+from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+
+if TYPE_CHECKING:
+    from pikepdf import Page, Pdf
+
+logger = logging.getLogger(__name__)
 
 _MONTAGE_LONG_DESC = """
 The `montage` operation allows you to impose multiple source pages onto a
@@ -38,7 +40,6 @@ margins, and spacing.
 | `grid=<cols>x<rows>` | Set columns and rows (e.g., `2x2`, `3x4`) |
 | `margin=<pts>` | Set page margin in points |
 | `gutter=<pts>` | Set spacing between slots in points |
-| `fit=<mode>` | `contain` (default) preserves aspect ratio; `fill` stretches. |
 """
 
 _MONTAGE_EXAMPLES = [
@@ -104,7 +105,6 @@ def montage_pages(pdf, operation_args) -> OpResult:
         source_pages=[pdf.pages[p - 1] for p in source_pages_to_process],
         strategy=layout_strategy,
         canvas_size=config["canvas_size"],
-        preserve_aspect_ratio=config["preserve_aspect_ratio"],
     )
 
     return OpResult(success=True, pdf=new_pdf)
@@ -123,7 +123,6 @@ def _parse_montage_config(specs: list[str], out_page_specs: list[str]) -> dict[s
         "margin": 0.0,
         "gutter": 0.0,
         "canvas_size": parse_paper_spec("a4"),  # Default A4 Portrait
-        "preserve_aspect_ratio": True,
     }
 
     for token in specs:
@@ -170,8 +169,6 @@ def _update_config_from_keyval(key, val, config):
             config[key] = int(val)
         except ValueError as e:
             raise InvalidArgumentError(f"Could not parse {key} value '{val}' as an integer. ({e})")
-    elif key == "fit":
-        config["preserve_aspect_ratio"] = val != "fill"
 
     return config
 
@@ -181,12 +178,11 @@ def _apply_montage_logic(
     source_pages: list["Page"],
     strategy: GridLayout,
     canvas_size: tuple[float, float],
-    preserve_aspect_ratio: bool,
 ):
     """
     The engine that combines Layout, Geometry, and Pikepdf to build the document.
     """
-    from pikepdf import Name
+    from pikepdf import Array, Rectangle
 
     try:
         target_w, target_h = canvas_size
@@ -210,44 +206,7 @@ def _apply_montage_logic(
             output_pages[slot.page_index] = target_pdf.pages[slot.page_index]
 
         target_page = output_pages[slot.page_index]
-
-        # B. Calculate Fit
-        _, _, src_w, src_h = get_visible_page_dimensions(src_page, box="trimbox")
-
-        src_rotation = int(src_page.get("/Rotate", 0))
-
-        sx, sy, off_x, off_y = calculate_fit_metrics(
-            src_w, src_h, slot.width, slot.height, preserve_aspect_ratio
+        src_page.Rotate = (src_page.get("/Rotate", 0)) % 360
+        target_page.add_overlay(
+            src_page, Rectangle(Array([slot.x, slot.y, slot.x + slot.width, slot.y + slot.height]))
         )
-
-        # C. Calculate Placement Matrix
-        # Slot gives the bottom-left of the cell.
-        # Fit metrics give the offset from that bottom-left to center the content.
-        final_x = slot.x + off_x
-        final_y = slot.y + off_y
-
-        matrix = calculate_placement_matrix(
-            source_page=src_page,
-            dest_x=final_x,
-            dest_y=final_y,
-            scale_x=sx,
-            scale_y=sy,
-            rotate=src_rotation,
-            anchor_source="bottom-left",  # fit_metrics assumes simple bottom-left box match
-            anchor_target="bottom-left",
-        )
-
-        # D. Stamp (Form XObject)
-        # Convert source page to a Form XObject in its original PDF context first
-        src_form = src_page.as_form_xobject()
-
-        # Then copy the Form XObject over to the target PDF
-        form_xobj = target_pdf.copy_foreign(src_form)
-
-        # Add to the target page's resources
-        form_name = target_page.add_resource(form_xobj, Name("/XObject"))
-
-        # Apply Matrix (a, b, c, d, e, f)
-        m = matrix
-        cmd = f"q {m.a:.6f} {m.b:.6f} {m.c:.6f} {m.d:.6f} {m.e:.6f} {m.f:.6f} cm {form_name} Do Q "
-        target_page.contents_add(cmd.encode("ascii"))

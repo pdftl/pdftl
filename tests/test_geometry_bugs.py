@@ -273,3 +273,20 @@ def test_chop_cleans_up_other_bounding_boxes(tmp_path):
         assert "/CropBox" not in page
         assert "/BleedBox" not in page
         assert "/MediaBox" in page  # MediaBox must survive
+
+
+def content_stream_has_90deg_rotation(page: pikepdf.Page) -> bool:
+    """
+    Checks if the page content stream contains a 'cm' (Current Matrix) operator
+    that applies a +/- 90 degree rotation (possibly with scaling).
+    In a matrix [a b c d e f], a 90-degree rotation means a ≈ 0, d ≈ 0,
+    and b, c are non-zero (specifically b = -c).
+    """
+    ops = pikepdf.parse_content_stream(page)
+    for operands, operator in ops:
+        if str(operator) == "cm" and len(operands) == 6:
+            a, b, c, d, e, f = [float(x) for x in operands]
+            # Check for a 90/270 rotation matrix signature
+            if abs(a) < 0.001 and abs(d) < 0.001 and abs(b) > 0.001 and abs(c) > 0.001:
+                return True
+    return False

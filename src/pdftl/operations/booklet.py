@@ -6,10 +6,8 @@
 
 """Impose pages into printable booklet signatures."""
 
+import logging
 from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from pikepdf import Page
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -21,6 +19,12 @@ from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+
+if TYPE_CHECKING:
+    from pikepdf import Page
+
+
+logger = logging.getLogger(__name__)
 
 _BOOKLET_LONG_DESC = """
 The `booklet` operation arranges pages so they can be printed as a foldable booklet.
@@ -122,13 +126,12 @@ def booklet_pages(pdf, operation_args) -> OpResult:
     layout_strategy = GridLayout(
         columns=2, rows=1, margin=config["margin"], gutter=config["gutter"]
     )
-
+    logger.debug("calling _apply_montage_logic")
     _apply_montage_logic(
         target_pdf=new_pdf,
         source_pages=final_pages,
         strategy=layout_strategy,
         canvas_size=canvas_size,
-        preserve_aspect_ratio=True,
     )
 
     return OpResult(success=True, pdf=new_pdf)
