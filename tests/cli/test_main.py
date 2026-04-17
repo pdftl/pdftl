@@ -236,10 +236,8 @@ def test_main_as_script():
     with patch("pdftl.cli.main.main") as mock_main:
         with patch("sys.argv", ["pdftl"]):
             # Simulate the 'if __name__ == "__main__":' block logic
-            import pdftl.cli.main as main_module
-
             # This is a trick to trigger the line without a full subprocess
-            if hasattr(main_module, "__name__"):
+            if hasattr(mainmod, "__name__"):
                 mock_main()
     # Alternatively, use a subprocess test if you want to be 100% literal
 
@@ -248,11 +246,9 @@ def test_main_execution_block():
     """Triggers line 180: The __main__ block (via manual import/execution)."""
     with patch("pdftl.cli.main.main") as mock_main:
         # This simulates the behavior of running the script directly
-        import pdftl.cli.main as main_module
-
         # We can't easily trigger the actual __name__ check without a subprocess,
         # but calling the logic at that level or mocking the entry point is standard.
-        if hasattr(main_module, "__name__") and main_module.__name__ == "pdftl.cli.main":
+        if hasattr(mainmod, "__name__") and mainmod.__name__ == "pdftl.cli.main":
             pass  # Logic verified by structure
 
 

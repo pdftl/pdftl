@@ -4,13 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# We import the module object to use with patch.object
 import pdftl.registry_init as registry_init
-from pdftl.registry_init import (
-    _discover_external_operations,
-    _discover_modules,
-    initialize_registry,
-)
 
 # --- 1. The Safety Net: Anti-Pollution Fixture ---
 
@@ -25,8 +19,8 @@ def clean_system_environment():
     initial_modules = list(sys.modules.keys())
 
     # Ensure flag is gone before starting
-    if hasattr(initialize_registry, "initialized"):
-        delattr(initialize_registry, "initialized")
+    if hasattr(registry_init.initialize_registry, "initialized"):
+        delattr(registry_init.initialize_registry, "initialized")
 
     yield
 
@@ -40,11 +34,11 @@ def clean_system_environment():
             del sys.modules[mod]
 
     # Reset flag again for the next test
-    if hasattr(initialize_registry, "initialized"):
-        delattr(initialize_registry, "initialized")
+    if hasattr(registry_init.initialize_registry, "initialized"):
+        delattr(registry_init.initialize_registry, "initialized")
 
 
-# --- 2. Tests for _discover_external_operations ---
+# --- 2. Tests for registry_init._discover_external_operations ---
 
 
 def test_external_ops_platform_branching():
@@ -55,7 +49,7 @@ def test_external_ops_platform_branching():
 
         # Test Windows Branch (Line 29)
         with patch("os.name", "nt"), patch.dict(os.environ, {"APPDATA": "C:\\MockApp"}):
-            _discover_external_operations()
+            registry_init._discover_external_operations()
             # Verify the Windows-specific path was constructed
             assert "C:\\MockApp" in mock_path.call_args[0][0]
 
@@ -64,7 +58,7 @@ def test_external_ops_platform_branching():
             patch("os.name", "posix"),
             patch.dict(os.environ, {"XDG_CONFIG_HOME": "/mock/config"}),
         ):
-            _discover_external_operations()
+            registry_init._discover_external_operations()
             # Verify the Linux-specific path was constructed
             assert "/mock/config" in mock_path.call_args[0][0]
 
@@ -110,13 +104,13 @@ def test_external_ops_execution_flow():
         # Map returns to glob order (excluding __init__)
         mock_spec_func.side_effect = [spec_ok, None, spec_imp, spec_syn, spec_exc]
 
-        _discover_external_operations()
+        registry_init._discover_external_operations()
 
         assert "/fake/ops" in sys.path
         assert mock_spec_func.call_count == 5
 
 
-# --- 3. Tests for _discover_modules ---
+# --- 3. Tests for registry_init._discover_modules ---
 
 
 def test_internal_discovery_edge_cases():
@@ -125,7 +119,7 @@ def test_internal_discovery_edge_cases():
     # 1. Line 89: Package with no __path__
     mock_no_path = MagicMock(__name__="no_path_pkg")
     del mock_no_path.__path__
-    _discover_modules([mock_no_path], "test")
+    registry_init._discover_modules([mock_no_path], "test")
 
     # 2. Line 94/99: Security and Invalid names
     mock_valid_pkg = MagicMock(__name__="pdftl.core")
@@ -141,11 +135,11 @@ def test_internal_discovery_edge_cases():
         patch("importlib.import_module"),
     ):
 
-        _discover_modules([mock_valid_pkg], "test")
-        _discover_modules([mock_bad_pkg], "test")
+        registry_init._discover_modules([mock_valid_pkg], "test")
+        registry_init._discover_modules([mock_bad_pkg], "test")
 
 
-# --- 4. Tests for initialize_registry (The CI-Safe version) ---
+# --- 4. Tests for registry_init.initialize_registry (The CI-Safe version) ---
 
 
 def test_initialize_registry_idempotency():
@@ -157,10 +151,10 @@ def test_initialize_registry_idempotency():
         patch.object(registry_init, "_discover_external_operations") as mock_ext,
     ):
         # Call 1: Runs everything
-        initialize_registry()
-        assert initialize_registry.initialized is True
+        registry_init.initialize_registry()
+        assert registry_init.initialize_registry.initialized is True
         assert mock_ext.call_count == 1
 
         # Call 2: Should return early (Line 129)
-        initialize_registry()
+        registry_init.initialize_registry()
         assert mock_ext.call_count == 1

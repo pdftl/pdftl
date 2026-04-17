@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.operations.rebox import _apply_rule_to_page, crop_or_clip_pages
+from pdftl.operations.rebox import _apply_rule_to_page, _calculate_new_box, crop_or_clip_pages
 
 
 def _read_page_content(page):
@@ -189,3 +189,10 @@ def test_crop_invalid_spec_raises_user_error(tmp_path):
 
     with pytest.raises(UserCommandLineError, match="foobar"):
         crop_or_clip_pages(pdf, ["foobar"], operation="crop")
+
+
+def test_calculate_new_box_missing_dimensions(two_page_pdf):
+    with pikepdf.open(two_page_pdf) as pdf:
+        with patch("pdftl.utils.dimensions.get_visible_page_dimensions") as mock_page_dims:
+            mock_page_dims.return_value = []
+            assert _calculate_new_box(None, None, None, None, None, None) is None

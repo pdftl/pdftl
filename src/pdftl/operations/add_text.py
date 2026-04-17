@@ -10,7 +10,6 @@ This operation uses a helper class to create text overlays,
 which are then applied to the target pages.
 """
 
-import io
 import logging
 from pathlib import Path
 

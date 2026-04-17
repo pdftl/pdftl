@@ -182,11 +182,13 @@ def _apply_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules, operatio
         raise ValueError(f"With {len(pdf.pages)} pages, i={i} is too large")
     page = pdf.pages[i]
 
-    if (page_dims := get_visible_page_dimensions(page)) is None:
+    # Verify a bounding box exists, but defer extracting dimensions to `_calculate_new_box`
+    if get_visible_page_dimensions(page) is None:
         logger.warning("Warning: Skipping page %s as it has no valid MediaBox.", i + 1)
         return
 
-    new_box = _calculate_new_box(page_dims, page_rule, i, fit_ctx, all_rules, operation)
+    # Pass the 'page' object instead of 'page_dims' so we can handle rotation states
+    new_box = _calculate_new_box(page, page_rule, i, fit_ctx, all_rules, operation)
 
     if new_box is None:
         logger.warning(
@@ -207,32 +209,61 @@ def _apply_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules, operatio
     _apply_or_preview(pdf, page, new_box, preview, operation)
 
 
-def _calculate_new_box(page_dims, spec_str, page_idx, fit_ctx, all_rules, operation):
+def _calculate_new_box(page, spec_str, page_idx, fit_ctx, all_rules, operation):
     """
     Calculates the new mediabox from the current box dimensions and a spec string.
     Returns a tuple (x0, y0, x1, y1) or None if calculation fails.
     """
-    x0, y0, width, height = page_dims
+    # Fetch both coordinate spaces
+    unrotated_dims = get_visible_page_dimensions(page, apply_rotate=False)
+    visual_dims = get_visible_page_dimensions(page, apply_rotate=True)
 
-    # Use the master parser which handles fit/paper/margin modes
-    parsed = parse_rebox_content(spec_str, width, height, operation)
+    if not unrotated_dims or not visual_dims:
+        return None
+
+    ux0, uy0, u_width, u_height = unrotated_dims
+    vx0, vy0, v_width, v_height = visual_dims
+
+    # Use the master parser which handles fit/paper/margin modes based on visual dimensions
+    parsed = parse_rebox_content(spec_str, v_width, v_height, operation)
 
     if parsed["type"] == "abs":
-        logging.debug(f"values={parsed['values']}")
+        logger.debug(f"values={parsed['values']}")
         return parsed["values"]
 
     elif parsed["type"] == "fit":
-        # 'fit' mode calculates absolute coordinates directly
+        # 'fit' mode bounding boxes are extracted natively and bypass rotation shifts
         return fit_ctx.calculate_rect(page_idx, parsed, spec_str, all_rules)
 
     elif parsed["type"] == "paper":
-        left, top, right, bottom = _crop_margins_from_paper_size(width, height, *parsed["size"])
+        left, top, right, bottom = _crop_margins_from_paper_size(
+            v_width, v_height, *parsed["size"]
+        )
     else:  # type == 'margin'
         left, top, right, bottom = parsed["values"]
 
-    # Apply relative margins to the current box
-    new_x0, new_x1 = x0 + left, (x0 + width) - right
-    new_y0, new_y1 = y0 + bottom, (y0 + height) - top
+    # -------------------------------------------------------------
+    # MARGIN UN-ROTATION
+    # -------------------------------------------------------------
+    try:
+        rotation = int(page.Rotate) % 360
+    except (AttributeError, TypeError, ValueError):
+        rotation = 0
+
+    u_left, u_top, u_right, u_bottom = left, top, right, bottom
+
+    if rotation == 90:
+        u_left, u_top, u_right, u_bottom = top, right, bottom, left
+    elif rotation == 180:
+        u_left, u_top, u_right, u_bottom = right, bottom, left, top
+    elif rotation == 270:
+        u_left, u_top, u_right, u_bottom = bottom, left, top, right
+
+    # Apply mapped margins to the unrotated box
+    new_x0 = ux0 + u_left
+    new_x1 = (ux0 + u_width) - u_right
+    new_y0 = uy0 + u_bottom
+    new_y1 = (uy0 + u_height) - u_top
 
     if new_x0 >= new_x1 or new_y0 >= new_y1:
         return None  # Invalid crop dimensions
@@ -245,11 +276,9 @@ def _box_width_height(box):
 
 
 def _apply_or_preview(pdf, page, new_box, preview, operation):
-    """Applies the calculated crop box or a preview rectangle to the page."""
     if preview:
         _overlay_preview_rectangle(page, new_box)
     elif operation == "crop":
-        # When cropping, update all relevant boxes to the new dimensions.
         page.mediabox = new_box
         for box_key in ("/CropBox", "/TrimBox", "/BleedBox"):
             if box_key in page:
@@ -276,8 +305,6 @@ def _overlay_preview_rectangle(page, new_box):
         overlay_pdf.add_blank_page(page_size=page_size)
         overlay_page = overlay_pdf.pages[0]
 
-        # overlay geometry should mirror source
-        # use list to avoid copy_foreign shenanigans
         overlay_page.mediabox = pikepdf.Array(list(page.mediabox))
         if hasattr(page, "Rotate"):
             overlay_page.Rotate = int(page.Rotate)
@@ -289,7 +316,6 @@ def _overlay_preview_rectangle(page, new_box):
 
 
 def _crop_margins_from_paper_size(width, height, paper_width, paper_height):
-    """Calculate cropped page corners"""
     left = (width - paper_width) / 2
     top = (height - paper_height) / 2
     right, bottom = left, top

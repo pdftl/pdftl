@@ -1,5 +1,3 @@
-import pikepdf
-
 import pdftl.api
 
 

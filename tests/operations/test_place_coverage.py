@@ -154,15 +154,16 @@ class TestPlaceEdgeCases(unittest.TestCase):
         self.assertTrue(result.success)
 
 
+class DummyPage:
+    def __init__(self):
+        self.trimbox = [0, 0, 0, 0]
+
+    def get(self, *args, **kwargs):
+        return 0
+
+
 def test_calculate_matrix_returns_id_when_no_dims(monkeypatch):
     from pdftl.operations.place import _calculate_transformation_matrix
-
-    class DummyPage:
-        def __init__(self):
-            self.trimbox = [0, 0, 0, 0]
-
-        def get(*args, **kwargs):
-            return 0
 
     # Force the edge case
     monkeypatch.setattr(
@@ -178,13 +179,6 @@ def test_calculate_matrix_returns_id_when_no_dims(monkeypatch):
 
 def test_calculate_transformation_matrix_returns_id_when_dims_missing(monkeypatch):
     from pdftl.operations.place import _calculate_transformation_matrix
-
-    class DummyPage:
-        def __init__(self):
-            self.trimbox = [0, 0, 0, 0]
-
-        def get(*args, **kwargs):
-            return 0
 
     # Force the edge case: no visible page dimensions
     monkeypatch.setattr(

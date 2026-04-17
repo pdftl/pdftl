@@ -154,7 +154,12 @@ def _determine_v4_algorithm(length: int, encrypt_dict) -> tuple[str, int]:
         elif cfm == "/V2":
             algo_name = "RC4 (128-bit)"
     except (KeyError, TypeError):
-        pass
+        # Missing or malformed crypt filter structure: keep default v4 algorithm label.
+        logger.debug(
+            "Could not determine V=4 encryption algorithm from encryption dictionary; using '%s'.",
+            algo_name,
+            exc_info=True,
+        )
     return algo_name, length or 128
 
 
