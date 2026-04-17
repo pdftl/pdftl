@@ -46,7 +46,8 @@ typescript
 /scripts/
 /notes/
 
-tests/**/*.pdf
+tests/assets/**/*.pdf
+tests/files/**/*.pdf
 magic_report.json
 auto/
 /output/

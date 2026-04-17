@@ -32,9 +32,13 @@ def assert_pdf_match(request, tmp_path):
     Visually compares a test PDF (path or in-memory object) against a baseline.
     Supports multi-page PDFs.
     """
+    created_baselines = []
 
-    def _checker(pdf_input, custom_name: str = None):
-        baseline_name = custom_name if custom_name else f"{request.node.name}.pdf"
+    def _checker(pdf_input, custom_name: str = None, suffix: str = None):
+        baseline_name = custom_name if custom_name else request.node.name
+        if suffix:
+            baseline_name += f"_{suffix}"
+        baseline_name += ".pdf"
         baseline_dir = Path(request.config.rootdir) / "tests" / "baselines"
         baseline_dir.mkdir(parents=True, exist_ok=True)
         baseline_pdf_path = baseline_dir / baseline_name
@@ -55,7 +59,9 @@ def assert_pdf_match(request, tmp_path):
         # --- 2. First-run helper ---
         if not baseline_pdf_path.exists():
             baseline_pdf_path.write_bytes(test_pdf_bytes)
-            pytest.skip(f"New baseline generated: {baseline_name}. Inspect and commit.")
+            created_baselines.append(baseline_name)
+            return
+        # pytest.skip(f"New baseline generated: {baseline_name}. Inspect and commit.")
 
         # --- 3. Rasterize Both (Multi-page) ---
         test_images = render_pdf_to_images(test_pdf_bytes)
@@ -111,7 +117,17 @@ def assert_pdf_match(request, tmp_path):
                         f"  Actual output PDF: {output_pdf_path}"
                     )
 
-    return _checker
+    yield _checker
+
+    # --- TEARDOWN ---
+    # If the test finishes and we had to create baselines, fail it now.
+    # This ensures CI will fail if someone forgets to commit the baselines,
+    # but generates all of them locally in a single run.
+    if created_baselines:
+        pytest.skip(
+            f"Generated new baselines: {created_baselines}. "
+            "Please visually inspect them in 'tests/baselines/' and commit them."
+        )
 
 
 @pytest.fixture

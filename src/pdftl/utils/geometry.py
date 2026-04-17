@@ -65,7 +65,7 @@ def calculate_placement_matrix(
     m_align = Matrix().translated(-min_x, -min_y)
 
     # 5. Resolve anchors based on the VISUAL dimensions
-    handle_x, handle_y = _resolve_anchor(anchor_source, 0, 0, vis_w, vis_h)
+    handle_x, handle_y = resolve_anchor(anchor_source, 0, 0, vis_w, vis_h)
 
     # Move the chosen visual anchor to (0,0)
     m_anchor = Matrix().translated(-handle_x, -handle_y)
@@ -118,7 +118,7 @@ def _transform_point(x: float, y: float, m: "Matrix") -> tuple[float, float]:
     return (m_arr[0] * x + m_arr[2] * y + m_arr[4], m_arr[1] * x + m_arr[3] * y + m_arr[5])
 
 
-def _resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> tuple[float, float]:
+def resolve_anchor(anchor: str, x: float, y: float, w: float, h: float) -> tuple[float, float]:
     """Parses 'center', 'top-left' etc into absolute coordinates."""
     anchor = anchor.lower().strip()
 
@@ -207,3 +207,29 @@ def calculate_fit_metrics(
     dy = (target_h - final_h) / 2.0
 
     return sx, sy, dx, dy
+
+
+def get_visual_mapping_matrices(x0: float, y0: float, w: float, h: float, rotation: int):
+    """
+    Returns two matrices: (m_u_to_v, m_v_to_u).
+    These map coordinates between the unrotated PDF space and the visually rotated space.
+    """
+    from pikepdf import Matrix
+
+    m_to_orig = Matrix().translated(-x0, -y0)
+    m_from_orig = Matrix().translated(x0, y0)
+
+    if rotation == 90:
+        m_u_to_v = m_to_orig @ Matrix().rotated(-90) @ Matrix().translated(0, w) @ m_from_orig
+        m_v_to_u = m_to_orig @ Matrix().translated(0, -w) @ Matrix().rotated(90) @ m_from_orig
+    elif rotation == 180:
+        m_u_to_v = m_to_orig @ Matrix().rotated(-180) @ Matrix().translated(w, h) @ m_from_orig
+        m_v_to_u = m_to_orig @ Matrix().translated(-w, -h) @ Matrix().rotated(180) @ m_from_orig
+    elif rotation == 270:
+        m_u_to_v = m_to_orig @ Matrix().rotated(-270) @ Matrix().translated(h, 0) @ m_from_orig
+        m_v_to_u = m_to_orig @ Matrix().translated(-h, 0) @ Matrix().rotated(270) @ m_from_orig
+    else:
+        m_u_to_v = Matrix()
+        m_v_to_u = Matrix()
+
+    return m_u_to_v, m_v_to_u

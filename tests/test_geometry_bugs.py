@@ -167,10 +167,11 @@ class TestPlaceShiftRotatedPage:
 
         assert matrix is not None
         # Matrix is [a, b, c, d, e, f] — e is x-translation
-        tx = matrix[4]
-        assert tx == pytest.approx(
+        # On a 90-degree rotated page, a visual horizontal shift is a physical vertical shift (ty)
+        ty = matrix[5]
+        assert ty == pytest.approx(
             842 / 2, abs=1
-        ), f"Expected tx≈421 (50% of visual width 842), got {tx}"
+        ), f"Expected ty≈421 (50% of visual width 842 mapped to physical Y), got {ty}"
 
     def test_shift_0_50pct_vertical_on_rotated_page(self, tmp_path):
         """
@@ -186,10 +187,11 @@ class TestPlaceShiftRotatedPage:
         matrix = get_prepended_cm_matrix(page)
 
         assert matrix is not None
-        ty = matrix[5]
-        assert ty == pytest.approx(
+        # On a 90-degree rotated page, a visual vertical shift is a physical horizontal shift (tx)
+        tx = matrix[4]
+        assert abs(tx) == pytest.approx(
             595 / 2, abs=1
-        ), f"Expected ty≈297.5 (50% of visual height 595), got {ty}"
+        ), f"Expected |tx|≈297.5 (50% of visual height 595 mapped to physical X), got {tx}"
 
 
 class TestBookletRotatedPages:

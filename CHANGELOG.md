@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `montage` and `booklet` bug handling pages with negative rotation fixed
 
+- `place` and `add_text` rotation bugs fixed and visual tests added 
+
 ## [0.13.0] - 2026-04-15
 
 ### Added

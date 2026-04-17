@@ -5,9 +5,9 @@ import pytest
 from pikepdf import Matrix
 
 from pdftl.utils.geometry import (
-    _resolve_anchor,
     calculate_fit_metrics,
     calculate_placement_matrix,
+    resolve_anchor,
     transform_quadpoints,
     transform_rect_bbox,
 )
@@ -51,21 +51,21 @@ def test_calculate_placement_matrix_mediabox_fallback():
         assert matrix.shorthand[4:] == (10.0, 10.0)
 
 
-def test_resolve_anchor_variants():
+def testresolve_anchor_variants():
     """Hits lines 105-113 and 120, 127 (the 'else' branches for center)."""
     x, y, w, h = 0, 0, 100, 100
 
     # Test "left-top" (swapped order logic in line 105)
-    assert _resolve_anchor("left-top", x, y, w, h) == (0, 100)
+    assert resolve_anchor("left-top", x, y, w, h) == (0, 100)
 
     # Test "right" only (line 113 & 127)
-    assert _resolve_anchor("right", x, y, w, h) == (100, 50)
+    assert resolve_anchor("right", x, y, w, h) == (100, 50)
 
     # Test "bottom" only (line 111 & 120)
-    assert _resolve_anchor("bottom", x, y, w, h) == (50, 0)
+    assert resolve_anchor("bottom", x, y, w, h) == (50, 0)
 
     # Test single part "left" (line 113)
-    assert _resolve_anchor("left", x, y, w, h) == (0, 50)
+    assert resolve_anchor("left", x, y, w, h) == (0, 50)
 
 
 def test_calculate_fit_metrics_edge_cases():
@@ -115,21 +115,21 @@ def test_transform_point_and_matrix_array():
     assert ny == 20.0
 
 
-def test_resolve_anchor_top_center():
+def testresolve_anchor_top_center():
     """Hits lines 102-104: The vertical-first split branch."""
     x, y, w, h = 0, 0, 100, 100
     # This hits: if parts[0] in ["top", "bottom", "center"]
     # followed by: if len(parts) > 1: h_pos = parts[1]
-    res = _resolve_anchor("top-center", x, y, w, h)
+    res = resolve_anchor("top-center", x, y, w, h)
     assert res == (50.0, 100.0)
 
 
-def test_resolve_anchor_shorthand_vonly():
+def testresolve_anchor_shorthand_vonly():
     """Hits line 102 but without a horizontal component."""
     x, y, w, h = 0, 0, 100, 100
     # Hits the logic where it's a split but only one part or no second part
     # though usually handled by the 'else' in line 120/127
-    res = _resolve_anchor("top", x, y, w, h)
+    res = resolve_anchor("top", x, y, w, h)
     assert res == (50.0, 100.0)
 
 

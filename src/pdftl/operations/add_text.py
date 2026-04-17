@@ -289,17 +289,27 @@ def _process_page(i, page, page_rules, static_context, drawer_class):
         return
 
     # Use TrimBox if available, fallback to CropBox/MediaBox.
-    # Note: pikepdf properties handle the fallback logic.
     page_box = Rectangle(*page.trimbox)
 
-    # Calculate dimensions for context
-    width = float(page_box.width)
-    height = float(page_box.height)
+    # Get the unrotated physical dimensions
+    physical_width = float(page_box.width)
+    physical_height = float(page_box.height)
+
+    # Extract rotation safely (avoids the bound method bug)
+    rotation = int(page.get("/Rotate", 0)) % 360
+
+    # Calculate visual dimensions
+    if rotation in (90, 270):
+        visual_width = physical_height
+        visual_height = physical_width
+    else:
+        visual_width = physical_width
+        visual_height = physical_height
 
     # --- Build Page Context ---
     page_context = {**static_context, "page": i + 1}
 
-    # Retrieve "sticky" source metadata if available (e.g. from cat operation)
+    # Retrieve "sticky" source metadata if available
     source_meta = getattr(page, c.PDFTL_SOURCE_INFO_KEY, None)
 
     if source_meta:
@@ -309,17 +319,22 @@ def _process_page(i, page, page_rules, static_context, drawer_class):
         page_context["source_filename"] = static_context.get("filename", "")
         page_context["source_path"] = static_context.get("filepath", "")
         page_context["source_page"] = i + 1
-        page_context["source_rotation"] = page.rotate
-        page_context["source_width"] = width
-        page_context["source_height"] = height
-        page_context["source_orientation"] = "Landscape" if width > height else "Portrait"
+        page_context["source_rotation"] = rotation
+        page_context["source_width"] = visual_width
+        page_context["source_height"] = visual_height
+        page_context["source_orientation"] = (
+            "Landscape" if visual_width > visual_height else "Portrait"
+        )
         page_context["source_cropbox"] = str(list(page.cropbox))
         page_context["source_mediabox"] = str(list(page.mediabox))
         page_context["source_filesize"] = ""
 
-    # --- 5. Delegate drawing to drawer = TextDrawer ---
-    # Create a new drawer for each page
-    drawer = drawer_class(page_box=page_box)
+    # --- 5. Delegate drawing to drawer ---
+    # Create a new Rectangle using the VISUAL dimensions.
+    # This ensures ReportLab generates an overlay with the correct aspect ratio,
+    # preventing `add_overlay` from horizontally/vertically shifting the text to center it.
+    visual_page_box = Rectangle(0, 0, visual_width, visual_height)
+    drawer = drawer_class(page_box=visual_page_box)
 
     for rule in rules_for_page:
         drawer.draw_rule(rule, page_context)
@@ -329,6 +344,8 @@ def _process_page(i, page, page_rules, static_context, drawer_class):
 
     # --- 6. Apply the overlay ---
     if overlay_bytes:
+        import io
+
         from pikepdf import Pdf
         from pikepdf.exceptions import PdfError
 

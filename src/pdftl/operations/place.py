@@ -15,6 +15,8 @@ from pdftl.operations.parsers.place_parser import parse_place_args
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.geometry import (
+    get_visual_mapping_matrices,
+    resolve_anchor,
     transform_quadpoints,
     transform_rect_bbox,
 )
@@ -115,48 +117,45 @@ def place_content(target_pdf, place_specs) -> OpResult:
 
 def _calculate_transformation_matrix(page, operations):
     """
-    Adapts the specific 'shift/scale/spin' logic of the Place command.
+    Adapts the specific 'shift/scale/spin' logic of the Place command,
+    safely handling rotated pages.
     """
     from pikepdf import Matrix
 
-    # We need these imports available locally or at module level
-    from pdftl.utils.geometry import _resolve_anchor
+    rotation = int(page.get("/Rotate", 0)) % 360
 
-    # Start with Identity
-    current_matrix = Matrix()
-
-    # Dimensions for relative math (50%)
-    dims = get_visible_page_dimensions(page)
-    if dims is None:
+    # 1. Unrotated dimensions needed for the coordinate mapping wrap
+    unrot_dims = get_visible_page_dimensions(page, apply_rotate=False)
+    if unrot_dims is None:
         return Matrix()
-    x0, y0, w, h = dims
+    u_x0, u_y0, u_w, u_h = unrot_dims
+
+    # 2. Visual dimensions needed for percentage math and anchors
+    vis_dims = get_visible_page_dimensions(page, apply_rotate=True)
+    v_x0, v_y0, v_w, v_h = vis_dims
+
+    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(u_x0, u_y0, u_w, u_h, rotation)
+
+    # 3. Accumulate operations purely in the visual space
+    visual_matrix = Matrix()
 
     for op in operations:
         step_matrix = Matrix()
 
         if op.name == "shift":
-            dx = _eval_dim(op.params["dx"], w)
-            dy = _eval_dim(op.params["dy"], h)
+            dx = _eval_dim(op.params["dx"], v_w)
+            dy = _eval_dim(op.params["dy"], v_h)
             step_matrix = Matrix().translated(dx, dy)
 
         elif op.name == "scale" or op.name == "spin":
-            # --- RESTORED ANCHOR LOGIC ---
-            # 1. Determine the anchor point (ax, ay) in absolute page coordinates
-
             if op.params.get("anchor_type") == "coord":
-                # Case A: Explicit coordinates (e.g. "50% 10pt")
-                # We calculate offset from the page origin (x0, y0)
-                offset_x = _eval_dim(op.params["anchor_x"], w)
-                offset_y = _eval_dim(op.params["anchor_y"], h)
-                ax, ay = x0 + offset_x, y0 + offset_y
+                offset_x = _eval_dim(op.params["anchor_x"], v_w)
+                offset_y = _eval_dim(op.params["anchor_y"], v_h)
+                ax, ay = v_x0 + offset_x, v_y0 + offset_y
             else:
-                # Case B: Named anchor (e.g. "center", "top-left")
-                # Delegate to the geometry helper
                 anchor_name = op.params.get("anchor_name", "center")
-                ax, ay = _resolve_anchor(anchor_name, x0, y0, w, h)
+                ax, ay = resolve_anchor(anchor_name, v_x0, v_y0, v_w, v_h)
 
-            # 2. Build the Matrix
-            # Move Anchor->Origin, Transform, Move Back
             m1 = Matrix().translated(-ax, -ay)
             m3 = Matrix().translated(ax, ay)
 
@@ -169,10 +168,13 @@ def _calculate_transformation_matrix(page, operations):
 
             step_matrix = m1 @ m2 @ m3
 
-        # Accumulate
-        current_matrix = current_matrix @ step_matrix
+        visual_matrix = visual_matrix @ step_matrix
 
-    return current_matrix
+    if visual_matrix == Matrix():
+        return Matrix()
+
+    # 4. Wrap the visual transformations to execute safely inside the unrotated content stream
+    return m_u_to_v @ visual_matrix @ m_v_to_u
 
 
 def _update_annotations(page, matrix):

@@ -161,10 +161,13 @@ def test_calculate_matrix_returns_id_when_no_dims(monkeypatch):
         def __init__(self):
             self.trimbox = [0, 0, 0, 0]
 
+        def get(*args, **kwargs):
+            return 0
+
     # Force the edge case
     monkeypatch.setattr(
         "pdftl.operations.place.get_visible_page_dimensions",
-        lambda page: None,
+        lambda page, **kwargs: None,
     )
 
     result = _calculate_transformation_matrix(DummyPage(), [])
@@ -180,10 +183,13 @@ def test_calculate_transformation_matrix_returns_id_when_dims_missing(monkeypatc
         def __init__(self):
             self.trimbox = [0, 0, 0, 0]
 
+        def get(*args, **kwargs):
+            return 0
+
     # Force the edge case: no visible page dimensions
     monkeypatch.setattr(
         "pdftl.operations.place.get_visible_page_dimensions",
-        lambda page: None,
+        lambda page, **kwargs: None,
     )
 
     result = _calculate_transformation_matrix(DummyPage(), [])
