@@ -25,10 +25,10 @@ def _read_xobject_content(container, visited=None):
 
     resources = getattr(container, "Resources", None)
     if not isinstance(resources, pikepdf.Dictionary):
-        return []  # Return empty list, not None
+        return []
 
     xobjects = getattr(resources, "XObject", None)
-    if not xobjects:  # Handle case where Resources exists but XObject doesn't
+    if not xobjects:
         return []
 
     streams = []

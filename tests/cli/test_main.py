@@ -1,3 +1,5 @@
+# tests/cli/test_main.py
+
 import io
 import sys
 import types
@@ -101,25 +103,6 @@ def test_handle_special_flags_calls(monkeypatch):
     helpmod.print_help.assert_called_once()
     assert ret_code == 0
     fake_sys.exit.assert_not_called()
-
-
-# def test_main_no_stages_raises(monkeypatch):
-#     fake_sys = types.SimpleNamespace(
-#         argv=["pdftl", "combine"], exit=MagicMock(), stdout=io.StringIO(), stderr=io.StringIO()
-#     )
-#     monkeypatch.setattr(mainmod, "sys", fake_sys)
-
-#     # Patch parsing to simulate no stages
-#     monkeypatch.setattr(mainmod, "split_args_by_separator", lambda x: [[]])
-#     monkeypatch.setattr(mainmod, "parse_cli_stage", lambda x, is_first_stage=False: None)
-#     monkeypatch.setattr(mainmod, "initialize_registry", lambda: None)
-#     monkeypatch.setattr(mainmod, "UserInputContext", lambda *args, **kwargs: MagicMock())
-#     monkeypatch.setattr(
-#         mainmod, "PipelineManager", lambda *args, **kwargs: MagicMock(run=lambda: None)
-#     )
-
-#     with pytest.raises(UserCommandLineError):
-#         mainmod.main()
 
 
 def test_print_help_returns_zero(monkeypatch):
@@ -297,9 +280,6 @@ def test_main_uses_sys_argv_if_none_provided():
 
             # This assertion still works because the mock was called before it raised the exception
             assert mock_special.called
-
-
-# tests/cli/test_main.py
 
 
 def test_main_special_flags_returns_early(mocker):

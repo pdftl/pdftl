@@ -5,11 +5,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.14.0] - 2026-04-17
 
 ### Added
 
 - `dump_encryption` operation
+
+- `dump_bookmarks` operation
+
+- `update_bookmarks` operation
 
 ### Changed
 

@@ -1,7 +1,10 @@
+import unittest
+from unittest.mock import MagicMock, patch
+
 import pikepdf
 import pytest
 
-from pdftl.operations.place import place_content
+from pdftl.operations.place import _calculate_transformation_matrix, _eval_dim, place_content
 
 
 @pytest.fixture
@@ -98,9 +101,6 @@ def test_place_updates_annotations(minimal_pdf):
     assert "/AP" not in updated_annot
 
 
-from unittest.mock import MagicMock, patch
-
-
 def test_place_content_out_of_bounds_index():
     """Hits line 91 (the continue statement) by using a page index > total pages."""
     mock_pdf = MagicMock()
@@ -117,9 +117,6 @@ def test_place_content_out_of_bounds_index():
         # Line 91: continue -> HIT
         result = place_content(mock_pdf, ["99(shift=1,1)"])
         assert result.success
-
-
-import unittest
 
 
 class TestPlaceEdgeCases(unittest.TestCase):
@@ -163,7 +160,6 @@ class DummyPage:
 
 
 def test_calculate_matrix_returns_id_when_no_dims(monkeypatch):
-    from pdftl.operations.place import _calculate_transformation_matrix
 
     # Force the edge case
     monkeypatch.setattr(
@@ -172,14 +168,10 @@ def test_calculate_matrix_returns_id_when_no_dims(monkeypatch):
     )
 
     result = _calculate_transformation_matrix(DummyPage(), [])
-    import pikepdf
-
     assert result == pikepdf.Matrix()
 
 
 def test_calculate_transformation_matrix_returns_id_when_dims_missing(monkeypatch):
-    from pdftl.operations.place import _calculate_transformation_matrix
-
     # Force the edge case: no visible page dimensions
     monkeypatch.setattr(
         "pdftl.operations.place.get_visible_page_dimensions",
@@ -187,14 +179,10 @@ def test_calculate_transformation_matrix_returns_id_when_dims_missing(monkeypatc
     )
 
     result = _calculate_transformation_matrix(DummyPage(), [])
-    import pikepdf
-
     assert result == pikepdf.Matrix()
 
 
 def test_place_content_skips_invalid_page_numbers(mocker):
-    import pikepdf
-
     pdf = pikepdf.Pdf.new()
     pdf.add_blank_page()
 
@@ -208,12 +196,7 @@ def test_place_content_skips_invalid_page_numbers(mocker):
     assert result.success is True
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def test_place_eval_dim_normalization():
-    from pdftl.operations.place import _eval_dim
 
     # Line 208: Pass a single string instead of a list
     # This triggers: if isinstance(terms, str): terms = [terms]

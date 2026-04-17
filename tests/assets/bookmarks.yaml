@@ -1,0 +1,24 @@
+- {title: 1. Standard Destination (Page 1), page: 1}
+- title: 2. Highly Styled Text (Page 2)
+  color: [1.0, 0.0, 0.0]
+  italic: true
+  bold: true
+  page: 2
+- title: 3. Zoomed in 250% (Page 3)
+  page: 3
+  view: [XYZ, 0, 700, 2.5]
+- title: 4. Link via Named Destination
+  color: [0.0, 0.5, 0.0]
+  dest: secret_appendix
+- title: 5. External Web Link
+  color: [0.0, 0.0, 1.0]
+  italic: true
+  uri: https://github.com/pdftl/pdftl
+- title: 6. Deeply Nested Parent
+  page: 1
+  children:
+  - title: 6.1 Child (FitH)
+    page: 2
+    view: [FitH, 500]
+    children:
+    - {title: 6.1.1 Grandchild (Page 5), bold: true, page: 5}

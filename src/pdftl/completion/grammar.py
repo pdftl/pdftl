@@ -11,10 +11,10 @@ from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.core.registry import registry
 from pdftl.registry_init import initialize_registry
 
-# ============================== IMPORTANT ==============================
-# bump this if grammar output changes, both here and in complete.py
-GRAMMAR_VERSION = "4"
-# =======================================================================
+# ============================== IMPORTANT ====================================
+# bump this if grammar output changes, both here and in src/pdf/cli/complete.py
+GRAMMAR_VERSION = "5"
+# =============================================================================
 
 
 class GrammarBuilder:

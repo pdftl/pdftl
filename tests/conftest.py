@@ -368,8 +368,10 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
             link_path.symlink_to(target_pdf)
         paths[name] = link_path
 
-    # 1. Ensure meta.txt is copied to the test working directory
+    # 1. Ensure meta.txt etc are copied to the test working directory
     shutil.copy(assets_dir / "meta.txt", tmp_path / "meta.txt")
+    shutil.copy(assets_dir / "bookmarks.json", tmp_path / "bookmarks.json")
+    shutil.copy(assets_dir / "bookmarks.yaml", tmp_path / "bookmarks.yaml")
 
     # 2. Ensure Form.pdf is copied to the test working directory
     shutil.copy(assets_dir / "Form.pdf", tmp_path / "Form.pdf")
