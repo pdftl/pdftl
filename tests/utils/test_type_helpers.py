@@ -15,6 +15,7 @@ class _TestDC:
 def test_safe_create_success():
     obj = safe_create(_TestDC, {"required": "val", "optional": "x"})
     assert obj.required == "val"
+    assert obj.optional == "x"
 
 
 def test_safe_create_missing_required():
@@ -25,3 +26,4 @@ def test_safe_create_missing_required():
 def test_safe_create_ignores_extra_keys():
     obj = safe_create(_TestDC, {"required": "val", "unknown": "ignored"})
     assert obj.required == "val"
+    assert obj.optional == "default"

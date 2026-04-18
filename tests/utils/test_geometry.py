@@ -20,7 +20,7 @@ def mock_page():
         yield page
 
 
-def testresolve_anchor_variants():
+def test_resolve_anchor_variants():
     """Hits lines 105-113 and 120, 127 (the 'else' branches for center)."""
     x, y, w, h = 0, 0, 100, 100
 
@@ -61,7 +61,7 @@ def test_transform_point_and_matrix_array():
     assert ny == 20.0
 
 
-def testresolve_anchor_top_center():
+def test_resolve_anchor_top_center():
     """Hits lines 102-104: The vertical-first split branch."""
     x, y, w, h = 0, 0, 100, 100
     # This hits: if parts[0] in ["top", "bottom", "center"]
@@ -70,7 +70,7 @@ def testresolve_anchor_top_center():
     assert res == (50.0, 100.0)
 
 
-def testresolve_anchor_shorthand_vonly():
+def test_resolve_anchor_shorthand_vonly():
     """Hits line 102 but without a horizontal component."""
     x, y, w, h = 0, 0, 100, 100
     # Hits the logic where it's a split but only one part or no second part

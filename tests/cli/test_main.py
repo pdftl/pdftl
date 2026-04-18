@@ -83,7 +83,7 @@ def test_get_flags_and_setup_logging():
     assert debug_flag not in remaining
 
 
-def test_handle_special_flags_cxalls(monkeypatch):
+def test_handle_special_flags_calls(monkeypatch):
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stdout=io.StringIO(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 

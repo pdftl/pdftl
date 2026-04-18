@@ -66,7 +66,7 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
                 "inputs",
                 "<input>",
                 "<input>...",
-                "inputs" "pdfs",
+                "pdfs",
                 "password",
                 "passwords",
                 "pdf",

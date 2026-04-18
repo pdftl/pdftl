@@ -279,3 +279,18 @@ def test_dump_signatures_raises_operation_error_on_value_error(signed_pdf_path):
             from pdftl.operations.dump_signatures import dump_signatures
 
             dump_signatures(signed_pdf_path, None, None)
+
+
+def test_patch_pyhanko_bytes_handling():
+    """Directly tests the patched function body."""
+    from pdftl.operations.dump_signatures import _patch_pyhanko
+    from pyhanko.pdf_utils import generic
+
+    # Ensure patch is applied
+    _patch_pyhanko()
+    
+    # Call with bytes — this exercises the isinstance branch
+    generic.parse_pdf_date(b"D:20211230134641+11'00'")
+    
+    # Call with trailing nulls
+    generic.parse_pdf_date("D:20211230134641+11'00'\x00   ")

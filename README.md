@@ -67,7 +67,8 @@ A simple `pip install pdftl[full]` install is also supported.
 
 * **Combine:** [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html) (interleave pages from multiple docs).
 * **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages, by bookmarks, by size,...), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages.
-* **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html).
+* **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html) page labels, document properties, ...
+* **Attachments:** [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html).
 * **Bookmarks:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html) and [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html) with high fidelity, using structured YAML or JSON.
 * **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html) (single page), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
 
