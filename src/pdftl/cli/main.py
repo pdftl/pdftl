@@ -6,19 +6,26 @@
 
 """Main CLI entry point and helper methods"""
 
+import difflib
 import logging
 import sys
 
 logger = logging.getLogger(__name__)
 
-from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
+from pdftl.cli.constants import (
+    COMPLETION_FLAGS,
+    DEBUG_FLAGS,
+    HELP_FLAGS,
+    VERBOSE_FLAGS,
+    VERSION_FLAGS,
+)
 from pdftl.cli.parser import (
     parse_cli_stage,
     parse_options_and_specs,
     split_args_by_separator,
 )
 from pdftl.cli.pipeline import PipelineManager
-from pdftl.cli.whoami import WHOAMI
+from pdftl.cli.whoami import ISSUES, WHOAMI
 from pdftl.core.registry import register_option
 from pdftl.exceptions import OperationError, PackageError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
@@ -35,7 +42,11 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    found_flags, args_for_parsing = _get_flags_and_setup_logging(argv[1:])
+    try:
+        found_flags, args_for_parsing = _get_flags_and_setup_logging(argv[1:])
+    except UserCommandLineError as e:
+        return _handle_error_from_main(e, False)
+
     initialize_registry()
     if (ret := _handle_special_flags(argv[1:])) is not None:
         return ret
@@ -45,17 +56,42 @@ def main(argv=None):
 
     try:
         pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
+        _validate_inputs_exist(pipeline)
         pipeline.run()
         return 0
 
     except (UserCommandLineError, PackageError, OperationError) as e:
-        if "debug" in found_flags:
-            raise
-        print(f"Error: {e}", file=sys.stderr)
-        logger.debug("A user command line error occurred", exc_info=True)
-        if isinstance(e, OperationError):
-            return 3
-        return 1
+        return _handle_error_from_main(e, "debug" in found_flags)
+
+
+def _validate_inputs_exist(pipeline):
+    """Check input files exist before running the pipeline."""
+    import os
+
+    for stage in pipeline.stages:
+        for filespec in stage.inputs:
+            if not isinstance(filespec, str) or filespec in ("-", "_"):
+                continue
+            if "=" in filespec:
+                # Handle A=file.pdf syntax
+                _, filespec = filespec.split("=", 1)
+            if not os.path.exists(filespec):
+                raise UserCommandLineError(f"Unable to find file: {filespec}")
+
+
+def _handle_error_from_main(e, debug):
+    if debug:
+        raise e
+    print(f"[{WHOAMI}] Error: {e}", file=sys.stderr)
+    logger.debug("A user command line error occurred", exc_info=True)
+    if isinstance(e, OperationError):
+        print(
+            f"If this looks like a bug, please report it at\n{ISSUES}\n"
+            "Include the command you ran and the pdftl --version output.",
+            file=sys.stderr,
+        )
+        return 3
+    return 1
 
 
 ##################################################
@@ -161,7 +197,22 @@ def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
     logging.getLogger("pdftl").setLevel(level)
     flags_to_remove = VERBOSE_FLAGS.union(DEBUG_FLAGS)
     remaining_args = [x for x in cli_args if x not in flags_to_remove]
+    _check_remaining_args_or_raise(remaining_args)
     return found_flags, remaining_args
+
+
+def _check_remaining_args_or_raise(remaining_args):
+    all_known_flaglike = DEBUG_FLAGS.union(
+        COMPLETION_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS, {"-", "---"}
+    )
+    for r_arg in remaining_args:
+        if r_arg.startswith("--") and r_arg.strip() not in all_known_flaglike:
+            msg = f"Unknown option '{r_arg}'."
+
+            matches = difflib.get_close_matches(r_arg, all_known_flaglike, n=1, cutoff=0.6)
+            if matches:
+                msg += f" Did you mean '{matches[0]}'?"
+            raise UserCommandLineError(msg)
 
 
 def _handle_special_flags(nonverbose_cli_args):

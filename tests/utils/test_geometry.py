@@ -1,4 +1,3 @@
-
 import pikepdf
 import pytest
 from pikepdf import Matrix

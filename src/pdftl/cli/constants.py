@@ -10,5 +10,6 @@ DEBUG_FLAGS = {"--debug"}
 HELP_FLAGS = {"-help", "--help", "-h", "help"}
 VERBOSE_FLAGS = {"verbose"}
 VERSION_FLAGS = {"--version"}
+COMPLETION_FLAGS = {"--completion"}
 SUB_START = "JOB"
 SUB_END = "DONE"

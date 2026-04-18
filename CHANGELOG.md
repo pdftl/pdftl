@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `set` operation
 
+- improve handling of unknown command line flags
+
+- suggest possible bug reporting on errors
+
+- CONTRIBUTING.md added
+
 ### Fixed
 
 - work around a pyHanko bug affecting `dump_signatures`

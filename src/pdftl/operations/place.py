@@ -134,50 +134,52 @@ def _calculate_transformation_matrix(page, operations):
     vis_dims = get_visible_page_dimensions(page, apply_rotate=True)
     if vis_dims is None:
         raise OperationError("Could not get page dimensions")
-
     v_x0, v_y0, v_w, v_h = vis_dims
 
-    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(u_x0, u_y0, u_w, u_h, rotation)
-
-    # 3. Accumulate operations purely in the visual space
     visual_matrix = Matrix()
 
     for op in operations:
-        step_matrix = Matrix()
-
-        if op.name == "shift":
-            dx = _eval_dim(op.params["dx"], v_w)
-            dy = _eval_dim(op.params["dy"], v_h)
-            step_matrix = Matrix().translated(dx, dy)
-
-        elif op.name == "scale" or op.name == "spin":
-            if op.params.get("anchor_type") == "coord":
-                offset_x = _eval_dim(op.params["anchor_x"], v_w)
-                offset_y = _eval_dim(op.params["anchor_y"], v_h)
-                ax, ay = v_x0 + offset_x, v_y0 + offset_y
-            else:
-                anchor_name = op.params.get("anchor_name", "center")
-                ax, ay = resolve_anchor(anchor_name, v_x0, v_y0, v_w, v_h)
-
-            m1 = Matrix().translated(-ax, -ay)
-            m3 = Matrix().translated(ax, ay)
-
-            if op.name == "scale":
-                s = float(op.params["value"])
-                m2 = Matrix().scaled(s, s)
-            else:  # spin
-                deg = float(op.params["value"])
-                m2 = Matrix().rotated(deg)
-
-            step_matrix = m1 @ m2 @ m3
-
-        visual_matrix = visual_matrix @ step_matrix
+        visual_matrix = visual_matrix @ _step_matrix(op, v_x0, v_y0, v_w, v_h, Matrix)
 
     if visual_matrix == Matrix():
         return Matrix()
 
+    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(u_x0, u_y0, u_w, u_h, rotation)
+
     # 4. Wrap the visual transformations to execute safely inside the unrotated content stream
     return m_u_to_v @ visual_matrix @ m_v_to_u
+
+
+def _step_matrix(op, v_x0, v_y0, v_w, v_h, Matrix):
+    step_matrix = Matrix()
+
+    if op.name == "shift":
+        dx = _eval_dim(op.params["dx"], v_w)
+        dy = _eval_dim(op.params["dy"], v_h)
+        step_matrix = Matrix().translated(dx, dy)
+
+    elif op.name == "scale" or op.name == "spin":
+        if op.params.get("anchor_type") == "coord":
+            offset_x = _eval_dim(op.params["anchor_x"], v_w)
+            offset_y = _eval_dim(op.params["anchor_y"], v_h)
+            ax, ay = v_x0 + offset_x, v_y0 + offset_y
+        else:
+            anchor_name = op.params.get("anchor_name", "center")
+            ax, ay = resolve_anchor(anchor_name, v_x0, v_y0, v_w, v_h)
+
+        m1 = Matrix().translated(-ax, -ay)
+        m3 = Matrix().translated(ax, ay)
+
+        if op.name == "scale":
+            s = float(op.params["value"])
+            m2 = Matrix().scaled(s, s)
+        else:  # spin
+            deg = float(op.params["value"])
+            m2 = Matrix().rotated(deg)
+
+        step_matrix = m1 @ m2 @ m3
+
+    return step_matrix
 
 
 def _update_annotations(page, matrix):

@@ -9,4 +9,5 @@
 WHOAMI = "pdftl"
 PACKAGE = "pdftl"
 HOMEPAGE = "https://github.com/pdftl/pdftl"
+ISSUES = HOMEPAGE + "/issues"
 DOCSPAGE = "https://pdftl.readthedocs.io"

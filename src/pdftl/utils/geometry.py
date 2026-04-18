@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from pikepdf import Matrix
 
 
-
 def transform_rect_bbox(rect: list[float], matrix: "Matrix") -> list[float]:
     """
     Applies a matrix to a rectangle [x1, y1, x2, y2] and returns the

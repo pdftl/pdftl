@@ -83,7 +83,7 @@ def test_get_flags_and_setup_logging():
     assert debug_flag not in remaining
 
 
-def test_handle_special_flags_calls(monkeypatch):
+def test_handle_special_flags_cxalls(monkeypatch):
     fake_sys = types.SimpleNamespace(exit=MagicMock(), stdout=io.StringIO(), stderr=io.StringIO())
     monkeypatch.setattr(mainmod, "sys", fake_sys)
 
@@ -310,6 +310,7 @@ def test_main_operation_error_exit_code(mocker, capfd):
     mocker.patch("pdftl.cli.main.initialize_registry")
     mocker.patch("pdftl.cli.main._handle_special_flags", return_value=None)
     mocker.patch("pdftl.cli.main._get_flags_and_setup_logging", return_value=(set(), ["args"]))
+    mocker.patch("pdftl.cli.main._validate_inputs_exist")
 
     # Mock the pipeline preparation to return a mock object
     mock_pipeline = mocker.Mock()
@@ -398,3 +399,95 @@ def test_main_success_return_zero():
                 # ASSERT
                 assert result == 0
                 assert mock_instance.run.called
+
+
+def test_main_handles_error_before_registry_init(capsys):
+    """Lines 47-48: UserCommandLineError from _get_flags_and_setup_logging is handled."""
+    from pdftl.cli.main import main
+
+    result = main(["pdftl", "--hlp"])
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "Unknown option '--hlp'" in captured.err
+    assert "Did you mean '--help'" in captured.err
+
+
+def test_check_remaining_args_unknown_flag_no_match():
+    """Lines 195-200: Unknown flag with no close match raises UserCommandLineError."""
+    from pdftl.cli.main import _check_remaining_args_or_raise
+    from pdftl.exceptions import UserCommandLineError
+
+    with pytest.raises(UserCommandLineError, match="Unknown option '--xyzzy'"):
+        _check_remaining_args_or_raise(["--xyzzy"])
+
+
+def test_check_remaining_args_unknown_flag_with_suggestion():
+    """Lines 195-200: Unknown flag with close match suggests correction."""
+    from pdftl.cli.main import _check_remaining_args_or_raise
+    from pdftl.exceptions import UserCommandLineError
+
+    with pytest.raises(UserCommandLineError, match="Did you mean '--help'"):
+        _check_remaining_args_or_raise(["--hlp"])
+
+
+def test_check_remaining_args_known_flags_pass():
+    """Lines 195-200: Known flags do not raise."""
+    from pdftl.cli.main import _check_remaining_args_or_raise
+
+    # Should not raise
+    _check_remaining_args_or_raise(["--help", "--version", "--debug"])
+
+
+def test_check_remaining_args_non_flag_args_ignored():
+    """Lines 195-200: Non-flag args (filenames etc) are not checked."""
+    from pdftl.cli.main import _check_remaining_args_or_raise
+
+    # Should not raise - these don't start with --
+    _check_remaining_args_or_raise(["in.pdf", "cat", "output"])
+
+
+def test_validate_inputs_exist_file_not_found(tmp_path):
+    """Tests that missing input file raises UserCommandLineError."""
+    from pdftl.cli.main import _validate_inputs_exist
+    from pdftl.exceptions import UserCommandLineError
+
+    stage = types.SimpleNamespace(inputs=["nonexistent.pdf"])
+    pipeline = types.SimpleNamespace(stages=[stage])
+
+    with pytest.raises(UserCommandLineError, match="Unable to find file: nonexistent.pdf"):
+        _validate_inputs_exist(pipeline)
+
+
+def test_validate_inputs_exist_file_found(tmp_path):
+    """Tests that existing file passes validation."""
+    from pdftl.cli.main import _validate_inputs_exist
+
+    real_file = tmp_path / "real.pdf"
+    real_file.touch()
+
+    stage = types.SimpleNamespace(inputs=[str(real_file)])
+    pipeline = types.SimpleNamespace(stages=[stage])
+
+    _validate_inputs_exist(pipeline)  # Should not raise
+
+
+def test_validate_inputs_exist_skips_stdin():
+    """Tests that stdin markers are skipped."""
+    from pdftl.cli.main import _validate_inputs_exist
+
+    stage = types.SimpleNamespace(inputs=["-", "_"])
+    pipeline = types.SimpleNamespace(stages=[stage])
+
+    _validate_inputs_exist(pipeline)  # Should not raise
+
+
+def test_validate_inputs_exist_handle_syntax(tmp_path):
+    """Tests A=file.pdf syntax is correctly resolved."""
+    from pdftl.cli.main import _validate_inputs_exist
+    from pdftl.exceptions import UserCommandLineError
+
+    stage = types.SimpleNamespace(inputs=["A=nonexistent.pdf"])
+    pipeline = types.SimpleNamespace(stages=[stage])
+
+    with pytest.raises(UserCommandLineError, match="Unable to find file: nonexistent.pdf"):
+        _validate_inputs_exist(pipeline)
