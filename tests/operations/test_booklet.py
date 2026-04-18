@@ -200,3 +200,20 @@ def test_booklet_invalid_integer_keys():
             pdf=pdf,
             operation_args=["sig=oops"],
         )
+
+
+def test_booklet_raises_when_page_dimensions_unavailable(tmp_path):
+    """Tests InvalidArgumentError when page dimensions cannot be determined."""
+    from unittest.mock import patch
+
+    import pikepdf
+
+    from pdftl.exceptions import InvalidArgumentError
+    from pdftl.operations.booklet import booklet_pages
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+
+    with patch("pdftl.operations.booklet.get_visible_page_dimensions", return_value=None):
+        with pytest.raises(InvalidArgumentError, match="Could not determine page dimensions"):
+            booklet_pages(pdf, [])

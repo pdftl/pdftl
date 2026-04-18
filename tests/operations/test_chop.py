@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pikepdf
+import pytest
 
 from pdftl.operations.chop import chop_pages
 
@@ -155,3 +156,18 @@ def test_chop_removes_extra_bounding_boxes():
     for page in result.pdf.pages:
         assert "/CropBox" not in page
         assert "/TrimBox" not in page
+
+
+def test_chop_raises_on_unexpected_rotation():
+    import pikepdf
+
+    from pdftl.exceptions import OperationError
+    from pdftl.operations.chop import _apply_chop_to_page
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    page = pdf.pages[0]
+    page["/Rotate"] = 45  # Not 0/90/180/270
+
+    with pytest.raises(OperationError, match="Unexpected rotation"):
+        _apply_chop_to_page(pdf, page, "cols2")

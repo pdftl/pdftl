@@ -225,11 +225,6 @@ class PdfInfo:
 
         return _fuzzy_create(cls, d)
 
-    def to_json(self, indent=2):
-        import json
-
-        return json.dumps(self.to_dict(), indent=indent)
-
     def to_dict(self):
         # 1. Use factory for bulk work (renaming, filtering, recursion)
         d = asdict(self, dict_factory=camel_case_dict_factory)

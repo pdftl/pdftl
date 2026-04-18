@@ -4,7 +4,7 @@
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -116,8 +116,8 @@ def dump_encryption_cli_hook(result: OpResult, stage, _pipeline):
         return
 
     logger.debug("result.meta=%s", result.meta)
-    output_file = result.meta.get(c.META_OUTPUT_FILE)
-    json_output = result.meta.get(c.META_JSON_OUTPUT, False)
+    output_file = result.meta.get(c.META_OUTPUT_FILE)  # type: ignore[union-attr]
+    json_output = result.meta.get(c.META_JSON_OUTPUT, False)  # type: ignore[union-attr]
 
     with smart_open_maybe_dash(output_file) as f:
         if json_output:
@@ -213,7 +213,7 @@ def dump_encryption(pdf: "pikepdf.Pdf", operation_args=None, output_file=None) -
     operation_args = operation_args or []
     json_output = get_json_flag(operation_args, "dump_encryption")
 
-    data = {
+    data: dict[str, Any] = {
         "IsEncrypted": pdf.is_encrypted,
     }
 

@@ -44,31 +44,7 @@ def text_dump_hook(result: OpResult, stage, _pipeline):
     consume_output_option(stage)
 
 
-def json_dump_hook(result: OpResult, stage, _pipeline):
-    """
-    Writes JSON to file (and consumes output option) or stdout.
-    """
-    import json
-
-    if not result.success or result.data is None:
-        return
-
-    output_path = _get_output_path(stage)
-
-    with smart_open_maybe_dash(output_path) as f:
-        json.dump(result.data, f, indent=2, default=str)
-        f.write("\n")
-
-    consume_output_option(stage)
-
-
 def from_result_meta(result: OpResult, attrib: str) -> Any:
     if result.meta is None:
         raise ValueError("result.meta is None")
     return result.meta.get(attrib)
-
-
-def str_from_result_meta(result: OpResult, attrib: str) -> str:
-    if not isinstance(ret := from_result_meta(result, attrib), str):
-        raise TypeError("Wrong type: expected str")
-    return ret

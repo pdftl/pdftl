@@ -1,7 +1,16 @@
+import types
 from types import SimpleNamespace
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
 
 from pdftl.core.types import OpResult
 from pdftl.utils import hooks
+from pdftl.utils.hooks import (
+    consume_output_option,
+    from_result_meta,
+    text_dump_hook,
+)
 
 
 def test_get_output_path_priorities():
@@ -45,38 +54,6 @@ def test_text_dump_hook_scenarios(capsys, tmp_path):
     assert output_file.read_text().strip() == "stdout content"
 
 
-def test_json_dump_hook_scenarios(capsys, tmp_path):
-    """Test json_dump_hook behavior (Lines 59-72)."""
-
-    data = {"key": "value"}
-    res = OpResult(success=True, data=data)
-
-    # 1. Stdout
-    stage = SimpleNamespace(options={})
-    hooks.json_dump_hook(res, stage, None)
-    out, _ = capsys.readouterr()
-    assert '"key": "value"' in out
-
-    # 2. File
-    output_file = tmp_path / "output.json"
-    stage = SimpleNamespace(options={"output": str(output_file)})
-    hooks.json_dump_hook(res, stage, None)
-
-    assert output_file.exists()
-    assert '"key": "value"' in output_file.read_text()
-
-    # 3. Failure -> No op
-    hooks.json_dump_hook(OpResult(success=False), None, None)
-    # Implicit pass if no error raised
-
-
-from unittest.mock import MagicMock
-
-import pytest
-
-from pdftl.utils.hooks import str_from_result_meta, text_dump_hook
-
-
 def test_text_dump_hook_early_returns():
     """Test that text_dump_hook returns early on failure or empty data."""
     stage = MagicMock()
@@ -89,33 +66,6 @@ def test_text_dump_hook_early_returns():
     # Case 2: No Data
     res_no_data = OpResult(success=True, data=None)
     assert text_dump_hook(res_no_data, stage, None) is None
-
-
-def test_str_from_result_meta():
-    """Test the meta string extraction utility."""
-    # Case 1: Valid String
-    res = OpResult(success=True, meta={"key": "value"})
-    assert str_from_result_meta(res, "key") == "value"
-
-    # Case 2: Missing Key (AssertionError from from_result_meta or None check)
-    # The code asserts result.meta is not None.
-    # But if key is missing, .get returns None, failing isinstance(None, str)
-    with pytest.raises(TypeError):
-        str_from_result_meta(res, "missing_key")
-
-    # Case 3: Wrong Type
-    res_int = OpResult(success=True, meta={"key": 123})
-    with pytest.raises(TypeError):
-        str_from_result_meta(res_int, "key")
-
-
-import types
-from unittest.mock import mock_open, patch
-
-from pdftl.utils.hooks import (
-    consume_output_option,
-    from_result_meta,
-)
 
 
 def test_consume_output_option_no_options_attr():
@@ -154,13 +104,3 @@ def test_from_result_meta_none():
     result = OpResult(success=True, meta=None)
     with pytest.raises(ValueError, match="result.meta is None"):
         from_result_meta(result, "some_attrib")
-
-
-def test_str_from_result_meta_wrong_type():
-    """
-    Covers hooks.py line 72-73:
-    Ensures TypeError is raised if the meta attribute is not a string.
-    """
-    result = OpResult(success=True, meta={"count": 123})  # int, not str
-    with pytest.raises(TypeError, match="expected str"):
-        str_from_result_meta(result, "count")

@@ -75,14 +75,6 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     """
     Loads JSON (or YAML) from disk and converts it to model_class.
     """
-    # Optional: Support YAML if PyYAML is installed
-    try:
-        import yaml
-
-        has_yaml = True
-    except ImportError:
-        has_yaml = False
-
     path = Path(path_str)
     if not path.exists():
         raise FileNotFoundError(f"Argument file not found: {path}")
@@ -90,11 +82,15 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
     with open(path, encoding="utf-8") as f:
         # Simple extension check
         if path.suffix.lower() in (".yaml", ".yml"):
-            if not has_yaml:
+            # Optional: Support YAML if PyYAML is installed
+            try:
+                import yaml
+
+                data = yaml.safe_load(f)
+            except ImportError:
                 raise ImportError(
                     "PyYAML is required to load .yaml files. Install it with: pip install pyyaml"
                 )
-            data = yaml.safe_load(f)
         else:
             # Default to JSON
             import json

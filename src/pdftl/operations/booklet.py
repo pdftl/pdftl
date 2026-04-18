@@ -107,8 +107,14 @@ def booklet_pages(pdf, operation_args) -> OpResult:
         canvas_size = config["canvas_size"]
     else:
         # Smart Default: Calculate based on placing 2 of the first page side-by-side
-        max_w = max(get_visible_page_dimensions(p, box="trimbox")[2] for p in raw_pages)
-        max_h = max(get_visible_page_dimensions(p, box="trimbox")[3] for p in raw_pages)
+        dims = [get_visible_page_dimensions(p, box="trimbox") for p in raw_pages]
+        dims = [d for d in dims if d is not None]
+        if not dims or any(len(d) < 4 for d in dims):
+            raise InvalidArgumentError(
+                "Could not determine page dimensions for canvas calculation."
+            )
+        max_w = max(d[2] for d in dims)
+        max_h = max(d[3] for d in dims)
         canvas_size = (max_w * 2, max_h)
 
     # 4. Pad and Reorder Pages
@@ -119,7 +125,7 @@ def booklet_pages(pdf, operation_args) -> OpResult:
     make_blank_page(dummy_pdf, raw_pages[0].trimbox)
     blank_page = dummy_pdf.pages[0]
 
-    final_pages = [p if p is not None else blank_page for p in ordered_pages]
+    final_pages: list[Page] = [p if p is not None else blank_page for p in ordered_pages]
 
     # 6. Apply via Montage Engine
     # A booklet is just a 2x1 grid filled with our carefully ordered pages
@@ -184,7 +190,9 @@ def _update_config_from_keyval(key, val, config):
     return config
 
 
-def _build_booklet_permutation(raw_pages: list["Page"], sig: int, rtl: bool) -> list["Page"]:
+def _build_booklet_permutation(
+    raw_pages: list["Page"], sig: int, rtl: bool
+) -> list["Page | None"]:
     """
     Chunks the document into signatures and calculates the 2-up permutation
     required for standard duplex booklet printing.

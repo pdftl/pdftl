@@ -24,18 +24,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
-import builtins
 
 from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.utils.progress import get_track_progress
-
-if not hasattr(builtins, "profile"):
-
-    def profile(func):
-        return func
-
-    builtins.profile = profile
 
 
 @dataclass

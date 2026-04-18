@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import OperationError
 from pdftl.operations.parsers.chop_parser import parse_chop_spec, parse_chop_specs_to_rules
 
 _CHOP_LONG_DESC = """
@@ -217,7 +218,7 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
 
     # 3. Get visual chopped rectangles (rooted at 0,0) from the parser
     visual_mediabox = [0.0, 0.0, visual_w, visual_h]
-    visual_rects = parse_chop_spec(chop_spec_to_use, visual_mediabox)
+    visual_rects = parse_chop_spec(chop_spec_to_use, visual_mediabox)  # type: ignore
 
     def make_new_chopped_page(rect):
         pdf.pages.append(source_page)
@@ -239,6 +240,8 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
         elif rotation == 270:  # 270 degrees clockwise (90 CCW)
             px0, px1 = vy0, vy1
             py0, py1 = raw_h - vx1, raw_h - vx0
+        else:
+            raise OperationError(f"Unexpected rotation: {rotation}")
 
         # Shift by the physical origin (in case original page wasn't rooted at 0,0)
         new_page.mediabox = pikepdf.Array([px0 + raw_x0, py0 + raw_y0, px1 + raw_x0, py1 + raw_y0])
@@ -246,7 +249,7 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
         # 5. Clean up other bounding boxes so they don't hide the new MediaBox
         for box in ("/CropBox", "/TrimBox", "/BleedBox", "/ArtBox"):
             if box in new_page:
-                del new_page[box]
+                del new_page[box]  # type: ignore
 
         # Note: We DO NOT delete new_page.Rotate and DO NOT inject a content transform!
         # The physical MediaBox and the native rotation flag handle everything gracefully.

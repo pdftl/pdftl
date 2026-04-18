@@ -1,16 +1,21 @@
-import json
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from pdftl.exceptions import PdftlConfigError  # Assuming this is where it lives
+from pdftl.info import output_info
 from pdftl.info.info_types import (
     BookmarkEntry,
     DocInfoEntry,
     PageLabelEntry,
     PageMediaEntry,
     PdfInfo,
+    _fuzzy_create,
 )
 
 
 def test_info_types_serialization():
-    """Cover .to_dict() and .to_json() methods."""
+    """Cover .to_dict() method."""
 
     # 1. PageLabelEntry to_dict
     pl = PageLabelEntry(new_index=1, num_style="RomanUpper")
@@ -29,23 +34,6 @@ def test_info_types_serialization():
     assert d_bm["Title"] == "Chapter 1"
     assert d_bm["PageNumber"] == 5
 
-    # 4. PdfInfo to_json (full serialization)
-    info = PdfInfo(
-        pages=10,
-        page_media=[pm],
-        bookmarks=[bm],
-        page_labels=[pl],
-        doc_info=[DocInfoEntry("Title", "Test Doc")],
-    )
-
-    json_str = info.to_json()
-    data = json.loads(json_str)
-
-    assert data["NumberOfPages"] == 10
-    assert data["PageMedia"][0]["Rotation"] == 90
-    # Verify DocInfo flattening in to_dict logic
-    assert data["Info"]["Title"] == "Test Doc"
-
 
 def test_bookmark_entry_lowercase_children():
     """Test BookmarkEntry.from_dict with lowercase 'children' key."""
@@ -59,11 +47,6 @@ def test_bookmark_entry_lowercase_children():
     bm = BookmarkEntry.from_dict(data)
     assert len(bm.children) == 1
     assert bm.children[0].title == "Child"
-
-
-import pytest
-
-from pdftl.info.info_types import _fuzzy_create
 
 
 def test_pdf_info_from_dict_complex():
@@ -104,10 +87,6 @@ def test_fuzzy_create_guard():
     # If data is not a dict, it should return it as-is
     assert _fuzzy_create(PdfInfo, "not-a-dict") == "not-a-dict"
 
-
-from unittest.mock import MagicMock, patch
-
-from pdftl.info import output_info
 
 # --- Part 1: Test info_types.py (Serialization/Deserialization) ---
 
@@ -268,8 +247,6 @@ def test_get_info_mocked():
         assert info.page_labels[0].prefix == "Page-"
         assert info.pages == 2
 
-
-from pdftl.exceptions import PdftlConfigError  # Assuming this is where it lives
 
 # --- Tests for PageMediaEntry (Missing page_number) ---
 

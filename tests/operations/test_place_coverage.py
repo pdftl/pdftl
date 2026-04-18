@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
+from pdftl.exceptions import OperationError
 from pdftl.operations.place import _calculate_transformation_matrix, _eval_dim, place_content
 
 
@@ -219,3 +220,22 @@ def test_place_noop_matrix_returns_unchanged_pdf():
     assert result.success
     # No content stream should have been added
     assert b"cm" not in bytes(pdf.pages[0].obj.get("/Contents", b""))
+
+
+def test_place_raises_when_no_page_dimensions():
+    """Tests OperationError raised when visual dimensions cannot be determined."""
+    from unittest.mock import patch
+
+    import pikepdf
+
+    from pdftl.operations.place import place_content
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+
+    with patch(
+        "pdftl.operations.place.get_visible_page_dimensions",
+        side_effect=[(0, 0, 200, 300), None],  # first call succeeds, second returns None
+    ):
+        with pytest.raises(OperationError, match="Could not get page dimensions"):
+            place_content(pdf, ["1(shift=10,10)"])

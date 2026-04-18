@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import HelpExample, OpResult
+from pdftl.exceptions import OperationError
 from pdftl.operations.parsers.place_parser import parse_place_args
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
@@ -100,7 +101,6 @@ def place_content(target_pdf, place_specs) -> OpResult:
 
             # 1. Calculate the Matrix using the unified Geometry Engine
             # We map the high-level commands (shift/scale) into the parameters
-            # expected by calculate_placement_matrix
             matrix = _calculate_transformation_matrix(page, cmd.operations)
 
             if matrix != pikepdf.Matrix():
@@ -132,6 +132,9 @@ def _calculate_transformation_matrix(page, operations):
 
     # 2. Visual dimensions needed for percentage math and anchors
     vis_dims = get_visible_page_dimensions(page, apply_rotate=True)
+    if vis_dims is None:
+        raise OperationError("Could not get page dimensions")
+
     v_x0, v_y0, v_w, v_h = vis_dims
 
     m_u_to_v, m_v_to_u = get_visual_mapping_matrices(u_x0, u_y0, u_w, u_h, rotation)
