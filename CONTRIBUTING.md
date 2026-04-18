@@ -4,12 +4,13 @@ If you have an idea for a feature and you are unsure if it fits, open a [Discuss
 
 ## Reporting bugs
 
+Please report bugs under [Issues](https://github.com/pdftl/pdftl/issues).
 The most useful thing you can include is the exact command that triggered
 the bug and, if possible, a PDF that reproduces it. Even a small synthetic
 PDF that shows the same problem is far more useful than a description alone.
 
 Run `pdftl --version` and include the output — it shows pdftl and
-dependency versions which often matter.
+dependency versions which often matter. Also run the problematic command with the `--debug` flag and paste the output.
 
 ## Development setup
 
