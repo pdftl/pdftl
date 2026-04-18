@@ -94,8 +94,8 @@ def dump_sigs_helper(tmp_path):
         output_file = tmp_path / "sigs_output.txt"
 
         # 2. Determine args based on input type
-        pdf_path = pdf_path_or_obj if isinstance(pdf_path_or_obj, str) else "_"
-        pdf_obj = pdf_path_or_obj if not isinstance(pdf_path_or_obj, str) else None
+        pdf_path = pdf_path_or_obj if isinstance(pdf_path_or_obj, (str, Path)) else "_"
+        pdf_obj = pdf_path_or_obj if not isinstance(pdf_path_or_obj, (str, Path)) else None
 
         # 3. Run Command
         result = dump_signatures(pdf_path, pdf_obj, password, output_file=str(output_file))
@@ -116,6 +116,16 @@ def test_dump_signatures_from_file(signed_pdf_path, dump_sigs_helper):
 
     assert "SignatureBegin" in results
     assert "SignatureFieldName: Signature1" in results
+    assert "SignatureIntegrity: VALID" in results
+
+
+def test_dump_signatures_from_etsi_file(get_pdf_path, dump_sigs_helper):
+    """Tests reading from a physical file path."""
+    signed_pdf_path = get_pdf_path("sig_etsi.pdf")
+    results = dump_sigs_helper(signed_pdf_path)
+
+    assert "SignatureBegin" in results
+    assert "SignatureFieldName: 2A1EB9ED1E3766E2FB585A476CD57FEF" in results
     assert "SignatureIntegrity: VALID" in results
 
 
@@ -236,3 +246,36 @@ def test_validate_signatures_missing_pyhanko():
         with pytest.raises(RuntimeError, match="pyhanko' library is required"):
             # We call the worker directly or the main command; worker is direct access to the import block
             _validate_signatures_worker("dummy.pdf", None, None)
+
+
+import pytest
+
+
+def test_dump_signatures_raises_operation_error_on_validation_failure(signed_pdf_path, tmp_path):
+    """Tests that SignatureValidationError is wrapped in OperationError."""
+    from pyhanko.sign.validation.errors import SignatureValidationError
+
+    from pdftl.exceptions import OperationError
+
+    with patch(
+        "pyhanko.sign.validation.validate_pdf_signature",
+        side_effect=SignatureValidationError("bad sig"),
+    ):
+        with pytest.raises(OperationError, match="bad sig"):
+            from pdftl.operations.dump_signatures import dump_signatures
+
+            dump_signatures(signed_pdf_path, None, None)
+
+
+def test_dump_signatures_raises_operation_error_on_value_error(signed_pdf_path):
+    """Tests that ValueError is also wrapped in OperationError."""
+    from pdftl.exceptions import OperationError
+
+    with patch(
+        "pyhanko.sign.validation.validate_pdf_signature",
+        side_effect=ValueError("unexpected value"),
+    ):
+        with pytest.raises(OperationError, match="unexpected value"):
+            from pdftl.operations.dump_signatures import dump_signatures
+
+            dump_signatures(signed_pdf_path, None, None)

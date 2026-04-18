@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `set` operation
 
+### Fixed
+
+- work around a pyHanko bug affecting `dump_signatures`
+
 ## [0.14.0] - 2026-04-17
 
 ### Added

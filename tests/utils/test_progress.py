@@ -38,3 +38,10 @@ def test_real_get_track_progress_non_interactive():
     # It should also accept kwargs without crashing (like description="Processing")
     result_kwargs = list(tracker(data, description="Doing work"))
     assert result_kwargs == data
+
+
+def test_get_track_progress_interactive():
+    from pdftl.utils.progress import get_track_progress
+
+    tracker = get_track_progress(interactive=True)
+    assert tracker([1, 2, 3]) == [1, 2, 3]

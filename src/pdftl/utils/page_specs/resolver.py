@@ -6,6 +6,8 @@ from .types import PageTransform
 
 def _handle_no_specs(inputs, opened_pdfs) -> list[PageTransform]:
     page_tuples = []
+    if inputs is None:
+        return page_tuples
     for input_idx in range(len(inputs)):
         pdf = opened_pdfs[input_idx]
         for i in range(len(pdf.pages)):

@@ -30,8 +30,8 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
         The caller is responsible for saving this object to a file.
     """
     total_pages = len(source_pdf.pages)
-
-    for page_transform in expand_specs_to_pages(specs, opened_pdfs=[source_pdf]):
+    expanded = expand_specs_to_pages(specs, opened_pdfs=[source_pdf]) or []
+    for page_transform in expanded:
         (angle, relative), scale = page_transform.rotation, page_transform.scale
         i = page_transform.index
         # i is 0-based, like pikepdf

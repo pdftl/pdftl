@@ -12,6 +12,7 @@ import logging
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import OperationError
 from pdftl.utils.io_helpers import smart_open
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,26 @@ engines.
 * `SignatureCoverage`: ENTIRE_FILE, REVISION_ONLY, or PARTIAL.
 * `SignatureModificationLevel`: NONE, FORM_FILLING, or SUSPICIOUS.
 """
+
+
+def _patch_pyhanko():
+    """Workaround for a pyHanko bug: https://github.com/MatthiasValvekens/pyHanko/issues/671"""
+    from pyhanko.pdf_utils import generic
+
+    if getattr(generic.parse_pdf_date, "_pdftl_patched", False):
+        return
+
+    _orig = generic.parse_pdf_date
+
+    def _patched(date_str, strict=False):
+        if isinstance(date_str, bytes):
+            date_str = date_str.decode("latin-1")
+        # Strip trailing null bytes and whitespace from some PDF generators
+        date_str = date_str.rstrip("\x00 \t\r\n")
+        return _orig(date_str, strict=strict)
+
+    _patched._pdftl_patched = True
+    generic.parse_pdf_date = _patched
 
 
 def dump_signatures_cli_hook(result: OpResult, _stage, _pipeline):
@@ -81,6 +102,7 @@ def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None) -> OpResu
     """
     Validate PDF signatures and returns a list of validation results.
     """
+    _patch_pyhanko()
     # Mute pyHanko's internal validation log noise (tracebacks for self-signed certs)
     ph_logger = logging.getLogger("pyhanko")
     cv_logger = logging.getLogger("pyhanko_certvalidator")
@@ -102,6 +124,7 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
         from pyhanko.pdf_utils.reader import PdfFileReader
         from pyhanko.sign.diff_analysis import DiffResult
         from pyhanko.sign.validation import validate_pdf_signature
+        from pyhanko.sign.validation.errors import SignatureValidationError
     except ImportError:
         raise RuntimeError("The 'pyhanko' library is required for dump_signatures.")
 
@@ -127,7 +150,10 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
 
     for sig in reader.embedded_signatures:
         # Perform cryptographic validation
-        status = validate_pdf_signature(sig)
+        try:
+            status = validate_pdf_signature(sig)
+        except (SignatureValidationError, ValueError) as e:
+            raise OperationError(f"[dump_signatures] {e}") from e
 
         # Extract data into a clean dictionary
         signer_name = status.signing_cert.subject.native.get("common_name", "Unknown")

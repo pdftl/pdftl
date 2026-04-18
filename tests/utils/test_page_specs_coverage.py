@@ -134,3 +134,10 @@ def test_spec_parser_invalid_step_errors():
         parser.parse("1-10step-4")
     with pytest.raises(InvalidArgumentError, match="Invalid step value"):
         parser.parse("1-10step0")
+
+
+def test_handle_no_specs_returns_empty_when_inputs_none():
+    from pdftl.utils.page_specs.resolver import _handle_no_specs
+
+    result = _handle_no_specs(None, {})
+    assert result == []

@@ -60,3 +60,38 @@ def test_dim_str_to_pts_error():
 def test_dim_str_to_pts_invalid_numeric_with_unit():
     with pytest.raises(InvalidArgumentError, match="Could not parse numeric dimension with unit"):
         dim_str_to_pts("abcin")
+
+
+def test_get_visible_page_dimensions_trimbox():
+    import pikepdf
+
+    from pdftl.utils.dimensions import get_visible_page_dimensions
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/TrimBox"] = pikepdf.Array([10, 10, 190, 290])
+    result = get_visible_page_dimensions(pdf.pages[0], box="trimbox")
+    assert result == (10.0, 10.0, 180.0, 280.0)
+
+
+def test_get_visible_page_dimensions_rotation_swap():
+    import pikepdf
+
+    from pdftl.utils.dimensions import get_visible_page_dimensions
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/Rotate"] = 90
+    x0, y0, w, h = get_visible_page_dimensions(pdf.pages[0])
+    assert w == 300.0 and h == 200.0  # swapped
+
+
+def test_get_visible_page_dimensions_returns_none_on_error():
+    from unittest.mock import MagicMock
+
+    from pdftl.utils.dimensions import get_visible_page_dimensions
+
+    page = MagicMock()
+    page.cropbox = None  # will cause TypeError when indexing
+    result = get_visible_page_dimensions(page)
+    assert result is None

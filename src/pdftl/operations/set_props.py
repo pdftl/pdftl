@@ -18,7 +18,6 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 
-
 logger = logging.getLogger(__name__)
 
 _SET_LONG_DESC = """
@@ -61,7 +60,8 @@ Syntax: A comma-separated list of rules.
 Rule format: `<StartPage>[ (Prefix) ][Style][StartNum]`
 * **StartPage**: 1-indexed physical page number.
 * **Prefix**: Optional text prefix enclosed in parentheses.
-* **Style**: Optional numbering style: `r` (roman), `R` (ROMAN), `a` (letters), `A` (LETTERS), `D` (Arabic).
+* **Style**: Optional numbering style:
+  `r` (roman), `R` (ROMAN), `a` (letters), `A` (LETTERS), `D` (Arabic).
 * **StartNum**: Optional starting number (defaults to 1).
 
 To completely remove custom page labels, use `pagelabels=""`.
@@ -83,7 +83,8 @@ _SET_EXAMPLES = [
     {
         "cmd": "in.pdf set 'pagelabels=1r,5D,8(A-)D8' output out.pdf",
         "desc": (
-            "Set complex page labels: pages 1-4 as roman numerals, pages 5-7 as arabic starting at 1,\n"
+            "Set complex page labels: pages 1-4 as roman numerals, "
+            "pages 5-7 as arabic starting at 1, "
             "and pages 8 onwards as arabic prefixed with 'A-' and starting at 8."
         ),
     },
@@ -128,34 +129,34 @@ def _parse_kwargs(op_args: list[str]) -> dict:
 def _parse_labels(pikepdf, labels_str: str) -> dict:
     """Parse the labels string and return a dictionary of page indices to pikepdf.Dictionary."""
     rules = {}
-    
+
     for part in labels_str.split(","):
         part = part.strip()
         if not part:
             continue
-            
+
         match = _LABEL_REGEX.match(part)
         if not match:
             raise OperationError(f"Invalid page label syntax: '{part}'")
-            
+
         start_page, prefix, style_char, start_num = match.groups()
         page_idx = int(start_page) - 1
 
         rule_args = {}
-        
+
         if prefix is not None:
             rule_args["P"] = prefix
-            
+
         if style_char:
             rule_args["S"] = pikepdf.Name(_STYLE_MAP[style_char])
-            
+
         if start_num is not None:
             rule_args["St"] = int(start_num)
         elif style_char:
             rule_args["St"] = 1
 
         rules[page_idx] = pikepdf.Dictionary(**rule_args)
-        
+
     return rules
 
 
@@ -163,10 +164,10 @@ def _apply_standard_props(pdf, kwargs, pikepdf):
     """Apply standard metadata properties like lang, layout, and mode."""
     if "lang" in kwargs:
         pdf.Root.Lang = kwargs["lang"]
-        
+
     if "layout" in kwargs:
         pdf.Root.PageLayout = pikepdf.Name(f"/{kwargs['layout']}")
-        
+
     if "mode" in kwargs:
         pdf.Root.PageMode = pikepdf.Name(f"/{kwargs['mode']}")
 
@@ -181,7 +182,7 @@ def _apply_viewer_prefs(pdf, kwargs, pikepdf):
         "center_window": "CenterWindow",
         "display_title": "DisplayDocTitle",
     }
-    
+
     prefs_to_set = {}
     for kw_key, pdf_key in viewer_pref_keys.items():
         if kw_key in kwargs:
@@ -227,7 +228,7 @@ def _parse_view_arg(arg: str):
 def _build_dest_array(parts: list[str], page_obj, pikepdf) -> list:
     """Construct the PDF destination array from parsed arguments."""
     dest_array = [page_obj]
-    
+
     if len(parts) == 1:
         # Default to XYZ with nulls to preserve viewer's default zoom/position
         dest_array.extend([pikepdf.Name("/XYZ"), None, None, None])
@@ -235,16 +236,16 @@ def _build_dest_array(parts: list[str], page_obj, pikepdf) -> list:
 
     view_type = parts[1]
     dest_array.append(pikepdf.Name(f"/{view_type}"))
-    
+
     for arg in parts[2:]:
         dest_array.append(_parse_view_arg(arg))
-        
+
     # Auto-pad missing arguments with None based on known view types
     expected_args = _VIEW_EXPECTED_ARGS.get(view_type.upper(), 0)
     missing = expected_args - len(parts[2:])
     if missing > 0:
         dest_array.extend([None] * missing)
-        
+
     return dest_array
 
 
@@ -261,7 +262,7 @@ def _apply_open_action(pdf, kwargs, pikepdf):
 
     parts = [p.strip() for p in val.split(",")]
     page_idx = _parse_page_idx(parts[0], len(pdf.pages))
-    
+
     dest_array = _build_dest_array(parts, pdf.pages[page_idx].obj, pikepdf)
     pdf.Root.OpenAction = pikepdf.Array(dest_array)
 

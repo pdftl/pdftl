@@ -245,3 +245,40 @@ def test_calculate_placement_matrix_handles_cropped_origin():
     # Check the translation components!
     assert matrix.e == pytest.approx(350.0, abs=1e-9)
     assert matrix.f == pytest.approx(-50.0, abs=1e-9)
+
+
+from pdftl.utils.geometry import get_visual_mapping_matrices
+
+
+@pytest.mark.parametrize("rotation", [90, 180, 270])
+def test_get_visual_mapping_matrices_rotations(rotation):
+    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(0, 0, 200, 300, rotation)
+    # Round-trip should give identity
+    identity = m_u_to_v @ m_v_to_u
+    arr = list(map(float, identity.as_array()))
+    assert arr[0] == pytest.approx(1.0, abs=1e-6)
+    assert arr[3] == pytest.approx(1.0, abs=1e-6)
+    assert arr[4] == pytest.approx(0.0, abs=1e-6)
+    assert arr[5] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_get_visual_mapping_matrices_270():
+    from pdftl.utils.geometry import get_visual_mapping_matrices
+
+    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(0, 0, 200, 300, 270)
+    identity = m_u_to_v @ m_v_to_u
+    arr = list(map(float, identity.as_array()))
+    assert arr[0] == pytest.approx(1.0, abs=1e-6)
+    assert arr[3] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_get_visual_mapping_matrices_rotation_0():
+    import pikepdf
+
+    from pdftl.utils.geometry import get_visual_mapping_matrices
+
+    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(0, 0, 200, 300, 0)
+    # Should return identity matrices
+    identity = pikepdf.Matrix()
+    assert list(map(float, m_u_to_v.as_array())) == list(map(float, identity.as_array()))
+    assert list(map(float, m_v_to_u.as_array())) == list(map(float, identity.as_array()))

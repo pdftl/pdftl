@@ -111,3 +111,47 @@ def test_chop_rotated_page(two_page_pdf):
         # Assert physical dimensions match the mathematically correct cut
         assert w0 == 200
         assert h0 == 600
+
+
+def test_chop_rotation_90(tmp_path):
+    """Tests that rotation=90 correctly maps visual rects to physical space."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/Rotate"] = 90  # landscape via rotation
+    result = chop_pages(pdf, ["cols2"])
+    assert len(result.pdf.pages) == 2
+
+
+def test_chop_rotation_180(tmp_path):
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/Rotate"] = 180
+    result = chop_pages(pdf, ["cols2"])
+    assert len(result.pdf.pages) == 2
+
+
+def test_chop_rotation_270(tmp_path):
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/Rotate"] = 270
+    result = chop_pages(pdf, ["cols2"])
+    assert len(result.pdf.pages) == 2
+
+
+def test_chop_removes_extra_bounding_boxes():
+    """Tests that CropBox/TrimBox/BleedBox/ArtBox are removed from chopped pages."""
+    import pikepdf
+
+    from pdftl.operations.chop import chop_pages
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    # Set extra bounding boxes on the page
+    pdf.pages[0]["/CropBox"] = pikepdf.Array([0, 0, 200, 300])
+    pdf.pages[0]["/TrimBox"] = pikepdf.Array([5, 5, 195, 295])
+
+    result = chop_pages(pdf, ["cols2"])
+
+    for page in result.pdf.pages:
+        assert "/CropBox" not in page
+        assert "/TrimBox" not in page

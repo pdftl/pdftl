@@ -1,3 +1,4 @@
+import io
 import logging
 from unittest.mock import patch
 
@@ -107,3 +108,76 @@ def test_process_page_with_source_meta():
 
     args, _ = mock_drawer_instance.draw_rule.call_args
     assert args[1]["source_filename"] == "old.pdf"
+
+
+def test_process_page_uses_trimbox(tmp_path):
+    """Tests that TrimBox is used when available."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    # Set a TrimBox smaller than MediaBox
+    pdf.pages[0]["/TrimBox"] = pikepdf.Array([10, 10, 190, 290])
+    result = add_text_pdf(pdf, ["/TEST/(position=mid-center)"])
+    assert result.success
+
+
+def test_process_page_handles_empty_overlay(tmp_path):
+    """Tests graceful handling when overlay PDF has no pages."""
+    from unittest.mock import patch
+
+    from pdftl.operations.helpers.text_drawer import TextDrawer
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+
+    # Return bytes that parse as a valid but empty PDF
+    empty_pdf_bytes = io.BytesIO()
+    with pikepdf.new() as empty:
+        empty.save(empty_pdf_bytes)
+
+    with patch.object(TextDrawer, "save", return_value=empty_pdf_bytes.getvalue()):
+        result = add_text_pdf(pdf, ["/TEST/(position=mid-center)"])
+        assert result.success  # Should not crash
+
+
+def test_add_text_rotated_page_90():
+    """Tests visual dimension swap for rotated pages."""
+    import pikepdf
+
+    from pdftl.operations.add_text import add_text_pdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/Rotate"] = 90
+    # This triggers the rotation branch in _process_page
+    result = add_text_pdf(pdf, ["/TEST/(position=mid-center)"])
+    assert result.success
+
+
+def test_add_text_rotated_page_270():
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    pdf.pages[0]["/Rotate"] = 270
+    result = add_text_pdf(pdf, ["/TEST/(position=mid-center)"])
+    assert result.success
+
+
+def test_add_text_no_rules_returns_early():
+    """Line 268: empty spec list produces no rules."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    # A spec that matches no pages
+    result = add_text_pdf(pdf, ["99/TEST/(position=mid-center)"])
+    assert result.success
+
+
+def test_add_text_bad_metadata_handled_gracefully():
+    """Lines 204-206: corrupted docinfo doesn't crash."""
+    from unittest.mock import PropertyMock, patch
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+    with patch(
+        "pikepdf.Pdf.docinfo", new_callable=PropertyMock, side_effect=AttributeError("no docinfo")
+    ):
+        result = add_text_pdf(pdf, ["1-end/TEST/(position=mid-center)"])
+        assert result.success

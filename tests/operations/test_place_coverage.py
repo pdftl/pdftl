@@ -204,3 +204,18 @@ def test_place_eval_dim_normalization():
 
     # 1 inch is 72 points
     assert result == 72.0
+
+
+def test_place_noop_matrix_returns_unchanged_pdf():
+    """Tests that a zero transformation returns the PDF unmodified."""
+
+    from pdftl.operations.place import place_content
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+
+    # shift=0,0 should produce identity matrix → no content stream modification
+    result = place_content(pdf, ["(shift=0,0)"])
+    assert result.success
+    # No content stream should have been added
+    assert b"cm" not in bytes(pdf.pages[0].obj.get("/Contents", b""))
