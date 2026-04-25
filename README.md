@@ -66,7 +66,7 @@ A simple `pip install pdftl[full]` install is also supported.
 ### 📄 Standard operations
 
 * **Combine:** [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html) (interleave pages from multiple docs).
-* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages, by bookmarks, by size,...), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages.
+* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages, by bookmarks, by size,...), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages or [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html) pages.
 * **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html) page labels, document properties, ...
 * **Attachments:** [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html).
 * **Bookmarks:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html) and [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html) with high fidelity, using structured YAML or JSON.
@@ -208,6 +208,7 @@ See the **[API Tutorial][4]** for more details.
 | [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages to a rectangle                                       |
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
+| [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
 | [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html)               | Extract PDF bookmarks into YAML or JSON                         |

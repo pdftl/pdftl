@@ -438,16 +438,16 @@ class TestDeleteImages:
             delete_images(pdf, ["", ""])
             assert mock_stub.call_count == 1
 
-        def test_global_mode_skips_non_stream_objects(self):
-            non_stream = MagicMock()  # not a pikepdf.Stream instance
+    def test_global_mode_skips_non_stream_objects(self):
+        non_stream = MagicMock()  # not a pikepdf.Stream instance
 
-            pdf = _make_pdf()
-            pdf.objects = [non_stream]
+        pdf = _make_pdf()
+        pdf.objects = [non_stream]
 
-            with patch("pdftl.operations.delete_images._overwrite_with_stub") as mock_stub:
-                result = delete_images(pdf, [""])
-                mock_stub.assert_not_called()
-            assert result.success is True
+        with patch("pdftl.operations.delete_images._overwrite_with_stub") as mock_stub:
+            result = delete_images(pdf, [""])
+            mock_stub.assert_not_called()
+        assert result.success is True
 
     def test_global_mode_skips_wrong_type_or_subtype(self):
         import pikepdf

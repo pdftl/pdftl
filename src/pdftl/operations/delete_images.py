@@ -192,7 +192,7 @@ def _process_resources(resources, params, modified_objects) -> None:
 
 @register_operation(
     "delete_images",
-    tags=["in_place", "images", "optimization"],
+    tags=["in_place", "images", "optimization", "delete"],
     type="single input operation",
     desc="Delete images",
     long_desc=_DELETE_IMAGES_LONG_DESC,

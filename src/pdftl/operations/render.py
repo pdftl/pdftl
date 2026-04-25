@@ -1,8 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/operations/render.py
 
 """Render PDF pages to images"""
 
-import io
 import logging
 import os
 
@@ -10,7 +13,6 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.progress import get_track_progress
 
 logger = logging.getLogger(__name__)
@@ -55,7 +57,6 @@ def render_cli_hook(result: OpResult, _stage, _pipeline):
     CLI-specific side effect: Writes the rendered images to disk.
     This function is only called by the CLI pipeline.
     """
-    # The generator yields (filename, pil_image) tuples
     image_generator = result.data
 
     if not image_generator:
@@ -110,63 +111,41 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
         try:
             dpi = float(args[0])
             if not (dpi > 0):
-                raise ValueError("dpi={dpi} should be positive")
+                raise ValueError(f"dpi={dpi} should be positive")
         except (ValueError, AssertionError) as exc:
             raise InvalidArgumentError(
                 f"'render': invalid dpi '{args[0]}' passed. Should be a positive number."
             ) from exc
 
+    from pdftl.utils.dependencies import ensure_dependencies
+
     ensure_dependencies("render", ["pypdfium2", "PIL"], "render")
 
     track_progress = get_track_progress(interactive=True)
 
-    import pypdfium2 as pdfium
-
-    # We define the generator here to capture the dependencies and settings
     def _render_generator():
-        # Create a separate buffer for PDFium so we don't consume/close the main input_pdf
-        # which needs to pass down the pipeline.
-        pdf_buffer = io.BytesIO()
-        input_pdf.save(pdf_buffer)
-        pdf_buffer.seek(0)
+        from pdftl.utils.page_images import iter_pages_as_pil
 
-        ui_pdf = None
-        try:
-            ui_pdf = pdfium.PdfDocument(pdf_buffer)
-            scale = dpi / 72.0
+        pattern = output_pattern or "page_%d.png"
 
-            # Use provided pattern or default
-            pattern = output_pattern or "page_%d.png"
-            page_counter = 0
+        for i, image in track_progress(
+            iter_pages_as_pil(input_pdf, dpi), description="Rendering pages"
+        ):
+            page_number = i + 1
+            try:
+                filename = pattern % page_number
+            except TypeError as exc:
+                logger.warning(
+                    f"Invalid pattern: '{pattern}'. Falling back to 'page_%d.png'. (Reason: {exc})"
+                )
+                filename = f"page_{page_number}.png"
 
-            for page in track_progress(ui_pdf, description="Rendering pages"):
-                page_counter += 1
-                try:
-                    filename = pattern % page_counter
-                except TypeError as exc:
-                    # Fallback if pattern is invalid
-                    logger.warning(
-                        f"Invalid pattern: '{pattern}'. Falling back to 'page_%d.png'. "
-                        f"(Reason: {exc})"
-                    )
-                    filename = f"page_{page_counter}.png"
-
-                bitmap = page.render(scale=scale)
-                yield (filename, bitmap.to_pil())
-        finally:
-            # Clean up the PDFium resources and the specific buffer we created.
-            # We do NOT close input_pdf here, as it is returned in OpResult.
-            if ui_pdf:
-                ui_pdf.close()
-            pdf_buffer.close()
-            logger.debug("Render generator finished: Cleaned up temporary buffer.")
+            yield filename, image
 
     return OpResult(
         success=True,
-        pdf=input_pdf,  # Pass the PDF down the pipeline
-        data=_render_generator(),  # API users get the generator; CLI hook consumes it
+        pdf=input_pdf,
+        data=_render_generator(),
         is_discardable=True,
-        meta={
-            "output_pattern": output_pattern,
-        },
+        meta={"output_pattern": output_pattern},
     )

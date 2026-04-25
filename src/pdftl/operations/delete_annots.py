@@ -29,7 +29,7 @@ _DELETE_ANNOTS_EXAMPLES = [
 
 @register_operation(
     "delete_annots",
-    tags=["in_place", "annotations"],
+    tags=["in_place", "annotations", "delete"],
     type="single input operation",
     desc="Delete annotation info",
     long_desc=_DELETE_ANNOTS_LONG_DESC,

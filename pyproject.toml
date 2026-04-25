@@ -43,6 +43,7 @@ pdftl = "pdftl.cli.main:main"
 # Feature-specific dependencies
 add-text = ["reportlab"]
 crop-visible = ["pypdfium2"]
+delete-blank = ["numpy"]
 dump-text = ["pypdfium2"]
 flatten = ["pypdfium2"]
 optimize-images = ["ocrmypdf"]
@@ -55,6 +56,7 @@ yaml-bookmarks = ["pyyaml"]
 extras = [
     "pdftl[add-text]",
     "pdftl[crop-visible]",
+    "pdftl[delete-blank]",
     "pdftl[dump-text]",
     "pdftl[flatten]",
     "pdftl[optimize-images]",

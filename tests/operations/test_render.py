@@ -32,7 +32,7 @@ def test_render_pdf_invalid_args():
         render_pdf(mock_pdf, ["-10"])
 
 
-@patch("pdftl.operations.render.ensure_dependencies")
+@patch("pdftl.utils.dependencies.ensure_dependencies")
 def test_render_pdf_generator_success(mock_ensure):
     """
     Mocks pypdfium2 to verify the generator yields images
@@ -80,7 +80,7 @@ def test_render_pdf_generator_success(mock_ensure):
         input_pdf.save.assert_called()
 
 
-@patch("pdftl.operations.render.ensure_dependencies")
+@patch("pdftl.utils.dependencies.ensure_dependencies")
 def test_render_pdf_default_dpi_and_bad_pattern(mock_ensure):
     """
     Covers:

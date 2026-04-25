@@ -46,7 +46,7 @@ _DELETE_EXAMPLES = [
 
 @register_operation(
     "delete",
-    tags=["in_place", "pages"],
+    tags=["in_place", "pages", "delete"],
     type="single input operation",
     desc="Delete pages from an input PDF",
     long_desc=_DELETE_LONG_DESC,
