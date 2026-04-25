@@ -25,7 +25,6 @@ CMD_PATTERN = re.compile(r"^(.*?)\((.*)\)$")
 def parse_place_args(args: list[str]) -> list[PlaceCommand]:
     commands = []
     for arg in args:
-
         arg = arg.strip()
         if arg.startswith("("):
             arg = "1-end" + arg

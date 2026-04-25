@@ -19,7 +19,6 @@ class GridLayout:
     def generate_slots(
         self, item_count: int, canvas_width: float, canvas_height: float
     ) -> Iterator[LayoutSlot]:
-
         # 1. Validate Dimensions
         usable_w = canvas_width - (2 * self.margin)
         usable_h = canvas_height - (2 * self.margin)

@@ -61,14 +61,14 @@ def test_mypy_validation_isolated(tmp_path):
             """
         from pdftl import api
         import pikepdf
-        
+
         def check_errors() -> None:
             # Error 1: [arg-type]
             api.cat(inputs=123)
-            
+
             # Error 2: [call-arg]
             api.cat(inputs=["f.pdf"], unknown_kwarg=True)
-            
+
             # Error 3: [assignment]
             # api.cat returns pikepdf.Pdf; assigning to int must fail.
             val: int = api.cat(inputs=["f.pdf"])
@@ -94,8 +94,7 @@ def test_mypy_validation_isolated(tmp_path):
             "--disallow-untyped-calls",
             "--ignore-missing-imports",  # Important for CI if pikepdf stubs aren't installed
         ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         env=env,
     )
@@ -104,9 +103,9 @@ def test_mypy_validation_isolated(tmp_path):
 
     # 6. Assertions
     assert "[arg-type]" in output, f"Mypy failed to flag invalid argument type. Output: {output}"
-    assert (
-        "[call-arg]" in output
-    ), f"Mypy failed to flag unknown keyword argument. Output: {output}"
-    assert (
-        "[assignment]" in output
-    ), f"Mypy failed to flag incompatible return assignment. Output: {output}"
+    assert "[call-arg]" in output, (
+        f"Mypy failed to flag unknown keyword argument. Output: {output}"
+    )
+    assert "[assignment]" in output, (
+        f"Mypy failed to flag incompatible return assignment. Output: {output}"
+    )

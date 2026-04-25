@@ -47,8 +47,7 @@ _MUTATE_CONTENT_EXAMPLES = [
     ),
     HelpExample(
         desc=(
-            "Fix hairlines using `mutate_hairline_fixer.py`,"
-            " passing the script the argument '0.5'"
+            "Fix hairlines using `mutate_hairline_fixer.py`, passing the script the argument '0.5'"
         ),
         cmd="in.pdf mutate_content mutate_hairline_fixer.py 0.5 output out.pdf",
     ),

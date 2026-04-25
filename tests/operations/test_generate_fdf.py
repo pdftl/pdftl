@@ -201,7 +201,6 @@ def test_generate_fdf_radio_button_exception_handling():
         pass  # Dummy for isinstance
 
     with patch("pikepdf.form.Form") as MockForm, patch("pikepdf.form.RadioButtonGroup", MockRB):
-
         mock_field = MockRB()
         mock_field.value = Name("/1")
         mock_field.obj = MagicMock()
@@ -434,7 +433,6 @@ def test_impossible_else_branch():
 
     # Patch the types used in the function with our Fickle types
     with patch("pikepdf.String", new=FickleString), patch("pikepdf.Name", new=FickleName):
-
         # val can be anything, the metaclass controls the check result
         val = MagicMock()
         val.__str__.return_value = "DefensiveFallback"

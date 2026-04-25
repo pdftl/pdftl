@@ -75,8 +75,7 @@ _BURST_EXAMPLES = [
     {
         "cmd": "my.pdf burst step3 output out%04d.pdf",
         "desc": (
-            "Burst a file into chunks out0001.pdf with pages 1-3, "
-            "out0002.pdf with pages 4-6, etc."
+            "Burst a file into chunks out0001.pdf with pages 1-3, out0002.pdf with pages 4-6, etc."
         ),
     },
     {

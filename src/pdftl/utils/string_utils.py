@@ -59,7 +59,9 @@ def xml_encode_for_info(x):
                 (
                     XML_LOOKUPS[c]
                     if c in XML_LOOKUPS
-                    else c if c.isascii() and c != chr(0x7F) else f"&#{ord(c)};"
+                    else c
+                    if c.isascii() and c != chr(0x7F)
+                    else f"&#{ord(c)};"
                 )
                 for c in x
             ]

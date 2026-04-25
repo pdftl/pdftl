@@ -42,9 +42,9 @@ def test_stub_file_completeness():
     content = "\n".join(content_lines)
 
     for op_name in registry.operations.keys():
-        assert (
-            f"def {op_name}" in content
-        ), f"Operation '{op_name}' missing from stub generation logic!"
+        assert f"def {op_name}" in content, (
+            f"Operation '{op_name}' missing from stub generation logic!"
+        )
 
 
 def test_actual_stub_file_exists():
@@ -54,8 +54,7 @@ def test_actual_stub_file_exists():
     """
     stub_path = os.path.join("src", "pdftl", "api.pyi")
     assert os.path.exists(stub_path), (
-        "src/pdftl/api.pyi is missing. "
-        "Please run 'python tools/api_stub_gen.py' to generate it."
+        "src/pdftl/api.pyi is missing. Please run 'python tools/api_stub_gen.py' to generate it."
     )
 
 

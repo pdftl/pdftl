@@ -474,9 +474,8 @@ def test_fill_form_prompt_args(mock_field):
 
     with (
         patch("pdftl.operations.fill_form.smart_open") as mock_open,
-        patch("pdftl.operations.fill_form._fill_form_from_data") as mock_fill,
+        patch("pdftl.operations.fill_form._fill_form_from_data"),
     ):
-
         mock_open.return_value.__enter__.return_value.read.return_value = b"DATA"
 
         # Case 1: No args -> prompt

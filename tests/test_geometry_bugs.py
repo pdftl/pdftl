@@ -169,9 +169,9 @@ class TestPlaceShiftRotatedPage:
         # Matrix is [a, b, c, d, e, f] — e is x-translation
         # On a 90-degree rotated page, a visual horizontal shift is a physical vertical shift (ty)
         ty = matrix[5]
-        assert ty == pytest.approx(
-            842 / 2, abs=1
-        ), f"Expected ty≈421 (50% of visual width 842 mapped to physical Y), got {ty}"
+        assert ty == pytest.approx(842 / 2, abs=1), (
+            f"Expected ty≈421 (50% of visual width 842 mapped to physical Y), got {ty}"
+        )
 
     def test_shift_0_50pct_vertical_on_rotated_page(self, tmp_path):
         """
@@ -189,9 +189,9 @@ class TestPlaceShiftRotatedPage:
         assert matrix is not None
         # On a 90-degree rotated page, a visual vertical shift is a physical horizontal shift (tx)
         tx = matrix[4]
-        assert abs(tx) == pytest.approx(
-            595 / 2, abs=1
-        ), f"Expected |tx|≈297.5 (50% of visual height 595 mapped to physical X), got {tx}"
+        assert abs(tx) == pytest.approx(595 / 2, abs=1), (
+            f"Expected |tx|≈297.5 (50% of visual height 595 mapped to physical X), got {tx}"
+        )
 
 
 class TestBookletRotatedPages:
@@ -216,9 +216,9 @@ class TestBookletRotatedPages:
         canvas_h = canvas_box[3] - canvas_box[1]
 
         # Visual width of rotated page = 842, so 2-up canvas should be ~1684 wide
-        assert canvas_w == pytest.approx(
-            842 * 2, abs=2
-        ), f"Expected canvas width≈1684, got {canvas_w}"
+        assert canvas_w == pytest.approx(842 * 2, abs=2), (
+            f"Expected canvas width≈1684, got {canvas_w}"
+        )
         assert canvas_h == pytest.approx(595, abs=2), f"Expected canvas height≈595, got {canvas_h}"
 
 

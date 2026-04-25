@@ -113,7 +113,7 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
                 raise ValueError("dpi={dpi} should be positive")
         except (ValueError, AssertionError) as exc:
             raise InvalidArgumentError(
-                f"'render': invalid dpi '{args[0]}' passed. " f"Should be a positive number."
+                f"'render': invalid dpi '{args[0]}' passed. Should be a positive number."
             ) from exc
 
     ensure_dependencies("render", ["pypdfium2", "PIL"], "render")

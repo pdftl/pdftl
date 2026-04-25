@@ -64,7 +64,9 @@ def test_info_page_label_validation(minimal_pdf, caplog):
     # Fix: 'decimal' was causing a style error before the start error could trigger.
     # We must use a VALID style (e.g. 'DecimalArabicNumerals') to test the INVALID start.
     bad_start = PageLabelEntry(
-        new_index=1, start=0, num_style="DecimalArabicNumerals"  # VALID style
+        new_index=1,
+        start=0,
+        num_style="DecimalArabicNumerals",  # VALID style
     )
     _make_page_label(minimal_pdf, bad_start)
 

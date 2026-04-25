@@ -145,7 +145,6 @@ def _determine_algorithm(v: int, length: int, encrypt_dict) -> tuple[str, int]:
 
 
 def _determine_v4_algorithm(length: int, encrypt_dict) -> tuple[str, int]:
-
     algo_name = "AES / RC4 (128-bit)"
     try:
         cfm = encrypt_dict["/CF"]["/StdCF"]["/CFM"]

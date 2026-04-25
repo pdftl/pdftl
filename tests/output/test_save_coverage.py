@@ -30,7 +30,6 @@ def test_save_to_stdout_broken_pipe(minimal_pdf):
     """
     # Fix 4: Patch sys.stderr as well, because the code calls sys.stderr.close() on error
     with patch("sys.stdout") as mock_stdout, patch("sys.stderr") as mock_stderr:
-
         # Configure the buffer.write to raise BrokenPipeError
         mock_buffer = MagicMock()
         mock_buffer.write.side_effect = BrokenPipeError
@@ -154,7 +153,6 @@ def test_save_pdf_triggers_font_replacement():
         patch("pdftl.output.save._remove_source_info"),
         patch("pdftl.output.save._action_drop_flags"),
     ):
-
         # Execute
         save_pdf(mock_pdf, output_filename, mock_context, options=options)
 

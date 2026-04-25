@@ -74,7 +74,6 @@ def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> di
 
 
 def _get_node_dest_data(dest, page_map, named_dests):
-
     resolved = resolve_dest_to_page_num(dest, page_map, named_dests)
     if not resolved:
         return {}

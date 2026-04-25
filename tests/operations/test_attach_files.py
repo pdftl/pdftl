@@ -309,7 +309,6 @@ def test_get_attachments_from_args_coverage():
         patch("pdftl.operations.attach_files._parse_attach_specs_to_intent") as mock_parse,
         patch("pdftl.operations.attach_files._resolve_attachments") as mock_resolve,
     ):
-
         # Setup return values
         mock_parsed_items = [MagicMock()]
         mock_parse.return_value = mock_parsed_items

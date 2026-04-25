@@ -39,7 +39,7 @@ def discover_examples():
 
         for i, example in enumerate(examples):
             if (cmd := example.get("cmd")) and "PROMPT" not in cmd:
-                test_id = f"{op_name}-example{i+1}"
+                test_id = f"{op_name}-example{i + 1}"
                 all_examples.append(pytest.param(cmd, id=test_id))
 
     # 2. Discover examples from the dedicated pipeline help section
@@ -48,14 +48,14 @@ def discover_examples():
         if "examples" in topic:
             for i, example in enumerate(topic["examples"]):
                 if example.get("cmd"):
-                    test_id = f"{topic_name}-example{i+1}"
+                    test_id = f"{topic_name}-example{i + 1}"
                     all_examples.append(pytest.param(example["cmd"], id=test_id))
 
     for topic_name, topic in registry.options.items():
         if "examples" in topic:
             for i, example in enumerate(topic["examples"]):
                 if example.get("cmd"):
-                    test_id = f"{topic_name}-example{i+1}"
+                    test_id = f"{topic_name}-example{i + 1}"
                     all_examples.append(pytest.param(example["cmd"], id=test_id))
 
     return all_examples

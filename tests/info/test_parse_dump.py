@@ -14,8 +14,10 @@ from pdftl.info.parse_dump import (
     _reset_state,
 )
 
+
 # Simple decoder for testing (just returns the value)
-TEST_DECODER = lambda x: x
+def TEST_DECODER(x):
+    return x
 
 
 # Use a common fixture for the initial pdf_data structure
@@ -72,9 +74,8 @@ class TestParseDumpCoverage:
         caplog.clear()
         with caplog.at_level("WARNING"):
             _handle_line(line_bytes, pdf_data_struct, clean_state, TEST_DECODER)
-        expected = (
-            "Parsing error for 'update_data': line '%s' does not end in 'Begin'"
-            % "Another malformed line"
+        expected = "Parsing error for 'update_data': line '{}' does not end in 'Begin'".format(
+            "Another malformed line"
         )
         assert [rec.message for rec in caplog.records] == [expected]
 
@@ -88,7 +89,7 @@ class TestParseDumpCoverage:
             _handle_begin_tag("UnknownTag", pdf_data_struct, initial_state, TEST_DECODER)
 
         # 1. Check line 99: warning logged
-        expected = "Unknown Begin tag '%s' in metadata. Ignoring." % "UnknownTag"
+        expected = "Unknown Begin tag '{}' in metadata. Ignoring.".format("UnknownTag")
         assert [rec.message for rec in caplog.records] == [expected]
 
         # 2. Check line 100: state reset to None
@@ -116,9 +117,9 @@ class TestParseDumpCoverage:
 
         # 1. Check lines 111-117: warning logged
         expected = (
-            "While parsing metadata: key '%s' in %sBegin block"
-            " should start with '%s'. Ignoring this line."
-        ) % (key, "PageMedia", "PageMedia")
+            "While parsing metadata: key '{}' in {}Begin block"
+            " should start with '{}'. Ignoring this line."
+        ).format(key, "PageMedia", "PageMedia")
         assert [rec.message for rec in caplog.records] == [expected]
 
         # 2. Check line 118: return, meaning the current PageMedia record is still empty/unchanged.
@@ -315,7 +316,9 @@ class TestParseDump:
         """Tests the stateful parsing of InfoKey/InfoValue pairs."""
         info_dict = {}
         state = {"last_info_key": None}
-        decoder = lambda x: x  # Passthrough
+
+        def decoder(x):
+            return x  # Passthrough
 
         # 1. Key, then Value
         _parse_info_field("InfoKey", "Title", info_dict, state, decoder)
@@ -361,7 +364,9 @@ class TestParseDump:
             "PageLabelPrefix: A-",
         ]
 
-        decoder = lambda x: x  # Passthrough
+        def decoder(x):
+            return x  # Passthrough
+
         result = parse_dump_data(dump_data, decoder)
 
         # Check top-level
@@ -558,7 +563,8 @@ def test_parse_dump_data_consecutive_info_keys(caplog):
     ]
 
     # Use a simple identity lambda for the string decoder
-    identity_decoder = lambda x: x
+    def identity_decoder(x):
+        return x
 
     with caplog.at_level(logging.WARNING):
         result = parse_dump_data(lines, identity_decoder)

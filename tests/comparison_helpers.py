@@ -32,9 +32,9 @@ def compare_visuals(path_py: Path, path_tk: Path, tolerance: float = 10.0):
 
     # check page sizes
     for i, (p, q) in enumerate(zip(doc_py, doc_tk)):
-        assert all(
-            [math.isclose(p.rect[k], q.rect[k], rel_tol=0.00001) for k in range(4)]
-        ), f"page {i+1} has differing sizes: {p.rect}, {q.rect}"
+        assert all([math.isclose(p.rect[k], q.rect[k], rel_tol=0.00001) for k in range(4)]), (
+            f"page {i + 1} has differing sizes: {p.rect}, {q.rect}"
+        )
 
     pix_pys = [doc_py.load_page(i).get_pixmap() for i, _ in enumerate(doc_py)]
     doc_py.close()
@@ -58,6 +58,6 @@ def compare_visuals(path_py: Path, path_tk: Path, tolerance: float = 10.0):
             pix_py.save(Path(str(path_py) + ".png"))
             pix_tk.save(Path(str(path_tk) + ".png"))
             diff.save(Path(str(path_py) + ".diff.png"))
-            assert (
-                max_diff_percent < tolerance
-            ), f"Page {i+1} is visually different by {max_diff_percent}%, more than tolerance={tolerance}%"
+            assert max_diff_percent < tolerance, (
+                f"Page {i + 1} is visually different by {max_diff_percent}%, more than tolerance={tolerance}%"
+            )

@@ -211,7 +211,9 @@ def test_dump_signatures_hook_multiple_sigs():
     ]
 
     op_result = OpResult(
-        success=True, data=fake_sigs, meta={c.META_OUTPUT_FILE: None}  # None -> Stdout
+        success=True,
+        data=fake_sigs,
+        meta={c.META_OUTPUT_FILE: None},  # None -> Stdout
     )
 
     # 2. Capture stdout
@@ -242,7 +244,6 @@ def test_validate_signatures_missing_pyhanko():
     """
     # 1. Simulate pyhanko being missing by setting it to None in sys.modules
     with patch.dict(sys.modules, {"pyhanko": None, "pyhanko.pdf_utils.reader": None}):
-
         with pytest.raises(RuntimeError, match="pyhanko' library is required"):
             # We call the worker directly or the main command; worker is direct access to the import block
             _validate_signatures_worker("dummy.pdf", None, None)
@@ -283,14 +284,15 @@ def test_dump_signatures_raises_operation_error_on_value_error(signed_pdf_path):
 
 def test_patch_pyhanko_bytes_handling():
     """Directly tests the patched function body."""
-    from pdftl.operations.dump_signatures import _patch_pyhanko
     from pyhanko.pdf_utils import generic
+
+    from pdftl.operations.dump_signatures import _patch_pyhanko
 
     # Ensure patch is applied
     _patch_pyhanko()
-    
+
     # Call with bytes — this exercises the isinstance branch
     generic.parse_pdf_date(b"D:20211230134641+11'00'")
-    
+
     # Call with trailing nulls
     generic.parse_pdf_date("D:20211230134641+11'00'\x00   ")

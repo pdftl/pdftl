@@ -47,9 +47,9 @@ def test_safety_annotation_independence():
     # The Contents stream should be the SAME object (Shared)
     # (Note: Blank pages might not have Contents, so we check Resources or implicit sharing)
     if "/Contents" in p1:
-        assert (
-            p1.Contents.objgen == p2.Contents.objgen
-        ), "Content streams should be shared for speed"
+        assert p1.Contents.objgen == p2.Contents.objgen, (
+            "Content streams should be shared for speed"
+        )
 
 
 def test_annotation_isolation_regression():

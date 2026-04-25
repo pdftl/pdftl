@@ -25,7 +25,6 @@ def handle_page_widgets(new_pdf, new_page, source_page, instance_num):
     cloned_parents = {}
 
     for annot in new_page.Annots:
-
         type_str = str(annot.get("/Type", ""))
         subtype_str = str(annot.get("/Subtype", ""))
         is_widget = type_str == "/Widget" or subtype_str == "/Widget"
@@ -106,7 +105,6 @@ def _rebuild_acroform_for_page_annots(page_annots, fields, seen_fields):
         subtype_str = str(annot.get("/Subtype", ""))
 
         if type_str == "/Widget" or subtype_str == "/Widget":
-
             candidate = annot
             if "/Parent" in annot:
                 candidate = annot.Parent

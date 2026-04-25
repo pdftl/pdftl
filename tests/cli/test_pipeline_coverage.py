@@ -481,7 +481,7 @@ def test_inline_pipeline_no_output_error():
     # We patch the class's 'run' so it does nothing,
     # then we'll use a side_effect to ensure the sub-manager's
     # pipeline_pdf is None when it finishes.
-    with patch("pdftl.cli.pipeline.PipelineManager.run") as mock_run:
+    with patch("pdftl.cli.pipeline.PipelineManager.run"):
         # We need to simulate the sub_manager that is created INSIDE _open_input_pdfs
         # To hit line 423, the sub_manager.pipeline_pdf must be None.
         with pytest.raises(UserCommandLineError, match="Inline pipeline returned no output PDF"):

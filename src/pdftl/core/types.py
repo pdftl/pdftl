@@ -17,7 +17,6 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-
     import pikepdf
 
 

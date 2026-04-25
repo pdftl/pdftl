@@ -169,9 +169,8 @@ def test_registry_syntax_error():
         # Patch import_module to raise SyntaxError when called
         with (
             patch("importlib.util.spec_from_file_location") as mock_spec_func,
-            patch("importlib.util.module_from_spec") as mock_module_func,
+            patch("importlib.util.module_from_spec"),
         ):
-
             # Setup the mock spec and its loader
             mock_spec = MagicMock()
             mock_spec_func.return_value = mock_spec

@@ -45,7 +45,10 @@ def test_dump_files_operation(pdf_with_attachment, capsys):
 def test_unpack_prompt(pdf_with_attachment, tmp_path):
     """Test 'PROMPT' for output directory (Line 122)."""
     with pikepdf.open(pdf_with_attachment) as pdf:
-        mock_input = lambda msg, **kwargs: str(tmp_path)
+
+        def mock_input(msg, **kwargs):
+            return str(tmp_path)
+
         result = unpack_files(pdf, mock_input, output_dir="PROMPT")
         unpack_files_cli_hook(result, None, None)
 

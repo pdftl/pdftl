@@ -206,7 +206,6 @@ def test_move_command_loads_json_spec():
         with patch("pathlib.Path.exists", return_value=True):
             # 3. Mock execute_move so we don't need a real PDF
             with patch("pdftl.operations.move.execute_move") as mock_exec:
-
                 # We can pass None as the PDF since execute_move is mocked
                 move_pages(None, ["@my_plan.json"])
 

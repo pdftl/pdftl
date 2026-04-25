@@ -318,7 +318,8 @@ def test_add_pages_orchestration(
 
     # Check PASS 2c (write_named_dests)
     mock_write_named_dests.assert_called_once_with(
-        mock_new_pdf, ["link_dest_1", "outline_dest_1"]  # Check dests are combined
+        mock_new_pdf,
+        ["link_dest_1", "outline_dest_1"],  # Check dests are combined
     )
 
     # PASS 3

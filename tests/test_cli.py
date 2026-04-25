@@ -92,7 +92,7 @@ def test_rotate_operation_visual(runner, pdf_factory, temp_dir, num_pages):
     args = [
         input_pdf,
         "rotate",
-        f"1-{min(3,num_pages)}east",
+        f"1-{min(3, num_pages)}east",
         "endleft",
         "output",
         output_py_pdf,
@@ -120,7 +120,7 @@ def test_rotate_operation_visual(runner, pdf_factory, temp_dir, num_pages):
         page_tk.get_pixmap().save(img_tk_path)
 
         diff_percent = get_image_diff(img_py_path, img_tk_path)
-        assert diff_percent < 1.0, f"Page {i+1} is visually different by {diff_percent:.2f}%"
+        assert diff_percent < 1.0, f"Page {i + 1} is visually different by {diff_percent:.2f}%"
 
 
 # --- Test Case 3: Testing `pdftl`-exclusive Functionality ---
@@ -153,9 +153,9 @@ def test_crop_operation(runner, pdf_factory, temp_dir, num_pages):
             expected_width = 595 - 200
             expected_height = 842 - 200
 
-            assert math.isclose(
-                page.rect.width, expected_width
-            ), "Page width is incorrect after crop"
-            assert math.isclose(
-                page.rect.height, expected_height
-            ), "Page height is incorrect after crop"
+            assert math.isclose(page.rect.width, expected_width), (
+                "Page width is incorrect after crop"
+            )
+            assert math.isclose(page.rect.height, expected_height), (
+                "Page height is incorrect after crop"
+            )

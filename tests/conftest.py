@@ -427,9 +427,9 @@ def assert_dump_output(capsys):
             for text in expected_text_or_list:
                 assert text in out, f"Expected '{text}' in output.\nGot:\n{out[:200]}..."
         else:
-            assert (
-                expected_text_or_list in out
-            ), f"Expected '{expected_text_or_list}' in output.\nGot:\n{out[:200]}..."
+            assert expected_text_or_list in out, (
+                f"Expected '{expected_text_or_list}' in output.\nGot:\n{out[:200]}..."
+            )
 
         return out
 

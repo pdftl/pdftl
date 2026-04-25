@@ -37,7 +37,9 @@ def test_fluent_method_dispatch(mock_api_call, mock_pdf):
     # The new fluent implementation passes the pipeline's PDF
     # as the first item in the 'inputs' list.
     mock_api_call.assert_called_once_with(
-        "cat", operation_args=["1-5"], inputs=[mock_pdf]  # This is the key change
+        "cat",
+        operation_args=["1-5"],
+        inputs=[mock_pdf],  # This is the key change
     )
 
     # Ensure state update happened

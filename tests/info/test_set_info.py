@@ -294,7 +294,7 @@ class TestSetInfo:
         caplog.clear()
         with caplog.at_level("WARNING"):
             _set_ids(mock_pdf, ["not hex"])
-        expected = "Could not set PDFID%s to '%s'; invalid hex string?" % (0, "not hex")
+        expected = "Could not set PDFID{} to '{}'; invalid hex string?".format(0, "not hex")
         assert expected in [rec.message for rec in caplog.records]
 
         caplog.clear()
@@ -413,7 +413,7 @@ class TestSetInfo:
             result = _add_bookmark(mock_pdf, b, MagicMock(), ancestors)
 
         # Check that a warning was logged
-        expected = "Skipping invalid bookmark with level %s. Levels should be 1 or greater." % 0
+        expected = f"Skipping invalid bookmark with level {0}. Levels should be 1 or greater."
         assert expected in [rec.message for rec in caplog.records]
 
         # Check that ancestors list was returned unchanged
@@ -450,7 +450,7 @@ class TestSetInfo:
             _set_id_info(mock_pdf, 0, "not a hex string")
 
         # Check that the warning was logged
-        expected = "Could not set PDFID%s to '%s'; invalid hex string?" % (
+        expected = "Could not set PDFID{} to '{}'; invalid hex string?".format(
             0,
             "not a hex string",
         )

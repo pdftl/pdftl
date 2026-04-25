@@ -49,14 +49,14 @@ def test_php_pdftk_compatibility(tmp_path):
     shim_content = f"""#!/bin/bash
     echo "--- START BLOCK ---" >> "{arg_log_file}"
     echo "ARGS: $@" >> "{arg_log_file}"
-    
+
     # Run the real tool
     "{real_pdftl}" "$@"
     EXIT_CODE=$?
-    
+
     echo "EXIT: $EXIT_CODE" >> "{arg_log_file}"
     echo "--- END BLOCK ---" >> "{arg_log_file}"
-    
+
     exit $EXIT_CODE
     """
 

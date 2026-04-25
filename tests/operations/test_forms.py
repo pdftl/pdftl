@@ -89,7 +89,9 @@ def test_dump_data_fields_stdout(pdf_with_form):
 def test_fill_form_basic(pdf_with_form, fdf_file):
     """Test filling a form with FDF data."""
     args = [fdf_file]
-    mock_input = lambda msg, **kwargs: None
+
+    def mock_input(msg, **kwargs):
+        return None
 
     fill_form(pdf_with_form, args, mock_input)
 

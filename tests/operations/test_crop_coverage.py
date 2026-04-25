@@ -192,7 +192,7 @@ def test_crop_invalid_spec_raises_user_error(tmp_path):
 
 
 def test_calculate_new_box_missing_dimensions(two_page_pdf):
-    with pikepdf.open(two_page_pdf) as pdf:
+    with pikepdf.open(two_page_pdf):
         with patch("pdftl.utils.dimensions.get_visible_page_dimensions") as mock_page_dims:
             mock_page_dims.return_value = []
             assert _calculate_new_box(None, None, None, None, None, None) is None

@@ -39,7 +39,7 @@ def transform_pdf(source_pdf: "Pdf", specs: list):
             page = source_pdf.pages[i]
         except IndexError as exc:
             raise InvalidArgumentError(
-                f"Page {i+1} does not exist in the PDF (total pages: {total_pages})."
+                f"Page {i + 1} does not exist in the PDF (total pages: {total_pages})."
             ) from exc
 
         if scale != 1.0:

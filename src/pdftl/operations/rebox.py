@@ -86,9 +86,7 @@ unchanged.
 To find out how to specify the rectangle, read the help for `crop`. Or
 see below:
 
-""" + _RECT_LONG_DESC.format(
-    verb="clip", verbing="clipping"
-)
+""" + _RECT_LONG_DESC.format(verb="clip", verbing="clipping")
 
 
 _CROP_LONG_DESC = """
@@ -96,15 +94,13 @@ _CROP_LONG_DESC = """
 Crops pages to a rectangle defined by offsets from the edges or in
 various other ways.
 
-""" + _RECT_LONG_DESC.format(
-    verb="crop", verbing="cropping"
-)
+""" + _RECT_LONG_DESC.format(verb="crop", verbing="cropping")
 
 _CROP_EXAMPLES = [
     {
         "cmd": "in.pdf crop '1-end(1cm,2cm)' output out.pdf",
         "desc": (
-            "Remove a 1cm margin from the sides\n" "and 2cm from the top and bottom of all pages:"
+            "Remove a 1cm margin from the sides\nand 2cm from the top and bottom of all pages:"
         ),
     },
     {
@@ -114,14 +110,14 @@ _CROP_EXAMPLES = [
     {
         "cmd": "in.pdf crop '2-8even(a5)' preview output out.pdf",
         "desc": (
-            "Preview effect of cropping the even-numbered pages\n" "between pages 2 and 8 to A5"
+            "Preview effect of cropping the even-numbered pages\nbetween pages 2 and 8 to A5"
         ),
     },
 ]
 _CLIP_EXAMPLES = [
     {
         "cmd": "in.pdf clip '1-end(1cm,2cm)' output out.pdf",
-        "desc": ("Clip to 1cm from the sides\n" "and 2cm from the top and bottom of all pages:"),
+        "desc": ("Clip to 1cm from the sides\nand 2cm from the top and bottom of all pages:"),
     },
     {
         "cmd": "in.pdf clip '1-end(fit,-10pt)' output clean.pdf",
@@ -130,7 +126,7 @@ _CLIP_EXAMPLES = [
     {
         "cmd": "in.pdf clip '2-8even(a5)' preview output out.pdf",
         "desc": (
-            "Preview effect of clipping the even-numbered pages\n" "between pages 2 and 8 to A5"
+            "Preview effect of clipping the even-numbered pages\nbetween pages 2 and 8 to A5"
         ),
     },
 ]
@@ -177,7 +173,6 @@ def crop_or_clip_pages(pdf: "Pdf", specs: list, operation="crop") -> OpResult:
 
 
 def _apply_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules, operation):
-
     if not i < len(pdf.pages):
         raise ValueError(f"With {len(pdf.pages)} pages, i={i} is too large")
     page = pdf.pages[i]

@@ -11,8 +11,7 @@ def get_json_flag(op_args, op_name, only_json_allowed=True):
             return True
 
         raise InvalidArgumentError(
-            f"Invalid '{op_name}' argument. "
-            "Only valid argument is 'json', to select JSON output."
+            f"Invalid '{op_name}' argument. Only valid argument is 'json', to select JSON output."
         )
 
     return False

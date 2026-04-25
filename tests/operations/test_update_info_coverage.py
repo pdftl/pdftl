@@ -14,8 +14,10 @@ def pdf():
 
 def test_update_info_prompt(pdf):
     """Test PROMPT argument (Line 124)."""
+
     # Mock input to return a dummy filename (which we will also mock opening)
-    mock_input = lambda msg, **kwargs: "meta.txt"
+    def mock_input(msg, **kwargs):
+        return "meta.txt"
 
     with patch("builtins.open", new_callable=MagicMock) as mock_file:
         mock_file.return_value.__enter__.return_value.readlines.return_value = []
@@ -48,7 +50,6 @@ def test_update_info_no_xml_strings(pdf):
 
         # We also mock open so the file reading part doesn't fail
         with patch("builtins.open", new_callable=MagicMock):
-
             # 1. Run with xml_strings=False
             update_info(pdf, ["meta.txt"], None, xml_strings=False)
 

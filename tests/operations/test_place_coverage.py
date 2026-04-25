@@ -161,7 +161,6 @@ class DummyPage:
 
 
 def test_calculate_matrix_returns_id_when_no_dims(monkeypatch):
-
     # Force the edge case
     monkeypatch.setattr(
         "pdftl.operations.place.get_visible_page_dimensions",
@@ -198,7 +197,6 @@ def test_place_content_skips_invalid_page_numbers(mocker):
 
 
 def test_place_eval_dim_normalization():
-
     # Line 208: Pass a single string instead of a list
     # This triggers: if isinstance(terms, str): terms = [terms]
     result = _eval_dim("1in", reference_size=100.0)

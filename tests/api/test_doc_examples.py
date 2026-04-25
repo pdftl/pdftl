@@ -78,4 +78,4 @@ def test_api_tutorial_examples(tmp_path, monkeypatch):
             code = compile(block, filename=f"example_{i}", mode="exec")
             exec(code, shared_locals)
         except Exception as e:
-            pytest.fail(f"Doc example #{i+1} failed:\n\n{block}\n\nError: {e}")
+            pytest.fail(f"Doc example #{i + 1} failed:\n\n{block}\n\nError: {e}")

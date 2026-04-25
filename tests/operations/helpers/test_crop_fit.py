@@ -82,7 +82,7 @@ class TestFitCropContext:
         ctx = FitCropContext(mock_pikepdf_doc)
 
         with (
-            mock.patch("pdftl.operations.helpers.crop_fit.io.BytesIO") as mock_io,
+            mock.patch("pdftl.operations.helpers.crop_fit.io.BytesIO"),
             mock.patch("pypdfium2.PdfDocument") as mock_pdfium_cls,
         ):
             ctx._init_pdfium_doc()
@@ -289,7 +289,6 @@ def test_calculate_rect_no_visible_content():
         ),
         patch("pdftl.operations.helpers.crop_fit.get_visible_bbox", return_value=(0, 0, 0, 0)),
     ):  # Invalid/Empty box
-
         ctx = FitCropContext(mock_pdf)
         # Mock the pdfium doc to have at least one page
         ctx._pdfium_doc = MagicMock()

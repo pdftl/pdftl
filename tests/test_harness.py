@@ -19,9 +19,9 @@ def format_size(size_bytes: int) -> str:
     if size_bytes < 1024:
         return f"{size_bytes} B"
     elif size_bytes < 1024**2:
-        return f"{size_bytes/1024:.2f} KB"
+        return f"{size_bytes / 1024:.2f} KB"
     else:
-        return f"{size_bytes/1024**2:.2f} MB"
+        return f"{size_bytes / 1024**2:.2f} MB"
 
 
 def run_test_case(
@@ -75,7 +75,7 @@ def run_test_case(
             print(
                 f"  {command} file size: "
                 f"Input: {format_size(input_size)}, Output: {format_size(out_size)}, "
-                f"ratio {round(float(out_size)/input_size*100)}%"
+                f"ratio {round(float(out_size) / input_size * 100)}%"
             )
 
         if expected_stderrs:

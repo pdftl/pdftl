@@ -52,8 +52,7 @@ def _compare_annotations(original_dump: str, processed_dump: str) -> list[str]:
 
     if len(original_data) != len(processed_data):
         errors.append(
-            f"Annotation count mismatch. "
-            f"Expected {len(original_data)}, got {len(processed_data)}."
+            f"Annotation count mismatch. Expected {len(original_data)}, got {len(processed_data)}."
         )
         return errors
 

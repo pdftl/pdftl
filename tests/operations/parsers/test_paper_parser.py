@@ -2,7 +2,6 @@ from pdftl.operations.parsers.paper_parser import parse_paper_spec
 
 
 def test_parse_paper_spec_missing_underscore_fallback():
-
     # Get baseline dimensions for proper landscape formatting
     landscape_dims = parse_paper_spec("a4_l")
     assert landscape_dims is not None

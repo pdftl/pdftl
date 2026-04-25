@@ -192,11 +192,7 @@ def _write_page_media_info(writer, info):
     """Writes the media box and rotation information for each page."""
     for entry in info.page_media or {}:
         rot = entry.rotation or 0
-        writer(
-            "PageMediaBegin\n"
-            f"PageMediaNumber: {entry.page_number}\n"
-            f"PageMediaRotation: {rot}"
-        )
+        writer(f"PageMediaBegin\nPageMediaNumber: {entry.page_number}\nPageMediaRotation: {rot}")
         # breakpoint()
         if entry.media_rect is not None:
             writer(f"PageMediaRect: {pdf_rect_to_string(entry.media_rect)}")
@@ -214,9 +210,7 @@ def _write_page_labels(writer, info):
     """Writes the document's page label definitions."""
     for entry in info.page_labels or {}:
         writer(
-            f"PageLabelBegin\n"
-            f"PageLabelNewIndex: {entry.new_index}\n"
-            f"PageLabelStart: {entry.start}"
+            f"PageLabelBegin\nPageLabelNewIndex: {entry.new_index}\nPageLabelStart: {entry.start}"
         )
         if entry.prefix:
             writer(f"PageLabelPrefix: {entry.prefix}")

@@ -12,7 +12,6 @@ from pdftl.operations.update_info import update_info
 
 
 class TestOpsCoverage:
-
     def test_generate_fdf_cli_hook_stdout(self):
         """
         Cover generate_fdf.py line 46:

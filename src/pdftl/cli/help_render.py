@@ -56,7 +56,6 @@ def _load_help_markdown():
 
 
 def load_hprint(dest, raw):
-
     def hprint(x):
         HelpMarkdown = _load_help_markdown()
         use_rich_console = not raw and (dest is None or dest is sys.stdout or dest is sys.stderr)
@@ -114,7 +113,7 @@ def format_examples_block(examples, show_topics=False):
             output += f"### {heading_text}\n"
 
         # Use a quote block for description and a fenced code block for command
-        output += f"> {ex.get('desc','')}\n"
+        output += f"> {ex.get('desc', '')}\n"
         output += f"```\n{WHOAMI} {ex['cmd'].strip()}\n```\n\n"
 
     return output.rstrip()

@@ -196,7 +196,6 @@ def test_save_pdf_flatten_and_attach(mock_pdf, mock_input_context):
         patch("pdftl.operations.attach_files.attach_files") as mock_attach,
         patch("pdftl.output.save._build_save_options", return_value={}),
     ):
-
         mock_flat.return_value = mock_pdf  # Return the pdf object
 
         save_pdf(mock_pdf, "out.pdf", mock_input_context, options)
@@ -235,7 +234,6 @@ def test_save_pdf_signing(mock_pdf, mock_input_context):
         patch("pdftl.output.save.parse_sign_options") as mock_parse,
         patch("pdftl.output.save.save_and_sign") as mock_sign,
     ):
-
         save_pdf(mock_pdf, "out.pdf", mock_input_context, options)
 
         mock_parse.assert_called_once()

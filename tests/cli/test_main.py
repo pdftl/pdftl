@@ -227,7 +227,7 @@ def test_main_as_script():
 
 def test_main_execution_block():
     """Triggers line 180: The __main__ block (via manual import/execution)."""
-    with patch("pdftl.cli.main.main") as mock_main:
+    with patch("pdftl.cli.main.main"):
         # This simulates the behavior of running the script directly
         # We can't easily trigger the actual __name__ check without a subprocess,
         # but calling the logic at that level or mocking the entry point is standard.
@@ -337,7 +337,7 @@ def test_main_operation_error_exit_code(mocker, capfd):
 
 def test_cli_handles_completion_flag():
     # Test --completion without shell (should show help)
-    with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+    with patch("sys.stdout", new_callable=io.StringIO):
         cli_main(["--completion"])
 
     # Test --completion=bash
@@ -392,7 +392,6 @@ def test_main_success_return_zero():
         # (Assuming 'info' is a registered operation)
         with patch("pdftl.cli.main.parse_options_and_specs", return_value=([], {})):
             with patch("pdftl.cli.main.parse_cli_stage", return_value=MagicMock()):
-
                 # ACT: Provide an argument that passes through to _prepare_pipeline
                 result = cli_main(["pdftl", "info"])
 

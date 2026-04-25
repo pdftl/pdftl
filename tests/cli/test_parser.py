@@ -187,7 +187,9 @@ class TestPrivateHelpers:
 
     def test_parse_multiple_arguments(self):
         args = ["allow", "Printing", "Copying", "output"]
-        q = lambda x: x.lower() in ["printing", "copying"]
+
+        def q(x):
+            return x.lower() in ["printing", "copying"]
 
         consumed, end_pos = _parse_multiple_arguments("allow", args, 0, q)
         assert consumed == 3  # "allow", "Printing", "Copying"
@@ -195,7 +197,9 @@ class TestPrivateHelpers:
 
     def test_parse_multiple_arguments_error(self):
         args = ["allow", "output"]
-        q = lambda x: x.lower() in ["printing", "copying"]
+
+        def q(x):
+            return x.lower() in ["printing", "copying"]
 
         with pytest.raises(InvalidArgumentError, match="Invalid argument 'output'"):
             _parse_multiple_arguments("allow", args, 0, q, hint="test hint")

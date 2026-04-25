@@ -28,7 +28,8 @@ def test_unpack_files(pdf_with_attachment, tmp_path):
 
         # get_input is a callable, likely used if specific files need to be selected
         # We pass a dummy lambda that returns empty or None
-        mock_get_input = lambda: None
+        def mock_get_input():
+            return None
 
         # Run the command
         result = unpack_files(

@@ -148,7 +148,7 @@ def _update_config_from_keyval(key, val, config):
             config["rows"] = int(rows)
         except ValueError:
             raise InvalidArgumentError(
-                f"Invalid grid format: '{val}'. " "Expected format: 'cols x rows', e.g. '2x2'."
+                f"Invalid grid format: '{val}'. Expected format: 'cols x rows', e.g. '2x2'."
             )
     elif key == "canvas":
         # Use standard pdftl parser (e.g. "a4", "a4_l", "4x6")
@@ -198,7 +198,6 @@ def _apply_montage_logic(
     output_pages = {}
 
     for src_page, slot in zip(source_pages, layout_stream):
-
         # A. Ensure Target Page Exists
         if slot.page_index not in output_pages:
             while len(target_pdf.pages) <= slot.page_index:

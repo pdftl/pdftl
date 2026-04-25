@@ -12,11 +12,11 @@ import pikepdf
 def mutate(instructions, context):
     # Insert '0 w' at the beginning
     instructions.insert(0, ([0], pikepdf.Operator("w")))
-    
+
     # Check for test args
     if "trigger_error" in context["args"]:
         raise ValueError("Triggered Error")
-        
+
     return instructions
 
 def custom_entry(instructions, context):

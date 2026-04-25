@@ -52,7 +52,6 @@ def test_resolve_detects_json_file():
 
     with patch("builtins.open", mock_open(read_data=file_content)) as mock_file:
         with patch("pathlib.Path.exists", return_value=True):
-
             args = ["@config.json"]
             _result = resolve_operation_spec(args, mock_manual_parser, MockSpec)
 
@@ -169,7 +168,6 @@ def test_load_yaml_missing_dependency():
     with patch.dict(sys.modules, {"yaml": None}):
         with patch("builtins.open", mock_open(read_data="...")):
             with patch("pathlib.Path.exists", return_value=True):
-
                 # Verify it raises ImportError
                 with pytest.raises(ImportError) as exc:
                     _load_spec_from_file("config.yaml")

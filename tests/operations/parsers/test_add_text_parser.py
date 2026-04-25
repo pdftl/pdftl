@@ -623,7 +623,6 @@ class TestAddTextParserHypothesis(unittest.TestCase):
 
 
 class TestAddTextFiltering(unittest.TestCase):
-
     def test_line_135_omissions(self):
         """Tests filtering via page range omissions '~' (Line 135)."""
         # Spec: range 1 to 5, but omit page 3

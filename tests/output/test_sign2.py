@@ -149,7 +149,6 @@ def test_save_and_sign_encryption_success_path():
         patch("pyhanko.sign.signers.sign_pdf"),
         patch("pdftl.output.sign.logger") as mock_logger,
     ):
-
         save_and_sign(mock_pdf, sign_cfg, save_opts, "out.pdf")
 
         # Verify line 42 was hit by checking the logger call
@@ -173,6 +172,5 @@ def test_sign_load_failure_coverage():
         patch("pyhanko.pdf_utils.incremental_writer.IncrementalPdfFileWriter"),
         patch("pdftl.output.sign.io.BytesIO"),
     ):
-
         with pytest.raises(UserCommandLineError, match="Failed to load signing key"):
             save_and_sign(mock_pdf, sign_cfg, save_opts, "out.pdf")

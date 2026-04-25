@@ -60,7 +60,6 @@ def parse_chop_specs_to_rules(specs, total_pages):
     page_rules = {}
 
     for spec in specs:
-
         # 2. Split the spec into its two main parts.
         #    e.g. "1-5rows2" -> "1-5", "rows2"
         #    e.g. "1,3rows2" -> "1,3", "rows2"

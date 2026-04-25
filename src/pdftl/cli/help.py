@@ -185,7 +185,7 @@ def _print_output_options_help(hprint):
     for opt, info in sorted(registry.options.items()):
         safe_opt = opt
         hprint(f"\n## `{safe_opt}`")
-        hprint(f"\n> {info.get('desc','')}\n")
+        hprint(f"\n> {info.get('desc', '')}\n")
         if hasattr(info, "long_desc"):
             cleaned_desc = info.long_desc.strip()
             if cleaned_desc:

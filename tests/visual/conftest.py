@@ -100,7 +100,7 @@ def assert_pdf_match(request, tmp_path):
                     diff_visible = ImageEnhance.Brightness(diff).enhance(100.0)
 
                     # If multipage, attach the page number (1-indexed) to the failure artifacts
-                    page_suffix = f"_page_{i+1}" if len(test_images) > 1 else ""
+                    page_suffix = f"_page_{i + 1}" if len(test_images) > 1 else ""
 
                     diff_path = tmp_path / f"FAILED_DIFF_{baseline_name}{page_suffix}.png"
                     output_img_path = tmp_path / f"FAILED_OUTPUT_{baseline_name}{page_suffix}.png"
@@ -111,7 +111,7 @@ def assert_pdf_match(request, tmp_path):
                     output_pdf_path.write_bytes(test_pdf_bytes)
 
                     pytest.fail(
-                        f"Visual regression detected on page {i+1}! (Max pixel delta: {max_diff}/255)\n"
+                        f"Visual regression detected on page {i + 1}! (Max pixel delta: {max_diff}/255)\n"
                         f"  Diff image: {diff_path}\n"
                         f"  Actual output image: {output_img_path}\n"
                         f"  Actual output PDF: {output_pdf_path}"

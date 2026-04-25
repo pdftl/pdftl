@@ -38,7 +38,7 @@ class TestInputNormalization:
         user_inputs = ["file1.pdf", "file2.pdf"]
         user_opened = {1: mock_pdf}
 
-        with patch("pikepdf.open") as mock_open:
+        with patch("pikepdf.open"):
             inputs, opened = api._normalize_inputs(user_inputs, user_opened, None)
             assert inputs[1] == "<explicit-obj-1>"
             assert opened[1] is mock_pdf

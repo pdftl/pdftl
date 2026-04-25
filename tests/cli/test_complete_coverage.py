@@ -206,7 +206,6 @@ def test_is_package_newer_than_cache_logic_extended_final(tmp_path):
         patch("os.path.exists", return_value=True),
         patch("os.path.getmtime", side_effect=mtime_mock),
     ):
-
         # This will walk through the loop (returning 500),
         # reach line 237, get 5000, and hit 238-239.
         assert is_package_newer_than_cache(cache_file) is True
@@ -239,7 +238,6 @@ def test_script_itself_is_newer():
         patch("os.path.exists", return_value=True),
         patch("os.path.getmtime", side_effect=mtime_logic),
     ):
-
         result = is_package_newer_than_cache(cache_file)
 
         # If this still fails, the pdb below will show us what paths were checked

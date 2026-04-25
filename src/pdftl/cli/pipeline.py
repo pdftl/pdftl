@@ -479,8 +479,7 @@ class PipelineManager:
         ),
         HelpExample(
             desc=(
-                "Save a snapshot of a rotated file,"
-                " then apply a stamp and save the final version"
+                "Save a snapshot of a rotated file, then apply a stamp and save the final version"
             ),
             cmd=(
                 "in.pdf rotate right output rotated_snapshot.pdf --- "

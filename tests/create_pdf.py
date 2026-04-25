@@ -33,18 +33,18 @@ def create_custom_pdf(filename: str, pages=2):
         border_and_arrow_stream = f"""q
         0.3 0.3 0.3 RG
         20 w
-        5 5 {WIDTH-10} {HEIGHT-10} re
+        5 5 {WIDTH - 10} {HEIGHT - 10} re
         S
         Q
         q
         {COLOURS[i % len(COLOURS)]} RG
         20 w
-        {WIDTH/2} {HEIGHT*0.4} m
-        {WIDTH/2} {HEIGHT*0.6} l
+        {WIDTH / 2} {HEIGHT * 0.4} m
+        {WIDTH / 2} {HEIGHT * 0.6} l
         S
-        {WIDTH/2 - 50} {HEIGHT*0.6 - 50} m
-        {WIDTH/2} {HEIGHT*0.6} l
-        {WIDTH/2 + 50} {HEIGHT*0.6 - 50} l
+        {WIDTH / 2 - 50} {HEIGHT * 0.6 - 50} m
+        {WIDTH / 2} {HEIGHT * 0.6} l
+        {WIDTH / 2 + 50} {HEIGHT * 0.6 - 50} l
         S
         Q
         """.encode()
@@ -60,7 +60,7 @@ def create_custom_pdf(filename: str, pages=2):
         # Define the content stream for the page-specific text
         text_stream = f"""BT
         /F1 96 Tf
-        30 {HEIGHT-110} Td
+        30 {HEIGHT - 110} Td
         (Page {i}) Tj
         ET
         """.encode()

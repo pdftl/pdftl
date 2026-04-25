@@ -457,7 +457,6 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
 
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
-
     # 1. Create an in-memory bytes buffer
     with io.BytesIO() as buffer:
         # 2. Save the pikepdf object into the buffer

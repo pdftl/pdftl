@@ -86,7 +86,6 @@ def test_external_ops_execution_flow():
         patch("importlib.util.module_from_spec"),
         patch.dict("sys.modules", {}, clear=False),
     ):
-
         # Setup specific spec behaviors
         spec_ok = MagicMock()
 
@@ -134,7 +133,6 @@ def test_internal_discovery_edge_cases():
         patch("pkgutil.iter_modules", return_value=mock_iter_data),
         patch("importlib.import_module"),
     ):
-
         registry_init._discover_modules([mock_valid_pkg], "test")
         registry_init._discover_modules([mock_bad_pkg], "test")
 
@@ -147,7 +145,7 @@ def test_initialize_registry_idempotency():
     # Using patch.object on the imported module for maximum CI reliability
     with (
         patch("importlib.import_module"),
-        patch.object(registry_init, "_discover_modules") as mock_disc,
+        patch.object(registry_init, "_discover_modules"),
         patch.object(registry_init, "_discover_external_operations") as mock_ext,
     ):
         # Call 1: Runs everything

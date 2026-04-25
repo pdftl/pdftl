@@ -120,8 +120,7 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
 
     if not parsed_stages:
         raise UserCommandLineError(
-            "No pipeline stages found.\n "
-            "Did you forget an operation?  Hint: pdftl help operations"
+            "No pipeline stages found.\n Did you forget an operation?  Hint: pdftl help operations"
         )
 
     import getpass

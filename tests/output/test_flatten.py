@@ -68,7 +68,6 @@ def test_flatten_uses_renderer_if_available(fresh_flatten_module):
     # Patch pypdfium2 to be our mock
     with patch.dict(sys.modules, {"pypdfium2": mock_pdfium_mod, "pypdfium2.raw": MagicMock()}):
         with patch("pikepdf.Pdf.open") as mock_pikepdf_open:
-
             # Reload so the module imports our mock_pdfium_mod
             importlib.reload(fresh_flatten_module)
 
@@ -88,7 +87,6 @@ def test_flatten_pypdfium2_runtime_error(mock_pdf, caplog, fresh_flatten_module)
     mock_pypdfium.PdfDocument.side_effect = RuntimeError("PDFium exploded")
 
     with patch.dict(sys.modules, {"pypdfium2": mock_pypdfium, "pypdfium2.raw": MagicMock()}):
-
         importlib.reload(fresh_flatten_module)
 
         fresh_flatten_module.flatten_pdf(mock_pdf)
@@ -106,7 +104,6 @@ def test_flatten_appearance_generation_error(mock_pdf, caplog, fresh_flatten_mod
 
     # Ensure we are in fallback mode (no pypdfium)
     with patch.dict(sys.modules, {"pypdfium2": None}):
-
         importlib.reload(fresh_flatten_module)
 
         fresh_flatten_module.flatten_pdf(mock_pdf)

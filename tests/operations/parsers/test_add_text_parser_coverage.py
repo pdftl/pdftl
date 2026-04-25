@@ -354,7 +354,6 @@ from pdftl.operations.parsers.add_text_parser import (
 
 
 class TestAddTextParserCoverage:
-
     def test_legacy_options_passed_through(self):
         """
         Covers Lines 314, 316-317.

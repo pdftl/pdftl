@@ -47,7 +47,6 @@ def resolve_operation_spec(
         and isinstance(args_or_spec[0], str)
         and args_or_spec[0].startswith("@")
     ):
-
         file_path = args_or_spec[0][1:]
         return _load_spec_from_file(file_path, model_class)
 

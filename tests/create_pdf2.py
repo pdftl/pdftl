@@ -25,19 +25,19 @@ def create_custom_pdf(filename: str):
     q                    # Save graphics state
     0.8 0.8 0.8 RG       # Set stroke color to gray
     2 w                  # Set line width to 2 points
-    5 5 {WIDTH-10} {HEIGHT-10} re  # Define the rectangle for the border
+    5 5 {WIDTH - 10} {HEIGHT - 10} re  # Define the rectangle for the border
     S                    # Stroke the path (draw the border)
     Q                    # Restore graphics state
 
     q                    # Save graphics state
     0 0 0 RG             # Set stroke color to black
     2 w                  # Set line width
-    {WIDTH/2} {HEIGHT*0.4} m  # Move to the arrow's base
-    {WIDTH/2} {HEIGHT*0.6} l  # Draw the main line of the arrow
+    {WIDTH / 2} {HEIGHT * 0.4} m  # Move to the arrow's base
+    {WIDTH / 2} {HEIGHT * 0.6} l  # Draw the main line of the arrow
     S                    # Stroke the path
-    {WIDTH/2 - 15} {HEIGHT*0.6 - 15} m # Move to the left arrowhead point
-    {WIDTH/2} {HEIGHT*0.6} l          # Draw to the arrow's tip
-    {WIDTH/2 + 15} {HEIGHT*0.6 - 15} l # Draw to the right arrowhead point
+    {WIDTH / 2 - 15} {HEIGHT * 0.6 - 15} m # Move to the left arrowhead point
+    {WIDTH / 2} {HEIGHT * 0.6} l          # Draw to the arrow's tip
+    {WIDTH / 2 + 15} {HEIGHT * 0.6 - 15} l # Draw to the right arrowhead point
     S                    # Stroke the path
     Q                    # Restore graphics state
     """.encode()
@@ -53,7 +53,7 @@ def create_custom_pdf(filename: str):
         text_stream = f"""
         BT                   # Begin Text Block
         /F1 48 Tf            # Set Font to F1, size 48
-        30 {HEIGHT-70} Td   # Position the text (top-left)
+        30 {HEIGHT - 70} Td   # Position the text (top-left)
         (Page {i}) Tj         # Show the text
         ET                   # End Text Block
         """.encode()

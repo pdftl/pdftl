@@ -196,7 +196,7 @@ def test_rebuild_acroform_updates_existing(clean_pdf):
     rebuild_acroform_index(pdf)
 
     assert len(pdf.Root.AcroForm.Fields) == 1
-    assert pdf.Root.AcroForm.NeedAppearances == True
+    assert pdf.Root.AcroForm.NeedAppearances
 
 
 def test_rebuild_acroform_deduplicates_parents(complex_radio_page):

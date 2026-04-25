@@ -15,8 +15,12 @@ from pdftl.utils.user_input import (
 
 def test_user_input_context():
     """Tests that the UserInputContext dataclass holds callables."""
-    mock_input = lambda: "input"
-    mock_pass = lambda: "pass"
+
+    def mock_input():
+        return "input"
+
+    def mock_pass():
+        return "pass"
 
     context = UserInputContext(get_input=mock_input, get_pass=mock_pass)
 

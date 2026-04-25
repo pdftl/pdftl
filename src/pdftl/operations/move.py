@@ -61,8 +61,7 @@ _MOVE_EXAMPLES = [
     ),
     HelpExample(
         desc=(
-            "Moving a Discontinuous List: "
-            "Gather pages 1, 3, and 5 and place them before page 10."
+            "Moving a Discontinuous List: Gather pages 1, 3, and 5 and place them before page 10."
         ),
         cmd="in.pdf move 1,3,5 before 10 output out.pdf",
     ),

@@ -290,7 +290,7 @@ def test_copy_item_recursive_pruning(mock_remapper):
     mock_constructor.return_value = mock_new_item
 
     copier = OutlineCopier(mock_remapper)
-    with patch("pikepdf.OutlineItem", mock_constructor) as mock_OI_constructor:
+    with patch("pikepdf.OutlineItem", mock_constructor):
         copier.copy_item(mock_item, new_parent_list)
 
     # 3. Assert
