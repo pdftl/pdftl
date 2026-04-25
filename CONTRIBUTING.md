@@ -35,11 +35,10 @@ pytest --cov=pdftl -n auto      # with coverage
 
 ## Code style
 
-We use `isort` and `black` for formatting, and `ruff` for linting. Before submitting:
+We use `ruff` for linting and formatting. Before submitting:
 
 ```bash
-isort src tests
-black src tests
+ruff format src tests
 ruff check src --fix    # should be no warnings here
 ruff check tests --fix  # ruff usually flags things in tests/ but --fix is still useful
 ```
