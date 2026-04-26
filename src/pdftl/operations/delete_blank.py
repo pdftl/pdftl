@@ -14,6 +14,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.keyval_parser import parse_keyval_string
 
 logger = logging.getLogger(__name__)
 
@@ -131,24 +132,15 @@ def _parse_float(value: str, name: str, min_val: float = None, max_val: float = 
 
 
 def _extract_params(spec: str) -> tuple[str, dict[str, str]]:
-    """
-    Split 'odd(threshold=0.01,dpi=72)' into ('odd', {'threshold': '0.01', 'dpi': '72'}).
-    Returns (spec, {}) unchanged if no parenthesised params are present.
-    """
     if "(" not in spec or not spec.endswith(")"):
         return spec, {}
-
     selector, params_str = spec[:-1].split("(", 1)
-    params: dict[str, str] = {}
-    for part in params_str.split(","):
-        if "=" not in part:
-            continue
-        k, v = part.split("=", 1)
-        k, v = k.strip().lower(), v.strip().lower()
-        if k not in _DELETE_BLANK_KEYS:
-            raise InvalidArgumentError(f"Invalid delete_blank parameter '{k}'.")
-        params[k] = v
-    return selector, params
+    return selector, parse_keyval_string(
+        params_str,
+        allowed_keys=_DELETE_BLANK_KEYS,
+        bare_tokens=True,  # silently skip tokens without '='
+        context="delete_blank",
+    )
 
 
 def _resolve_params(params: dict[str, str]) -> tuple[str, float, float, float, bool, bool]:

@@ -17,6 +17,7 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
+from pdftl.utils.keyval_parser import parse_keyval_list
 
 logger = logging.getLogger(__name__)
 
@@ -116,14 +117,7 @@ _LABEL_REGEX = re.compile(r"^(\d+)(?:\((.*?)\))?([rRaAD])?(\d+)?$")
 
 
 def _parse_kwargs(op_args: list[str]) -> dict:
-    """Parse the raw CLI arguments into a dictionary of key-value pairs."""
-    kwargs = {}
-    for arg in op_args:
-        if "=" not in arg:
-            raise OperationError(f"Invalid argument '{arg}'. Expected format: key=value")
-        key, value = arg.split("=", 1)
-        kwargs[key.lower().strip()] = value.strip()
-    return kwargs
+    return parse_keyval_list(op_args, context="set")
 
 
 def _parse_labels(pikepdf, labels_str: str) -> dict:

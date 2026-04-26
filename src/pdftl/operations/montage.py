@@ -17,6 +17,7 @@ from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.utils.keyval_parser import parse_keyval_list
 
 if TYPE_CHECKING:
     from pikepdf import Page, Pdf
@@ -124,18 +125,9 @@ def _parse_montage_config(specs: list[str], out_page_specs: list[str]) -> dict[s
         "gutter": 0.0,
         "canvas_size": parse_paper_spec("a4"),  # Default A4 Portrait
     }
-
-    for token in specs:
-        if "=" in token:
-            key, val = token.split("=", 1)
-            key = key.lower().strip()
-            val = val.lower().strip()
-            config = _update_config_from_keyval(key, val, config)
-
-        else:
-            # Assume it's a page spec (e.g. "1-5", "even", "A")
-            out_page_specs.append(token)
-
+    pairs = parse_keyval_list(specs, bare_tokens=out_page_specs, lowercase_values=True)
+    for k, v in pairs.items():
+        config = _update_config_from_keyval(k, v, config)
     return config
 
 

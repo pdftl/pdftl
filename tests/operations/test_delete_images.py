@@ -493,7 +493,7 @@ class TestDeleteImages:
 
     def test_invalid_key_raises_invalid_argument_error(self):
         pdf = _make_pdf()
-        with pytest.raises(InvalidArgumentError, match="invalid delete_images key"):
+        with pytest.raises(InvalidArgumentError, match="unknown parameter 'badkey'"):
             delete_images(pdf, ["(badkey=100)"])
 
     def test_invalid_minbytes_value_raises(self):

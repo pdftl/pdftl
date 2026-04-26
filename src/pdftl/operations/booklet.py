@@ -19,6 +19,7 @@ from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.utils.keyval_parser import parse_keyval_list
 
 if TYPE_CHECKING:
     from pikepdf import Page
@@ -144,25 +145,16 @@ def booklet_pages(pdf, operation_args) -> OpResult:
 
 
 def _parse_booklet_config(specs: list[str], out_page_specs: list[str]) -> dict[str, Any]:
-    """Parses booklet configuration from the command line."""
     config = {
-        "sig": 0,  # 0 means one giant signature
+        "sig": 0,
         "canvas_size": None,
         "margin": 0.0,
         "gutter": 0.0,
         "rtl": False,
     }
-
-    for token in specs:
-        if "=" in token:
-            key, val = token.split("=", 1)
-            key = key.lower().strip()
-            val = val.lower().strip()
-            config = _update_config_from_keyval(key, val, config)
-
-        else:
-            out_page_specs.append(token)
-
+    pairs = parse_keyval_list(specs, bare_tokens=out_page_specs, lowercase_values=True)
+    for k, v in pairs.items():
+        config = _update_config_from_keyval(k, v, config)
     return config
 
 

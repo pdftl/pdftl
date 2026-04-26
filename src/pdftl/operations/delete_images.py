@@ -13,6 +13,8 @@ from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.keyval_parser import parse_keyval_string
+
 
 logger = logging.getLogger(__name__)
 
@@ -257,24 +259,14 @@ def _delete_images_from_pages(selector, pdf, params, modified_objects, pikepdf):
 
 
 def _get_params(params_str):
-    params = {}
-    if not params_str:
-        return params
-
-    for p in params_str.split(","):
-        if "=" not in p:
-            raise InvalidArgumentError(f"missing '=' in delete_images argument '{p}'")
-
-        k, v = p.split("=", 1)
-        k = k.strip().lower()
-        v = v.strip().lower()
-
-        if k not in _DELETE_IMAGES_KEYS:
-            raise InvalidArgumentError(f"invalid delete_images key '{k}'")
-
+    params = parse_keyval_string(
+        params_str,
+        allowed_keys=_DELETE_IMAGES_KEYS,
+        lowercase_values=True,
+        context="delete_images",
+    )
+    for k, v in params.items():
         _validate_param(k, v)
-
-        params[k] = v
     return params
 
 

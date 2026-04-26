@@ -31,7 +31,7 @@ def render_page_to_pil(pdf, page_index: int, dpi: float):
         A PIL Image object.
     """
 
-    pdfium =_get_pdfium()
+    pdfium = _get_pdfium()
     pdf_buffer = _get_open_pdf_buffer(pdf)
     ui_pdf = None
     try:
@@ -63,7 +63,7 @@ def iter_pages_as_pil(pdf, dpi: float, page_indices: set[int] | None = None):
     Yields:
         (int, PIL.Image.Image) tuples — 0-based index and rendered image.
     """
-    pdfium =_get_pdfium()
+    pdfium = _get_pdfium()
     pdf_buffer = _get_open_pdf_buffer(pdf)
     ui_pdf = None
     try:
@@ -79,11 +79,15 @@ def iter_pages_as_pil(pdf, dpi: float, page_indices: set[int] | None = None):
             ui_pdf.close()
         pdf_buffer.close()
 
+
 def _get_pdfium():
     from pdftl.utils.dependencies import ensure_dependencies
+
     ensure_dependencies("page_images", ["pypdfium2", "PIL"], "render")
     import pypdfium2 as pdfium
+
     return pdfium
+
 
 def _get_open_pdf_buffer(pdf):
     pdf_buffer = io.BytesIO()

@@ -167,6 +167,9 @@ line-length = 99
 target-version = ['py310']
 include = '\.pyi?$'
 
+[tool.coverage.run]
+source = ["pdftl"]
+
 [tool.coverage.report]
 exclude_also = [
     # A pragma comment that excludes an entire file:

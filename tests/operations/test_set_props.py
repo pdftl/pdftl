@@ -3,7 +3,7 @@
 import pikepdf
 import pytest
 
-from pdftl.exceptions import OperationError
+from pdftl.exceptions import OperationError, InvalidArgumentError
 from pdftl.operations.set_props import set_props
 
 
@@ -22,7 +22,7 @@ def test_set_props_missing_args(blank_pdf):
 
 
 def test_set_props_invalid_arg_format(blank_pdf):
-    with pytest.raises(OperationError, match="Expected format: key=value"):
+    with pytest.raises(InvalidArgumentError, match="missing '=' in argument"):
         set_props(blank_pdf, ["lang_en-US"])
 
 

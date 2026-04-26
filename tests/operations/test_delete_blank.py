@@ -46,7 +46,7 @@ class TestDeleteBlankParams:
         assert params == {"threshold": "0.01", "dpi": "72", "mode": "rgb"}
 
     def test_extract_params_invalid_key(self):
-        with pytest.raises(InvalidArgumentError, match="Invalid delete_blank parameter 'potato'"):
+        with pytest.raises(InvalidArgumentError, match="unknown parameter 'potato'"):
             _extract_params("1-5(potato=5)")
 
     def test_resolve_params_defaults(self):
