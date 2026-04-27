@@ -152,7 +152,7 @@ extend-exclude = [
 
 [tool.ruff.lint]
 # E: Error, W: Warning, F: Pyflakes, UP: Pyupgrade, BLE: Blind Except
-select = ["E", "W", "F", "UP", "BLE"]
+select = ["E", "W", "F", "UP", "BLE", "W291"]
 ignore = ["E203", "E402"]
 
 [tool.ruff.lint.per-file-ignores]
