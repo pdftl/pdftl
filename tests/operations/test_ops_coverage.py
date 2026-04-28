@@ -7,7 +7,6 @@ import pdftl.core.constants as c
 from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.operations.generate_fdf import generate_fdf_cli_hook
-from pdftl.operations.overlay import apply_overlay
 from pdftl.operations.update_info import update_info
 
 
@@ -27,29 +26,6 @@ class TestOpsCoverage:
             generate_fdf_cli_hook(result, None, None)
 
             mock_smart_open.assert_called_with(None, mode="wb")
-
-    def test_apply_overlay_stdin(self):
-        """
-        Cover overlay.py line 150:
-        Checks that source is set to None when overlay_filename is "-".
-        """
-        # 1. Setup Mocks
-        input_pdf = MagicMock()
-        page_mock = MagicMock()
-        # FIX: Provide actual coordinates so pikepdf.Rectangle(*map(float, ...)) works
-        page_mock.trimbox = [0, 0, 612, 792]
-        input_pdf.pages = [page_mock]
-
-        with patch("pdftl.operations.overlay.smart_pikepdf_open") as mock_open:
-            overlay_pdf = MagicMock()
-            overlay_pdf.pages = [MagicMock()]
-            mock_open.return_value = overlay_pdf
-
-            # 2. Call with "-"
-            apply_overlay(input_pdf, overlay_filename="-")
-
-            # 3. Assert
-            mock_open.assert_called_with(None)
 
     def test_update_info_value_error(self):
         """

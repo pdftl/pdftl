@@ -108,3 +108,40 @@ def clean_ocproperties(pdf, target_ids: set):
     # 4. If NO layers are left, completely destroy the OCProperties shell
     if ocgs is not None and len(ocgs) == 0:
         del pdf.Root["/OCProperties"]
+
+
+def create_layer(pdf, layer_name: str):
+    """
+    Creates a new Optional Content Group (layer) and registers it globally
+    in the PDF's /OCProperties. Returns the OCG object.
+    """
+    from pikepdf import Name, Dictionary, Array
+
+    # 1. Create the base Optional Content Group (OCG)
+    ocg = pdf.make_indirect(Dictionary(Type=Name.OCG, Name=layer_name))
+
+    # 2. Ensure the global /OCProperties dictionary exists
+    if "/OCProperties" not in pdf.Root:
+        pdf.Root.OCProperties = Dictionary(OCGs=Array(), D=Dictionary(Order=Array(), ON=Array()))
+
+    oc_props = pdf.Root.OCProperties
+
+    # 3. Safely append to the master OCG list
+    if "/OCGs" not in oc_props:
+        oc_props.OCGs = Array()
+    oc_props.OCGs.append(ocg)
+
+    # 4. Safely append to the Default view dictionary (/D) and Order array
+    if "/D" not in oc_props:
+        oc_props.D = Dictionary(Order=Array(), ON=Array())
+    if "/Order" not in oc_props.D:
+        oc_props.D.Order = Array()
+
+    oc_props.D.Order.append(ocg)
+
+    # Best practice: ensure it is toggled ON by default
+    if "/ON" not in oc_props.D:
+        oc_props.D.ON = Array()
+    oc_props.D.ON.append(ocg)
+
+    return ocg

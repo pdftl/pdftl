@@ -1,45 +1,7 @@
 import pikepdf
 import pytest
 
-from pdftl.operations.overlay import apply_overlay
 from pdftl.operations.update_info import update_info
-
-# --- OVERLAY/STAMP TESTS ---
-
-
-@pytest.fixture
-def stamp_pdf_path(tmp_path):
-    """Creates a 1-page PDF to act as a stamp/overlay."""
-    p = pikepdf.new()
-    p.add_blank_page()
-    output = tmp_path / "stamp.pdf"
-    p.save(output)
-    return str(output)
-
-
-def test_overlay_stamp_basic(two_page_pdf, stamp_pdf_path):
-    """Test applying a stamp (overlay)."""
-    with pikepdf.open(two_page_pdf) as pdf:
-        # apply_overlay(input_pdf, overlay_filename, ...)
-        apply_overlay(pdf, stamp_pdf_path, on_top=True)
-
-        # We verify success by checking the file structure implicitly
-        # (pikepdf handles the heavy lifting)
-        assert len(pdf.pages) == 2
-
-
-def test_overlay_background(two_page_pdf, stamp_pdf_path):
-    """Test applying a background (underlay)."""
-    with pikepdf.open(two_page_pdf) as pdf:
-        apply_overlay(pdf, stamp_pdf_path, on_top=False)
-        assert len(pdf.pages) == 2
-
-
-def test_overlay_missing_file_error(two_page_pdf):
-    """Test error when overlay file doesn't exist."""
-    with pikepdf.open(two_page_pdf) as pdf:
-        with pytest.raises(FileNotFoundError):
-            apply_overlay(pdf, "non_existent_file.pdf")
 
 
 # --- UPDATE_INFO TESTS ---

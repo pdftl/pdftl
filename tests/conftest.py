@@ -335,6 +335,8 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
         "watermark.pdf",
         "overlay.pdf",
         "letterhead.pdf",
+        "letter.pdf",
+        "mark.pdf",
         "bgs.pdf",
         "stamps.pdf",
         "signatures.pdf",

@@ -133,7 +133,7 @@ def test_clean_ocproperties_alternate_configs():
 
 def test_get_page_layer_map_missing_keys():
     """Line 16/45ish: Handling resources with no /Properties or /XObject."""
-    pdf = pikepdf.Pdf.new()
+    pikepdf.Pdf.new()
     resources = pikepdf.Dictionary()  # Completely empty
     prop_map, xobj_map = get_page_layer_map(resources)
     assert not prop_map
@@ -144,7 +144,7 @@ def test_remove_targets_ignores_non_indirect():
     """Line 81ish: Safely skips array items that aren't indirect objects (like Names/Strings)."""
     import pikepdf
 
-    pdf = pikepdf.Pdf.new()
+    pikepdf.Pdf.new()
     arr = pikepdf.Array(["/SomeName", 42])  # Not objects with objgen
     _remove_targets_from_array(arr, {1})
     assert len(arr) == 2  # Remains untouched
@@ -164,3 +164,68 @@ def test_get_xobject_ocg_ids_invalid_oc():
     # Assign a Name instead of a Dictionary
     xobj.OC = pikepdf.Name("/NotADict")
     assert get_xobject_ocg_ids(xobj) == set()
+
+
+from pdftl.utils.ocg import create_layer
+
+
+def test_create_layer_initializes_missing_catalog():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    assert "/OCProperties" not in pdf.Root
+
+    ocg = create_layer(pdf, "NewLayer")
+
+    assert "/OCProperties" in pdf.Root
+    assert ocg in pdf.Root.OCProperties.OCGs
+    assert ocg in pdf.Root.OCProperties.D.Order
+    assert ocg in pdf.Root.OCProperties.D.ON
+
+
+def test_create_layer_appends_to_existing_catalog():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    create_layer(pdf, "Layer1")
+
+    # Add a second one
+    create_layer(pdf, "Layer2")
+
+    assert len(pdf.Root.OCProperties.OCGs) == 2
+    assert pdf.Root.OCProperties.OCGs[1].Name == "Layer2"
+
+
+def test_create_layer_partial_ocproperties():
+    """Covers ocg.py:132,137,139,145 — create_layer defends against a
+    pre-existing but incomplete /OCProperties (missing /OCGs, /D, /Order, /ON)."""
+    from pdftl.utils.ocg import create_layer
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+
+    # Intentionally skeletal — none of the expected sub-keys are present
+    pdf.Root.OCProperties = pikepdf.Dictionary()
+
+    ocg = create_layer(pdf, "DefensiveLayer")
+
+    assert ocg in pdf.Root.OCProperties.OCGs
+    assert ocg in pdf.Root.OCProperties.D.Order
+    assert ocg in pdf.Root.OCProperties.D.ON
+
+
+def test_create_layer_missing_order_and_on_in_existing_d():
+    """Covers ocg.py:139,145 — /D exists but is missing /Order and /ON."""
+    from pdftl.utils.ocg import create_layer
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+
+    # /D exists but has neither /Order nor /ON
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        OCGs=pikepdf.Array(),
+        D=pikepdf.Dictionary(),
+    )
+
+    ocg = create_layer(pdf, "SparseLayer")
+
+    assert ocg in pdf.Root.OCProperties.D.Order
+    assert ocg in pdf.Root.OCProperties.D.ON

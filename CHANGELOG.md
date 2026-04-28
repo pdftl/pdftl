@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `modify_layers` operation
 
+- `stamp`, `background`, `multistamp`, `multibackground`: option to add content in a new layer
+
 ## [0.16.0] - 2026-04-26
 
 ### Added
