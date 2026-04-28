@@ -229,3 +229,113 @@ def test_create_layer_missing_order_and_on_in_existing_d():
 
     assert ocg in pdf.Root.OCProperties.D.Order
     assert ocg in pdf.Root.OCProperties.D.ON
+
+
+from pdftl.utils.ocg import set_layer_state, set_layer_usage
+
+
+def test_set_layer_state_all_actions():
+    """Hits lines 154-190: Covers show, hide, lock, unlock logic."""
+    pdf = pikepdf.Pdf.new()
+
+    l1 = create_layer(pdf, "Layer1")
+    l2 = create_layer(pdf, "Layer2")
+    id1, id2 = int(l1.objgen[0]), int(l2.objgen[0])
+
+    # Test hide & show
+    set_layer_state(pdf, {id1}, "hide")
+    assert l1 in pdf.Root.OCProperties.D.OFF
+
+    set_layer_state(pdf, {id1}, "show")
+    assert l1 in pdf.Root.OCProperties.D.ON
+    assert l1 not in pdf.Root.OCProperties.D.OFF
+
+    # Test lock & unlock
+    set_layer_state(pdf, {id2}, "lock")
+    assert l2 in pdf.Root.OCProperties.D.Locked
+
+    set_layer_state(pdf, {id2}, "unlock")
+    assert l2 not in pdf.Root.OCProperties.D.Locked
+
+
+def test_set_layer_usage_all_actions():
+    """Hits lines 197-215: Covers print, noprint, screen, noscreen overrides."""
+    pdf = pikepdf.Pdf.new()
+
+    l1 = create_layer(pdf, "Layer1")
+    id1 = int(l1.objgen[0])
+
+    # Print / Noprint overrides
+    set_layer_usage(pdf, {id1}, "print")
+    assert str(l1.Usage.Print.PrintState) == "/ON"
+
+    set_layer_usage(pdf, {id1}, "noprint")
+    assert str(l1.Usage.Print.PrintState) == "/OFF"
+
+    # Screen / Noscreen overrides
+    set_layer_usage(pdf, {id1}, "screen")
+    assert str(l1.Usage.View.ViewState) == "/ON"
+
+    set_layer_usage(pdf, {id1}, "noscreen")
+    assert str(l1.Usage.View.ViewState) == "/OFF"
+
+
+def test_set_layer_missing_ocproperties():
+    """Hits the early returns in set_layer_state and set_layer_usage."""
+    pdf = pikepdf.Pdf.new()
+
+    # Should safely return without throwing exceptions
+    set_layer_state(pdf, {1}, "hide")
+    set_layer_usage(pdf, {1}, "print")
+
+
+def test_set_layer_state_no_matching_targets():
+    """Hits line 172: Early return when target_ids don't match any OCGs."""
+    import pikepdf
+    from pdftl.utils.ocg import create_layer, set_layer_state
+
+    pdf = pikepdf.Pdf.new()
+
+    # Create a layer to initialize the /OCProperties dictionary.
+    # Without this, it hits the earlier return at line 157 instead.
+    create_layer(pdf, "ValidLayer")
+
+    # Call with a dummy ID that doesn't exist in the PDF.
+    # `target_ocgs` will evaluate to [] and safely trigger the return at line 172.
+    set_layer_state(pdf, {99999}, "hide")
+
+    # Asserting that it exits gracefully without raising an exception or doing anything
+    assert True
+
+
+def test_get_xobject_ocg_ids_direct_dict():
+    """Hits line 27: /OC is a direct dictionary of Type /OCG, so it has no objgen."""
+    import pikepdf
+    from pdftl.utils.ocg import get_xobject_ocg_ids
+
+    # Construct a dummy XObject dictionary with a direct /OC dictionary
+    xobj = pikepdf.Dictionary(
+        Type=pikepdf.Name.XObject,
+        Subtype=pikepdf.Name.Form,
+        OC=pikepdf.Dictionary(Type=pikepdf.Name.OCG),
+    )
+
+    # Because it is a direct dict (not attached to a PDF), it has no objgen.
+    # It passes the first check but fails the objgen check, hitting line 27.
+    assert get_xobject_ocg_ids(xobj) == set()
+
+
+def test_set_layer_usage_skip_unmatched_targets():
+    """Hits line 226: Safely skips OCGs that are not in the target_ids list."""
+    import pikepdf
+    from pdftl.utils.ocg import create_layer, set_layer_usage
+
+    pdf = pikepdf.Pdf.new()
+    l1 = create_layer(pdf, "Layer1")
+
+    # Target an ID that doesn't match Layer1's ID.
+    # When _process_ocg_layer_usage checks Layer1, it will hit the early return.
+    set_layer_usage(pdf, {99999}, "print")
+
+    # Assert the layer was skipped and NOT modified
+    assert "/Usage" not in l1

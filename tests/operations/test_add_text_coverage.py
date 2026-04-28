@@ -5,7 +5,6 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-import pdftl.operations.helpers.text_drawer
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.add_text import add_text_pdf
 
@@ -35,7 +34,7 @@ class TestAddTextCoverage(ModuleSandboxMixin):
         """Test that pages with no rules are skipped."""
         spec = "1/Hello/"
 
-        with patch.object(pdftl.operations.helpers.text_drawer, "TextDrawer") as MockDrawer:
+        with patch("pdftl.operations.helpers.text_drawer.TextDrawer") as MockDrawer:
             add_text_pdf(pdf, [spec])
             # Instantiated once for dependency check, once for Page 1.
             # Should NOT be instantiated for Page 2.
@@ -131,9 +130,8 @@ def test_process_page_handles_empty_overlay(tmp_path):
     with pikepdf.new() as empty:
         empty.save(empty_pdf_bytes)
 
-    with patch.object(
-        pdftl.operations.helpers.text_drawer.TextDrawer,
-        "save",
+    with patch(
+        "pdftl.operations.helpers.text_drawer.TextDrawer.save",
         return_value=empty_pdf_bytes.getvalue(),
     ):
         result = add_text_pdf(pdf, ["/TEST/(position=mid-center)"])

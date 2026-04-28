@@ -117,7 +117,22 @@ def apply_overlay(
     """Apply overlay or underlay with optional OCG layering."""
     import pikepdf
 
-    # 1. Parse layer_name from operation_args
+    layer_name = _get_layer_name(operation_args)
+    source = None if overlay_filename == "-" else overlay_filename
+    with smart_pikepdf_open(source) as overlay_pdf:
+        if not overlay_pdf.pages:
+            raise OperationError(f"Overlay file '{overlay_filename}' is empty.")
+
+        ocg = create_layer(input_pdf, layer_name) if layer_name else None
+
+        for i, base_page in enumerate(input_pdf.pages):
+            _process_page(i, base_page, overlay_pdf, pikepdf, scale_to_fit, on_top, multi, ocg)
+
+    return OpResult(success=True, pdf=input_pdf)
+
+
+def _get_layer_name(operation_args):
+    """Parse layer_name from operation_args."""
     layer_name: str | None = None
     if operation_args:
         it = iter(operation_args)
@@ -127,39 +142,32 @@ def apply_overlay(
                     layer_name = next(it)
                 except StopIteration:
                     raise OperationError("The 'layer_name' option requires a value.")
+    return layer_name
 
-    source = None if overlay_filename == "-" else overlay_filename
-    with smart_pikepdf_open(source) as overlay_pdf:
-        if not overlay_pdf.pages:
-            raise OperationError(f"Overlay file '{overlay_filename}' is empty.")
 
-        ocg = create_layer(input_pdf, layer_name) if layer_name else None
+def _process_page(i, base_page, overlay_pdf, pikepdf, scale_to_fit, on_top, multi, ocg):
+    overlay_idx = min(i, len(overlay_pdf.pages) - 1) if multi else 0
+    overlay_page = overlay_pdf.pages[overlay_idx]
 
-        for i, base_page in enumerate(input_pdf.pages):
-            overlay_idx = min(i, len(overlay_pdf.pages) - 1) if multi else 0
-            overlay_page = overlay_pdf.pages[overlay_idx]
+    rect = (
+        pikepdf.Rectangle(*map(float, base_page.trimbox or base_page.MediaBox))
+        if scale_to_fit
+        else None
+    )
 
-            rect = (
-                pikepdf.Rectangle(*map(float, base_page.trimbox or base_page.MediaBox))
-                if scale_to_fit
-                else None
-            )
+    # Diff-and-Patch Logic
+    old_xobjs = (
+        set(base_page.Resources.XObject.keys())
+        if "/Resources" in base_page and "/XObject" in base_page.Resources
+        else set()
+    )
 
-            # Diff-and-Patch Logic
-            old_xobjs = (
-                set(base_page.Resources.XObject.keys())
-                if "/Resources" in base_page and "/XObject" in base_page.Resources
-                else set()
-            )
+    if on_top:
+        base_page.add_overlay(overlay_page, rect=rect)
+    else:
+        base_page.add_underlay(overlay_page, rect=rect)
 
-            if on_top:
-                base_page.add_overlay(overlay_page, rect=rect)
-            else:
-                base_page.add_underlay(overlay_page, rect=rect)
-
-            if ocg and "/Resources" in base_page and "/XObject" in base_page.Resources:
-                new_keys = set(base_page.Resources.XObject.keys()) - old_xobjs
-                for key in new_keys:
-                    base_page.Resources.XObject[key].OC = ocg
-
-    return OpResult(success=True, pdf=input_pdf)
+    if ocg and "/Resources" in base_page and "/XObject" in base_page.Resources:
+        new_keys = set(base_page.Resources.XObject.keys()) - old_xobjs
+        for key in new_keys:
+            base_page.Resources.XObject[key].OC = ocg

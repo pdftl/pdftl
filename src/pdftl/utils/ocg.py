@@ -8,29 +8,33 @@ def get_xobject_ocg_ids(xobj) -> set:
     """Extracts a set of OCG object IDs from an XObject's /OC dictionary."""
     import pikepdf
 
-    ocg_ids = set()
     if "/OC" not in xobj:
-        return ocg_ids
+        return set()
 
     oc = xobj.OC
     if not isinstance(oc, pikepdf.Dictionary):
-        return ocg_ids
+        return set()
 
     # An OCMD can contain a single OCG or an array of OCGs
     if oc.get("/Type") == "/OCMD":
-        ocgs = oc.get("/OCGs")
-        if isinstance(ocgs, pikepdf.Array):
-            for o in ocgs:
-                if hasattr(o, "objgen"):
-                    ocg_ids.add(int(o.objgen[0]))
-        elif hasattr(ocgs, "objgen"):
-            ocg_ids.add(int(ocgs.objgen[0]))
+        return _ocg_ids_from_ocmd(oc.get("/OCGs"), pikepdf.Array)
 
     # Sometimes it's just a direct reference to an OCG
-    elif oc.get("/Type") == "/OCG" or hasattr(oc, "objgen"):
-        if hasattr(oc, "objgen"):
-            ocg_ids.add(int(oc.objgen[0]))
+    if oc.get("/Type") == "/OCG" or hasattr(oc, "objgen"):
+        if oc.objgen[0] != 0:
+            return {int(oc.objgen[0])}
 
+    return set()
+
+
+def _ocg_ids_from_ocmd(ocgs, Array):
+    ocg_ids = set()
+    if isinstance(ocgs, Array):
+        for o in ocgs:
+            if hasattr(o, "objgen"):
+                ocg_ids.add(int(o.objgen[0]))
+    elif hasattr(ocgs, "objgen"):
+        ocg_ids.add(int(ocgs.objgen[0]))
     return ocg_ids
 
 
@@ -85,17 +89,29 @@ def clean_ocproperties(pdf, target_ids: set):
     if "/OCProperties" not in pdf.Root:
         return
 
+    ocgs = _clean_master_ocg_array(pdf, target_ids, NamePath)
+    _clean_default_config(pdf, target_ids, NamePath)
+    _clean_alternate_configs(pdf, target_ids, NamePath)
+    _clean_empty_shell(pdf, ocgs)
+
+
+def _clean_master_ocg_array(pdf, target_ids, NamePath):
     # 1. Clean Master OCGs Array
     ocgs = pdf.Root.get(NamePath.OCProperties.OCGs)
     if ocgs is not None:
         _remove_targets_from_array(ocgs, target_ids)
+    return ocgs
 
+
+def _clean_default_config(pdf, target_ids, NamePath):
     # 2. Clean Default Config
     for key in ["/ON", "/OFF", "/Order"]:
         arr = pdf.Root.get(NamePath("/OCProperties", "/D", key))
         if arr is not None:
             _remove_targets_from_array(arr, target_ids)
 
+
+def _clean_alternate_configs(pdf, target_ids, NamePath):
     # 3. Clean Alternate Configs
     configs = pdf.Root.get(NamePath.OCProperties.Configs)
     if configs is not None:
@@ -105,6 +121,8 @@ def clean_ocproperties(pdf, target_ids: set):
                 if arr is not None:
                     _remove_targets_from_array(arr, target_ids)
 
+
+def _clean_empty_shell(pdf, ocgs):
     # 4. If NO layers are left, completely destroy the OCProperties shell
     if ocgs is not None and len(ocgs) == 0:
         del pdf.Root["/OCProperties"]
@@ -145,3 +163,77 @@ def create_layer(pdf, layer_name: str):
     oc_props.D.ON.append(ocg)
 
     return ocg
+
+
+def set_layer_state(pdf, target_ids: set, action: str):
+    """
+    Applies state changes (show/hide/lock/unlock) to the global /OCProperties.
+    """
+    import pikepdf
+
+    if "/OCProperties" not in pdf.Root or "/D" not in pdf.Root.OCProperties:
+        return
+
+    d_dict = pdf.Root.OCProperties.D
+
+    def _ensure_array(key):
+        if key not in d_dict:
+            d_dict[key] = pikepdf.Array()
+        return d_dict[key]
+
+    ocgs = pdf.Root.OCProperties.get("/OCGs", [])
+    target_ocgs = [
+        ocg for ocg in ocgs if hasattr(ocg, "objgen") and int(ocg.objgen[0]) in target_ids
+    ]
+
+    if not target_ocgs:
+        return
+
+    if action in ("show", "hide"):
+        on_arr = _ensure_array("/ON")
+        off_arr = _ensure_array("/OFF")
+
+        # Remove from both arrays to prevent contradictory states
+        _remove_targets_from_array(on_arr, target_ids)
+        _remove_targets_from_array(off_arr, target_ids)
+
+        target_arr = on_arr if action == "show" else off_arr
+        target_arr.extend(target_ocgs)
+
+    elif action in ("lock", "unlock"):
+        locked_arr = _ensure_array("/Locked")
+        _remove_targets_from_array(locked_arr, target_ids)
+
+        if action == "lock":
+            locked_arr.extend(target_ocgs)
+
+
+def set_layer_usage(pdf, target_ids: set, action: str):
+    """
+    Applies usage overrides (print/noprint/screen/noscreen) to OCG dictionaries.
+    """
+    from pikepdf import Name, Dictionary
+
+    if "/OCProperties" not in pdf.Root or "/OCGs" not in pdf.Root.OCProperties:
+        return
+
+    for ocg in pdf.Root.OCProperties.OCGs:
+        _process_ocg_layer_usage(ocg, action, target_ids, Dictionary, Name)
+
+
+def _process_ocg_layer_usage(ocg, action, target_ids, Dictionary, Name):
+    if not (hasattr(ocg, "objgen") and int(ocg.objgen[0]) in target_ids):
+        return
+
+    if "/Usage" not in ocg:
+        ocg.Usage = Dictionary()
+
+    if action in ("print", "noprint"):
+        if "/Print" not in ocg.Usage:
+            ocg.Usage.Print = Dictionary(Subtype=Name.Print, PrintState=Name.ON)
+        ocg.Usage.Print.PrintState = Name.ON if action == "print" else Name.OFF
+
+    elif action in ("screen", "noscreen"):
+        if "/View" not in ocg.Usage:
+            ocg.Usage.View = Dictionary(ViewState=Name.ON)
+        ocg.Usage.View.ViewState = Name.ON if action == "screen" else Name.OFF

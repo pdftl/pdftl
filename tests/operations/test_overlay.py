@@ -6,51 +6,7 @@ from pdftl.exceptions import OperationError
 from pdftl.operations.overlay import apply_overlay
 
 
-def test_apply_overlay_empty_pdf():
-    mock_input_pdf = MagicMock()
-
-    # Create a mock for the overlay PDF that has an empty page list
-    mock_overlay_pdf = MagicMock()
-    mock_overlay_pdf.pages = []
-
-    # ADD THIS LINE: Make the mock work properly as a context manager
-    mock_overlay_pdf.__enter__.return_value = mock_overlay_pdf
-
-    with patch("pikepdf.open", return_value=mock_overlay_pdf):
-        with pytest.raises(OperationError, match="contains no pages"):
-            # assuming your function call looks like this:
-            apply_overlay(mock_input_pdf, "empty_overlay.pdf", [])
-
-
 import pikepdf
-
-
-def test_apply_overlay_missing_layer_name_value(simple_pdf):
-    with pytest.raises(OperationError, match="requires a value"):
-        apply_overlay(simple_pdf, "-", ["layer_name"], on_top=True)
-
-
-def test_apply_overlay_with_ocg_layer(simple_pdf, stamp_pdf):
-    # Pass a real file path or mock smart_pikepdf_open
-    # For this snippet, assume stamp_pdf is a path to a 1-page PDF
-    result = apply_overlay(simple_pdf, stamp_pdf, ["layer_name", "MyLayer"], on_top=True)
-
-    assert result.success
-    # Check if OCG was created
-    assert "/OCProperties" in result.pdf.Root
-    # Check if page 1's new XObject has the OC tag
-    page = result.pdf.pages[0]
-    xobjs = page.Resources.XObject
-    found_oc = any("/OC" in x for x in xobjs.values())
-    assert found_oc
-
-
-def test_overlay_empty_file_error(simple_pdf, tmp_path):
-    empty_pdf = tmp_path / "empty.pdf"
-    pikepdf.new().save(empty_pdf)  # Create a PDF with 0 pages if possible or just 1 then delete
-    # Most pikepdf.new() have 0 pages until added.
-    with pytest.raises(OperationError):
-        apply_overlay(simple_pdf, str(empty_pdf), [], on_top=True)
 
 
 def test_apply_overlay_empty_pdf():
@@ -90,17 +46,6 @@ def test_apply_overlay_with_ocg_layer(two_page_pdf, tmp_path):
     xobjs = page.Resources.XObject
     found_oc = any("/OC" in x for x in xobjs.values())
     assert found_oc
-
-
-def test_overlay_empty_file_error(two_page_pdf, tmp_path):
-    # Create an actually empty file or a PDF with no pages
-    empty_pdf_path = tmp_path / "empty.pdf"
-    with pikepdf.new() as empty:
-        # Save without adding pages
-        empty.save(empty_pdf_path)
-
-    with pytest.raises(OperationError, match="is empty"):
-        apply_overlay(pikepdf.open(two_page_pdf), str(empty_pdf_path), [], on_top=True)
 
 
 def test_apply_overlay_underlay(two_page_pdf, tmp_path):

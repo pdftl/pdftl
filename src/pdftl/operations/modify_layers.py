@@ -3,27 +3,46 @@ import logging
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
-from pdftl.utils.ocg import get_page_layer_map, clean_ocproperties
+from pdftl.utils.ocg import (
+    get_page_layer_map,
+    clean_ocproperties,
+    set_layer_state,
+    set_layer_usage,
+)
 from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
 
 logger = logging.getLogger(__name__)
 
 _MODIFY_LAYERS_LONG_DESC = """
 
-The `modify_layers` operation allows you to permanently alter Optional Content Groups
-(layers) in a PDF by either merging or stripping them.
+The `modify_layers` operation allows you to alter Optional Content Groups
+(layers) in a PDF. You can permanently merge/strip them, or change their
+default visibility and behavior.
 
 The command reads a sequence of action-target pairs. If no target is provided
 after an action, it defaults to affecting "all" layers.
 
 ### Available Actions
 
+**Structural (Permanent):**
 * `merge`: The visual content of the layer is permanently baked into the
   page. The layer is removed from the PDF's layer menu.
 * `strip`: The visual content of the layer is completely deleted from the
   document, and the layer is removed from the PDF's layer menu.
-* `keep`: Used primarily to exclude a specific layer when merging or
-  stripping all others.
+
+**State & Behavior (Non-destructive):**
+* `show` / `hide`: Sets the default visibility when the document is opened.
+* `lock` / `unlock`: Prevents/allows the user from toggling the layer in viewers.
+* `print` / `noprint`: Overrides behavior to force layer visibility ON or OFF when printing.
+* `screen` / `noscreen`:
+  Overrides behavior to force layer visibility ON or OFF on digital displays.
+
+**Utility:**
+* `keep`: Used primarily to exclude a specific layer when targeting "all" others.
+
+*Note on State vs. Usage: Layer visibility on screen (`show`/`hide`) is independent
+of its visibility when printing. Modifying a usage state (like `noprint`) without
+changing its base state will leave its on-screen visibility unchanged.*
 
 ### Target Specifications
 
@@ -40,12 +59,12 @@ _MODIFY_LAYERS_EXAMPLES = [
         "desc": "Strip ALL layers from the PDF.",
     },
     {
-        "cmd": "in.pdf modify_layers merge keep Background output out.pdf",
-        "desc": 'Merge all layers EXCEPT the one named "Background".',
+        "cmd": "in.pdf modify_layers hide all show name=Draft output out.pdf",
+        "desc": "Hide all layers by default, except 'Draft'.",
     },
     {
-        "cmd": "in.pdf modify_layers strip name=English merge id=42 output out.pdf",
-        "desc": "Chain multiple commands using explicit key=value syntax.",
+        "cmd": "in.pdf modify_layers noprint name=Watermark output out.pdf",
+        "desc": "Prevent the 'Watermark' layer from showing up on paper.",
     },
 ]
 
@@ -151,11 +170,11 @@ def _process_xobject_invocation(
         if "strip" in actions or is_stripping:
             return True
 
-        # If mergeed, delete the /OC dict so it becomes a permanent object
+        # If merged, delete the /OC dict so it becomes a permanent object
         if "merge" in actions:
             xobj = resources.XObject[local_alias]
             if "/OC" in xobj:
-                del xobj.OC
+                del xobj["/OC"]
 
     return False
 
@@ -221,9 +240,9 @@ def _process_stream_op(
 
 @register_operation(
     "modify_layers",
-    tags=["layers", "modify", "merge", "strip"],
+    tags=["layers", "modify", "merge", "strip", "visibility", "print"],
     type="single input operation",
-    desc="Merge or strip specific layers",
+    desc="Modify state, merge, or strip specific layers",
     long_desc=_MODIFY_LAYERS_LONG_DESC,
     usage="<input> modify_layers [action] [target]... output <output> [<option>...]",
     examples=_MODIFY_LAYERS_EXAMPLES,
@@ -232,28 +251,57 @@ def _process_stream_op(
 def modify_layers(pdf, *args, output_file=None) -> OpResult:
     cli_args = args[0] if len(args) == 1 and isinstance(args[0], (list, tuple)) else args
 
-    rules_by_id, rules_by_name, default_action = parse_modify_layers_rules(cli_args)
-    resolved_targets = _resolve_targets(pdf, rules_by_id, rules_by_name, default_action)
-    target_ids = set(resolved_targets.keys())
+    rules_by_id, rules_by_name, default_actions = parse_modify_layers_rules(cli_args)
+    resolved_targets = _resolve_targets(pdf, rules_by_id, rules_by_name, default_actions)
 
-    if not target_ids:
+    if not resolved_targets:
         return OpResult(
             success=True,
             data="No matching layers found to modify.",
             meta={c.META_OUTPUT_FILE: output_file},
         )
 
-    processed_xobjs = set()
-    for page in pdf.pages:
-        _process_content_stream(pdf, page, resolved_targets, processed_xobjs)
-
-    clean_ocproperties(pdf, target_ids)
+    # 1. Filter out structural actions (require expensive stream parsing)
+    _modify_structural_targets(pdf, resolved_targets)
+    # 2. Process state/usage actions (fast dictionary operations)
+    _modify_state_or_usage(pdf, resolved_targets)
 
     return OpResult(
         success=True,
-        data=f"Successfully modified layers. Targets matched: {len(target_ids)}",
+        data=f"Successfully modified layers. Targets matched: {len(resolved_targets)}",
         meta={c.META_OUTPUT_FILE: output_file},
     )
+
+
+def _modify_structural_targets(pdf, resolved_targets):
+    structural_targets = {}
+    for oid, actions in resolved_targets.items():
+        if "strip" in actions:
+            structural_targets[oid] = "strip"
+        elif "merge" in actions:
+            structural_targets[oid] = "merge"
+
+    if structural_targets:
+        processed_xobjs = set()
+        for page in pdf.pages:
+            _process_content_stream(pdf, page, structural_targets, processed_xobjs)
+        clean_ocproperties(pdf, set(structural_targets.keys()))
+
+
+def _modify_state_or_usage(pdf, resolved_targets):
+    targets_by_action = {}
+    for oid, actions in resolved_targets.items():
+        for action in actions:
+            targets_by_action.setdefault(action, set()).add(oid)
+
+    state_actions = {"show", "hide", "lock", "unlock"}
+    usage_actions = {"print", "noprint", "screen", "noscreen"}
+
+    for action, oids in targets_by_action.items():
+        if action in state_actions:
+            set_layer_state(pdf, oids, action)
+        elif action in usage_actions:
+            set_layer_usage(pdf, oids, action)
 
 
 def _resolve_targets(pdf, rules_by_id: dict, rules_by_name: dict, default_action: str) -> dict:
@@ -272,13 +320,17 @@ def _resolve_targets(pdf, rules_by_id: dict, rules_by_name: dict, default_action
     return final_targets
 
 
-def _resolve_targets_for_ocg(ocg, default_action, rules_by_id, rules_by_name, final_targets):
+def _resolve_targets_for_ocg(ocg, default_actions, rules_by_id, rules_by_name, final_targets):
     obj_id = int(ocg.objgen[0])
-    action_for_this_ocg = default_action
 
-    # 1. Strict ID Match (Takes precedence)
+    # Initialize the set directly with our default actions
+    actions_for_this_ocg = set(default_actions)
+
+    # 1. Strict ID Match
     if obj_id in rules_by_id:
-        action_for_this_ocg = rules_by_id[obj_id]
+        actions = rules_by_id[obj_id]
+        # Assuming the parser returns a list/set of actions for the ID
+        actions_for_this_ocg.update(actions if isinstance(actions, (list, set)) else [actions])
     else:
         # 2. Sloppy Name Match
         name_obj = ocg.get("/Name")
@@ -287,8 +339,12 @@ def _resolve_targets_for_ocg(ocg, default_action, rules_by_id, rules_by_name, fi
             clean_name = name[1:] if name.startswith("/") else name
 
             if clean_name in rules_by_name:
-                action_for_this_ocg = rules_by_name[clean_name]
+                actions = rules_by_name[clean_name]
+                actions_for_this_ocg.update(
+                    actions if isinstance(actions, (list, set)) else [actions]
+                )
 
-    # Only track layers that are actually being modified
-    if action_for_this_ocg != "keep":
-        final_targets[obj_id] = action_for_this_ocg
+    # Only track if there are actual actions to perform
+    actions_for_this_ocg.discard("keep")
+    if actions_for_this_ocg:
+        final_targets[obj_id] = actions_for_this_ocg

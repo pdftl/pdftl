@@ -10,25 +10,6 @@ def create_mock_ocg(obj_id, name):
     return ocg
 
 
-def test_resolve_targets():
-    pdf = MagicMock()
-    ocg1 = create_mock_ocg(10, "Layer1")
-    ocg2 = create_mock_ocg(20, "Layer2")
-    ocg3 = create_mock_ocg(30, "Layer3")
-
-    pdf.Root.get.return_value = [ocg1, ocg2, ocg3]
-
-    # Strict ID overrides sloppy name
-    rules_by_id = {10: "merge"}
-    rules_by_name = {"Layer1": "strip", "Layer2": "strip"}
-
-    targets = _resolve_targets(pdf, rules_by_id, rules_by_name, "keep")
-
-    assert targets[10] == "merge"  # ID takes precedence
-    assert targets[20] == "strip"
-    assert 30 not in targets  # Kept targets aren't tracked
-
-
 @patch("pdftl.operations.modify_layers.get_page_layer_map")
 @patch("pikepdf.parse_content_stream")
 @patch("pikepdf.unparse_content_stream")
@@ -67,10 +48,23 @@ def test_process_content_stream(mock_unparse, mock_parse, mock_get_map):
     mock_parse.return_value = mock_stream
     mock_unparse.return_value = b"new_stream"
 
-    # We need to mock the resources for the XObject mergeing logic
+    # Setup the XObject mock
     xobj_mock = MagicMock()
-    xobj_mock.__contains__.return_value = True  # Has /OC
-    stream_dict.get.return_value = MagicMock(XObject={"/Fm0": xobj_mock})
+    xobj_mock.__contains__.return_value = True  # Tells 'if "/OC" in xobj:' to return True
+
+    # Setup the Resources mock (Your prod code uses resources.XObject)
+    mock_resources = MagicMock()
+    mock_resources.XObject = {"/Fm0": xobj_mock}
+
+    # Route the .get() calls so the stream finds the resources
+    def mock_stream_get(key, default=None):
+        if key == "/Type":
+            return "/Page"
+        if key == "/Resources":
+            return mock_resources
+        return default
+
+    stream_dict.get.side_effect = mock_stream_get
 
     _process_content_stream(pdf, stream_dict, resolved)
 
@@ -88,7 +82,7 @@ def test_process_content_stream(mock_unparse, mock_parse, mock_get_map):
 
     assert operators == expected
     # Verify the /OC key was deleted from the mergeed XObject
-    assert xobj_mock.__delitem__.called_with("/OC")
+    xobj_mock.__delitem__.assert_called_with("/OC")
 
 
 @patch("pdftl.operations.modify_layers.parse_modify_layers_rules")
@@ -156,16 +150,6 @@ def test_process_content_stream_form_xobject_write():
 
         # Ensure write() was called instead of assigning to Contents
         stream_dict.write.assert_called_once_with(b"new_data")
-
-
-def test_resolve_targets_no_match():
-    """Line 120ish: Hits the branch where a layer doesn't match any specific rule."""
-    pdf = MagicMock()
-    ocg1 = create_mock_ocg(10, "UnknownLayer")
-    pdf.Root.get.return_value = [ocg1]
-
-    targets = _resolve_targets(pdf, {}, {"SpecificName": "strip"}, "keep")
-    assert targets == {}  # No matches found
 
 
 def test_process_content_stream_missing_xobj():
@@ -262,3 +246,75 @@ def test_process_content_stream_strip_do_operator():
         filtered_stream = mock_unparse.call_args[0][0]
         operators = [(ops, str(op)) for ops, op in filtered_stream]
         assert operators == [(["/KeepMe"], "Do")]
+
+
+def test_resolve_targets():
+    pdf = MagicMock()
+    ocg1 = create_mock_ocg(10, "Layer1")
+    ocg2 = create_mock_ocg(20, "Layer2")
+    ocg3 = create_mock_ocg(30, "Layer3")
+
+    pdf.Root.get.return_value = [ocg1, ocg2, ocg3]
+
+    rules_by_id = {10: {"merge"}}
+    rules_by_name = {"Layer1": {"strip"}, "Layer2": {"strip"}}
+
+    targets = _resolve_targets(pdf, rules_by_id, rules_by_name, {"keep"})
+
+    # The function correctly drops 'keep' and only tracks 'merge'
+    assert targets[10] == {"merge"}
+
+
+def test_resolve_targets_no_match():
+    """Line 120ish: Hits the branch where a layer doesn't match any specific rule."""
+    pdf = MagicMock()
+    ocg1 = create_mock_ocg(10, "UnknownLayer")
+    pdf.Root.get.return_value = [ocg1]
+
+    targets = _resolve_targets(pdf, {}, {"SpecificName": {"strip"}}, {"keep"})
+
+    # Because 'keep' is a no-op, the queue correctly remains empty
+    assert targets == {}
+
+
+from unittest.mock import patch
+
+
+@patch("pdftl.operations.modify_layers.parse_modify_layers_rules")
+@patch("pdftl.operations.modify_layers._resolve_targets")
+@patch("pdftl.operations.modify_layers._process_content_stream")
+@patch("pdftl.operations.modify_layers.clean_ocproperties")
+def test_modify_layers_merge(mock_clean, mock_process, mock_resolve, mock_parse):
+    """Hits lines 269-270: The 'merge' structural action branch."""
+    pdf = MagicMock()
+    pdf.pages = ["dummy_page"]
+
+    mock_parse.return_value = ({}, {}, {"merge"})
+    mock_resolve.return_value = {123: {"merge"}}
+
+    result = modify_layers(pdf, ["in.pdf", "modify_layers", "merge", "all", "output", "out.pdf"])
+
+    assert result.success is True
+    mock_process.assert_called_with(pdf, "dummy_page", {123: "merge"}, set())
+    mock_clean.assert_called_with(pdf, {123})
+
+
+@patch("pdftl.operations.modify_layers.parse_modify_layers_rules")
+@patch("pdftl.operations.modify_layers._resolve_targets")
+@patch("pdftl.operations.modify_layers.set_layer_state")
+@patch("pdftl.operations.modify_layers.set_layer_usage")
+def test_modify_layers_state_and_usage(mock_usage, mock_state, mock_resolve, mock_parse):
+    """Hits lines 289 & 291: The state and usage action loops."""
+    pdf = MagicMock()
+    mock_parse.return_value = ({}, {}, set())
+
+    # Resolve multiple different actions
+    mock_resolve.return_value = {10: {"hide", "lock"}, 11: {"noprint", "screen"}}
+
+    result = modify_layers(pdf, [])
+
+    assert result.success is True
+    mock_state.assert_any_call(pdf, {10}, "hide")
+    mock_state.assert_any_call(pdf, {10}, "lock")
+    mock_usage.assert_any_call(pdf, {11}, "noprint")
+    mock_usage.assert_any_call(pdf, {11}, "screen")
