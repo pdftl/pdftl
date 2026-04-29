@@ -1,4 +1,6 @@
 import os
+import pytest
+
 from unittest.mock import MagicMock, call
 
 # --- Import the module and functions to test ---
@@ -32,11 +34,7 @@ def test_user_input_context():
 
 def test_get_input_no_completer(mocker):
     """Tests get_input in its simplest form (no completer)."""
-    try:
-        import readline
-    except ImportError:
-        return
-
+    pytest.importorskip("readline")
     # Patch the built-in input() function
     mock_input = mocker.patch("builtins.input", return_value="test_output")
 
@@ -59,10 +57,7 @@ def test_get_input_with_completer(mocker):
     Tests that get_input correctly sets up and tears down
     the readline completer.
     """
-    try:
-        import readline
-    except ImportError:
-        return
+    pytest.importorskip("readline")
 
     # Patch the built-in input() function
     mock_input = mocker.patch("builtins.input", return_value="test_file.pdf")

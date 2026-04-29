@@ -4,13 +4,16 @@ import pikepdf
 import pytest
 from pikepdf import String
 
-# --- Import SUT ---
-from pdftl.info.output_info import (
+from pdftl.info.info_types import (
     BookmarkEntry,
     DocInfoEntry,
     PageLabelEntry,
     PageMediaEntry,
     PdfInfo,
+)
+
+# --- Import SUT ---
+from pdftl.info.output_info import (
     _write_bookmarks,
     _write_docinfo,
     _write_page_labels,
@@ -87,6 +90,19 @@ def mock_pdf():
     pdf.open_outline.return_value.__enter__.return_value.root = []
 
     return pdf
+
+# @pytest.fixture
+# def mock_pdf():
+#     pdf = MagicMock(spec=pikepdf.Pdf)
+#     pdf.pages = []
+#     pdf.docinfo = {}
+#     pdf.is_encrypted = False
+#     pdf.pdf_version = "1.7"
+#     pdf.Root = MagicMock()
+#     # Default ID
+#     pdf.trailer = {"/ID": [b"ID1", b"ID2"]}
+#     return pdf
+
 
 
 @pytest.fixture
@@ -541,9 +557,6 @@ def test_advanced_page_box_logic():
 
 
 def test_write_info_rect_coverage():
-    from pdftl.info.info_types import PageMediaEntry, PdfInfo
-    from pdftl.info.output_info import write_info
-
     # Setup info with rare rects
     entry = PageMediaEntry(page_number=1, trim_rect=[0, 0, 10, 10], bleed_rect=[0, 0, 15, 15])
     info = PdfInfo(pages=1, page_media=[entry])
@@ -560,17 +573,6 @@ def test_write_info_rect_coverage():
     assert "PageMediaBleedRect: 0 0 15 15" in combined
 
 
-from unittest.mock import patch
-
-import pytest
-
-from pdftl.info.info_types import (
-    BookmarkEntry,
-    DocInfoEntry,
-    PageLabelEntry,
-    PageMediaEntry,
-    PdfInfo,
-)
 
 # --- Fixtures & Mocks ---
 
@@ -587,18 +589,6 @@ def mock_constants():
         }
         yield mock_c
 
-
-@pytest.fixture
-def mock_pdf():
-    pdf = MagicMock(spec=pikepdf.Pdf)
-    pdf.pages = []
-    pdf.docinfo = {}
-    pdf.is_encrypted = False
-    pdf.pdf_version = "1.7"
-    pdf.Root = MagicMock()
-    # Default ID
-    pdf.trailer = {"/ID": [b"ID1", b"ID2"]}
-    return pdf
 
 
 # --- Tests for get_info ---

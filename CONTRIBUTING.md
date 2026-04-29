@@ -39,8 +39,7 @@ We use `ruff` for linting and formatting. Before submitting:
 
 ```bash
 ruff format src tests
-ruff check src --fix    # should be no warnings here
-ruff check tests --fix  # ruff usually flags things in tests/ but --fix is still useful
+ruff check src tests --fix      # should be no warnings here
 ```
 
 ## Adding an operation

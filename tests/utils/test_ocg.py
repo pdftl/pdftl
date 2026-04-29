@@ -133,7 +133,6 @@ def test_clean_ocproperties_alternate_configs():
 
 def test_get_page_layer_map_missing_keys():
     """Line 16/45ish: Handling resources with no /Properties or /XObject."""
-    pikepdf.Pdf.new()
     resources = pikepdf.Dictionary()  # Completely empty
     prop_map, xobj_map = get_page_layer_map(resources)
     assert not prop_map
@@ -144,7 +143,6 @@ def test_remove_targets_ignores_non_indirect():
     """Line 81ish: Safely skips array items that aren't indirect objects (like Names/Strings)."""
     import pikepdf
 
-    pikepdf.Pdf.new()
     arr = pikepdf.Array(["/SomeName", 42])  # Not objects with objgen
     _remove_targets_from_array(arr, {1})
     assert len(arr) == 2  # Remains untouched
