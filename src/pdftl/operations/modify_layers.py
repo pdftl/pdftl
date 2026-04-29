@@ -3,13 +3,13 @@ import logging
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
 from pdftl.utils.ocg import (
-    get_page_layer_map,
     clean_ocproperties,
+    get_page_layer_map,
     set_layer_state,
     set_layer_usage,
 )
-from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
 
 logger = logging.getLogger(__name__)
 

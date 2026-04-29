@@ -9,12 +9,12 @@
 import logging
 from typing import TYPE_CHECKING
 
+import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.ocg import create_layer
-import pdftl.core.constants as c
 
 if TYPE_CHECKING:
     import pikepdf

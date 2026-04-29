@@ -1,19 +1,20 @@
-import pytest
-import numpy as np
-from PIL import Image
 from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
+from PIL import Image
 
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.delete_blank import (
-    _parse_float,
-    _extract_params,
-    _resolve_params,
-    _parse_spec,
     _BlankSpec,
     _compute_ink_coverage,
     _compute_stddev,
-    _page_is_blank,
+    _extract_params,
     _find_blank_pages_for_spec,
+    _page_is_blank,
+    _parse_float,
+    _parse_spec,
+    _resolve_params,
     delete_blank,
 )
 

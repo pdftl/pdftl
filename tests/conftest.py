@@ -14,6 +14,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import importlib
+import pprint
+from unittest.mock import MagicMock, patch
 import pytest
 
 # need
@@ -439,11 +442,6 @@ def assert_dump_output(capsys):
     return _check
 
 
-import importlib
-
-import pytest
-
-
 @pytest.fixture
 def clean_registry():
     """
@@ -494,11 +492,6 @@ def clean_registry():
     pdftl.registry_init.initialize_registry()
 
     return registry
-
-
-import pprint
-
-import pytest
 
 
 # --- PART 1: Hookwrapper to capture test status ---
@@ -587,9 +580,6 @@ def minimal_pdf():
         yield pdf
 
 
-from unittest.mock import MagicMock
-
-
 @pytest.fixture
 def mock_pdf():
     """
@@ -603,9 +593,6 @@ def mock_pdf():
     # Default behavior: simulate a clean structure unless test overrides
     pdf.Root.__contains__.return_value = False
     return pdf
-
-
-import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -633,3 +620,18 @@ def clean_logging_state():
     pdftl_logger.setLevel(logging.NOTSET)
 
     yield
+
+
+@pytest.fixture
+def run_pdftl():
+    from pdftl.cli.main import main
+
+    def _run(args):
+        with patch.object(sys, "argv", ["pdftl"] + args):
+            try:
+                main()
+            except SystemExit as e:
+                if e.code != 0:
+                    raise RuntimeError(f"pdftl failed with exit code {e.code}")
+
+    return _run

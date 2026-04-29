@@ -1,12 +1,10 @@
 from unittest.mock import MagicMock, patch
 
+import pikepdf
 import pytest
 
 from pdftl.exceptions import OperationError
 from pdftl.operations.overlay import apply_overlay
-
-
-import pikepdf
 
 
 def test_apply_overlay_empty_pdf():

@@ -12,9 +12,8 @@ import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.keyval_parser import parse_keyval_string
-
+from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 logger = logging.getLogger(__name__)
 

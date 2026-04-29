@@ -18,8 +18,8 @@ from pdftl.operations.montage import _apply_montage_logic
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
-from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.keyval_parser import parse_keyval_list
+from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 if TYPE_CHECKING:
     from pikepdf import Page

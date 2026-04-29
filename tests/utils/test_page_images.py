@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
-from pdftl.utils.page_images import render_page_to_pil, iter_pages_as_pil
+import pytest
+
+from pdftl.utils.page_images import iter_pages_as_pil, render_page_to_pil
 
 
 @pytest.fixture

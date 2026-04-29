@@ -91,6 +91,7 @@ def mock_pdf():
 
     return pdf
 
+
 # @pytest.fixture
 # def mock_pdf():
 #     pdf = MagicMock(spec=pikepdf.Pdf)
@@ -102,7 +103,6 @@ def mock_pdf():
 #     # Default ID
 #     pdf.trailer = {"/ID": [b"ID1", b"ID2"]}
 #     return pdf
-
 
 
 @pytest.fixture
@@ -573,7 +573,6 @@ def test_write_info_rect_coverage():
     assert "PageMediaBleedRect: 0 0 15 15" in combined
 
 
-
 # --- Fixtures & Mocks ---
 
 
@@ -588,7 +587,6 @@ def mock_constants():
             "trim_rect": "TrimBox",
         }
         yield mock_c
-
 
 
 # --- Tests for get_info ---

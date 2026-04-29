@@ -133,7 +133,7 @@ def create_layer(pdf, layer_name: str):
     Creates a new Optional Content Group (layer) and registers it globally
     in the PDF's /OCProperties. Returns the OCG object.
     """
-    from pikepdf import Name, Dictionary, Array
+    from pikepdf import Array, Dictionary, Name
 
     # 1. Create the base Optional Content Group (OCG)
     ocg = pdf.make_indirect(Dictionary(Type=Name.OCG, Name=layer_name))
@@ -212,7 +212,7 @@ def set_layer_usage(pdf, target_ids: set, action: str):
     """
     Applies usage overrides (print/noprint/screen/noscreen) to OCG dictionaries.
     """
-    from pikepdf import Name, Dictionary
+    from pikepdf import Dictionary, Name
 
     if "/OCProperties" not in pdf.Root or "/OCGs" not in pdf.Root.OCProperties:
         return

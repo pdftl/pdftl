@@ -1,9 +1,10 @@
 import pikepdf
+
 from pdftl.utils.ocg import (
-    get_xobject_ocg_ids,
-    get_page_layer_map,
     _remove_targets_from_array,
     clean_ocproperties,
+    get_page_layer_map,
+    get_xobject_ocg_ids,
 )
 
 
@@ -290,6 +291,7 @@ def test_set_layer_missing_ocproperties():
 def test_set_layer_state_no_matching_targets():
     """Hits line 172: Early return when target_ids don't match any OCGs."""
     import pikepdf
+
     from pdftl.utils.ocg import create_layer, set_layer_state
 
     pdf = pikepdf.Pdf.new()
@@ -309,6 +311,7 @@ def test_set_layer_state_no_matching_targets():
 def test_get_xobject_ocg_ids_direct_dict():
     """Hits line 27: /OC is a direct dictionary of Type /OCG, so it has no objgen."""
     import pikepdf
+
     from pdftl.utils.ocg import get_xobject_ocg_ids
 
     # Construct a dummy XObject dictionary with a direct /OC dictionary
@@ -326,6 +329,7 @@ def test_get_xobject_ocg_ids_direct_dict():
 def test_set_layer_usage_skip_unmatched_targets():
     """Hits line 226: Safely skips OCGs that are not in the target_ids list."""
     import pikepdf
+
     from pdftl.utils.ocg import create_layer, set_layer_usage
 
     pdf = pikepdf.Pdf.new()

@@ -95,7 +95,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 * **Text replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) text in content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)
+* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html)
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
@@ -221,6 +221,7 @@ See the **[API Tutorial][4]** for more details.
 | [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html)                       | Print PDF named destinations data to the console                |
 | [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html)             | Print PDF encryption details and permissions                    |
 | [`dump_files`](https://pdftl.readthedocs.io/en/latest/operations/dump_files.html)                       | List file attachments                                           |
+| [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html)                     | Extract PDF embedded image metadata to JSON                     |
 | [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)                     | Dump layer info (JSON)                                          |
 | [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html)             | List and validate digital signatures                            |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |

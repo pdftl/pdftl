@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
-from pdftl.operations.modify_layers import _resolve_targets, _process_content_stream, modify_layers
+
+from pdftl.operations.modify_layers import _process_content_stream, _resolve_targets, modify_layers
 
 
 # --- Mocks for Testing ---

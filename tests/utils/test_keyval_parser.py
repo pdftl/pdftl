@@ -8,11 +8,10 @@ import pytest
 
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import (
-    parse_keyval_token,
     parse_keyval_list,
     parse_keyval_string,
+    parse_keyval_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # parse_keyval_token

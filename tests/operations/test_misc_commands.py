@@ -3,7 +3,6 @@ import pytest
 
 from pdftl.operations.update_info import update_info
 
-
 # --- UPDATE_INFO TESTS ---
 
 

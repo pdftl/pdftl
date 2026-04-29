@@ -16,8 +16,8 @@ from pdftl.exceptions import InvalidArgumentError
 from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import dim_str_to_pts
-from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.keyval_parser import parse_keyval_list
+from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 if TYPE_CHECKING:
     from pikepdf import Page, Pdf

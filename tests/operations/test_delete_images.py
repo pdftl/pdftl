@@ -4,19 +4,19 @@
 
 """Tests for pdftl/operations/delete_images.py — 100% coverage target."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from pikepdf import Array, Name
 
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.delete_images import (
-    _parse_size_str,
-    _overwrite_with_stub,
     _image_matches,
+    _overwrite_with_stub,
+    _parse_size_str,
     _process_resources,
     delete_images,
 )
-
 
 # ---------------------------------------------------------------------------
 # _parse_size_str

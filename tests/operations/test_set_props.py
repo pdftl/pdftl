@@ -3,7 +3,7 @@
 import pikepdf
 import pytest
 
-from pdftl.exceptions import OperationError, InvalidArgumentError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.operations.set_props import set_props
 
 

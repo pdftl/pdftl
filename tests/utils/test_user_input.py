@@ -1,7 +1,7 @@
 import os
-import pytest
-
 from unittest.mock import MagicMock, call
+
+import pytest
 
 # --- Import the module and functions to test ---
 from pdftl.utils.user_input import (

@@ -1,4 +1,5 @@
 import pytest
+
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
 
