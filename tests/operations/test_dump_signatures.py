@@ -296,3 +296,129 @@ def test_patch_pyhanko_bytes_handling():
 
     # Call with trailing nulls
     generic.parse_pdf_date("D:20211230134641+11'00'\x00   ")
+
+
+# --- Additional Coverage Tests ---
+
+
+def test_dump_signatures_isolated_cert_fallback(signed_pdf_path):
+    """
+    Covers lines 283-286.
+    Tests the fallback when validation_path is None, but a signing_cert exists.
+    """
+    from pdftl.operations.dump_signatures import dump_signatures
+
+    mock_status = MagicMock()
+    mock_status.intact = True
+    mock_status.diff_result = "Basic Modification"
+
+    # Empty validation path, but provide the isolated signing cert
+    mock_status.validation_path = None
+    mock_cert = MagicMock()
+    mock_cert.subject.native = {"common_name": "Isolated Test Signer"}
+    mock_status.signing_cert = mock_cert
+
+    with patch("pyhanko.sign.validation.validate_pdf_signature", return_value=mock_status):
+        result = dump_signatures(signed_pdf_path, None, None)
+
+    assert result.success
+    sig_data = result.data[0]
+    # Verify the fallback tag was applied
+    assert "Isolated Test Signer (Untrusted/Isolated)" in sig_data["chain_of_trust"]
+
+
+def test_parse_suspicious_details_all_branches():
+    """
+    Covers lines 98-130 in dump_signatures.py.
+    Tests all regex replacements and formatting branches of the text parser.
+    """
+    from pdftl.operations.dump_signatures import _parse_suspicious_details
+
+    # A crafted string that triggers every branch:
+    # - Exception wrapper regex
+    # - Reference & Context compression
+    # - Orphan bullets and text
+    # - Header colons vs Inline colons
+    # - End-of-loop flushing with and without data
+    raw_diff = (
+        'Exception("\n'
+        "- Orphan Bullet\n"
+        "Orphan Plain Text\n"
+        "Header 1:\n"
+        "- Bullet under header\n"
+        "Plain text under header\n"
+        "InlineType: Inline Data\n"
+        "Header 2:\n"
+        "Reference(idnum=112, generation=0)\n"
+        "AbsoluteContext(path=PathInRevision('.Root.Pages'))\n"
+        "Header 3:\n"
+        "Trailing data to flush\n"
+        '")'
+    )
+
+    blocks = _parse_suspicious_details(raw_diff)
+
+    # We expect 6 blocks because `112:0` triggers the inline colon split branch
+    assert len(blocks) == 6
+    assert blocks[0] == {"type": "General Modification", "data": "Orphan Plain Text"}
+    assert blocks[1] == {
+        "type": "Header 1",
+        "data": "Bullet under header | Plain text under header",
+    }
+    assert blocks[2] == {"type": "InlineType", "data": "Inline Data"}
+    assert blocks[3] == {"type": "112", "data": "0"}
+    assert blocks[4] == {"type": "Header 2", "data": ".Root.Pages"}
+    assert blocks[5] == {"type": "Header 3", "data": "Trailing data to flush"}
+
+
+def test_dump_signatures_diffresult_suspicious(signed_pdf_path):
+    """
+    Covers lines 261 and 281-282.
+    Tests the branch where diff_result is exactly an instance of DiffResult
+    and its modification level is SUSPICIOUS, plus the validation_path loop.
+    """
+    from pyhanko.sign.diff_analysis import DiffResult
+    from pdftl.operations.dump_signatures import dump_signatures
+
+    mock_status = MagicMock()
+    mock_status.intact = True
+
+    # Fake a proper pyHanko DiffResult without strict spec causing AttributeError
+    mock_diff = MagicMock()
+    mock_diff.__class__ = DiffResult
+    mock_diff.modification_level.name = "SUSPICIOUS"
+    mock_diff.__str__.return_value = "FakeHeader:\n- Fake modification"
+    mock_status.diff_result = mock_diff
+
+    # Trigger coverage for lines 281-282 (validation path iteration)
+    mock_cert = MagicMock()
+    mock_cert.subject.native = {"common_name": "Chain Cert"}
+    mock_cert.subject.human_friendly = "Chain Cert Friendly"
+    mock_status.validation_path = [mock_cert]
+    mock_status.signing_cert = None
+
+    with patch("pyhanko.sign.validation.validate_pdf_signature", return_value=mock_status):
+        result = dump_signatures(signed_pdf_path, None, None)
+
+    assert result.success
+    sig_data = result.data[0]
+    assert sig_data["modification_level"] == "SUSPICIOUS"
+    assert len(sig_data["suspicious_details"]) > 0
+    assert sig_data["suspicious_details"][0]["type"] == "FakeHeader"
+    assert "Chain Cert" in sig_data["chain_of_trust"]
+
+
+def test_parse_suspicious_details_empty_flush():
+    """
+    Covers lines 129-130 in dump_signatures.py.
+    Ensures that a trailing header with no data is properly flushed.
+    """
+    from pdftl.operations.dump_signatures import _parse_suspicious_details
+
+    # A string that ends exactly on a header, leaving current_data empty
+    raw_diff = "Trailing Empty Header:\n"
+    
+    blocks = _parse_suspicious_details(raw_diff)
+    
+    assert len(blocks) == 1
+    assert blocks[0] == {"type": "Trailing Empty Header", "data": ""}

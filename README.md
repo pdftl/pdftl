@@ -95,7 +95,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 * **Text replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) text in content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html)
+* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images.
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
