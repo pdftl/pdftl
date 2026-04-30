@@ -141,3 +141,28 @@ def test_handle_no_specs_returns_empty_when_inputs_none():
 
     result = _handle_no_specs(None, {})
     assert result == []
+
+
+from unittest.mock import MagicMock, patch
+from pdftl.utils.page_specs.resolver import _aspect_ratio_pass
+
+
+@patch("pdftl.utils.page_specs.resolver.get_visible_page_dimensions")
+def test_aspect_ratio_pass_no_dimensions(mock_get_dims):
+    """
+    Covers line 63 in resolver.py.
+    Tests the fallback when get_visible_page_dimensions returns None.
+    """
+    # Force the dimensions utility to return None
+    mock_get_dims.return_value = None
+
+    # Create a mock PDF with at least 1 page to bypass the line 59 check
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [MagicMock()]
+
+    # Evaluate a page number that exists in our mock
+    result = _aspect_ratio_pass(p=1, portrait_q=True, landscape_q=False, pdf=mock_pdf)
+
+    # If dims is None, the function should default to returning True
+    assert result is True
+    mock_get_dims.assert_called_once_with(mock_pdf.pages[0])

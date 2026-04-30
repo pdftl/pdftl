@@ -68,6 +68,45 @@ def _patch_pyhanko():
     generic.parse_pdf_date = _patched
 
 
+def _process_suspicious_line(line, blocks, current_type, current_data):
+    """Helper to process a single line of the diff analysis diff."""
+    if line.startswith("- "):
+        current_data.append(line[2:].strip())
+        return current_type, current_data
+
+    if ":" in line:
+        # Flush the existing block before starting a new key
+        if current_type is not None and current_data:
+            blocks.append({"type": current_type, "data": " | ".join(current_data)})
+            # We flushed data, so we reset the context
+            current_type = None
+            current_data = []
+
+        if line.endswith(":"):
+            return line[:-1].strip(), []
+
+        # Handle inline split (e.g., 112:0)
+        parts = line.split(":", 1)
+        blocks.append({"type": parts[0].strip(), "data": parts[1].strip()})
+        # Preserve current_type and current_data context if we didn't flush
+        return current_type, current_data
+
+    # Handle plain text blocks
+    if current_type is not None:
+        current_data.append(line)
+    else:
+        blocks.append({"type": "General Modification", "data": line})
+
+    return current_type, current_data
+
+
+def _flush_suspicious_block(blocks, current_type, current_data):
+    """Helper to flush any remaining block data at the end of parsing."""
+    if current_type is not None:
+        data_str = " | ".join(current_data) if current_data else ""
+        blocks.append({"type": current_type, "data": data_str})
+
+
 def _parse_suspicious_details(diff_result) -> list:
     """
     Parses pyHanko's text-based diff analysis into structured blocks.
@@ -92,44 +131,51 @@ def _parse_suspicious_details(diff_result) -> list:
         line = line.strip()
         if not line:
             continue
+        current_type, current_data = _process_suspicious_line(
+            line, blocks, current_type, current_data
+        )
 
-        if line.startswith("- "):
-            # It's a bullet point belonging to the previous header
-            val = line[2:].strip()
-            if current_type:
-                current_data.append(val)
-            else:
-                current_data.append(val)
-        elif ":" in line:
-            if line.endswith(":"):
-                # It's a header line for bullet points
-                if current_type and current_data:
-                    blocks.append({"type": current_type, "data": " | ".join(current_data)})
-                current_type = line[:-1].strip()
-                current_data = []
-            else:
-                # It's an inline type/data split: "Type details here: 112:0, 113:0"
-                if current_type and current_data:
-                    blocks.append({"type": current_type, "data": " | ".join(current_data)})
-                    current_type = None
-                    current_data = []
-
-                parts = line.split(":", 1)
-                blocks.append({"type": parts[0].strip(), "data": parts[1].strip()})
-        else:
-            # Plain text fallback
-            if current_type:
-                current_data.append(line)
-            else:
-                blocks.append({"type": "General Modification", "data": line})
-
-    # Flush any remaining data
-    if current_type and current_data:
-        blocks.append({"type": current_type, "data": " | ".join(current_data)})
-    elif current_type and not current_data:
-        blocks.append({"type": current_type, "data": ""})
-
+    _flush_suspicious_block(blocks, current_type, current_data)
     return blocks
+
+
+def _print_signature_stanza(sig_data, out):
+    """Helper to print a single signature stanza, lowering CLI hook complexity."""
+    print("SignatureBegin", file=out)
+    print(f"SignatureFieldName: {sig_data.get('field_name')}", file=out)
+    print(f"SignatureSigner: {sig_data.get('signer')}", file=out)
+    print(f"SignatureHashAlgorithm: {sig_data.get('hash_algorithm')}", file=out)
+
+    # Mathematical Integrity
+    integrity = "VALID" if sig_data.get("is_intact") else "INVALID"
+    print(f"SignatureIntegrity: {integrity}", file=out)
+
+    # Trust Identity
+    print(f"SignerTrusted: {sig_data.get('is_trusted')}", file=out)
+    if sig_data.get("trust_problem") != "NO_PROBLEM":
+        print(f"TrustProblem: {sig_data.get('trust_problem')}", file=out)
+
+    print(f"SignatureCoverage: {sig_data.get('coverage')}", file=out)
+    print(f"SignatureModificationLevel: {sig_data.get('modification_level')}", file=out)
+    print(f"DocMDPOk: {sig_data.get('docmdp_ok')}", file=out)
+
+    # Print parsed suspicious details blocks
+    suspicious_details = sig_data.get("suspicious_details", [])
+    for block in suspicious_details:
+        print("SuspiciousDetailsBegin", file=out)
+        print(f"SuspiciousDetailsType: {block.get('type', 'Unknown')}", file=out)
+        print(f"SuspiciousDetailsData: {block.get('data', '')}", file=out)
+
+    # Metadata and Identity details
+    if sig_data.get("timestamp"):
+        print(f"SignatureTimestamp: {sig_data.get('timestamp')}", file=out)
+
+    if sig_data.get("signature_mechanism"):
+        print(f"SignatureMechanism: {sig_data.get('signature_mechanism')}", file=out)
+
+    chain = sig_data.get("chain_of_trust")
+    if chain:
+        print(f"SignatureChainOfTrust: {' -> '.join(chain)}", file=out)
 
 
 def dump_signatures_cli_hook(result: OpResult, _stage, _pipeline):
@@ -148,42 +194,7 @@ def dump_signatures_cli_hook(result: OpResult, _stage, _pipeline):
             return
 
         for idx, sig_data in enumerate(signatures):
-            print("SignatureBegin", file=out)
-            print(f"SignatureFieldName: {sig_data.get('field_name')}", file=out)
-            print(f"SignatureSigner: {sig_data.get('signer')}", file=out)
-            print(f"SignatureHashAlgorithm: {sig_data.get('hash_algorithm')}", file=out)
-
-            # Mathematical Integrity
-            integrity = "VALID" if sig_data.get("is_intact") else "INVALID"
-            print(f"SignatureIntegrity: {integrity}", file=out)
-
-            # Trust Identity
-            print(f"SignerTrusted: {sig_data.get('is_trusted')}", file=out)
-            if sig_data.get("trust_problem") != "NO_PROBLEM":
-                print(f"TrustProblem: {sig_data.get('trust_problem')}", file=out)
-
-            print(f"SignatureCoverage: {sig_data.get('coverage')}", file=out)
-            print(f"SignatureModificationLevel: {sig_data.get('modification_level')}", file=out)
-            print(f"DocMDPOk: {sig_data.get('docmdp_ok')}", file=out)
-
-            # Print parsed suspicious details blocks
-            suspicious_details = sig_data.get("suspicious_details", [])
-            for block in suspicious_details:
-                print("SuspiciousDetailsBegin", file=out)
-                print(f"SuspiciousDetailsType: {block.get('type', 'Unknown')}", file=out)
-                print(f"SuspiciousDetailsData: {block.get('data', '')}", file=out)
-
-            # Metadata and Identity details
-            if sig_data.get("timestamp"):
-                print(f"SignatureTimestamp: {sig_data.get('timestamp')}", file=out)
-
-            if sig_data.get("signature_mechanism"):
-                print(f"SignatureMechanism: {sig_data.get('signature_mechanism')}", file=out)
-
-            chain = sig_data.get("chain_of_trust")
-            if chain:
-                print(f"SignatureChainOfTrust: {' -> '.join(chain)}", file=out)
-
+            _print_signature_stanza(sig_data, out)
             if idx + 1 < len(signatures):
                 print("---", file=out)
 
@@ -218,10 +229,71 @@ def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None) -> OpResu
         cv_logger.setLevel(prev_cv)
 
 
+def _get_timestamp_string(status) -> str | None:
+    """Helper to safely extract the timestamp string from status."""
+    if getattr(status, "timestamp_validity", None) and status.timestamp_validity.timestamp:
+        return f"{status.timestamp_validity.timestamp.isoformat()} (Cryptographic TSA Token)"
+    if getattr(status, "signer_reported_dt", None) and status.signer_reported_dt:
+        return f"{status.signer_reported_dt.isoformat()} (Signer-reported)"
+    return None
+
+
+def _get_cert_chain(status) -> list:
+    """Helper to extract the certificate chain array from status."""
+    chain = []
+    if getattr(status, "validation_path", None):
+        for cert in status.validation_path:
+            subject_name = cert.subject.native.get("common_name", cert.subject.human_friendly)
+            chain.append(subject_name)
+    elif getattr(status, "signing_cert", None):
+        cert = status.signing_cert
+        subject_name = cert.subject.native.get("common_name", cert.subject.human_friendly)
+        chain.append(f"{subject_name} (Untrusted/Isolated)")
+    return chain
+
+
+def _extract_signature_info(sig, status) -> dict:
+    """Helper to extract and format a single pyHanko signature validation result."""
+    from pyhanko.sign.diff_analysis import DiffResult
+
+    signer_name = "Unknown"
+    if getattr(status, "signing_cert", None):
+        signer_name = status.signing_cert.subject.native.get("common_name", "Unknown")
+
+    # Handle Document Modifications
+    suspicious_blocks = []
+    if isinstance(status.diff_result, DiffResult):
+        mod_level = status.diff_result.modification_level.name
+        if mod_level == "SUSPICIOUS":
+            suspicious_blocks = _parse_suspicious_details(status.diff_result)
+    else:
+        mod_level = f"SUSPICIOUS ({type(status.diff_result).__name__})"
+        suspicious_blocks = _parse_suspicious_details(status.diff_result)
+
+    trust_problem = getattr(status, "trust_problem_indic", None)
+    trust_problem_name = trust_problem.name if trust_problem else "NO_PROBLEM"
+    is_trusted = getattr(status, "valid", False) and trust_problem_name == "NO_PROBLEM"
+
+    return {
+        "field_name": sig.field_name,
+        "signer": signer_name,
+        "hash_algorithm": getattr(status, "md_algorithm", "Unknown"),
+        "is_intact": getattr(status, "intact", False),
+        "is_trusted": is_trusted,
+        "trust_problem": trust_problem_name,
+        "coverage": status.coverage.name if getattr(status, "coverage", None) else "UNKNOWN_NONE",
+        "modification_level": mod_level,
+        "suspicious_details": suspicious_blocks,
+        "docmdp_ok": getattr(status, "docmdp_ok", None),
+        "timestamp": _get_timestamp_string(status),
+        "signature_mechanism": getattr(status, "pkcs7_signature_mechanism", None),
+        "chain_of_trust": _get_cert_chain(status),
+    }
+
+
 def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
     try:
         from pyhanko.pdf_utils.reader import PdfFileReader
-        from pyhanko.sign.diff_analysis import DiffResult
         from pyhanko.sign.validation import validate_pdf_signature
         from pyhanko.sign.validation.errors import SignatureValidationError
     except ImportError:
@@ -249,59 +321,6 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
         except (SignatureValidationError, ValueError) as e:
             raise OperationError(f"[dump_signatures] {e}") from e
 
-        signer_name = "Unknown"
-        if getattr(status, "signing_cert", None):
-            signer_name = status.signing_cert.subject.native.get("common_name", "Unknown")
-
-        # Handle Document Modifications
-        suspicious_blocks = []
-        if isinstance(status.diff_result, DiffResult):
-            mod_level = status.diff_result.modification_level.name
-            if mod_level == "SUSPICIOUS":
-                suspicious_blocks = _parse_suspicious_details(status.diff_result)
-        else:
-            mod_level = f"SUSPICIOUS ({type(status.diff_result).__name__})"
-            suspicious_blocks = _parse_suspicious_details(status.diff_result)
-
-        timestamp = None
-        if getattr(status, "timestamp_validity", None) and status.timestamp_validity.timestamp:
-            timestamp = (
-                f"{status.timestamp_validity.timestamp.isoformat()} (Cryptographic TSA Token)"
-            )
-        elif getattr(status, "signer_reported_dt", None) and status.signer_reported_dt:
-            timestamp = f"{status.signer_reported_dt.isoformat()} (Signer-reported)"
-
-        trust_problem = "NO_PROBLEM"
-        if getattr(status, "trust_problem_indic", None):
-            trust_problem = status.trust_problem_indic.name
-
-        chain = []
-        if getattr(status, "validation_path", None):
-            for cert in status.validation_path:
-                subject_name = cert.subject.native.get("common_name", cert.subject.human_friendly)
-                chain.append(subject_name)
-        elif getattr(status, "signing_cert", None):
-            cert = status.signing_cert
-            subject_name = cert.subject.native.get("common_name", cert.subject.human_friendly)
-            chain.append(f"{subject_name} (Untrusted/Isolated)")
-
-        sig_data = {
-            "field_name": sig.field_name,
-            "signer": signer_name,
-            "hash_algorithm": getattr(status, "md_algorithm", "Unknown"),
-            "is_intact": getattr(status, "intact", False),
-            "is_trusted": getattr(status, "valid", False) and trust_problem == "NO_PROBLEM",
-            "trust_problem": trust_problem,
-            "coverage": status.coverage.name
-            if getattr(status, "coverage", None)
-            else "UNKNOWN_NONE",
-            "modification_level": mod_level,
-            "suspicious_details": suspicious_blocks,
-            "docmdp_ok": getattr(status, "docmdp_ok", None),
-            "timestamp": timestamp,
-            "signature_mechanism": getattr(status, "pkcs7_signature_mechanism", None),
-            "chain_of_trust": chain,
-        }
-        results.append(sig_data)
+        results.append(_extract_signature_info(sig, status))
 
     return results

@@ -18,8 +18,8 @@ def _help_topic_page_specs():
     1. Page range: Which pages to select.
 
     2. Qualifiers, step and omissions: Filtering the selected pages by
-    parity (even/odd), a step size to use when interpreting ranges,
-    and omitted ranges.
+    parity (even/odd) or aspect ratio (portrait/landscape), a step
+    size to use when interpreting ranges, and omitted ranges.
 
     3. Transformation modifiers: Applying rotation or scaling to
     the selected pages. This is ignored by some operations.
@@ -65,6 +65,10 @@ def _help_topic_page_specs():
     * `odd`: selects only odd-numbered pages in the range (e.g.,
     `odd` alone selects all odd pages).
 
+    * `portrait`: selects only pages with width no bigger than height
+
+    * `landscape`: selects only pages with height no bigger than width
+
     ### Step size
 
     An optional step size to use when interpreting page ranges,
@@ -72,6 +76,11 @@ def _help_topic_page_specs():
     integer, and at least 1. The default step size is 1.
 
     Examples
+
+    * `portraiteven` selects portrait pages with even numbers.
+
+    * `6-20landscapeeven` selects landscape pages with even numbers from
+      pages 6-20.
 
     * `step4` selects every 4th page (pages 1, 5, 9, ...) in the
       document.

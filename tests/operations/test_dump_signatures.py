@@ -417,8 +417,54 @@ def test_parse_suspicious_details_empty_flush():
 
     # A string that ends exactly on a header, leaving current_data empty
     raw_diff = "Trailing Empty Header:\n"
-    
+
     blocks = _parse_suspicious_details(raw_diff)
-    
+
     assert len(blocks) == 1
     assert blocks[0] == {"type": "Trailing Empty Header", "data": ""}
+
+
+def test_signature_no_timestamp_handled_correctly():
+    """
+    Covers line 237 and ensures that a missing timestamp safely
+    propagates as None and is omitted from the CLI output.
+    """
+    import io
+    from pdftl.operations.dump_signatures import _extract_signature_info, _print_signature_stanza
+
+    # 1. Mock the necessary pyHanko objects to survive extraction
+    class MockSig:
+        field_name = "TestSigNoTime"
+
+    class MockStatus:
+        md_algorithm = "sha256"
+        intact = True
+        valid = True
+        trust_problem_indic = None
+        docmdp_ok = True
+        pkcs7_signature_mechanism = "rsa"
+        validation_path = []
+        signing_cert = None
+
+        # Mocking the coverage and diff_result enums/objects
+        coverage = type("MockCoverage", (), {"name": "ENTIRE_FILE"})
+        diff_result = type(
+            "MockDiff", (), {"modification_level": type("MockMod", (), {"name": "NONE"})}
+        )
+
+        # Explicitly lack timestamp data to trigger the fallback branch
+        timestamp_validity = None
+        signer_reported_dt = None
+
+    # 2. Run the extraction (this hits line 237 and returns None)
+    sig_data = _extract_signature_info(MockSig(), MockStatus())
+    assert sig_data.get("timestamp") is None
+
+    # 3. Pass the data to the formatter and capture the stdout
+    out_buffer = io.StringIO()
+    _print_signature_stanza(sig_data, out_buffer)
+    output_text = out_buffer.getvalue()
+
+    # 4. Verify the caller correctly ignored the None value
+    assert "SignatureBegin" in output_text  # Ensure it actually printed the stanza
+    assert "SignatureTimestamp" not in output_text  # Ensure the timestamp line was safely skipped

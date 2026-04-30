@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
 from pdftl.core.types import OpResult
+from pdftl.exceptions import OperationError
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 
@@ -82,7 +83,7 @@ def cat_pages(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     source_pages_to_process = expand_specs_to_pages(specs, aliases, inputs, opened_pdfs)
 
     if not source_pages_to_process:
-        raise ValueError("Range specifications gave no pages")
+        raise OperationError("Range specifications gave no pages")
 
     add_pages(new_pdf, opened_pdfs, source_pages_to_process)
 

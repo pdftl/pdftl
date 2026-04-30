@@ -1,7 +1,12 @@
+import logging
+
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.dimensions import get_visible_page_dimensions  # <-- Add this import
 
 from .parser import SpecParser
 from .types import PageTransform
+
+logger = logging.getLogger(__name__)
 
 
 def _handle_no_specs(inputs, opened_pdfs) -> list[PageTransform]:
@@ -33,15 +38,41 @@ def _resolve_alias_and_spec(spec, opened_pdfs_by_alias, default_alias):
     return pdf, page_spec_full, alias
 
 
-def _filter_page_numbers(page_numbers, qualifiers, omissions):
+def _filter_page_numbers(page_numbers, qualifiers, omissions, pdf=None):
     if "even" in qualifiers:
         page_numbers = [p for p in page_numbers if p % 2 == 0]
     if "odd" in qualifiers:
         page_numbers = [p for p in page_numbers if p % 2 != 0]
 
+    page_numbers = [
+        p
+        for p in page_numbers
+        if _aspect_ratio_pass(p, "portrait" in qualifiers, "landscape" in qualifiers, pdf)
+    ]
+
     for om_start, om_end in omissions:
         page_numbers = [p for p in page_numbers if not om_start <= p <= om_end]
     return page_numbers
+
+
+def _aspect_ratio_pass(p, portrait_q, landscape_q, pdf):
+    if not pdf or not pdf.pages or len(pdf.pages) < p:
+        return True
+    dims = get_visible_page_dimensions(pdf.pages[p - 1])
+    if not dims:
+        return True
+    _, _, w, h = dims
+    ret = (not portrait_q or h >= w) and (not landscape_q or w >= h)
+    logger.debug(
+        "potrait_q=%s, landscape_q=%s, p=%s, w=%s, h=%s, ret=%s",
+        portrait_q,
+        landscape_q,
+        p,
+        w,
+        h,
+        ret,
+    )
+    return ret
 
 
 def _create_page_tuples_from_numbers(
@@ -86,9 +117,12 @@ def _new_tuples_from_spec_str(
         range(page_spec.start, page_spec.end + direction_sign, direction_sign * page_spec.step)
     )
 
-    # apply even/odd and omissions
+    # apply even/odd, layout qualifiers, and omissions
     final_page_numbers = _filter_page_numbers(
-        initial_page_numbers, page_spec.qualifiers, page_spec.omissions
+        initial_page_numbers,
+        page_spec.qualifiers,
+        page_spec.omissions,
+        pdf,  # <-- Pass pdf here
     )
 
     new_tuples = _create_page_tuples_from_numbers(

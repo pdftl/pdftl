@@ -39,7 +39,7 @@ ROTATION_MAP = {
 }
 
 # Set of supported page qualifiers.
-QUALIFIER_MAP = {"even", "odd"}
+QUALIFIER_MAP = {"even", "odd", "portrait", "landscape"}
 
 
 # --- Parser Class ---
