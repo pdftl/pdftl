@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `stamp`, `background`, `multistamp`, `multibackground`: option to add content in a new layer
 
+- page ranges accept `portrait` and `landscape` qualifiers
+
 ## [0.16.0] - 2026-04-26
 
 ### Added
