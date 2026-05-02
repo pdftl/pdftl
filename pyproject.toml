@@ -46,6 +46,7 @@ crop-visible = ["pypdfium2"]
 delete-blank = ["numpy"]
 dump-text = ["pypdfium2"]
 flatten = ["pypdfium2"]
+highlight = ["pypdfium2"]
 optimize-images = ["ocrmypdf"]
 replacement-font = [ "fonttools>=4.0,<5.0" ]
 signing = ["pyhanko"]
@@ -59,6 +60,7 @@ extras = [
     "pdftl[delete-blank]",
     "pdftl[dump-text]",
     "pdftl[flatten]",
+    "pdftl[highlight]",
     "pdftl[optimize-images]",
     "pdftl[replacement-font]",
     "pdftl[signing]",

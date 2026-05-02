@@ -84,7 +84,7 @@ A simple `pip install pdftl[full]` install is also supported.
 ### 📝 Forms & annotations
 
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
-* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html).
+* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html) by full-text regular expression search.
 
 ### 🔐 Security
 * **Decryption:** using [`input_pw`](https://pdftl.readthedocs.io/en/latest/general/input.html).
@@ -228,6 +228,7 @@ See the **[API Tutorial][4]** for more details.
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |
 | [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |
 | [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
+| [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)                         | Highlight text matching a regex pattern                         |
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
 | [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |

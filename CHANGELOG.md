@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_images` operation
 
+- `highlight` operation
+
 - `stamp`, `background`, `multistamp`, `multibackground`: option to add content in a new layer
 
 - page ranges accept `portrait` and `landscape` qualifiers
