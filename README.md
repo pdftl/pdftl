@@ -74,7 +74,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 ### ✂️ Geometry & splitting
 
-* **Rotate:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages (absolute or relative).
+* **Whole-page geometry:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages (absolute or relative) or [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages
 * **Clip** and **Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) pages to margins or standard paper sizes (e.g., "A4"), or keep pages unchanged and [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) to hide content outside a given region.
 * **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows (e.g., split a scanned spread into two pages).
 * **Shift, scale and spin** page content *inside* the page boundaries using [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
@@ -251,6 +251,7 @@ See the **[API Tutorial][4]** for more details.
 | [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html)           | Replace PDF bookmarks from a YAML or JSON file                  |
 | [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html)                     | Update PDF metadata from dump_data instructions                 |
 | [`update_info_utf8`](https://pdftl.readthedocs.io/en/latest/operations/update_info_utf8.html)           | Update PDF metadata from dump_data_utf8 instructions            |
+| [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/zoom.html)                                   | Rescale entire pages                                            |
 
 | Option                                                                                                             | Description                                               |
 |--------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|

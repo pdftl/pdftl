@@ -125,8 +125,8 @@ def _calculate_zoom_factor(vw, vh, params, bare):
             target_w = dim_str_to_pts(tw_str, vw, axis="width")
             th_str = dim_tokens[1] if len(dim_tokens) > 1 else tw_str
             target_h = dim_str_to_pts(th_str, vh, axis="height")
-        except (InvalidArgumentError, ValueError):
-            pass
+        except (InvalidArgumentError, ValueError) as exc:
+            raise InvalidArgumentError(f"Error parsing zoom dimensions. {exc}")
 
     ratios = []
     if target_w is not None:

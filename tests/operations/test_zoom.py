@@ -84,13 +84,6 @@ def test_zoom_no_target_defaults_to_identity():
     assert _calculate_zoom_factor(100, 100, {}, []) == 1.0
 
 
-def test_zoom_unrecognized_bare_tokens_ignored():
-    # 'random_text' should be filtered out from dimension calculation
-    # Only '100' should be used as target width/height
-    factor = _calculate_zoom_factor(50, 50, {}, ["100", "random_text"])
-    assert factor == 2.0
-
-
 def test_zoom_handles_zero_dimensions():
     # Page 100x100 -> Target width 0
     # Should result in a scale factor of 0.0, not 1.0
@@ -119,3 +112,11 @@ def test_zoom_invalid_format_raises():
 
     with pytest.raises(InvalidArgumentError, match="Invalid zoom spec"):
         zoom_pages(pdf, ["1-3_no_parens"])
+
+
+def test_zoom_invalid_dimension_raises():
+    from pdftl.exceptions import InvalidArgumentError
+
+    # This should now bubble up the error from dim_str_to_pts
+    with pytest.raises(InvalidArgumentError):
+        _calculate_zoom_factor(50, 50, {}, ["not_a_dimension"])
