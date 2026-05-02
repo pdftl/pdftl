@@ -95,3 +95,17 @@ def test_get_visible_page_dimensions_returns_none_on_error():
     page.cropbox = None  # will cause TypeError when indexing
     result = get_visible_page_dimensions(page)
     assert result is None
+
+
+def test_dim_str_to_pts_with_paper_sizes():
+    # This hits lines 18-20 and 77
+    # Assuming A4 is 595.28 x 841.89 pts
+    assert dim_str_to_pts("A4", axis="width") == pytest.approx(595.28, abs=0.5)
+    assert dim_str_to_pts("a4", axis="height") == pytest.approx(841.89, abs=0.5)
+
+    # Test that it ignores paper sizes if axis is not provided
+    # (Should fall through to default float parsing or fail)
+    from pdftl.exceptions import InvalidArgumentError
+
+    with pytest.raises(InvalidArgumentError):
+        dim_str_to_pts("A4")

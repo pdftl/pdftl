@@ -1,43 +1,43 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # src/pdftl/utils/dimensions.py
 
 """Utilities related to dimensions, e.g., conversion"""
 
+import re
 from typing import TYPE_CHECKING
 
 from pdftl.core.constants import UNITS
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.parsers.paper_parser import parse_paper_spec
 
 if TYPE_CHECKING:
     import pikepdf
 
 
-def dim_str_to_pts(val_str, total_dimension=None):
-    """
-    Parses a single crop dimension string (e.g., '10%', '2in', '50pt')
-    and converts it into points.
-    """
-    import re
+def _parse_paper_size(val_str: str, axis: str | None) -> float | None:
+    if axis in ("width", "height"):
+        paper_dims = parse_paper_spec(val_str)
+        if paper_dims:
+            return paper_dims[0] if axis == "width" else paper_dims[1]
+    return None
 
-    val_str = val_str.lower().strip()
-    if not val_str:
-        return 0.0
 
-    if val_str.endswith("%"):
-        # Percentage is a special case that depends on the total dimension.
-        numeric_part = val_str[:-1]
-        if total_dimension is None:
-            raise ValueError(f"Percentage value '{val_str}' requires a total dimension.")
-        try:
-            return (float(numeric_part) / 100.0) * total_dimension
-        except ValueError as e:
-            raise InvalidArgumentError(
-                f"Could not parse percentage dimension: '{numeric_part}'"
-            ) from e
+def _parse_percentage(val_str: str, total_dimension: float | None) -> float | None:
+    if not val_str.endswith("%"):
+        return None
 
+    numeric_part = val_str[:-1]
+    if total_dimension is None:
+        raise ValueError(f"Percentage value '{val_str}' requires a total dimension.")
+
+    try:
+        return (float(numeric_part) / 100.0) * total_dimension
+    except ValueError as e:
+        raise InvalidArgumentError(
+            f"Could not parse percentage dimension: '{numeric_part}'"
+        ) from e
+
+
+def _parse_unit(val_str: str) -> float | None:
     for unit, multiplier in UNITS.items():
         if val_str.endswith(unit):
             numeric_part = val_str[: -len(unit)]
@@ -47,13 +47,45 @@ def dim_str_to_pts(val_str, total_dimension=None):
                 raise InvalidArgumentError(
                     f"Could not parse numeric dimension with unit: '{numeric_part}'"
                 ) from e
+    return None
 
-    # Default to points, stripping an optional 'pt' suffix.
+
+def _parse_default_pts(val_str: str) -> float:
     numeric_part = re.sub(r"pts?$", "", val_str)
     try:
         return float(numeric_part)
     except ValueError as e:
         raise InvalidArgumentError(f"Could not parse numeric dimension: '{numeric_part}'") from e
+
+
+def dim_str_to_pts(
+    val_str: str, total_dimension: float | None = None, axis: str | None = None
+) -> float:
+    """
+    Parses a single crop dimension string (e.g., '10%', '2in', '50pt', 'a4')
+    and converts it into points.
+
+    If axis is provided ("width" or "height"), it can resolve standard paper sizes.
+    """
+    val_str = val_str.lower().strip()
+    if not val_str:
+        return 0.0
+
+    # Delegate to specialized parsers, returning the first successful match
+    paper_val = _parse_paper_size(val_str, axis)
+    if paper_val is not None:
+        return paper_val
+
+    perc_val = _parse_percentage(val_str, total_dimension)
+    if perc_val is not None:
+        return perc_val
+
+    unit_val = _parse_unit(val_str)
+    if unit_val is not None:
+        return unit_val
+
+    # Fallback
+    return _parse_default_pts(val_str)
 
 
 def get_visible_page_dimensions(page: "pikepdf.Page", box="cropbox", apply_rotate=True):
