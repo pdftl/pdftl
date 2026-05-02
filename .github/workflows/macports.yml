@@ -1,0 +1,50 @@
+name: Test MacPorts Build
+
+on:
+  push:
+    paths:
+      - 'macports/Portfile'
+      - '.github/workflows/macports.yml'
+  workflow_dispatch:
+
+jobs:
+  build-on-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MacPorts
+        uses: melusina-org/setup-macports@v1
+
+      - name: Build and Install pdftl
+        run: |
+          echo "Setting up official MacPorts Local Repository..."
+
+          # 1. Create the standard MacPorts directory structure
+          LOCAL_REPO="/opt/local/var/macports/sources/local"
+          PORT_DIR="$LOCAL_REPO/python/py-pdftl"
+          sudo mkdir -p "$PORT_DIR"
+
+          # 2. Copy the Portfile from your git repo into the MacPorts system
+          sudo cp macports/Portfile "$PORT_DIR/"
+
+          # 3. Create the port index so MacPorts adds it to its internal database
+          cd "$LOCAL_REPO"
+          sudo portindex
+
+          # 4. Register the local repo in MacPorts sources.conf
+          # We prepend it to the file so MacPorts checks our local repo first
+          echo "file://$LOCAL_REPO" > /tmp/sources.conf
+          cat /opt/local/etc/macports/sources.conf >> /tmp/sources.conf
+          sudo mv /tmp/sources.conf /opt/local/etc/macports/sources.conf
+
+          echo "Starting MacPorts installation test..."
+
+          # 5. Because it's indexed globally, we can use the standard install command!
+          sudo port -v install py312-pdftl
+
+          echo "Installation successful! Testing CLI execution..."
+
+          # Verify the executable is in the PATH
+          pdftl-3.12 --help
