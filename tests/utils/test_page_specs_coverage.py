@@ -144,6 +144,7 @@ def test_handle_no_specs_returns_empty_when_inputs_none():
 
 
 from unittest.mock import MagicMock, patch
+
 from pdftl.utils.page_specs.resolver import _aspect_ratio_pass
 
 

@@ -46,19 +46,18 @@ def render_page_to_pil(pdf, page_index: int, dpi: float):
         pdf_buffer.close()
 
 
-def iter_pages_as_pil(pdf, dpi: float, page_indices: set[int] | None = None):
+def iter_pages_as_pil(pdf, dpi: float, page_indices: list[int] | None = None):
     """
     Yield (page_index, PIL Image) for pages in the PDF.
 
     Serialises the PDF exactly once regardless of how many pages are rendered.
-    Pages whose 0-based index is not in `page_indices` are skipped entirely
-    (not rendered). If `page_indices` is None, all pages are rendered.
+    If `page_indices` is provided, pages are rendered in the exact order
+    specified, and duplicates are supported. If None, all pages are rendered.
 
     Args:
         pdf:          An open pikepdf.Pdf object.
         dpi:          Render resolution in dots per inch.
-        page_indices: Optional set of 0-based page indices to render.
-                      Pages outside this set are iterated past but not rendered.
+        page_indices: Optional list of 0-based page indices to render.
 
     Yields:
         (int, PIL.Image.Image) tuples — 0-based index and rendered image.
@@ -69,9 +68,12 @@ def iter_pages_as_pil(pdf, dpi: float, page_indices: set[int] | None = None):
     try:
         ui_pdf = pdfium.PdfDocument(pdf_buffer)
         scale = dpi / 72.0
-        for i, page in enumerate(ui_pdf):
-            if page_indices is not None and i not in page_indices:
-                continue
+
+        # Determine the sequence of pages to iterate over
+        iterator = page_indices if page_indices is not None else range(len(ui_pdf))
+
+        for i in iterator:
+            page = ui_pdf[i]
             bitmap = page.render(scale=scale)
             yield i, bitmap.to_pil()
     finally:

@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.17.0] - 2026-05-02
 
 ### Added
 
@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stamp`, `background`, `multistamp`, `multibackground`: option to add content in a new layer
 
 - page ranges accept `portrait` and `landscape` qualifiers
+
+### Changed
+
+- plain `render` arguments are now page specs, and we can output a multi-page render PDF
 
 ## [0.16.0] - 2026-04-26
 

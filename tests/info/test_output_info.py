@@ -92,19 +92,6 @@ def mock_pdf():
     return pdf
 
 
-# @pytest.fixture
-# def mock_pdf():
-#     pdf = MagicMock(spec=pikepdf.Pdf)
-#     pdf.pages = []
-#     pdf.docinfo = {}
-#     pdf.is_encrypted = False
-#     pdf.pdf_version = "1.7"
-#     pdf.Root = MagicMock()
-#     # Default ID
-#     pdf.trailer = {"/ID": [b"ID1", b"ID2"]}
-#     return pdf
-
-
 @pytest.fixture
 def sample_info():
     """Creates a populated PdfInfo dataclass for writing testing."""

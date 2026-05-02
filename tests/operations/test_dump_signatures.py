@@ -378,6 +378,7 @@ def test_dump_signatures_diffresult_suspicious(signed_pdf_path):
     and its modification level is SUSPICIOUS, plus the validation_path loop.
     """
     from pyhanko.sign.diff_analysis import DiffResult
+
     from pdftl.operations.dump_signatures import dump_signatures
 
     mock_status = MagicMock()
@@ -430,6 +431,7 @@ def test_signature_no_timestamp_handled_correctly():
     propagates as None and is omitted from the CLI output.
     """
     import io
+
     from pdftl.operations.dump_signatures import _extract_signature_info, _print_signature_stanza
 
     # 1. Mock the necessary pyHanko objects to survive extraction

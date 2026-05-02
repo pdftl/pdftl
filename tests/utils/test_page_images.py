@@ -61,6 +61,10 @@ def test_render_page_to_pil(mock_deps, mock_pypdfium2):
 def test_iter_pages_as_pil_all(mock_deps, mock_pypdfium2):
     mock_pdfium, mock_doc = mock_pypdfium2
     mock_pdf = MagicMock()
+    mock_doc.__len__.return_value = 3
+    mock_page = MagicMock()
+    mock_page.render.return_value = MagicMock()
+    mock_doc.__getitem__.return_value = mock_page
 
     # Iterate without specifying page indices (should yield all 3)
     results = list(iter_pages_as_pil(mock_pdf, dpi=72.0))

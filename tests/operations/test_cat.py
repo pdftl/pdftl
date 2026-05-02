@@ -2,8 +2,8 @@ import pikepdf
 import pytest
 
 from pdftl.api import cat
-from pdftl.operations.cat import cat_pages
 from pdftl.exceptions import OperationError
+from pdftl.operations.cat import cat_pages
 
 
 @pytest.fixture

@@ -255,7 +255,8 @@ def _find_blank_pages_for_spec(pdf, spec: _BlankSpec) -> set[int]:
     from pdftl.utils.page_images import iter_pages_as_pil
 
     blank = set()
-    for page_index, image in iter_pages_as_pil(pdf, spec.dpi, page_indices=spec.candidate_indices):
+    sorted_candidates = sorted(list(spec.candidate_indices))
+    for page_index, image in iter_pages_as_pil(pdf, spec.dpi, page_indices=sorted_candidates):
         if _page_is_blank(image, spec):
             p_num = page_index + 1
             blank.add(p_num)

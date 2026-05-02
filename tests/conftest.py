@@ -4,8 +4,10 @@
 
 # tests/conftest.py
 
+import importlib
 import logging
 import os
+import pprint
 import shutil
 import subprocess
 import sys
@@ -13,10 +15,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
-
-import importlib
-import pprint
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 # need
