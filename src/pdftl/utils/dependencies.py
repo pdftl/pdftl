@@ -6,9 +6,18 @@
 
 """Utilities for handling dependencies"""
 
+import sys
 import importlib.util
 
+from pathlib import Path
+
 from pdftl.exceptions import InvalidArgumentError
+
+
+def is_pipx_install() -> bool:
+    """Guess if the current tool is running from a pipx environment."""
+    # pipx usually installs to ~/.local/share/pipx/venvs/<package>
+    return "pipx" in Path(sys.prefix).parts
 
 
 def ensure_dependencies(
@@ -31,8 +40,10 @@ def ensure_dependencies(
             missing.append(display)
 
     if missing:
+        pip_cmd = f"pip install pdftl[{extra_tag}]"
+        pipx_cmd = f"pipx inject pdftl pdftl[{extra_tag}]"
+        cmd = pipx_cmd if is_pipx_install() else pip_cmd
         deps_str = " and ".join(missing)
         raise InvalidArgumentError(
-            f"The '{feature_name}' feature requires {deps_str}.\n"
-            f"Please install with: pip install pdftl[{extra_tag}]"
+            f"The '{feature_name}' feature requires {deps_str}.\nPlease install with: {cmd}"
         )
