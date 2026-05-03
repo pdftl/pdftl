@@ -36,6 +36,89 @@ class TestAddTextLogic(unittest.TestCase):
         self.assertEqual(context["filename"], "")
         self.assertEqual(context["metadata"], {})
 
+    def test_get_page_origin(self):
+        """Covers lines 366-367: extracting X, Y from trimbox."""
+        from pdftl.operations.add_text import _get_page_origin
+
+        mock_page = MagicMock()
+        mock_page.trimbox = [15.5, 20.0, 500, 800]
+
+        ox, oy = _get_page_origin(mock_page)
+        self.assertEqual(ox, 15.5)
+        self.assertEqual(oy, 20.0)
+
+    def test_translate_rect(self):
+        """Covers line 371: translating rectangle coordinates."""
+        from pdftl.operations.add_text import _translate_rect
+
+        rect = [10, 10, 50, 50]
+        translated = _translate_rect(rect, 5.0, -5.0)
+        self.assertEqual(translated, [15.0, 5.0, 55.0, 45.0])
+
+    def test_rotate_rect(self):
+        """Covers lines 379-402: mapping visual space to physical space."""
+        from pdftl.operations.add_text import _rotate_rect
+
+        mock_page = MagicMock()
+        mock_page.trimbox = [0, 0, 500, 800]
+
+        rect = [10, 20, 30, 40]
+
+        # Line 381: Test 0 rotation
+        mock_page.get.return_value = 0
+        self.assertEqual(_rotate_rect(rect, mock_page), [10, 20, 30, 40])
+
+        # Line 392: Test 90 CW
+        mock_page.get.return_value = 90
+        self.assertEqual(_rotate_rect(rect, mock_page), [460.0, 10.0, 480.0, 30.0])
+
+        # Line 395: Test 180
+        mock_page.get.return_value = 180
+        self.assertEqual(_rotate_rect(rect, mock_page), [470.0, 760.0, 490.0, 780.0])
+
+        # Line 400: Test 270 CW
+        mock_page.get.return_value = 270
+        self.assertEqual(_rotate_rect(rect, mock_page), [20.0, 770.0, 40.0, 790.0])
+
+        # Line 402: Test non-standard rotation fallback (e.g., 45 degrees)
+        mock_page.get.return_value = 45
+        self.assertEqual(_rotate_rect(rect, mock_page), [10, 20, 30, 40])
+
+    def test_copy_annotations(self):
+        """Covers lines 413-423: transferring annotations from overlay to main page."""
+        from pdftl.operations.add_text import _copy_annotations
+        from pikepdf import Pdf, Dictionary, Name, Array
+
+        # Use real Pdf objects instead of MagicMocks to safely test C++ bindings
+        pdf = Pdf.new()
+        target_page = pdf.add_blank_page(page_size=(500, 800))
+
+        overlay_pdf = Pdf.new()
+        overlay_page = overlay_pdf.add_blank_page(page_size=(500, 800))
+
+        # Create a dummy annotation dictionary on the overlay
+        annot = Dictionary(Type=Name.Annot, Subtype=Name.Text, Rect=Array([10, 10, 50, 50]))
+
+        # CRITICAL FIX: Make the annotation an indirect object so copy_foreign can process it
+        indirect_annot = overlay_pdf.make_indirect(annot)
+        overlay_page.Annots = Array([indirect_annot])
+
+        # Execute
+        _copy_annotations(target_page, overlay_page, pdf)
+
+        # Verify lines 413-414: Annots array was successfully created
+        self.assertIn(Name.Annots, target_page)
+        self.assertEqual(len(target_page.Annots), 1)
+
+        # Verify coordinates were transformed
+        self.assertEqual(list(target_page.Annots[0].Rect), [10.0, 10.0, 50.0, 50.0])
+
+        # Verify line 411: Early return if no overlay annots exist
+        overlay_page_empty = overlay_pdf.add_blank_page()
+        _copy_annotations(
+            target_page, overlay_page_empty, pdf
+        )  # Should return cleanly without error
+
 
 from .sandbox import ModuleSandboxMixin
 
@@ -61,7 +144,7 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
         self.parser_patcher.start()
 
         self.pdf = Pdf.new()
-        self.mock_rule = {"text": lambda c: "Test", "font": "Arial", "size": 10}
+        self.mock_rule = {"text": lambda c: [("Test", None)], "font": "Arial", "size": 10}
 
     def test_add_text_pdf_orchestration(self):
         """Standard happy path."""

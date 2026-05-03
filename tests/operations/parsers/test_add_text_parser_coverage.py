@@ -327,7 +327,7 @@ class TestAddTextParserExtended:
         result = renderer({"page": 99})
 
         # Should render literal {page}, not the value 99
-        assert result == "Value: {page}"
+        assert "".join(t for t, _ in result) == "Value: {page}"
 
     # --- Edge Case: Master Formatting Error (Line 532) ---
     def test_master_formatting_error(self):

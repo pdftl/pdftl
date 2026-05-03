@@ -163,41 +163,44 @@ class TextDrawer:
     def draw_rule(self, rule: dict, context: dict):
         """Draws a single text rule onto the internal canvas."""
         try:
-            # 1. Get text and font properties
-            # Note: 'rule["text"]' is expected to be a callable based on previous logic
-            text = rule["text"](context)
-            if not text:
+            runs = rule["text"](context)
+            if not runs:
                 return
 
             font_name = self.get_font_name(rule.get("font", DEFAULT_FONT_NAME))
             font_size = rule.get("size", DEFAULT_FONT_SIZE)
+            color = rule.get("color", DEFAULT_COLOR_TUPLE)
+            link_color = rule.get("linkcolor", color)
+            rotate = rule.get("rotate", 0)
 
-            # 2. Get anchor point
+            full_text = "".join(text for text, _ in runs)
+            text_width = self.canvas.stringWidth(full_text, font_name, font_size)
+            pos = rule.get("position", "")
+            draw_x, draw_y = self._get_draw_position(rule.get("align"), pos, text_width, font_size)
+
             anchor_x, anchor_y = _get_base_coordinates(rule, self.page_box)
-
-            # 3. Get user-defined offsets
             offset_x = _resolve_dimension(rule.get("offset-x"), self.page_box.width)
             offset_y = _resolve_dimension(rule.get("offset-y"), self.page_box.height)
 
-            final_anchor_x = anchor_x + offset_x
-            final_anchor_y = anchor_y + offset_y
-
-            # 5. Get graphical properties
-            color_tuple = rule.get("color", DEFAULT_COLOR_TUPLE)
-            rotate = rule.get("rotate", 0)
-
-            # 6. Calculate drawing offsets based on text dimensions
-            text_width = self.canvas.stringWidth(text, font_name, font_size)
-            pos = rule.get("position", "")
-
-            draw_x, draw_y = self._get_draw_position(rule.get("align"), pos, text_width, font_size)
-            # 7. Apply to canvas
             self.canvas.saveState()
-            self.canvas.setFillColorRGB(*color_tuple)
             self.canvas.setFont(font_name, font_size)
-            self.canvas.translate(final_anchor_x, final_anchor_y)
+            self.canvas.translate(anchor_x + offset_x, anchor_y + offset_y)
             self.canvas.rotate(rotate)
-            self.canvas.drawString(draw_x, draw_y, text)
+
+            cursor_x = draw_x
+            for text, url in runs:
+                cursor_x += _draw_run(
+                    self.canvas,
+                    text,
+                    url,
+                    cursor_x,
+                    draw_y,
+                    font_name,
+                    font_size,
+                    color,
+                    link_color,
+                )
+
             self.canvas.restoreState()
 
         except (ValueError, TypeError, KeyError, AttributeError) as e:
@@ -231,3 +234,30 @@ class TextDrawer:
         self.canvas.save()
         self.packet.seek(0)
         return self.packet.read()
+
+
+def _transform_rect(canvas, x1, y1, x2, y2):
+    corners = [
+        canvas.absolutePosition(x1, y1),
+        canvas.absolutePosition(x2, y1),
+        canvas.absolutePosition(x1, y2),
+        canvas.absolutePosition(x2, y2),
+    ]
+    xs = [p[0] for p in corners]
+    ys = [p[1] for p in corners]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _draw_run(canvas, text, url, x, y, font_name, font_size, color, link_color):
+    """Draws a single text run and optionally adds a URI annotation."""
+    run_color = link_color if url else color
+    canvas.setFillColorRGB(*run_color[:3])
+    canvas.drawString(x, y, text)
+    if url:
+        from reportlab.pdfbase.pdfmetrics import getAscentDescent
+
+        w = canvas.stringWidth(text, font_name, font_size)
+        ascent, descent = getAscentDescent(font_name, font_size)
+        rect = _transform_rect(canvas, x, y + descent, x + w, y + ascent)
+        canvas.linkURL(url, rect, relative=0, thickness=0)
+    return canvas.stringWidth(text, font_name, font_size)

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `update_bookmarks` can now read bookmark data from stdin
 
+- `add_text` supports markdown-style hyperlinks
+
 ## [0.17.0] - 2026-05-02
 
 ### Added

@@ -38,7 +38,7 @@ def test_draw_rule_empty_text():
     """Covers line 170: Early return if text is empty."""
     drawer = TextDrawer(MagicMock(width=500, height=800))
     # Rule with a lambda that returns empty string
-    rule = {"text": lambda ctx: "", "font": "Helvetica"}
+    rule = {"text": lambda ctx: [], "font": "Helvetica"}
     assert drawer.draw_rule(rule, {}) is None
 
 
@@ -47,11 +47,19 @@ def test_draw_rule_inferred_alignment():
     drawer = TextDrawer(MagicMock(width=500, height=800))
 
     # Trigger line 196 (right)
-    rule_right = {"text": lambda ctx: "test", "position": "right-top", "color": (0, 0, 0)}
+    rule_right = {
+        "text": lambda ctx: [("test", None)],
+        "position": "right-top",
+        "color": (0, 0, 0),
+    }
     drawer.draw_rule(rule_right, {})  # Should set align to 'right' internally
 
     # Trigger line 198 (center)
-    rule_center = {"text": lambda ctx: "test", "position": "center-mid", "color": (0, 0, 0)}
+    rule_center = {
+        "text": lambda ctx: [("test", None)],
+        "position": "center-mid",
+        "color": (0, 0, 0),
+    }
     drawer.draw_rule(rule_center, {})  # Should set align to 'center' internally
 
 
@@ -87,7 +95,12 @@ def test_draw_rule_default_left_align():
     drawer = TextDrawer(MagicMock(width=500, height=800))
 
     # Position 'top' contains neither 'right' nor 'center'
-    rule = {"text": lambda ctx: "hello", "position": "top", "font": "Helvetica", "size": 12}
+    rule = {
+        "text": lambda ctx: [("hello", None)],
+        "position": "top",
+        "font": "Helvetica",
+        "size": 12,
+    }
 
     # We spy on drawString to see if draw_x remained 0.0 (left aligned)
     with patch.object(drawer.canvas, "drawString") as mock_draw:
@@ -102,7 +115,7 @@ def test_text_drawer_save():
     drawer = TextDrawer(MagicMock(width=500, height=800))
 
     # Draw something so the canvas isn't empty
-    rule = {"text": lambda ctx: "test", "position": "top"}
+    rule = {"text": lambda ctx: [("test", None)], "position": "top"}
     drawer.draw_rule(rule, {})
 
     content = drawer.save()

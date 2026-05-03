@@ -11,7 +11,167 @@ import unittest
 from collections import namedtuple
 from unittest.mock import patch
 
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+from hypothesis.errors import InvalidArgument
+
 import pytest
+
+
+def _render_text(rule_or_fn, context):
+    """Extracts plain text from a renderer result (list of runs)."""
+    fn = rule_or_fn["text"] if isinstance(rule_or_fn, dict) else rule_or_fn
+    return "".join(text for text, _ in fn(context))
+
+
+# --- Mocks for dependencies ---
+# We mock the external dependencies of add_text_parser for isolated testing.
+
+# Mock pdftl.core.constants
+# 1 cm = 72 (pts/in) / 2.54 (cm/in) = 28.346...
+UNITS = {"pt": 1.0, "in": 72.0, "cm": 72.0 / 2.54}
+
+# Mock pdftl.utils.page_specs
+# A simple mock of parse_sub_page_spec to return what the parser expects.
+MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "step", "qualifiers", "omissions"])
+
+
+# Now, we can import the functions to be tested from the *new* module path
+# Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
+from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
+    PRESET_POSITIONS,
+    _compile_text_renderer,
+    _parse_options_content,
+    _parse_options_string,
+    _split_spec_string,
+    parse_add_text_specs_to_rules,
+)
+
+# # --- Monkey-patching the parser's imports ---
+# # We must replace the imported names *within the parser module*
+# pdftl.operations.parsers.add_text_parser.UNITS = UNITS
+# pdftl.operations.parsers.add_text_parser.parse_sub_page_spec = mock_parse_sub_page_spec
+# # We also need to give it the 're' module for the fixed _split_spec_string
+# pdftl.operations.parsers.add_text_parser.re = re
+
+
+# --- Strategies for generating valid-looking inputs ---
+# A valid non-alphanumeric delimiter
+st_delimiter = st.characters(min_codepoint=33, max_codepoint=126).filter(
+    lambda c: not c.isalnum() and c not in "()'"
+)
+
+# Text string that won't contain the delimiter (usually)
+st_text_content = st.text(
+    st.characters(min_codepoint=32, max_codepoint=126),
+    min_size=0,
+    max_size=50,
+).filter(lambda s: "(" not in s and ")" not in s and "{" not in s)
+
+st_page_range = st.one_of(
+    st.just(""),  # default
+    st.just("1-10"),
+    st.just("1"),
+    st.just("5-10"),
+    st.just("1-end"),
+    st.just("even"),
+    st.just("odd"),
+    st.just("1-10even"),
+    st.just("1-10odd"),
+)
+
+# --- Option Strategies ---
+st_font = st.builds(
+    lambda v: f"font={v}",
+    st.one_of(st.just("Helvetica"), st.just("'Times New Roman'")),
+)
+st_size = st.builds(
+    lambda v: f"size={v}",
+    st.floats(min_value=1, max_value=100, allow_nan=False, allow_infinity=False),
+)
+st_align = st.builds(
+    lambda v: f"align={v}",
+    st.one_of(st.just("left"), st.just("center"), st.just("right")),
+)
+st_rotate = st.builds(
+    lambda v: f"rotate={v}",
+    st.floats(min_value=-360, max_value=360, allow_nan=False, allow_infinity=False),
+)
+
+st_pos_preset = st.just(f"position={st.one_of(st.sampled_from(PRESET_POSITIONS))}")
+
+st_dim_floats = st.floats(min_value=0, max_value=1000, allow_nan=False, allow_infinity=False)
+st_unit = st.one_of(st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just(""))
+st_dim_str = st.builds(lambda v, u: f"{v}{u}", st_dim_floats, st_unit)
+
+st_pos_xy = st.builds(lambda x, y: f"x={x}, y={y}", st_dim_str, st_dim_str)
+
+st_offsets = st.builds(lambda x, y: f"offset-x={x}, offset-y={y}", st_dim_str, st_dim_str)
+
+# st_color_named = st.builds(
+#     lambda v: f"color={v}",
+#     st.one_of(st.just('red'), st.just('blue'))
+# )
+st_color_gray = st.just("color=0.1")
+st_color_rgb = st.just("color=0.1 0.2 0.3")
+st_color_rgba = st.just("color=0.1 0.2 0.3 0.4")
+
+st_option = st.one_of(
+    st_font,
+    st_size,
+    st_align,
+    st_rotate,
+    st_color_gray,
+    st_color_rgb,
+    st_color_rgba,
+    st_offsets,
+)
+
+# --- Strategies for INVALID specs ---
+
+st_invalid_options = st.one_of(
+    st.just("(size=foo)"),  # Not a float
+    st.just("(rotate=bar)"),  # Not a float
+    st.just("(position=top-left, x=10)"),  # Conflicting
+    st.just("(unknown=key)"),  # Unknown key
+    st.just("(position=top-left"),  # Missing paren
+    st.just("position=top-left)"),  # Missing paren
+    st.just("(align=middle)"),  # Invalid align value
+    st.just("(position=top)"),  # Invalid position value
+)
+
+st_invalid_variables = st.one_of(
+    st.just("{page+foo}"),  # Non-numeric math
+    st.just("{meta:Title+1}"),  # Math on meta
+    st.just("{foo}"),  # Unknown variable
+    st.just("{page-bar}"),  # Non-numeric math
+    st.just("{page*1}"),  # Invalid operator
+)
+
+st_invalid_structure = st.one_of(
+    st.just("1 /no-end-delim (size=10)"),  # Unmatched delimiter
+    st.just("1 /text/ no-parens-options"),  # Options not in parens
+    st.just("1 bad-delimiter text / (options)"),  # Alphanumeric delimiter
+)
+
+
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""
+Unit tests for the add_text_parser module.
+Requires 'pytest' and 'hypothesis' to run.
+"""
+
+from collections import namedtuple
+
+
+def _render_text(rule_or_fn, context):
+    """Extracts plain text from a renderer result (list of runs)."""
+    fn = rule_or_fn["text"] if isinstance(rule_or_fn, dict) else rule_or_fn
+    return "".join(text for text, _ in fn(context))
+
 
 # --- Mocks for dependencies ---
 # We mock the external dependencies of add_text_parser for isolated testing.
@@ -65,11 +225,6 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
 # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
 from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
     PRESET_POSITIONS,
-    _compile_text_renderer,
-    _parse_options_content,
-    _parse_options_string,
-    _split_spec_string,
-    parse_add_text_specs_to_rules,
 )
 
 # # --- Monkey-patching the parser's imports ---
@@ -261,7 +416,8 @@ class TestAddTextParser(unittest.TestCase):
             "metadata": {"Title": "My Report"},
         }
         self.assertEqual(
-            render_fn(context1), "Page 4 of 20. Report: My Report. File: doc. {Literal}"
+            _render_text(render_fn, context1),
+            "Page 4 of 20. Report: My Report. File: doc. {Literal}",
         )
 
         # Test with page 1
@@ -272,12 +428,13 @@ class TestAddTextParser(unittest.TestCase):
             "metadata": {"Title": "My Report"},
         }
         self.assertEqual(
-            render_fn(context2), "Page 0 of 20. Report: My Report. File: doc. {Literal}"
+            _render_text(render_fn, context2),
+            "Page 0 of 20. Report: My Report. File: doc. {Literal}",
         )
 
         # Test complex var
         render_fn_complex = _compile_text_renderer("{total-page} pages left")
-        self.assertEqual(render_fn_complex(context1), "15 pages left")
+        self.assertEqual(_render_text(render_fn_complex, context1), "15 pages left")
 
     # This is a new, explicit test for the logic in _evaluate_token
     def test_variable_renderer_fails_on_bad_arithmetic(self):
@@ -297,14 +454,14 @@ class TestAddTextParser(unittest.TestCase):
         # Check rule for page 0
         rule = rules[0][0]
         self.assertTrue(callable(rule["text"]))
-        self.assertEqual(rule["text"](self.context), "Hello")
+        self.assertEqual(_render_text(rule, self.context), "Hello")
         self.assertEqual(rule["position"], "top-left")
         self.assertEqual(rule["size"], 10.0)
 
         # Check rule for page 19
         rule = rules[19][0]
         self.assertTrue(callable(rule["text"]))
-        self.assertEqual(rule["text"](self.context), "Hello")
+        self.assertEqual(_render_text(rule, self.context), "Hello")
 
     def test_parse_specs_page_ranges(self):
         specs = [
@@ -317,11 +474,11 @@ class TestAddTextParser(unittest.TestCase):
         # Was 6, but pages 1, 2, 3, 4, 5, 10, 11 is 7 pages.
         self.assertEqual(len(rules), 7)
         self.assertTrue(callable(rules[0][0]["text"]))
-        self.assertEqual(rules[0][0]["text"](self.context), "First Page")
-        self.assertEqual(rules[1][0]["text"](self.context), "Some Pages")
-        self.assertEqual(rules[4][0]["text"](self.context), "Some Pages")
-        self.assertEqual(rules[9][0]["text"](self.context), "Reversed")
-        self.assertEqual(rules[10][0]["text"](self.context), "Reversed")
+        self.assertEqual(_render_text(rules[0][0], self.context), "First Page")
+        self.assertEqual(_render_text(rules[1][0], self.context), "Some Pages")
+        self.assertEqual(_render_text(rules[4][0], self.context), "Some Pages")
+        self.assertEqual(_render_text(rules[9][0], self.context), "Reversed")
+        self.assertEqual(_render_text(rules[10][0], self.context), "Reversed")
         self.assertNotIn(6, rules)
 
     def test_parse_specs_qualifiers(self):
@@ -333,16 +490,16 @@ class TestAddTextParser(unittest.TestCase):
         # 1-10 odd: 1, 3, 5, 7, 9 (indices 0, 2, 4, 6, 8)
         # all even: 2, 4, 6, 8, 10, 12, 14, 16, 18, 20 (indices 1, 3, 5, 7, 9, 11, 13, 15, 17, 19)
         self.assertEqual(len(rules), 15)
-        self.assertEqual(rules[0][0]["text"](self.context), "Odd Pages")
-        self.assertEqual(rules[1][0]["text"](self.context), "Even Pages")
-        self.assertEqual(rules[2][0]["text"](self.context), "Odd Pages")
+        self.assertEqual(_render_text(rules[0][0], self.context), "Odd Pages")
+        self.assertEqual(_render_text(rules[1][0], self.context), "Even Pages")
+        self.assertEqual(_render_text(rules[2][0], self.context), "Odd Pages")
 
         # rules[3] is page 4, which is ONLY even.
         self.assertEqual(len(rules[3]), 1)
-        self.assertEqual(rules[3][0]["text"](self.context), "Even Pages")
+        self.assertEqual(_render_text(rules[3][0], self.context), "Even Pages")
 
-        self.assertEqual(rules[8][0]["text"](self.context), "Odd Pages")
-        self.assertEqual(rules[19][0]["text"](self.context), "Even Pages")
+        self.assertEqual(_render_text(rules[8][0], self.context), "Odd Pages")
+        self.assertEqual(_render_text(rules[19][0], self.context), "Even Pages")
         self.assertNotIn(10, rules)  # Page 11 is odd, but not in 1-10
 
     def test_parse_specs_multiple_rules_on_page(self):
@@ -355,10 +512,10 @@ class TestAddTextParser(unittest.TestCase):
         self.assertEqual(len(rules), 1)
         self.assertEqual(len(rules[0]), 2)
 
-        self.assertEqual(rules[0][0]["text"](self.context), "Hello")
+        self.assertEqual(_render_text(rules[0][0], self.context), "Hello")
         self.assertEqual(rules[0][0]["position"], "top-left")
 
-        self.assertEqual(rules[0][1]["text"](self.context), "World")
+        self.assertEqual(_render_text(rules[0][1], self.context), "World")
         self.assertEqual(rules[0][1]["position"], "bottom-right")
 
     def test_parse_specs_grouped_qualifiers(self):
@@ -369,21 +526,21 @@ class TestAddTextParser(unittest.TestCase):
         # 'even 1-5' -> 2, 4 (indices 1, 3)
         # 'All' -> 1-20 (indices 0-19)
         self.assertEqual(len(rules), 20)
-        self.assertEqual(rules[0][0]["text"](self.context), "All")  # Page 1
+        self.assertEqual(_render_text(rules[0][0], self.context), "All")  # Page 1
 
         # Page 2 (index 1) has both
         self.assertEqual(len(rules[1]), 2)
-        self.assertEqual(rules[1][0]["text"](self.context), "Even 1-5")
-        self.assertEqual(rules[1][1]["text"](self.context), "All")
+        self.assertEqual(_render_text(rules[1][0], self.context), "Even 1-5")
+        self.assertEqual(_render_text(rules[1][1], self.context), "All")
 
         # Page 3 (index 2) has 'All'
         self.assertEqual(len(rules[2]), 1)
-        self.assertEqual(rules[2][0]["text"](self.context), "All")
+        self.assertEqual(_render_text(rules[2][0], self.context), "All")
 
         # Page 4 (index 3) has both
         self.assertEqual(len(rules[3]), 2)
-        self.assertEqual(rules[3][0]["text"](self.context), "Even 1-5")
-        self.assertEqual(rules[3][1]["text"](self.context), "All")
+        self.assertEqual(_render_text(rules[3][0], self.context), "Even 1-5")
+        self.assertEqual(_render_text(rules[3][1], self.context), "All")
 
     def test_parse_fail_missing_spec_after_qualifier(self):
         with self.assertRaisesRegex(ValueError, "Invalid add_text spec.*delimiter"):
@@ -395,9 +552,7 @@ class TestAddTextParser(unittest.TestCase):
             parse_add_text_specs_to_rules(["1 /Missing Delim"], self.total_pages)
 
 
-from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-from hypothesis.errors import InvalidArgument
 
 # --- Strategies for generating valid-looking inputs ---
 # A valid non-alphanumeric delimiter
@@ -641,5 +796,125 @@ class TestAddTextFiltering(unittest.TestCase):
         self.assertEqual(len(rules), 4)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestMiscAddTextParser(unittest.TestCase):
+    def test_parse_color_variants(self):
+        """Covers different branches in _parse_color."""
+        from pdftl.operations.parsers.add_text_parser import _parse_color
+
+        # Grayscale (1 part) -> RGBA (Line 408-410)
+        self.assertEqual(_parse_color("0.5"), [0.5, 0.5, 0.5, 1])
+
+        # RGBA (4 parts) (Line 414-415)
+        self.assertEqual(_parse_color("0.1 0.2 0.3 0.5"), [0.1, 0.2, 0.3, 0.5])
+
+        # Error: Invalid character (Line 404-405)
+        with self.assertRaises(ValueError):
+            _parse_color("red green blue")
+
+        # Error: Invalid part count (Line 417-420)
+        with self.assertRaisesRegex(ValueError, "must have 1, 3, or 4"):
+            _parse_color("0.1 0.2")
+
+    def test_variable_expression_errors(self):
+        """Covers unknown variables, bad arithmetic, and bad formatting."""
+        from pdftl.operations.parsers.add_text_parser import _parse_var_expression, _evaluate_token
+
+        # Unknown variable (Line 445-446)
+        with self.assertRaisesRegex(ValueError, "Unknown variable"):
+            _parse_var_expression("not_a_var")
+
+        # Arithmetic on non-numeric (Line 455-456)
+        with self.assertRaisesRegex(ValueError, "non-numeric variable"):
+            _parse_var_expression("filename+1")
+
+        # Metadata parsing (Line 437-438)
+        token = _parse_var_expression("meta:Author")
+        self.assertEqual(token[0], "meta:Author")
+
+        # Evaluate metadata (Line 475-477)
+        res = _evaluate_token(token, {"metadata": {"Author": "Gemini"}})
+        self.assertEqual(res, "Gemini")
+
+        # Total-page logic (Line 472-473)
+        token_tp = _parse_var_expression("total-page")
+        res_tp = _evaluate_token(token_tp, {"total": 10, "page": 3})
+        self.assertEqual(res_tp, 7)
+
+        # Formatting error during evaluation (Line 499-501)
+        # Using a string formatter 'd' on a string value
+        token_fmt = ("filename", "master", (0, "d"))
+        with self.assertRaises(ValueError):
+            _evaluate_token(token_fmt, {"filename": "test.pdf"})
+
+    def test_split_and_dimension_failures(self):
+        """Covers empty specs and malformed dimensions."""
+        # Empty spec (Line 170-171)
+        with self.assertRaisesRegex(ValueError, "Empty add_text spec"):
+            _split_spec_string("   ")
+
+        # Missing text component (Line 176-177)
+        # This happens if there is only an options block
+        with self.assertRaisesRegex(ValueError, "Missing text string"):
+            _split_spec_string("(size=10)")
+
+        # Malformed dimension values (Line 380, 388, 393)
+        from pdftl.operations.parsers.add_text_parser import _parse_dimension
+
+        with self.assertRaises(ValueError):
+            _parse_dimension("abc%")
+        with self.assertRaises(ValueError):
+            _parse_dimension("abcpt")
+        with self.assertRaises(ValueError):
+            _parse_dimension("not_a_number")
+
+    def test_position_center_alias(self):
+        """Covers line 324: 'center' mapping to 'mid-center'."""
+        from pdftl.operations.parsers.add_text_parser import _parse_options_string
+
+        spec = "(position=center)"
+        result = _parse_options_string(spec)
+        # Verify 'center' was normalized to 'mid-center'
+        self.assertEqual(result["position"], "mid-center")
+
+    def test_link_color_option(self):
+        """Covers line 365: 'linkcolor' parsing."""
+        from pdftl.operations.parsers.add_text_parser import _parse_options_string
+
+        spec = "(linkcolor=0 0 1)"  # Blue
+        result = _parse_options_string(spec)
+        self.assertEqual(result["linkcolor"], [0.0, 0.0, 1.0, 1])
+
+    def test_markdown_link_rendering(self):
+        """Covers lines 545-552, 560-568, and 585: Markdown links with variables."""
+        from pdftl.operations.parsers.add_text_parser import _compile_text_renderer
+
+        # A string with literal text and a Markdown link containing a variable
+        text_str = "Visit [Page {page}](http://example.com/p{page})"
+        renderer = _compile_text_renderer(text_str)
+
+        context = {"page": 5}
+        runs = renderer(context)
+
+        # Expected output:
+        # 1. "Visit " (Plain text)
+        # 2. ("Page 5", "http://example.com/p5") (The link run)
+
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0], ("Visit ", None))
+        self.assertEqual(runs[1], ("Page 5", "http://example.com/p5"))
+
+    def test_default_renderer_direct(self):
+        """Directly covers line 560-568 by invoking the default renderer logic."""
+        from pdftl.operations.parsers.add_text_parser import (
+            _default_renderer,
+            _tokenize_text_string,
+        )
+
+        # Create a complex token structure with a nested link
+        text_str = "[Go {page}](url)"
+        parts = _tokenize_text_string(text_str)
+
+        # _default_renderer is used when we need a plain string version
+        # of a segment (e.g., to generate the final URL string)
+        plain_text = _default_renderer(parts, {"page": 1})
+        self.assertEqual(plain_text, "Go 1")

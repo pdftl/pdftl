@@ -95,13 +95,13 @@ remaining.  (for now, this is the only complex possibility).
 
 5. Metadata: e.g., {meta:Title}. The metadata variables
 `allow` you to insert information stored within the PDF
-document's own metadata dictionary (\`/Title\`, \`/Author\`,
+document's own metadata dictionary (`/Title`, `/Author`,
 etc.) into your text.
 
 The format for a metadata variable is: {meta:`<KeyName>`}
 where `<KeyName>` is the exact, case-sensitive key found in
 the PDF's document information dictionary (it corresponds to
-the PDF keys like \`/Title\` after the leading slash is
+the PDF keys like `/Title` after the leading slash is
 stripped).
 
 The available keys are determined by the contents of the PDF
@@ -115,6 +115,16 @@ substituted with an `empty` string.
 6. Escaping: `{{...}}` renders a literal `{...}` string.
 
 
+### Hyperlinks
+
+You can create clickable hyperlinks within your text using standard
+Markdown syntax: `[Display Text](URL)`. Dynamic variables are supported
+in both the display text and the URL.
+
+Example: `[Visit Page {page}](https://example.com/p{page})`
+Escaping: Use `\[` and `\]` if you need literal brackets inside the text.
+
+
 ### Options
 
 Options are passed as comma-separated key=value pairs inside
@@ -122,7 +132,7 @@ parentheses, e.g., (`position=bottom-center`, `size=10`).
 
 #### Positioning and layout options
 
-`position=<keyword>`: Preset position (top-left, mid-center,
+`position=<keyword>`: Preset position (top-left, center, mid-center,
 bottom-right, etc.). Cannot be used with `x`/`y`.
 
 `x=<dim>`, `y=<dim>`: Absolute coordinates.
@@ -145,6 +155,9 @@ pt, in, cm, mm, and %.
 `color=<string>`: Text color. 1, 3, or 4 space-separated
 numbers between 0 and 1. Examples: `0.5` is gray,
 `1 0 0` is red, and `1 0 0 .5` is semi-transparent red.
+
+`linkcolor=<string>`: Color for hyperlinks (uses the same format as `color`).
+Defaults to the main `color` if not set.
 
 `align=<'left'|'center'|'right'>`: Horizontal alignment.
 
@@ -190,6 +203,15 @@ _ADD_TEXT_EXAMPLES = [
         "cmd": (
             "in.pdf add_text "
             "'/DEF-{page+5000:06d}/(position=bottom-right, size=10, color=1 0 0)' "
+            "output out.pdf"
+        ),
+    },
+    {
+        "desc": "Add a clickable Markdown link with a custom link color",
+        "cmd": (
+            "in.pdf add_text "
+            "'/Visit [Our Website](https://example.com)/"
+            "(position=top-right, size=12, linkcolor=0 0 1)' "
             "output out.pdf"
         ),
     },
@@ -275,12 +297,12 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
 
     # --- 4. Process all pages in-place ---
     for i, page in enumerate(pdf.pages):
-        _process_page(i, page, page_rules, static_context, TextDrawer)
+        _process_page(i, page, page_rules, static_context, TextDrawer, pdf)
 
     return OpResult(success=True, pdf=pdf)
 
 
-def _process_page(i, page, page_rules, static_context, drawer_class):
+def _process_page(i, page, page_rules, static_context, drawer_class, pdf):
     from pikepdf import Rectangle
 
     rules_for_page = page_rules.get(i)
@@ -350,12 +372,74 @@ def _process_page(i, page, page_rules, static_context, drawer_class):
 
         try:
             with Pdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
-                # This mutates the page object *in-place*
-                if len(overlay_pdf.pages) > 0:
-                    page.add_overlay(overlay_pdf.pages[0])
-                else:
+                if not overlay_pdf.pages:
                     logger.debug(
                         "Overlay PDF was empty (likely due to skipped rules) for page %d", i + 1
                     )
+                    return
+                # This mutates the page object *in-place*
+                page.add_overlay(overlay_pdf.pages[0])
+                _copy_annotations(page, overlay_pdf.pages[0], pdf)
         except (PdfError, TypeError) as e:
             logger.warning("Failed to apply overlay to page %d: %s", i + 1, e)
+
+
+def _get_page_origin(page):
+    box = page.trimbox
+    return float(box[0]), float(box[1])
+
+
+def _translate_rect(rect, ox, oy):
+    return [float(a) + b for a, b in zip(rect, [ox, oy, ox, oy])]
+
+
+def _rotate_rect(rect, page):
+    """
+    Maps a rect from Visual Space (what the user sees)
+    to Physical Space (the PDF dictionary).
+    """
+    rotation = int(page.get("/Rotate", 0)) % 360
+    if rotation == 0:
+        return rect
+
+    # These are the PHYSICAL dimensions (e.g., 500 x 800)
+    p1, p2, p3, p4 = page.trimbox
+    W, H = float(p3 - p1), float(p4 - p2)
+
+    x1, y1, x2, y2 = [float(t) for t in rect]
+
+    if rotation == 90:
+        # 90 CW: The visual X is the physical Y.
+        # The visual Y is the physical (Width - X).
+        return [W - y2, x1, W - y1, x2]
+
+    if rotation == 180:
+        return [W - x2, H - y2, W - x1, H - y1]
+
+    if rotation == 270:
+        # 270 CW: The visual X is physical (Height - Y)
+        # The visual Y is physical X
+        return [y1, H - x2, y2, H - x1]
+
+    return rect
+
+
+def _copy_annotations(page, overlay_page, pdf):
+    """Copies annotations from an overlay page to the target page."""
+    from pikepdf import Array, Name
+
+    overlay_annots = getattr(overlay_page, "Annots", None)
+    if not overlay_annots:
+        return
+
+    if Name.Annots not in page:
+        page[Name.Annots] = Array()
+
+    for annot in overlay_annots:
+        new_annot = pdf.copy_foreign(annot)
+        if r := getattr(new_annot, "Rect", None):
+            ox, oy = _get_page_origin(page)
+            rotated = _rotate_rect(r, page)
+            translated = _translate_rect(rotated, ox, oy)
+            new_annot.Rect = translated
+        page[Name.Annots].append(new_annot)

@@ -32,10 +32,19 @@ class TestAddTextCoverage(ModuleSandboxMixin):
 
     def test_add_text_skip_page(self, pdf):
         """Test that pages with no rules are skipped."""
-        spec = "1/Hello/"
+        # 1. Add pages so the loop actually executes
+        pdf.add_blank_page()
+        pdf.add_blank_page()
 
-        with patch("pdftl.operations.helpers.text_drawer.TextDrawer") as MockDrawer:
+        # 2. Explicitly import the module to prevent sys.modules cross-talk
+        import pdftl.operations.helpers.text_drawer
+
+        spec = "1/Hello/"
+        with patch.object(pdftl.operations.helpers.text_drawer, "TextDrawer") as MockDrawer:
+            from pdftl.operations.add_text import add_text_pdf
+
             add_text_pdf(pdf, [spec])
+
             # Instantiated once for dependency check, once for Page 1.
             # Should NOT be instantiated for Page 2.
             assert MockDrawer.call_count == 2
@@ -81,7 +90,7 @@ def test_process_page_empty_overlay_log():
         # Mock a PDF object that has 0 pages
         mock_pdf_open.return_value.__enter__.return_value.pages = []
 
-        _process_page(0, mock_page, {0: [MagicMock()]}, {}, mock_drawer_class)
+        _process_page(0, mock_page, {0: [MagicMock()]}, {}, mock_drawer_class, MagicMock())
         # Line 340 is now hit (logger.debug for empty overlay)
 
 
@@ -102,7 +111,9 @@ def test_process_page_with_source_meta():
 
     mock_rule = MagicMock()
     # Pass a dummy static_context to avoid fallthrough issues
-    _process_page(0, mock_page, {0: [mock_rule]}, {"filename": "new.pdf"}, mock_drawer_class)
+    _process_page(
+        0, mock_page, {0: [mock_rule]}, {"filename": "new.pdf"}, mock_drawer_class, MagicMock()
+    )
 
     args, _ = mock_drawer_instance.draw_rule.call_args
     assert args[1]["source_filename"] == "old.pdf"

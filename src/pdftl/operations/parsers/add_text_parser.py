@@ -22,6 +22,7 @@ PRESET_POSITIONS = {
     "top-center",
     "top-right",
     "mid-left",
+    "center",
     "mid-center",
     "mid-right",
     "bottom-left",
@@ -33,6 +34,8 @@ NUMERIC_VARS = {"page", "total", "source_page", "source_rotation", "source_width
 
 # Regex to capture either an escaped block {{...}} OR a variable block {...}
 TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
+
+LINK_REGEX = re.compile(r"\[([^\]\\]*(?:\\.[^\]\\]*)*)\]\(([^)]*)\)")
 
 # 1: (total-page)
 COMPLEX_VAR_REGEX = re.compile(r"^\s*(total-page)\s*$")
@@ -317,6 +320,8 @@ def _normalize_positioning(options: dict, normalized: dict):
         pos_lower = position.lower()
         if pos_lower not in PRESET_POSITIONS:
             raise ValueError(f"Unknown position '{position}'. Must be one of {PRESET_POSITIONS}")
+        if pos_lower == "center":
+            pos_lower = "mid-center"
         normalized["position"] = pos_lower
 
     if x:
@@ -340,7 +345,7 @@ def _normalize_layout(options: dict, normalized: dict):
 
 
 def _normalize_formatting(options: dict, normalized: dict):
-    """Handles 'font', 'size', 'color', and 'align' options."""
+    """Handles 'font', 'size', 'color', 'align', and 'linkcolor' options."""
     if "font" in options:
         normalized["font"] = options.pop("font")
     if "size" in options:
@@ -356,6 +361,8 @@ def _normalize_formatting(options: dict, normalized: dict):
         if align_lower not in ("left", "center", "right"):
             raise ValueError(f"Invalid align value: '{align_lower}'")
         normalized["align"] = align_lower
+    if "linkcolor" in options:
+        normalized["linkcolor"] = _parse_color(options.pop("linkcolor"))
 
 
 def _parse_dimension(size_str: str):
@@ -498,56 +505,87 @@ def _evaluate_token(token: tuple, context: dict):
     return base_value
 
 
-def _tokenize_text_string(text_str: str) -> list:
-    """
-    Splits the text string into a list of literals and parsed tokens.
-    """
-    parts = []
-    # Split the string by our token regex.
-    split_parts = TOKEN_REGEX.split(text_str)
-
-    for i, part in enumerate(split_parts):
-        if not part:
-            continue
-
-        is_token = i % 2 == 1  # Literals are at even indices
-
-        if not is_token:
-            parts.append(part)
-        elif part.startswith("{{"):
-            parts.append(part[1:-1])  # Unescape {{...}}
-        else:
-            # Parse {expr}
-            parts.append(_parse_var_expression(part[1:-1]))
-
-    return parts
-
-
-def _default_renderer(parts: list, context: dict) -> str:
-    """
-    Renders a pre-compiled list of parts against a context dict.
-    """
-    result = []
-    for part in parts:
-        if isinstance(part, str):
-            result.append(part)
-        else:
-            # It's a token tuple
-            result.append(str(_evaluate_token(part, context)))
-    return "".join(result)
-
-
-def _compile_text_renderer(text_str: str):
-    """
-    Parses and "compiles" a text string into a render function.
-    """
-    parts = _tokenize_text_string(text_str)
-    return lambda context: _default_renderer(parts, context)
-
-
 def _find_unit(input_str: str):
     """Find a unit from UNITS in the string"""
     for unit_name in UNITS:
         if input_str.endswith(unit_name):
             return unit_name
     return None
+
+
+def _tokenize_plain_segment(text_str: str) -> list:
+    """Tokenizes a plain (non-link) segment into literals and variable tokens."""
+    parts = []
+    for i, part in enumerate(TOKEN_REGEX.split(text_str)):
+        if not part:
+            continue
+        if i % 2 == 0:
+            parts.append(part.replace(r"\[", "[").replace(r"\]", "]"))
+        elif part.startswith("{{"):
+            parts.append(part[1:-1])
+        else:
+            parts.append(_parse_var_expression(part[1:-1]))
+    return parts
+
+
+def _tokenize_text_string(text_str: str) -> list:
+    """
+    Splits a text string into literals, variable tokens, and link tokens.
+    Link tokens: ("link", display_parts, url_parts)
+    Markdown syntax: [display](url). Supports {variables} in both parts.
+    Escaped brackets: \\[ and \\] are treated as literals.
+    """
+    parts = []
+    segments = LINK_REGEX.split(text_str)
+    i = 0
+    while i < len(segments):
+        if segments[i]:
+            parts.extend(_tokenize_plain_segment(segments[i]))
+        if i + 2 < len(segments):
+            parts.append(
+                (
+                    "link",
+                    _tokenize_plain_segment(segments[i + 1]),
+                    _tokenize_plain_segment(segments[i + 2]),
+                )
+            )
+            i += 3
+        else:
+            i += 1
+    return parts
+
+
+def _default_renderer(parts: list, context: dict) -> str:
+    """Renders parts to a plain string. Link display text is included; URL discarded."""
+    result = []
+    for part in parts:
+        if isinstance(part, str):
+            result.append(part)
+        elif isinstance(part, tuple) and part[0] == "link":
+            result.append(_default_renderer(part[1], context))
+        else:
+            result.append(str(_evaluate_token(part, context)))
+    return "".join(result)
+
+
+def _compile_text_renderer(text_str: str):
+    """
+    Compiles a text string into a render function.
+    Returns a callable: context -> list of (text, url_or_None) tuples.
+    """
+    parts = _tokenize_text_string(text_str)
+    return lambda context: _render_runs(parts, context)
+
+
+def _render_part_to_run(part, context) -> tuple[str, str | None]:
+    """Renders a single part to a (text, url_or_None) run tuple."""
+    if isinstance(part, str):
+        return (part, None)
+    if isinstance(part, tuple) and part[0] == "link":
+        return (_default_renderer(part[1], context), _default_renderer(part[2], context))
+    return (str(_evaluate_token(part, context)), None)
+
+
+def _render_runs(parts: list, context: dict) -> list[tuple[str, str | None]]:
+    """Renders all parts to a list of (text, url_or_None) run tuples."""
+    return [run for part in parts if (run := _render_part_to_run(part, context)) and run[0]]
