@@ -2,16 +2,21 @@
 
 PortSystem          1.0
 PortGroup           python 1.0
+PortGroup           active_variants 1.1
 
 name                pdftl
 version             0.17.0
+revision            0
+categories          textproc
 platforms           {darwin any}
 supported_archs     noarch
-license             MPL-2
+license             MPL-2.0
+
 maintainers         nomaintainer
 
 description         A capable CLI tool for PDF manipulation inspired by pdftk.
-long_description    {*}${description}
+long_description    pdftl (PDF tackle) is a standalone CLI utility and Python library \
+                    for manipulating PDF files.
 
 homepage            https://github.com/pdftl/pdftl
 
@@ -19,15 +24,75 @@ checksums           rmd160  1367a3a6d94a2257850e4faf1994c688da5b57d2 \
                     sha256  385fc71851025d029a2557e9edd3d9fb63bf145dd0b061b49295634ceeb88bb7 \
                     size    609806
 
-python.versions     310 311 312 313 314
-python.default_version 314
+set pyvers {310 311 312 313 314}
+foreach pyver $pyvers {
+    set pyconflicts [lmap v [ldelete $pyvers $pyver] {string cat python${v}}]
+    variant python${pyver} conflicts {*}$pyconflicts description "Use Python 3.[string range $pyver 1 end]" {}
+    if {[variant_isset python${pyver}]} {
+        python.default_version  ${pyver}
+        set any_py_variant_set 1
+    }
+}
+if {![info exists any_py_variant_set]} {
+    default_variants +python314
+    python.default_version 314
+}
+
 python.pep517       yes
 
-if {${name} ne ${subport}} {
-    depends_lib-append \
-        port:py${python.version}-defusedxml \
-        port:py${python.version}-pikepdf \
-        port:py${python.version}-rich
+depends_build-append \
+    port:py${python.version}-setuptools \
+    port:py${python.version}-setuptools_scm \
+    port:py${python.version}-wheel
 
-    livecheck.type      none
+# Base dependencies needed to run the core app
+depends_lib-append \
+    port:py${python.version}-defusedxml \
+    port:py${python.version}-pikepdf \
+    port:py${python.version}-rich
+
+variant add_text description {Support for adding text to PDFs} {
+    depends_lib-append \
+        port:py${python.version}-reportlab
 }
+
+variant delete_blank description {Support for deleting blank pages} {
+    depends_lib-append \
+        port:py${python.version}-numpy
+}
+
+variant optimize_images description {Support for optimizing images} {
+    depends_run-append \
+        port:ocrmypdf
+
+    # This ensures ocrmypdf's site-packages map to pdftl's site-packages
+    pre-configure {
+        require_active_variants ocrmypdf python${python.version}
+    }
+}
+
+variant replacement_font description {Support for replacement fonts} {
+    depends_lib-append \
+        port:py${python.version}-fonttools
+}
+
+variant signing description {Support for signing PDFs} {
+    depends_lib-append \
+        port:py${python.version}-hanko
+}
+
+variant shell_completion description {Support for shell tab completion} {
+    depends_lib-append \
+        port:py${python.version}-lark \
+        port:py${python.version}-cloudpickle
+}
+
+variant yaml_bookmarks description {Support for YAML bookmarks} {
+    depends_lib-append \
+        port:py${python.version}-yaml
+}
+
+default_variants-append +add_text +delete_blank +optimize_images +replacement_font \
+    +signing +shell_completion +yaml_bookmarks
+
+livecheck.type      none

@@ -30,6 +30,9 @@ jobs:
           sudo mkdir -p "$PORT_DIR"
 
           # 2. Copy the Portfile from your git repo into the MacPorts system
+          echo "__________ Portfile contents: __________"
+          sudo cat macports/Portfile
+          echo "________________________________________"
           sudo cp macports/Portfile "$PORT_DIR/"
 
           # 3. Create the port index so MacPorts adds it to its internal database
@@ -42,14 +45,36 @@ jobs:
           cat /opt/local/etc/macports/sources.conf >> /tmp/sources.conf
           sudo mv /tmp/sources.conf /opt/local/etc/macports/sources.conf
 
+          echo "Running which, then uninstalling, and trying again"
+          which pdftl || echo pdftl not found
+          which pdftl-3.12 || echo pdftl-3.12 not found
+          which pdftl-3.13 || echo pdftl-3.13 not found
+          which pdftl-3.14 || echo pdftl-3.14 not found
+          sudo port uninstall pdftl || true
+          sudo port uninstall py312-pdftl || true
+          sudo port uninstall py313-pdftl || true
+          sudo port uninstall py314-pdftl || true
+          which pdftl || echo pdftl not found
+          which pdftl-3.12 || echo pdftl-3.12 not found
+          which pdftl-3.13 || echo pdftl-3.13 not found
+          which pdftl-3.14 || echo pdftl-3.14 not found
+
+          echo "searching for setuptools_scm"
+          port search setuptools_scm || true
+
+          # fix missing macports user issue
+          echo "macportsuser root" | sudo tee -a /opt/local/etc/macports/macports.conf
+
           echo "Starting MacPorts installation test..."
 
           # 5. Because it's indexed globally, we can use the standard install command!
-          sudo port -v install py312-pdftl
+          sudo port selfupdate
+          sudo port -v install pdftl
 
           echo "Installation successful! Testing CLI execution..."
+          port contents pdftl
 
           # Verify the executable is in the PATH
-          pdftl-3.12 --help
-	  pdftl-3.12 cat --help
-          pdftl-3.12 --version
+          pdftl --help
+          pdftl cat --help
+          pdftl --version
