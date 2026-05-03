@@ -264,6 +264,7 @@ See the **[API Tutorial][4]** for more details.
 | [`encrypt_40bit`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-40bit)                   | Use 40 bit encryption (obsolete, highly insecure)         |
 | [`encrypt_aes128`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes128)                 | Use 128 bit AES encryption (maybe obsolete)               |
 | [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256)                 | Use 256 bit AES encryption                                |
+| [`fast`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#fast)                                     | Skip stream recompression for faster saving               |
 | [`flatten`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#flatten)                               | Flatten all annotations                                   |
 | [`keep_final_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-final-id)                   | Copy final input PDF's ID metadata to output              |
 | [`keep_first_id`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#keep-first-id)                   | Copy first input PDF's ID metadata to output              |

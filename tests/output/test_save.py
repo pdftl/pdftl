@@ -654,3 +654,68 @@ def test_pdftl_aes_encryption_forces_accessibility(tmp_path, mock_input_context)
         encrypt_dict = encrypted_pdf.trailer.get("/Encrypt")
         raw_p = int(encrypt_dict.get("/P", 0))
         assert raw_p == -3392, f"Expected raw AES permissions flag -3392, got {raw_p}"
+
+
+import pytest
+
+
+def test_fast_option_registration():
+    """
+    Covers line 157 by ensuring the registry-decorated function is at least
+    referenced/defined.
+    """
+    from pdftl.output.save import _fast_option
+
+    assert callable(_fast_option)
+    # Calling it directly doesn't do anything (it's a pass), but hits the line
+    _fast_option()
+
+
+def test_build_save_options_fast_logic(tmp_path):
+    """
+    Covers lines 348-349 by triggering the 'use_fast' conditional branch.
+    """
+    options = {"fast": True}
+    # Passing None for input_context as it's not needed for this branch
+    ret = _build_save_options(options, None)
+
+    assert ret["stream_decode_level"] == pikepdf.StreamDecodeLevel.none
+    assert ret["compress_streams"] is False
+    # Verify it didn't accidentally overwrite unrelated defaults
+    assert "linearize" in ret
+
+
+def test_save_pdf_with_fast_flag(tmp_path):
+    """
+    Integration test to ensure the 'fast' option flows through the actual
+    save_pdf call and produces a valid file.
+    """
+    out_file = tmp_path / "test_fast.pdf"
+
+    # Create a tiny dummy PDF with a stream (an image or content)
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    options = {"fast": True}
+
+    # This executes the full path from save_pdf -> _build_save_options
+    save_pdf(pdf, str(out_file), None, options=options)
+
+    assert out_file.exists()
+
+    # Verify the saved file is readable
+    with pikepdf.open(out_file) as saved_pdf:
+        assert len(saved_pdf.pages) == 1
+
+
+def test_fast_overrides_uncompress(tmp_path):
+    """
+    Edge case: Ensure 'fast' logic takes precedence or works
+    sensibly alongside 'uncompress'.
+    """
+    # If both are True, 'fast' sets compress_streams to False (same as uncompress)
+    options = {"fast": True, "uncompress": True}
+    ret = _build_save_options(options, None)
+
+    assert ret["compress_streams"] is False
+    assert ret["stream_decode_level"] == pikepdf.StreamDecodeLevel.none

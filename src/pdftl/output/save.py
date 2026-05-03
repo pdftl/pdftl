@@ -139,6 +139,24 @@ def _compress_options():
     pass
 
 
+_FAST_LONG_DESC = """By default, data streams (such as images and page contents)
+are decompressed and recompressed when saving. This allows the underlying
+library to recalculate stream lengths and often results in smaller files,
+but it can add significant CPU overhead. The `fast` option disables this step,
+copying streams as raw binary data to reduce save times."""
+
+
+@register_option(
+    "fast",
+    desc="Skip stream recompression for faster saving",
+    long_desc=_FAST_LONG_DESC,
+    type="flag",
+    tags=["performance", "compression"],
+)
+def _fast_option():
+    pass
+
+
 @register_option("linearize", desc="Linearize output file(s)", type="flag")
 def _linearize_option():
     pass
@@ -313,16 +331,24 @@ def _build_save_options(options, input_context):
         logger.warning("Encryption not requested, so 'allow' permissions will be ignored.")
 
     use_uncompress = options.get("uncompress", False)
-    return {
+    use_fast = options.get("fast", False)
+    # Determine the safest/requested object stream mode
+    if use_uncompress:
+        obj_mode = pikepdf.ObjectStreamMode.disable
+    else:
+        obj_mode = pikepdf.ObjectStreamMode.generate
+    logger.debug("obj_mode=%s", obj_mode)
+    ret = {
         "linearize": bool(options.get("linearize")),
         "encryption": encryption_object,
         "compress_streams": not use_uncompress,
-        "object_stream_mode": (
-            pikepdf.ObjectStreamMode.disable
-            if use_uncompress
-            else pikepdf.ObjectStreamMode.generate
-        ),
+        "object_stream_mode": obj_mode,
     }
+    if use_fast:
+        # generating object streams seems cheap, so we don't change it. maybe revisit
+        ret["stream_decode_level"] = pikepdf.StreamDecodeLevel.none
+        ret["compress_streams"] = False
+    return ret
 
 
 def _remove_source_info(pdf):

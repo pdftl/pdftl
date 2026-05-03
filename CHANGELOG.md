@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `zoom` operation
 
+- `fast` output option
+
+### Changed
+
+- pipx-specific installation instructions for missing dependencies
+
+- help output uses executable name correctly
+
+- `update_bookmarks` can now read bookmark data from stdin
+
 ## [0.17.0] - 2026-05-02
 
 ### Added

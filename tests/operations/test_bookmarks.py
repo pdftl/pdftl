@@ -223,3 +223,61 @@ def test_toc_filter_invalid_children(tmp_path, six_page_pdf, caplog):
     update_toc(pikepdf.open(six_page_pdf), [str(test_file)])
 
     assert "Ignoring invalid 'children' (must be a list)" in caplog.text
+
+
+import io
+
+
+def test_update_bookmarks_no_args():
+    """
+    Covers lines 74-75: Error when no file argument is provided.
+    """
+    from pdftl.exceptions import MissingArgumentError
+
+    pdf = pikepdf.Pdf.new()
+
+    with pytest.raises(MissingArgumentError, match="requires a <bookmarks_file> argument"):
+        update_toc(pdf, [])
+
+
+def test_update_bookmarks_invalid_root_type(tmp_path):
+    """
+    Covers lines 103-107: Error when JSON/YAML is not a list.
+    """
+    from pdftl.exceptions import OperationError
+
+    pdf = pikepdf.Pdf.new()
+    json_file = tmp_path / "invalid.json"
+    json_file.write_text(json.dumps({"not_a": "list"}))
+
+    with pytest.raises(OperationError, match="Root element must be a list"):
+        update_toc(pdf, [str(json_file)])
+
+
+def test_update_bookmarks_from_stdin(tmp_path):
+    """
+    Covers line 79: Handles '-' by reading from stdin.
+    """
+    # 1. Setup a dummy PDF
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    # 2. Prepare mock JSON data
+    mock_bookmarks = [{"title": "Chapter 1", "page": 1}]
+    mock_input = json.dumps(mock_bookmarks)
+
+    # 3. Patch stdin and call update_toc
+    # smart_open(None) reads from sys.stdin
+    with patch("sys.stdin", io.StringIO(mock_input)):
+        op_args = ["-"]
+        result = update_toc(pdf, op_args)
+
+    # 4. Verify results
+    assert result.success is True
+
+    # Correct way to check the outline in pikepdf:
+    # We use the 'open_outline' context manager to ensure the tree is synced
+    with pdf.open_outline() as outline:
+        root_items = list(outline.root)
+        assert len(root_items) == 1
+        assert root_items[0].title == "Chapter 1"
