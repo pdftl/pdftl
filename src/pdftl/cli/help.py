@@ -23,7 +23,7 @@ from pdftl.cli.help_render import (
     usage_as_markdown,
 )
 from pdftl.cli.metadata import get_project_version
-from pdftl.cli.whoami import WHOAMI
+from pdftl.cli.whoami import WHOAMI, PACKAGE
 from pdftl.core.registry import register_help_topic, registry
 from pdftl.core.types import HelpExample
 from pdftl.utils.string_utils import before_space
@@ -45,7 +45,7 @@ def _print_topic_help(hprint, topic_data, topic_name):
         topic_name if any(topic_name in x for x in SPECIAL_HELP_TOPICS_MAP) else f"`{topic_name}`"
     )
 
-    hprint(f"# {WHOAMI}: help for {safe_topic_name}")
+    hprint(f"# {PACKAGE}: help for {safe_topic_name}")
 
     if desc := topic_data.get("desc", None):
         hprint(f"\n{desc.strip()}")
@@ -169,7 +169,7 @@ def print_main_help(dest=None, raw=False):
     # We define the layout and content ONCE here.
 
     print_title(
-        f"{WHOAMI} - PDF tackle {get_project_version()}",
+        f"{PACKAGE} - PDF tackle {get_project_version()}",
         "A wannabe CLI compatible clone/extension of pdftk",
     )
 

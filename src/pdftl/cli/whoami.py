@@ -6,7 +6,11 @@
 
 """Metadata for the project"""
 
-WHOAMI = "pdftl"
+import os
+import sys
+
+_exe = os.path.basename(sys.argv[0]) if sys.argv and sys.argv[0] != "-m" else None
+WHOAMI = "pdftl" if _exe is None else _exe
 PACKAGE = "pdftl"
 HOMEPAGE = "https://github.com/pdftl/pdftl"
 ISSUES = HOMEPAGE + "/issues"

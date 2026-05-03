@@ -8,7 +8,7 @@ Generate .md and .rst source files for documentation.
 
 import os
 import sys
-
+sys.argv[0] = "pdftl"  # for WHOAMI
 sys.path.insert(0, os.path.abspath("../src"))
 
 import inspect

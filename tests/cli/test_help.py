@@ -19,9 +19,11 @@ from pdftl.core.types import HelpExample
 @pytest.fixture
 def patch_environment(monkeypatch, tmp_path):
     """Patch core globals so all help functions run cleanly."""
-    monkeypatch.setattr(helpvermod, "WHOAMI", "pdftl")
+    monkeypatch.setattr(helpmod, "WHOAMI", "pdftl_whoami")
+    monkeypatch.setattr(helpvermod, "WHOAMI", "pdftl_whoami")
     monkeypatch.setattr(helpvermod, "HOMEPAGE", "https://example.com")
-    monkeypatch.setattr(helpvermod, "PACKAGE", "pdftl")
+    monkeypatch.setattr(helpvermod, "PACKAGE", "pdftl_package")
+    monkeypatch.setattr(helpmod, "PACKAGE", "pdftl_package")
 
     # Create fake operations and options
     fake_op = {
@@ -62,7 +64,7 @@ def patch_environment(monkeypatch, tmp_path):
     monkeypatch.setattr(
         helpvermod,
         "VERSION_TEMPLATE",
-        "{whoami} {package} {project_version}\n{dependencies}",
+        "{whoami} <~~ {package} ~~> {project_version}\n{dependencies}",
     )
 
     dummy_py = tmp_path / "dummy.py"
@@ -72,7 +74,7 @@ def patch_environment(monkeypatch, tmp_path):
 
 def test_get_synopsis(patch_environment):
     result = helpmod.get_synopsis()
-    assert "pdftl" in result
+    assert "pdftl_whoami" in result
     assert "i" in result  # from SPECIAL_HELP_TOPICS_MAP key tuple
 
 
@@ -183,7 +185,7 @@ def test_print_version_to_console(monkeypatch, patch_environment):
         args, _ = mock_console_instance.print.call_args
         printed_content = str(args[0])
 
-        assert "pdftl 1.0.0" in printed_content
+        assert "pdftl_whoami <~~ pdftl_package ~~> 1.0.0" in printed_content
         assert "pikepdf 10.0" in printed_content
 
 
@@ -208,7 +210,7 @@ def test_print_version_to_file(monkeypatch, patch_environment):
     helpvermod.print_version(dest=buf)
     output = buf.getvalue()
 
-    assert "pdftl 1.0.0" in output
+    assert "pdftl_whoami <~~ pdftl_package ~~> 1.0.0" in output
     assert "pikepdf 10.0" in output
     assert "libqpdf 11.0" in output
 
@@ -235,11 +237,14 @@ import pytest
 
 
 @pytest.fixture
-def mock_metadata(mocker):
+def mock_metadata(mocker, monkeypatch):
     """
     Mocks the importlib.metadata functions to simulate a specific
     dependency tree without reading the real system.
     """
+    monkeypatch.setattr(helpvermod, "WHOAMI", "pdftl_whoami")
+    monkeypatch.setattr(helpvermod, "PACKAGE", "pdftl_package")
+
     # 1. Mock 'requires' to return a mix of core, feature, and dev deps
     mocker.patch(
         "importlib.metadata.requires",
@@ -312,7 +317,7 @@ def test_print_version_output_format(mock_metadata):
     stdout = capture.getvalue()
 
     # 1. Check Core output
-    assert "pdftl" in stdout
+    assert "pdftl_whoami" in stdout
     assert "Core dependencies:" in stdout
     assert "pikepdf" in stdout
 
@@ -327,11 +332,13 @@ def test_print_version_output_format(mock_metadata):
     assert "pytest" not in stdout
 
 
-def test_print_version_no_metadata_crash(mocker):
+def test_print_version_no_metadata_crash(mocker, monkeypatch):
     """
     Edge case: If importlib.metadata throws PackageNotFoundError
     (e.g. running from a raw .py file without install), it should not crash.
     """
+    monkeypatch.setattr(helpvermod, "WHOAMI", "pdftl_whoami")
+    monkeypatch.setattr(helpvermod, "PACKAGE", "pdftl_package")
     capture = io.StringIO()
 
     mocker.patch(
@@ -343,7 +350,7 @@ def test_print_version_no_metadata_crash(mocker):
     stdout = capture.getvalue()
 
     # Should still print core info, just no optional block
-    assert "pdftl" in stdout
+    assert "pdftl_whoami" in stdout
     assert "Optional dependencies:" not in stdout
 
 
