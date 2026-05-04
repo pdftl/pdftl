@@ -78,3 +78,7 @@ jobs:
           pdftl --help
           pdftl cat --help
           pdftl --version
+
+      - name: Show MacPorts log on failure
+        if: failure()
+        run: cat /opt/local/var/macports/logs/_opt_local_var_macports_sources_local_python_pdftl/pdftl/main.log
