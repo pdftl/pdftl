@@ -10,8 +10,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    pass
+from datetime import datetime
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_operation
@@ -19,7 +18,12 @@ from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.utils.keyval_parser import parse_keyval_list
 
+if TYPE_CHECKING:
+    pass
+
+
 logger = logging.getLogger(__name__)
+
 
 _SET_LONG_DESC = """
 
@@ -28,12 +32,24 @@ preferences, logical page labels, and open actions without altering page content
 
 You can provide one or more `key=value` pairs.
 
+### Document Metadata (Auto-syncs Info Dict & XMP Stream)
+Updates standard metadata properties. pdftl automatically synchronizes these
+values across both the legacy `/Info` dictionary and the modern PDF 2.0 XMP stream.
+* **title**: The document's title.
+* **author**: The name of the person who created the document.
+* **subject**: The subject of the document.
+* **keywords**: Comma-separated keywords associated with the document.
+* **creator**: The application that originally created the document.
+* **producer**: The tool used to convert the document to PDF.
+* **creationdate**: Document creation timestamp (ISO 8601 or PDF `D:...` date).
+* **moddate**: Document modification timestamp (ISO 8601 or PDF `D:...` date).
+
 ### Supported Properties
 * **lang**: The language identifier of the document (e.g., `en-US`). Important for accessibility.
 * **layout**: The page layout to use when opened.
-    *(SinglePage, OneColumn, TwoColumnLeft, TwoColumnRight, TwoPageLeft, TwoPageRight)*
+  *(SinglePage, OneColumn, TwoColumnLeft, TwoColumnRight, TwoPageLeft, TwoPageRight)*
 * **mode**: The document view mode when opened.
-    *(UseNone, UseOutlines, UseThumbs, FullScreen, UseOC, UseAttachments)*
+  *(UseNone, UseOutlines, UseThumbs, FullScreen, UseOC, UseAttachments)*
 
 ### Viewer Preferences (Booleans)
 These control how the PDF reader UI is presented:
@@ -70,12 +86,18 @@ To completely remove custom page labels, use `pagelabels=""`.
 
 _SET_EXAMPLES = [
     {
-        "cmd": "in.pdf set lang=en-US display_title=true output out.pdf",
-        "desc": "Set the document language and tell the viewer to display the metadata Title.",
+        "cmd": 'in.pdf set title="Q3 Report" author="Jane Doe" display_title=true output out.pdf',
+        "desc": (
+            "Set the document title/author, and "
+            "tell the viewer to display the Title instead of the filename."
+        ),
     },
     {
-        "cmd": "in.pdf set layout=TwoColumnRight mode=UseOutlines output out.pdf",
-        "desc": "Force the PDF to open in a two-column view with the bookmarks panel open.",
+        "cmd": "in.pdf set lang=en-US layout=TwoColumnRight mode=UseOutlines output out.pdf",
+        "desc": (
+            "Set language to US English and "
+            "force the PDF to open in a two-column view with bookmarks open."
+        ),
     },
     {
         "cmd": "in.pdf set open_action=5,XYZ,null,null,2.5 output out.pdf",
@@ -152,6 +174,101 @@ def _parse_labels(pikepdf, labels_str: str) -> dict:
         rules[page_idx] = pikepdf.Dictionary(**rule_args)
 
     return rules
+
+
+def _parse_to_datetime(val):
+    """Converts a CLI date string or a legacy PDF date to a Python datetime."""
+    from pikepdf.models.metadata import decode_pdf_date
+
+    val_str = str(val).strip()
+    if val_str.startswith("D:"):
+        return decode_pdf_date(val_str)  # Use pikepdf's native decoder for backfilling
+
+    # Assume the CLI user passed a standard ISO 8601 date (e.g., "2026-05-03")
+    return datetime.fromisoformat(val_str)
+
+
+def _format_date_for_docinfo(val):
+    """Converts any date input into a PDF-compliant string (D:YYYY...)"""
+    from pikepdf.models.metadata import encode_pdf_date
+
+    return encode_pdf_date(_parse_to_datetime(val))
+
+
+def _format_date_for_xmp(val):
+    """Converts any date input into an ISO 8601 string for XMP."""
+    return _parse_to_datetime(val).isoformat()
+
+
+# Format: "cli_key": ("/InfoKey", "xmp:Key", xmp_formatter, docinfo_formatter)
+_METADATA_MAP = {
+    "title": ("/Title", "dc:title", str, str),
+    "author": ("/Author", "dc:creator", lambda x: [str(x)], str),
+    "subject": ("/Subject", "dc:description", str, str),
+    "keywords": ("/Keywords", "pdf:Keywords", str, str),
+    "creator": ("/Creator", "xmp:CreatorTool", str, str),
+    "producer": ("/Producer", "pdf:Producer", str, str),
+    # The new date fields:
+    "creationdate": (
+        "/CreationDate",
+        "xmp:CreateDate",
+        _format_date_for_xmp,
+        _format_date_for_docinfo,
+    ),
+    "moddate": ("/ModDate", "xmp:ModifyDate", _format_date_for_xmp, _format_date_for_docinfo),
+}
+
+
+def _apply_cli_to_docinfo(pdf, kwargs):
+    """Applies CLI updates to the legacy /Info dict."""
+    for kw_key, (info_key, _, _, doc_fmt) in _METADATA_MAP.items():
+        if kw_key in kwargs:
+            pdf.docinfo[info_key] = doc_fmt(kwargs[kw_key])
+
+
+def _backfill_xmp(meta, preserved_info, pikepdf):
+    """Backfills missing XMP fields from the preserved /Info dictionary."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    for _, (info_key, xmp_key, xmp_fmt, _) in _METADATA_MAP.items():
+        # Early continue to prevent deep nesting
+        if info_key not in preserved_info or xmp_key in meta:
+            continue
+
+        try:
+            meta[xmp_key] = xmp_fmt(str(preserved_info[info_key]))
+        except (ValueError, TypeError, pikepdf.PdfError) as e:
+            logger.debug("Failed to backfill %s to XMP: %s", xmp_key, e)
+
+
+def _apply_cli_to_xmp(meta, kwargs):
+    """Applies explicit CLI updates directly to the XMP stream."""
+    for kw_key, (_, xmp_key, xmp_fmt, _) in _METADATA_MAP.items():
+        if kw_key in kwargs:
+            meta[xmp_key] = xmp_fmt(kwargs[kw_key])
+
+
+def _apply_metadata(pdf, kwargs, pikepdf):
+    """Updates both the legacy /Info dictionary and the XMP stream."""
+    if not any(k in kwargs for k in _METADATA_MAP):
+        return
+
+    # Snapshot the original /Info dict for XMP backfilling
+    preserved_info = {str(k): v for k, v in pdf.docinfo.items()}
+
+    # 1. APPLY CLI UPDATES TO LEGACY /INFO DICT
+    _apply_cli_to_docinfo(pdf, kwargs)
+
+    # 2. UPDATE XMP STREAM
+    try:
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as meta:
+            _backfill_xmp(meta, preserved_info, pikepdf)
+            _apply_cli_to_xmp(meta, kwargs)
+
+    except (ValueError, TypeError, AttributeError, pikepdf.PdfError) as exc:
+        raise OperationError(f"Failed to set document metadata: {exc}") from exc
 
 
 def _apply_standard_props(pdf, kwargs, pikepdf):
@@ -300,6 +417,8 @@ def set_props(pdf, op_args) -> OpResult:
 
     kwargs = _parse_kwargs(op_args)
 
+    # Pass pikepdf down to the metadata applier
+    _apply_metadata(pdf, kwargs, pikepdf)
     _apply_standard_props(pdf, kwargs, pikepdf)
     _apply_viewer_prefs(pdf, kwargs, pikepdf)
     _apply_open_action(pdf, kwargs, pikepdf)

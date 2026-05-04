@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `add_text` supports markdown-style hyperlinks
 
+- `set` handles common metadata, in both Info and XMP
+
 ## [0.17.0] - 2026-05-02
 
 ### Added
