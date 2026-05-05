@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `stamp`, `multistamp`, `background`, `multibackground` accept page specs
 
+- `help`: link to readthedocs page
+
 ## [0.17.0] - 2026-05-02
 
 ### Added

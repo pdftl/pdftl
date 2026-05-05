@@ -170,6 +170,7 @@ class Registry:
 
             topic = HelpTopic(
                 title=title,
+                name=name,
                 desc=desc,
                 long_desc=long_desc,
                 examples=safe_examples,

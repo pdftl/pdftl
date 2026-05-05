@@ -119,6 +119,7 @@ class HelpTopic(LegacyDictAccess):
     """
 
     title: str
+    name: str
     desc: str  # Short description
     long_desc: str  # Full documentation (usually from docstring)
     examples: list[HelpExample] = field(default_factory=list)

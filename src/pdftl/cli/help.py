@@ -39,6 +39,28 @@ def get_synopsis():
     return ret
 
 
+def _resolve_special_help_topic(topic_name):
+    for x, y in SPECIAL_HELP_TOPICS_MAP.items():
+        if topic_name in x or topic_name == y:
+            return y
+    return None
+
+
+def _print_help_trailer(hprint, topic_data, topic_name):
+    if tags := topic_data.get("tags", None):
+        hprint(format_tags(tags))
+
+    if caller := topic_data.get("caller", None):
+        hprint(f"\n*Source: {caller}*")
+
+    topic_type = type(topic_data).__name__
+
+    if rtd_url := _get_rtd_url(topic_name, topic_type, topic_data, caller):
+        hprint(f"\n*Read online: [{rtd_url}]({rtd_url})*")
+
+    hprint(f"\n*Type: {type(topic_data).__name__}*")
+
+
 def _print_topic_help(hprint, topic_data, topic_name):
     """Prints the detailed help for a specific command or topic."""
     safe_topic_name = (
@@ -62,13 +84,50 @@ def _print_topic_help(hprint, topic_data, topic_name):
         example_markdown = format_examples_block(examples)
         hprint(example_markdown)
 
-    if tags := topic_data.get("tags", None):
-        hprint(format_tags(tags))
+    _print_help_trailer(hprint, topic_data, topic_name)
 
-    if caller := topic_data.get("caller", None):
-        hprint(f"\n*Source: {caller}*")
 
-    hprint(f"\n*Type: {type(topic_data).__name__}*")
+def _get_rtd_url(topic_name, topic_type, topic_data, caller) -> None | str:
+    """Dynamically build the docs URL based on the caller namespace.
+
+    e.g., "pdftl.operations.cat" -> category becomes \"operations\" """
+    if not caller:
+        return None
+
+    current_version = get_project_version()
+    anchor = None
+    if any(x in current_version for x in ("post", "rc", "dev", "+")):
+        docs_version = "latest"
+    else:
+        docs_version = "stable"
+
+    if special_help_topic := _resolve_special_help_topic(topic_name):
+        category = "general"
+        topic_name_raw = special_help_topic
+    elif topic_type.endswith("HelpTopic"):
+        category = "help"
+        topic_name_raw = topic_data.name
+    elif topic_type.endswith("Option"):
+        import re
+
+        category = "misc"
+        anchor = re.sub("[^-a-zA-Z]", "", re.sub("[_ ]", "-", topic_name)).lower()
+        topic_name_raw = "output_options"
+    else:
+        topic_name_raw = topic_name
+        parts = caller.split(".")
+        if len(parts) <= 1:
+            return None
+        category = parts[1]
+
+    # Safely encode spaces for URLs (e.g., "shell completion" -> "shell%20completion")
+    url_topic = topic_name_raw.replace(" ", "%20")
+    doc_url = f"https://pdftl.readthedocs.io/en/{docs_version}/{category}/{url_topic}.html"
+    if anchor:
+        doc_url += f"#{anchor}"
+
+    # Using Markdown syntax so `rich` parses it into a clickable terminal link
+    return doc_url
 
 
 def print_main_help(dest=None, raw=False):
@@ -194,8 +253,9 @@ def _print_output_options_help(hprint):
         if hasattr(info, "examples"):
             example_markdown = format_examples_block(info.examples)
             hprint(example_markdown)
-        if hasattr(info, "tags"):
-            hprint(format_tags(info.tags))
+        _print_help_trailer(hprint, info, opt)
+        # if hasattr(info, "tags"):
+        #     hprint(format_tags(info.tags))
 
 
 def _print_examples_help(hprint):
@@ -278,7 +338,6 @@ def print_help(command=None, dest=None, raw=False):
             before_space(k) for k, t in taggable_topics if hasattr(t, "tags") and tag in t.tags
         ]
         _print_multiple_topics(tagged_topics, hprint, dest, raw)
-
     elif safe_command in (dispatch_table := _print_help_dispatch_table()):
         dispatch_table[safe_command](hprint)
     elif safe_command == "all":
@@ -292,7 +351,7 @@ def print_help(command=None, dest=None, raw=False):
             "signing",
             "page_specs",
             "pipeline",
-            "completion",
+            "shell_completion",
             "help",
         ]
         _print_multiple_topics(all_topics, hprint, dest, raw)

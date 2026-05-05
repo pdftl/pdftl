@@ -13,9 +13,9 @@ from pdftl.utils.dependencies import ensure_dependencies
 
 
 @register_help_topic(
-    "shell completion",
+    "shell_completion",
     title="shell completion",
-    desc="Getting tab completions in your shell",
+    desc="Getting tab completions for pdftl in your shell",
     examples=[
         HelpExample(
             desc="output bash completion code. This must be sourced from bash.",

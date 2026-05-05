@@ -146,8 +146,9 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
                 "fish",
                 "powershell",
                 "ps",
+                "shell completion",
             ),
-            "shell completion",
+            "shell_completion",
         ),
         (("all",), "all"),
     ]
