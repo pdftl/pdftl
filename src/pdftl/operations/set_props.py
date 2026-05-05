@@ -341,14 +341,14 @@ def _build_dest_array(parts: list[str], page_obj, pikepdf) -> list:
         dest_array.extend([pikepdf.Name("/XYZ"), None, None, None])
         return dest_array
 
-    view_type = parts[1]
+    view_type = parts[1].upper()
     dest_array.append(pikepdf.Name(f"/{view_type}"))
 
     for arg in parts[2:]:
         dest_array.append(_parse_view_arg(arg))
 
     # Auto-pad missing arguments with None based on known view types
-    expected_args = _VIEW_EXPECTED_ARGS.get(view_type.upper(), 0)
+    expected_args = _VIEW_EXPECTED_ARGS.get(view_type, 0)
     missing = expected_args - len(parts[2:])
     if missing > 0:
         dest_array.extend([None] * missing)
