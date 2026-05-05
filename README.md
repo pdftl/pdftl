@@ -35,19 +35,19 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 
 `pdftl` maintains command-line compatibility with `pdftk` while introducing features required for modern PDF workflows.
 
-| Feature | `pdftk` (Legacy) | `pdftl` (Modern) |
-| :--- | :--- | :--- |
-| **Pipelining** | ❌ (Requires temp files) | ✅ **Native** (Chain ops with `---`) |
-| **Encryption** | ⚠️ (Obsolete RC4) | ✅ **AES-256 Support** |
-| **Syntax** | Standard | ✅ **Compatible Extension** |
-| **Page Geometry** | ❌ | ✅ **Crop to fit, Zoom, & Chop** |
-| **Pipelined Logic** | ❌ | ✅ **Rotate + Stamp in one command** |
-| **Plugins** | ❌ | ✅ **Custom operations/mutation scripts written in Python** |
-| **Installation** | Often complex binary | ✅ **Simple `pipx install pdftl`** |
-| **Performance** | Variable | ✅ **Powered by pikepdf/qpdf** |
-| **Link Integrity**| ⚠️ Often breaks TOC/Links|✅ **Preserves internal cross-refs** |
-| **Shell Completion** | ❌ | ✅ **bash, zsh and powershell** |
-| **Help** | ⚠️ Basic (manpage) | ✅ **Self-documenting: [`pdftl help <operation/option/topic/tag>`][7]** |
+| Feature              | `pdftk` (Legacy)         | `pdftl` (Modern)                                                        |
+|:---------------------|:-------------------------|:------------------------------------------------------------------------|
+| **Pipelining**       | ❌ (Requires temp files) | ✅ **Native** (Chain ops with `---`)                                    |
+| **Encryption**       | ⚠️ (Obsolete RC4)         | ✅ **AES-256 Support**                                                  |
+| **Syntax**           | Standard                 | ✅ **Compatible Extension**                                             |
+| **Page Geometry**    | ❌                       | ✅ **Crop to fit, Zoom, & Chop**                                        |
+| **Pipelined Logic**  | ❌                       | ✅ **Rotate + Stamp in one command**                                    |
+| **Plugins**          | ❌                       | ✅ **Custom operations/mutation scripts written in Python**             |
+| **Installation**     | Often complex binary     | ✅ **Simple `pipx install pdftl`**                                      |
+| **Performance**      | Variable                 | ✅ **Powered by pikepdf/qpdf**                                          |
+| **Link Integrity**   | ⚠️ Often breaks TOC/Links | ✅ **Preserves internal cross-refs**                                    |
+| **Shell Completion** | ⚠️ zsh                    | ✅  **bash, zsh and powershell**                                        |
+| **Help**             | ⚠️ Basic (manpage)        | ✅ **Self-documenting: [`pdftl help <operation/option/topic/tag>`][7]** |
 
 ## Installation
 

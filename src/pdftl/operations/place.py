@@ -27,10 +27,11 @@ if TYPE_CHECKING:
     pass
 
 _PLACE_LONG_DESC = """
-Applies geometric transformations (direct similarities) to the content of selected pages.
+Applies geometric transformations (direct similarities) to the content
+of selected pages.
 
-**Syntax:**
-  `pdftl <input> place "<pages>(<op>=<val>; ...)" output <file>`
+**`<spec>` syntax:**
+  `[<pages>](<operation>...)`
 
 **Operations:**
   * `shift=dx, dy`
@@ -45,6 +46,11 @@ Applies geometric transformations (direct similarities) to the content of select
   * `spin=angle[:anchor]`
     Rotates content by degrees clockwise.
     Optional anchor determines the pivot point (default: center).
+
+  More than one operation can be given. They should be separated by
+  semicolons, '`;`'. Operations are applied in the order they appear,
+  from left to right.
+
 
 **Anchors:**
   Anchors define the center of scaling or rotation.

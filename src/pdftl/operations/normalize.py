@@ -46,7 +46,7 @@ _NORMALIZE_EXAMPLES = [
     type="single input operation",
     desc="Reformat page content streams",
     long_desc=_NORMALIZE_LONG_DESC,
-    usage="<input> replace [<spec>...] output <output>",
+    usage="<input> normalize [<spec>...] output <output>",
     examples=_NORMALIZE_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
