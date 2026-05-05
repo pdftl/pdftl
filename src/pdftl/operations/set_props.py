@@ -327,9 +327,12 @@ def _parse_view_arg(arg: str):
     if arg.lower() == "null":
         return None
     try:
-        return float(arg) if "." in arg else int(arg)
-    except ValueError as exc:
-        raise OperationError(f"Invalid open_action argument: {arg}") from exc
+        return int(arg)
+    except ValueError:
+        try:
+            return float(arg)
+        except ValueError as exc:
+            raise OperationError(f"Invalid open_action argument: {arg}") from exc
 
 
 def _build_dest_array(parts: list[str], page_obj, pikepdf) -> list:
