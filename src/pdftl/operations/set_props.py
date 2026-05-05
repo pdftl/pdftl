@@ -228,10 +228,6 @@ def _apply_cli_to_docinfo(pdf, kwargs):
 
 def _backfill_xmp(meta, preserved_info, pikepdf):
     """Backfills missing XMP fields from the preserved /Info dictionary."""
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     for _, (info_key, xmp_key, xmp_fmt, _) in _METADATA_MAP.items():
         # Early continue to prevent deep nesting
         if info_key not in preserved_info or xmp_key in meta:

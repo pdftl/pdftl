@@ -30,7 +30,11 @@ The output JSON contains several top-level keys:
     * `obj_id`: The PDF indirect object ID (used to link to the hierarchy).
     * `default_state`: "ON" or "OFF" based on the default configuration.
     * `intent`: Optional list of intents (e.g., "View", "Design").
-    * `usage`: Specialized metadata for "Print", "View", or "Zoom" states.
+    * `usage`: Specialized metadata for "Print", "View", "Export", or "Zoom" states.
+        * **active** (boolean): Indicates if this usage category is currently
+          governing the layer's behavior. A layer might have "Print" settings,
+          but they only take effect if the layer is 'active' for the Print event
+          via the document's Auto-State (`/AS`) settings.
 * `ui_hierarchy` (list):
     A recursive tree structure representing the Layers panel in a PDF viewer.
     * **Nested Arrays**: A list following a layer ID indicates child layers.
@@ -49,7 +53,7 @@ link the `ui_hierarchy` to the `layers` list using the `obj_id`.
 Example hierarchy interpretation:
 `[ {"obj_id": 4, "type": "layer"}, [ {"obj_id": 5, "type": "layer"} ] ]`
 This indicates that Layer 5 is a child of Layer 4.
-For convenience, layer names are added to heirarchy output where possible.
+For convenience, layer names are added to hierarchy output where possible.
 
 """
 
@@ -102,7 +106,7 @@ def _clean_val(val):
     return s[1:] if s.startswith("/") else s
 
 
-def _parse_usage(ocg):
+def _parse_usage(ocg, obj_id, active_usage_map):
     """Recursively convert the /Usage dictionary to a serializable dict."""
     import pikepdf
 
@@ -113,10 +117,53 @@ def _parse_usage(ocg):
     for key, val in ocg.Usage.items():
         clean_key = _clean_val(key)
         if isinstance(val, pikepdf.Dictionary):
-            usage_dict[clean_key] = {_clean_val(k): _clean_val(v) for k, v in val.items()}
+            parsed_val = {_clean_val(k): _clean_val(v) for k, v in val.items()}
+
+            # Inject the 'active' flag for standard usage categories
+            if clean_key in ["Print", "View", "Export", "Zoom"]:
+                parsed_val["active"] = obj_id in active_usage_map.get(clean_key, set())
+
+            usage_dict[clean_key] = parsed_val
         else:
             usage_dict[clean_key] = _clean_val(val)
     return usage_dict
+
+
+def _get_active_usage_map(d_dict):
+    """
+    Parses the /AS (Auto-State) array to determine which OCGs are actively
+    bound to which usage categories.
+    Returns a dict mapping category names to sets of OCG object IDs.
+    """
+    import pikepdf
+
+    active_map = {}
+    if "/AS" not in d_dict:
+        return active_map
+
+    for as_dict in d_dict.AS:
+        if not isinstance(as_dict, pikepdf.Dictionary):
+            continue
+
+        event_name = _clean_val(as_dict.get("/Event", ""))
+
+        # Determine the target usage category (defaults to Event name if missing)
+        categories = as_dict.get("/Category")
+        if categories:
+            cat_names = [_clean_val(c) for c in categories]
+        else:
+            cat_names = [event_name]
+
+        # Extract IDs of bound OCGs
+        bound_ids = {int(o.objgen[0]) for o in as_dict.get("/OCGs", []) if hasattr(o, "objgen")}
+
+        # Map the category to the set of IDs
+        for cat in cat_names:
+            if cat not in active_map:
+                active_map[cat] = set()
+            active_map[cat].update(bound_ids)
+
+    return active_map
 
 
 def dump_layers_cli_hook(result: OpResult, _stage, _pipeline):
@@ -156,6 +203,7 @@ def dump_layers(pdf, output_file=None) -> OpResult:
 
 def _extract_ocproperties(ocprops):
     results = {"has_layers": True, "layers": [], "default_config": {}}
+    active_usage_map = {}
 
     # 1. Capture Default Configuration (D) first
     if "/D" in ocprops:
@@ -163,13 +211,16 @@ def _extract_ocproperties(ocprops):
         if "ui_hierarchy" in results["default_config"]:
             results["ui_hierarchy"] = results["default_config"]["ui_hierarchy"]
 
+        # Grab the active usage mapping from the D dictionary
+        active_usage_map = _get_active_usage_map(ocprops.D)
+
     # 2. Capture Alternate Configurations
     if "/Configs" in ocprops:
         results["alternate_configs"] = [_parse_config(c) for c in ocprops.Configs]
 
     # 3. NOW check legacy top-level Order ONLY if D didn't provide one
     if "/Order" in ocprops and "ui_hierarchy" not in results:
-        results["ui_hierarchy"] = _parse_order(ocprops.Order)  # <--- LINE 162 HITS HERE
+        results["ui_hierarchy"] = _parse_order(ocprops.Order)
 
     # Iterate OCGs
     if "/OCGs" in ocprops:
@@ -185,7 +236,8 @@ def _extract_ocproperties(ocprops):
                 "intent": (
                     [_clean_val(i) for i in ocg.get("/Intent", [])] if "/Intent" in ocg else None
                 ),
-                "usage": _parse_usage(ocg),
+                # Pass the id and active map down
+                "usage": _parse_usage(ocg, obj_id, active_usage_map),
             }
             results["layers"].append(layer_data)
     return results

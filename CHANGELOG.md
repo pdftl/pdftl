@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Posible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.18.0] - 2026-05-05
 
 ### Added
 
@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stamp`, `multistamp`, `background`, `multibackground` accept page specs
 
 - `help`: link to readthedocs page
+
+### Fixed
+
+- `modify_layers` now hooks up print/view events (/AS dictionary)
+
+- `dump_layers` reports /AS dictionary hookup as 'active' state
 
 ## [0.17.0] - 2026-05-02
 

@@ -319,3 +319,92 @@ def test_modify_layers_state_and_usage(mock_usage, mock_state, mock_resolve, moc
     mock_state.assert_any_call(pdf, {10}, "lock")
     mock_usage.assert_any_call(pdf, {11}, "noprint")
     mock_usage.assert_any_call(pdf, {11}, "screen")
+
+
+import pikepdf
+from pdftl.operations.modify_layers import _ensure_auto_state
+
+
+def test_ensure_auto_state_creates_missing_as_array():
+    pdf = pikepdf.Pdf.new()
+    ocg1 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+
+    # Mock /OCProperties with /D but NO /AS array
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        {"/D": pikepdf.Dictionary(), "/OCGs": pikepdf.Array([ocg1])}
+    )
+
+    # Run the function (will hit lines 84-85, and 106-126)
+    _ensure_auto_state(pdf)
+
+    # Assert the /AS array was created and populated
+    assert "/AS" in pdf.Root.OCProperties.D
+    as_array = pdf.Root.OCProperties.D.AS
+    events = [str(as_dict.get("/Event")) for as_dict in as_array]
+    assert "/Print" in events
+    assert "/View" in events
+
+
+def test_ensure_auto_state_updates_existing_events():
+    pdf = pikepdf.Pdf.new()
+    ocg1 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+    ocg2 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+
+    # Mock an existing /AS array that only has /Print, and only maps to ocg1
+    existing_print_dict = pikepdf.Dictionary(
+        {"/Event": pikepdf.Name("/Print"), "/OCGs": pikepdf.Array([ocg1])}
+    )
+
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        {
+            "/D": pikepdf.Dictionary({"/AS": pikepdf.Array([existing_print_dict])}),
+            # Note: We now have TWO OCGs in the document
+            "/OCGs": pikepdf.Array([ocg1, ocg2]),
+        }
+    )
+
+    # Run the function (will hit lines 95-103 to update /Print, and 118-126 to append /View)
+    _ensure_auto_state(pdf)
+
+    as_array = pdf.Root.OCProperties.D.AS
+    events = {str(as_dict.get("/Event")): as_dict for as_dict in as_array}
+
+    # Assert both exist
+    assert "/Print" in events
+    assert "/View" in events
+
+    # Assert both were updated to contain all OCGs
+    assert len(events["/Print"].OCGs) == 2
+    assert len(events["/View"].OCGs) == 2
+
+
+def test_ensure_auto_state_updates_existing_view_event():
+    import pikepdf
+    from pdftl.operations.modify_layers import _ensure_auto_state
+
+    pdf = pikepdf.Pdf.new()
+    ocg1 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+    ocg2 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+
+    # Mock an existing /AS array that only has /View, mapped to a single OCG
+    existing_view_dict = pikepdf.Dictionary(
+        {"/Event": pikepdf.Name("/View"), "/OCGs": pikepdf.Array([ocg1])}
+    )
+
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        {
+            "/D": pikepdf.Dictionary({"/AS": pikepdf.Array([existing_view_dict])}),
+            # Note: Two OCGs are in the document total
+            "/OCGs": pikepdf.Array([ocg1, ocg2]),
+        }
+    )
+
+    # Run the function (will hit lines 101-103 to update /View)
+    _ensure_auto_state(pdf)
+
+    as_array = pdf.Root.OCProperties.D.AS
+    events = {str(as_dict.get("/Event")): as_dict for as_dict in as_array}
+
+    # Assert it was successfully updated to contain all OCGs
+    assert "/View" in events
+    assert len(events["/View"].OCGs) == 2

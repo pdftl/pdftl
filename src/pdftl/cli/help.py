@@ -254,8 +254,6 @@ def _print_output_options_help(hprint):
             example_markdown = format_examples_block(info.examples)
             hprint(example_markdown)
         _print_help_trailer(hprint, info, opt)
-        # if hasattr(info, "tags"):
-        #     hprint(format_tags(info.tags))
 
 
 def _print_examples_help(hprint):

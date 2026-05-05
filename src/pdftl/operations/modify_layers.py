@@ -69,6 +69,63 @@ _MODIFY_LAYERS_EXAMPLES = [
 ]
 
 
+def _ensure_auto_state(pdf):
+    """
+    Injects or updates the Auto-State (/AS) array in the Default Configuration (/D)
+    to ensure viewers respect layer Usage dictionaries for Print and View events.
+    """
+    import pikepdf
+
+    oc_props = pdf.Root.get("/OCProperties")
+    if not oc_props or "/D" not in oc_props:
+        return
+
+    d_dict = oc_props.D
+    if "/AS" not in d_dict:
+        d_dict.AS = pikepdf.Array()
+
+    as_array = d_dict.AS
+
+    # Grab all OCGs to ensure the event listeners cover the entire document
+    all_ocgs = oc_props.get("/OCGs", pikepdf.Array())
+
+    has_print = False
+    has_view = False
+
+    # Check if the events already exist and update their OCG arrays
+    for as_dict in as_array:
+        event = str(as_dict.get("/Event", ""))
+        if event == "/Print":
+            as_dict.OCGs = all_ocgs
+            has_print = True
+        elif event == "/View":
+            as_dict.OCGs = all_ocgs
+            has_view = True
+
+    # If the events don't exist, append them to the AS array
+    if not has_print:
+        as_array.append(
+            pikepdf.Dictionary(
+                {
+                    "/Event": pikepdf.Name("/Print"),
+                    "/Category": pikepdf.Array([pikepdf.Name("/Print")]),
+                    "/OCGs": all_ocgs,
+                }
+            )
+        )
+
+    if not has_view:
+        as_array.append(
+            pikepdf.Dictionary(
+                {
+                    "/Event": pikepdf.Name("/View"),
+                    "/Category": pikepdf.Array([pikepdf.Name("/View")]),
+                    "/OCGs": all_ocgs,
+                }
+            )
+        )
+
+
 def _process_content_stream(pdf, stream_dict, resolved_targets, processed_xobjs=None):
     """Recursively parses a stream to strip/merge BDC tags and XObject Do calls."""
     import pikepdf
@@ -297,11 +354,18 @@ def _modify_state_or_usage(pdf, resolved_targets):
     state_actions = {"show", "hide", "lock", "unlock"}
     usage_actions = {"print", "noprint", "screen", "noscreen"}
 
+    usage_modified = False
+
     for action, oids in targets_by_action.items():
         if action in state_actions:
             set_layer_state(pdf, oids, action)
         elif action in usage_actions:
             set_layer_usage(pdf, oids, action)
+            usage_modified = True
+
+    # Apply the fix: Wire up the AS array if we touched usage dictionaries
+    if usage_modified:
+        _ensure_auto_state(pdf)
 
 
 def _resolve_targets(pdf, rules_by_id: dict, rules_by_name: dict, default_action: str) -> dict:

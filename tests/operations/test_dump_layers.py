@@ -176,3 +176,43 @@ def test_dump_layers_extreme_edge_cases(tmp_path):
     assert "42" in res["ui_hierarchy"]
     # Verify Line 162: The hierarchy was still captured
     assert res["ui_hierarchy"][0]["name"] == "Layer1"
+
+
+from pdftl.operations.dump_layers import _get_active_usage_map
+
+
+def test_get_active_usage_map_coverage():
+    # Create a dummy PDF just to generate indirect objects
+    pdf = pikepdf.Pdf.new()
+    ocg1 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+    ocg2 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+
+    # Build a mock D dictionary with an /AS (Auto-State) array
+    d_dict = pikepdf.Dictionary()
+    d_dict.AS = pikepdf.Array(
+        [
+            # 1. A non-dictionary to trigger the `continue` on line 142
+            "Not a dictionary, should be skipped",
+            # 2. A standard dictionary with an explicit /Category array
+            pikepdf.Dictionary(
+                {
+                    "/Event": pikepdf.Name("/Print"),
+                    "/Category": pikepdf.Array([pikepdf.Name("/Print"), pikepdf.Name("/Export")]),
+                    "/OCGs": pikepdf.Array([ocg1]),
+                }
+            ),
+            # 3. A dictionary missing /Category to trigger the fallback to /Event on line 151
+            pikepdf.Dictionary({"/Event": pikepdf.Name("/View"), "/OCGs": pikepdf.Array([ocg2])}),
+        ]
+    )
+
+    # Run the function
+    result = _get_active_usage_map(d_dict)
+
+    # Assertions
+    assert "Print" in result
+    assert "Export" in result
+    assert "View" in result
+    assert int(ocg1.objgen[0]) in result["Print"]
+    assert int(ocg1.objgen[0]) in result["Export"]
+    assert int(ocg2.objgen[0]) in result["View"]
