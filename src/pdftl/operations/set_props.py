@@ -200,10 +200,19 @@ def _format_date_for_xmp(val):
     return _parse_to_datetime(val).isoformat()
 
 
+def _format_author_for_xmp(val):
+    """Format author for XMP `dc:creator`.
+
+    XMP stores `dc:creator` as an ordered array of creator names, while the legacy
+    PDF `/Author` docinfo field is a plain string.
+    """
+    return [str(val)]
+
+
 # Format: "cli_key": ("/InfoKey", "xmp:Key", xmp_formatter, docinfo_formatter)
 _METADATA_MAP = {
     "title": ("/Title", "dc:title", str, str),
-    "author": ("/Author", "dc:creator", lambda x: [str(x)], str),
+    "author": ("/Author", "dc:creator", _format_author_for_xmp, str),
     "subject": ("/Subject", "dc:description", str, str),
     "keywords": ("/Keywords", "pdf:Keywords", str, str),
     "creator": ("/Creator", "xmp:CreatorTool", str, str),
