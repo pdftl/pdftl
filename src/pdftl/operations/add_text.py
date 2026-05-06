@@ -156,6 +156,11 @@ pt, in, cm, mm, and %.
 numbers between 0 and 1. Examples: `0.5` is gray,
 `1 0 0` is red, and `1 0 0 .5` is semi-transparent red.
 
+`bgcolor=<string>`: Background color. 1, 3, or 4 space-separated
+numbers between 0 and 1.
+
+`padding=<dim>`: Padding for background colored rectangle, if present
+
 `linkcolor=<string>`: Color for hyperlinks (uses the same format as `color`).
 Defaults to the main `color` if not set.
 

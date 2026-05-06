@@ -213,3 +213,123 @@ def test_get_font_name_cache(drawer):
     # We can verify this by checking if the cache dictionary was accessed
     name2 = inst.get_font_name("Helvetica")
     assert name1 == name2 == "Helvetica"
+
+
+# tests/operations/helpers/test_text_drawer.py
+
+import pytest
+from unittest.mock import patch
+
+from pdftl.operations.helpers.text_drawer import TextDrawer, _PageBox
+
+
+@pytest.fixture
+def mock_drawer():
+    """Returns a TextDrawer with a mocked canvas to intercept draw calls."""
+    page_box = _PageBox(width=500, height=500)
+    drawer = TextDrawer(page_box)
+    drawer.canvas = MagicMock()
+    return drawer
+
+
+@patch("reportlab.pdfbase.pdfmetrics.getAscentDescent")
+def test_drawer_draws_background_rect(mock_metrics, mock_drawer):
+    """Test that explicit bgcolor and padding trigger the correct rect drawing."""
+    # Mock font metrics: Ascent 10, Descent -2
+    mock_metrics.return_value = (10.0, -2.0)
+
+    # Mock string width to be 50 points
+    mock_drawer.canvas.stringWidth.return_value = 50.0
+
+    rule = {
+        "text": lambda ctx: [("Hello", None)],
+        "bgcolor": (1.0, 0.0, 0.0, 0.5),  # Red, 50% opacity
+        "padding": 10.0,
+        "x": 100,
+        "y": 100,
+        "font": "Helvetica",
+        "size": 12.0,
+        "align": "left",
+    }
+
+    mock_drawer.draw_rule(rule, {})
+
+    # 1. Assert color and alpha were set correctly for the background
+    mock_drawer.canvas.setFillColorRGB.assert_any_call(1.0, 0.0, 0.0)
+    mock_drawer.canvas.setFillAlpha.assert_any_call(0.5)
+
+    # 2. Assert the rectangle math is correct
+    # draw_x = 0 (left align), draw_y = 0
+    # bg_x = 0 - 10(padding) = -10
+    # bg_y = 0 + (-2)(descent) - 10(padding) = -12
+    # bg_w = 50(width) + 20(padding*2) = 70
+    # bg_h = (10 - -2)(ascent-descent) + 20(padding*2) = 32
+    mock_drawer.canvas.rect.assert_called_with(-10.0, -12.0, 70.0, 32.0, fill=1, stroke=0)
+
+    # 3. Assert alpha was reset to 1.0 for the text
+    mock_drawer.canvas.setFillAlpha.assert_called_with(1.0)
+
+
+@patch("reportlab.pdfbase.pdfmetrics.getAscentDescent")
+def test_drawer_default_white_background(mock_metrics, mock_drawer):
+    """Test that providing padding without a bgcolor defaults to opaque white."""
+    mock_metrics.return_value = (10.0, -2.0)
+    mock_drawer.canvas.stringWidth.return_value = 50.0
+
+    rule = {
+        "text": lambda ctx: [("Hello", None)],
+        "padding": 5.0,
+        "align": "left",
+        # Notice: No bgcolor provided
+    }
+
+    mock_drawer.draw_rule(rule, {})
+
+    # It should default to [1, 1, 1] (White)
+    mock_drawer.canvas.setFillColorRGB.assert_any_call(1, 1, 1)
+
+    # Rect math for 5pt padding:
+    # bg_x = -5, bg_y = -7, bg_w = 60, bg_h = 22
+    mock_drawer.canvas.rect.assert_called_with(-5.0, -7.0, 60.0, 22.0, fill=1, stroke=0)
+
+
+@patch("reportlab.pdfbase.pdfmetrics.getAscentDescent")
+def test_drawer_zero_padding_triggers_minimal_background(mock_metrics, mock_drawer):
+    """Test that explicit padding=0 triggers the default white background tightly around text."""
+    mock_metrics.return_value = (10.0, -2.0)
+    mock_drawer.canvas.stringWidth.return_value = 50.0
+
+    rule = {
+        "text": lambda ctx: [("Hello", None)],
+        "padding": 0.0,  # Explicitly providing 0
+        "align": "left",
+        # Notice: No bgcolor provided
+    }
+
+    mock_drawer.draw_rule(rule, {})
+
+    # It should default to [1, 1, 1] (White)
+    mock_drawer.canvas.setFillColorRGB.assert_any_call(1, 1, 1)
+
+    # Rect math for 0pt padding:
+    # bg_x = 0, bg_y = 0 + (-2) = -2
+    # bg_w = 50, bg_h = (10 - -2) = 12
+    mock_drawer.canvas.rect.assert_called_with(0.0, -2.0, 50.0, 12.0, fill=1, stroke=0)
+
+
+def test_drawer_text_with_alpha_channel(mock_drawer):
+    """Test that providing a 4-tuple for text color sets the alpha channel."""
+    rule = {
+        "text": lambda ctx: [("Transparent Text", None)],
+        "color": (0.0, 0.0, 1.0, 0.5),  # Blue, 50% opacity
+        "align": "left",
+    }
+
+    mock_drawer.canvas.stringWidth.return_value = 100.0
+    mock_drawer.draw_rule(rule, {})
+
+    # Assert that the RGB colors were set for the text run
+    mock_drawer.canvas.setFillColorRGB.assert_any_call(0.0, 0.0, 1.0)
+
+    # Assert that line 289 was hit to set the text alpha
+    mock_drawer.canvas.setFillAlpha.assert_called_with(0.5)

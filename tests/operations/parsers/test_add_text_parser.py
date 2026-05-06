@@ -918,3 +918,53 @@ class TestMiscAddTextParser(unittest.TestCase):
         # of a segment (e.g., to generate the final URL string)
         plain_text = _default_renderer(parts, {"page": 1})
         self.assertEqual(plain_text, "Go 1")
+
+
+# tests/operations/parsers/test_add_text_parser.py
+
+import pytest
+
+# Adjust import paths based on your actual project structure
+from pdftl.operations.parsers.add_text_parser import _normalize_formatting
+
+
+def test_normalize_formatting_bgcolor_and_padding():
+    """Test that bgcolor and padding are correctly extracted and normalized."""
+    options = {"bgcolor": "1 0 0 .5", "padding": "10pt", "color": "0 0 0"}
+    normalized = {}
+
+    # Assuming _parse_color and _parse_dimension are mocked or work reliably
+    # We will mock them here to isolate the _normalize_formatting logic
+    with (
+        patch(
+            "pdftl.operations.parsers.add_text_parser._parse_color",
+            side_effect=lambda x: tuple(map(float, x.split())),
+        ) as mock_color,
+        patch(
+            "pdftl.operations.parsers.add_text_parser._parse_dimension", return_value=10.0
+        ) as mock_dim,
+    ):
+        _normalize_formatting(options, normalized)
+
+        # Ensure the keys were popped from the original dict
+        assert "bgcolor" not in options
+        assert "padding" not in options
+
+        # Ensure they were added to normalized with correct parsed values
+        assert normalized["bgcolor"] == (1.0, 0.0, 0.0, 0.5)
+        assert normalized["padding"] == 10.0
+
+        mock_color.assert_any_call("1 0 0 .5")
+        mock_dim.assert_called_once_with("10pt")
+
+
+def test_normalize_formatting_defaults():
+    """Test that missing bgcolor and padding don't cause errors."""
+    options = {"size": "12"}
+    normalized = {}
+
+    _normalize_formatting(options, normalized)
+
+    assert "bgcolor" not in normalized
+    assert "padding" not in normalized
+    assert normalized["size"] == 12.0

@@ -356,6 +356,10 @@ def _normalize_formatting(options: dict, normalized: dict):
             raise ValueError(f"Invalid size value: '{val}'") from exc
     if "color" in options:
         normalized["color"] = _parse_color(options.pop("color"))
+    if "bgcolor" in options:
+        normalized["bgcolor"] = _parse_color(options.pop("bgcolor"))
+    if "padding" in options:
+        normalized["padding"] = _parse_dimension(options.pop("padding"))
     if "align" in options:
         align_lower = options.pop("align").lower()
         if align_lower not in ("left", "center", "right"):

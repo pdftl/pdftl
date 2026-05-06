@@ -171,6 +171,10 @@ class TextDrawer:
             font_size = rule.get("size", DEFAULT_FONT_SIZE)
             color = rule.get("color", DEFAULT_COLOR_TUPLE)
             link_color = rule.get("linkcolor", color)
+            bgcolor = rule.get("bgcolor")
+
+            # Resolve padding (defaulting to 0 if not provided)
+            padding = _resolve_dimension(rule.get("padding", 0), self.page_box.width)
             rotate = rule.get("rotate", 0)
 
             full_text = "".join(text for text, _ in runs)
@@ -187,6 +191,31 @@ class TextDrawer:
             self.canvas.translate(anchor_x + offset_x, anchor_y + offset_y)
             self.canvas.rotate(rotate)
 
+            # --- Draw Background Rectangle if specified ---
+            if bgcolor or "padding" in rule:
+                if bgcolor is None:
+                    bgcolor = [1, 1, 1]
+                from reportlab.pdfbase.pdfmetrics import getAscentDescent
+
+                ascent, descent = getAscentDescent(font_name, font_size)
+
+                # Calculate bounding box with padding
+                bg_x = draw_x - padding
+                bg_y = draw_y + descent - padding
+                bg_w = text_width + (padding * 2)
+                bg_h = (ascent - descent) + (padding * 2)
+
+                self.canvas.setFillColorRGB(*bgcolor[:3])
+                if len(bgcolor) == 4:
+                    self.canvas.setFillAlpha(bgcolor[3])
+
+                # fill=1 draws the rect, stroke=0 ensures no border line
+                self.canvas.rect(bg_x, bg_y, bg_w, bg_h, fill=1, stroke=0)
+
+                # Reset alpha for the upcoming text drawing
+                self.canvas.setFillAlpha(1.0)
+
+            # --- Draw Text Runs ---
             cursor_x = draw_x
             for text, url in runs:
                 cursor_x += _draw_run(
@@ -251,7 +280,16 @@ def _transform_rect(canvas, x1, y1, x2, y2):
 def _draw_run(canvas, text, url, x, y, font_name, font_size, color, link_color):
     """Draws a single text run and optionally adds a URI annotation."""
     run_color = link_color if url else color
+
+    # Set RGB color
     canvas.setFillColorRGB(*run_color[:3])
+
+    # Handle alpha channel if present (the 4th float)
+    if len(run_color) == 4:
+        canvas.setFillAlpha(run_color[3])
+    else:
+        canvas.setFillAlpha(1.0)
+
     canvas.drawString(x, y, text)
     if url:
         from reportlab.pdfbase.pdfmetrics import getAscentDescent
