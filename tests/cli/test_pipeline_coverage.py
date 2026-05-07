@@ -399,7 +399,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 
 
 def test_process_result_implicit_passthrough():

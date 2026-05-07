@@ -87,8 +87,8 @@ def test_write_json_output_compaction_does_not_crash(data):
     simple_list=st.lists(st_atomic_values, min_size=1, max_size=5).filter(
         # A "simple" list contains no nested objects OR CHARACTERS
         # that would break compaction.
-        lambda l: not any(
-            "{" in str(i) or "[" in str(i) or "}" in str(i) or "]" in str(i) for i in l
+        lambda l: (
+            not any("{" in str(i) or "[" in str(i) or "}" in str(i) or "]" in str(i) for i in l)
         )
     )
 )

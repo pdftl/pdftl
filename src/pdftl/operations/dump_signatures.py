@@ -11,9 +11,10 @@ import logging
 import re
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
+from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.io_helpers import smart_open
 
 logger = logging.getLogger(__name__)
@@ -123,9 +124,9 @@ def _parse_suspicious_details(diff_result) -> list:
     # Compress document paths: AbsoluteContext(path=PathInRevision('.Root.Pages')) -> .Root.Pages
     text = re.sub(r"AbsoluteContext\(path=PathInRevision\('([^']+)'\)\)", r"\1", text)
 
-    blocks = []
+    blocks: list[dict[str, str]] = []
     current_type = None
-    current_data = []
+    current_data: list[str] = []
 
     for line in text.split("\n"):
         line = line.strip()
@@ -178,7 +179,7 @@ def _print_signature_stanza(sig_data, out):
         print(f"SignatureChainOfTrust: {' -> '.join(chain)}", file=out)
 
 
-def dump_signatures_cli_hook(result: OpResult, _stage, _pipeline):
+def dump_signatures_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI Hook for dump_signatures.
     Formats the list of signature dictionaries into the Stanza text format.
@@ -292,12 +293,14 @@ def _extract_signature_info(sig, status) -> dict:
 
 
 def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
-    try:
-        from pyhanko.pdf_utils.reader import PdfFileReader
-        from pyhanko.sign.validation import validate_pdf_signature
-        from pyhanko.sign.validation.errors import SignatureValidationError
-    except ImportError:
-        raise RuntimeError("The 'pyhanko' library is required for dump_signatures.")
+    ensure_dependencies(
+        feature_name="validate_signatures",
+        dependencies={"pyhanko": "pyhanko"},
+        extra_tag="signing",
+    )
+    from pyhanko.pdf_utils.reader import PdfFileReader
+    from pyhanko.sign.validation import validate_pdf_signature
+    from pyhanko.sign.validation.errors import SignatureValidationError
 
     if pdf_filename != "_":
         with open(pdf_filename, "rb") as f:

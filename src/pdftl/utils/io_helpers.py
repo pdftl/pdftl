@@ -22,7 +22,7 @@ def smart_pikepdf_open(filename: str | None, password: str | None = None) -> "pi
 
     if filename is None:
         data = sys.stdin.buffer.read()
-        source = io.BytesIO(data)
+        source: io.BytesIO | str = io.BytesIO(data)
     else:
         source = filename
     if password:

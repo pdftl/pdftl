@@ -11,11 +11,10 @@ import unittest
 from collections import namedtuple
 from unittest.mock import patch
 
+import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.errors import InvalidArgument
-
-import pytest
 
 
 def _render_text(rule_or_fn, context):
@@ -153,24 +152,6 @@ st_invalid_structure = st.one_of(
     st.just("1 /text/ no-parens-options"),  # Options not in parens
     st.just("1 bad-delimiter text / (options)"),  # Alphanumeric delimiter
 )
-
-
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-"""
-Unit tests for the add_text_parser module.
-Requires 'pytest' and 'hypothesis' to run.
-"""
-
-from collections import namedtuple
-
-
-def _render_text(rule_or_fn, context):
-    """Extracts plain text from a renderer result (list of runs)."""
-    fn = rule_or_fn["text"] if isinstance(rule_or_fn, dict) else rule_or_fn
-    return "".join(text for text, _ in fn(context))
 
 
 # --- Mocks for dependencies ---
@@ -817,7 +798,7 @@ class TestMiscAddTextParser(unittest.TestCase):
 
     def test_variable_expression_errors(self):
         """Covers unknown variables, bad arithmetic, and bad formatting."""
-        from pdftl.operations.parsers.add_text_parser import _parse_var_expression, _evaluate_token
+        from pdftl.operations.parsers.add_text_parser import _evaluate_token, _parse_var_expression
 
         # Unknown variable (Line 445-446)
         with self.assertRaisesRegex(ValueError, "Unknown variable"):

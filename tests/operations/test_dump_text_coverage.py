@@ -7,21 +7,28 @@ import pytest
 from pdftl.exceptions import InvalidArgumentError
 
 
-def test_dump_text_missing_dependency():
+@pytest.fixture
+def mock_pdfium():
+    mock_spec = MagicMock()
+    mock_module = MagicMock(__spec__=mock_spec)
+    return mock_module
+
+
+def test_dump_text_missing_dependency(mock_pdfium):
     """Test missing dependency error."""
     with patch.dict(sys.modules, {"pypdfium2": None}):
         import pdftl.operations.dump_text
 
         importlib.reload(pdftl.operations.dump_text)
 
-        with pytest.raises(InvalidArgumentError, match="requires the 'pypdfium2' library"):
+        with pytest.raises(InvalidArgumentError, match="requires pypdfium2"):
             pdftl.operations.dump_text.dump_text("dummy.pdf", "passwd123")
 
 
-def test_dump_text_password_none():
+def test_dump_text_password_none(mock_pdfium):
     """Test None password handling."""
     # Reload with mock success
-    with patch.dict(sys.modules, {"pypdfium2": MagicMock()}):
+    with patch.dict(sys.modules, {"pypdfium2": mock_pdfium}):
         import pdftl.operations.dump_text
 
         importlib.reload(pdftl.operations.dump_text)
@@ -34,7 +41,7 @@ def test_dump_text_password_none():
             mock_extract.assert_called_once()
 
 
-def test_dump_text_real_iteration(two_page_pdf):
+def test_dump_text_real_iteration(two_page_pdf, mock_pdfium):
     """Test iteration logic using mocks."""
     import pikepdf
 
@@ -46,7 +53,7 @@ def test_dump_text_real_iteration(two_page_pdf):
     mock_pdf.__len__.return_value = 1
     mock_pdf.__iter__.return_value = iter([mock_page])
 
-    with patch.dict(sys.modules, {"pypdfium2": MagicMock()}):
+    with patch.dict(sys.modules, {"pypdfium2": mock_pdfium}):
         import pdftl.operations.dump_text
 
         importlib.reload(pdftl.operations.dump_text)

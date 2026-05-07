@@ -23,7 +23,6 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
 
     # 1. Check for pypdfium2 availability
     has_renderer = False
-    pdfium = None
     try:
         import pypdfium2 as pdfium
         import pypdfium2.raw as pdfium_c
@@ -33,7 +32,7 @@ def flatten_pdf(pikepdf_doc: "pikepdf.Pdf") -> "pikepdf.Pdf":
         pass  # with has_renderer = False
 
     # 2. Strategy A: High-Fidelity Rendering (If installed)
-    if has_renderer and pdfium is not None:
+    if has_renderer:
         try:
             return _flatten_pdf_strategy_a(pikepdf_doc, pdfium, pdfium_c)
 

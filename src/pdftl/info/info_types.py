@@ -146,7 +146,7 @@ class PageMediaEntry:
 
     # Internal names match the requested keys (snake_case -> PascalCase)
     media_rect: list[float] | None = None  # Maps to MediaRect
-    dimensions: tuple[str, str] | None = None
+    dimensions: tuple[float, float] | None = None
     crop_rect: list[float] | None = None  # Maps to CropRect
     trim_rect: list[float] | None = None  # Maps to TrimRect
     bleed_rect: list[float] | None = None  # BleedRect

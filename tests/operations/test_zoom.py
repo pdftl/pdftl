@@ -1,8 +1,9 @@
 # tests/operations/test_zoom.py
 
-import pytest
 import pikepdf
-from pdftl.operations.zoom import zoom_pages, _calculate_zoom_factor
+import pytest
+
+from pdftl.operations.zoom import _calculate_zoom_factor, zoom_pages
 
 
 def test_zoom_basic_fit_a4():

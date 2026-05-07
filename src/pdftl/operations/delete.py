@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 _DELETE_LONG_DESC = """

@@ -7,24 +7,22 @@
 """Fill in forms in a PDF"""
 
 import logging
-
-from pdftl.utils.type_helpers import as_iterable
-
-logger = logging.getLogger(__name__)
-
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from pikepdf import Pdf
-
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import UserCommandLineError
 from pdftl.utils.fdf import wrap_fdf_data_in_pdf_bytes
 from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.user_input import filename_completer
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from pikepdf import Pdf
 
 _FILL_FORM_LONG_DESC = """
 

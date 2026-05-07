@@ -7,6 +7,7 @@ import pytest
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.dump_signatures import dump_signatures, dump_signatures_cli_hook
 
 # --- Fixtures ---
@@ -181,7 +182,7 @@ import sys
 import pytest
 
 import pdftl.core.constants as c
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.operations.dump_signatures import _validate_signatures_worker
 
 
@@ -244,7 +245,7 @@ def test_validate_signatures_missing_pyhanko():
     """
     # 1. Simulate pyhanko being missing by setting it to None in sys.modules
     with patch.dict(sys.modules, {"pyhanko": None, "pyhanko.pdf_utils.reader": None}):
-        with pytest.raises(RuntimeError, match="pyhanko' library is required"):
+        with pytest.raises(InvalidArgumentError, match="requires pyhanko"):
             # We call the worker directly or the main command; worker is direct access to the import block
             _validate_signatures_worker("dummy.pdf", None, None)
 

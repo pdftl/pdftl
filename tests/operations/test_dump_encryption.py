@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import pytest
 
 import pdftl.core.constants as c
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.operations.dump_encryption import (
     PERM_MAPPING,
     dump_encryption,

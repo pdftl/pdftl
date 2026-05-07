@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.operations.parsers.inject_parser import parse_inject_args
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.page_specs import page_number_matches_page_spec

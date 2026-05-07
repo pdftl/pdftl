@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, call, patch
 import pikepdf
 import pytest
 
-from pdftl.core.types import OpResult
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.core.core_types import OpResult
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.operations.burst import burst_cli_hook, burst_pdf
 
 
@@ -138,15 +138,17 @@ def test_burst_cli_hook_no_generator(caplog):
 
 
 def test_burst_cli_hook_empty_generator():
-    """Test behavior when the generator is valid but yields nothing."""
     mock_pipeline = MagicMock()
     mock_stage = MagicMock()
+    # Create a mock that satisfies isinstance(obj, pikepdf.Pdf)
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
 
     def empty_gen():
         if False:
-            yield  # Pythonic way to make an empty generator
+            yield
 
-    result = OpResult(success=True, data=empty_gen())
+    # Pass the mock_pdf here!
+    result = OpResult(success=True, data=empty_gen(), pdf=mock_pdf)
 
     with patch("pdftl.operations.burst.pdftl.api.dump_data") as mock_dump:
         burst_cli_hook(result, mock_stage, mock_pipeline)
@@ -337,3 +339,10 @@ def test_burst_pdf_standard_spec_routing():
 
     assert result.success is True
     assert result.pdf == "dummy_pdf_object"
+
+
+def test_burst_cli_hook_raises_on_missing_pdf():
+    # Pass a result where success is True but pdf is None
+    result = OpResult(success=True, data=[("file.pdf", MagicMock())], pdf=None)
+    with pytest.raises(OperationError, match="Invalid result: not a PDF"):
+        burst_cli_hook(result, MagicMock(), MagicMock())

@@ -6,12 +6,14 @@
 
 """Impose pages into printable booklet signatures."""
 
+from __future__ import annotations
+
 import logging
 from typing import TYPE_CHECKING, Any
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.layouts import GridLayout
 from pdftl.operations.montage import _apply_montage_logic
@@ -89,7 +91,7 @@ def booklet_pages(pdf, operation_args) -> OpResult:
     new_pdf = pikepdf.new()
 
     # 1. Separate Page Selectors from Config Arguments
-    page_specs = []
+    page_specs: list[str] = []
     config = _parse_booklet_config(operation_args, page_specs)
 
     # 2. Resolve Source Pages
@@ -163,7 +165,9 @@ def _update_config_from_keyval(key, val, config):
         try:
             config["sig"] = int(val)
         except ValueError as e:
-            raise InvalidArgumentError(f"Could not parse {key} value '{val}' as an integer. ({e})")
+            raise InvalidArgumentError(
+                f"Could not parse {key} value '{val}' as an integer. ({e})"
+            ) from e
     elif key == "canvas":
         parsed_size = parse_paper_spec(val)
         if parsed_size:
@@ -182,14 +186,12 @@ def _update_config_from_keyval(key, val, config):
     return config
 
 
-def _build_booklet_permutation(
-    raw_pages: list["Page"], sig: int, rtl: bool
-) -> list["Page | None"]:
+def _build_booklet_permutation(raw_pages: list[Page], sig: int, rtl: bool) -> list[Page | None]:
     """
     Chunks the document into signatures and calculates the 2-up permutation
     required for standard duplex booklet printing.
     """
-    pages = list(raw_pages)
+    pages: list[Page | None] = list(raw_pages)
 
     # Pad total document to a multiple of 4
     remainder = len(pages) % 4
@@ -198,7 +200,7 @@ def _build_booklet_permutation(
 
     # If sig=0, use one giant signature for the entire document
     sig_pages = sig * 4 if sig > 0 else len(pages)
-    ordered = []
+    ordered: list[Page | None] = []
 
     # Process each signature block independently
     for i in range(0, len(pages), sig_pages):

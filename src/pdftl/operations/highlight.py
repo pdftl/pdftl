@@ -9,19 +9,19 @@
 import io
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.page_specs import page_numbers_matching_page_spec
-from pdftl.utils.string_utils import split_escaped
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.keyval_parser import parse_keyval_string
+from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.string_utils import split_escaped
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ def _parse_options(options_part: str) -> dict:
     content = options_part[1:-1].strip()
     raw_opts = parse_keyval_string(content, lowercase_keys=True, context="highlight")
 
-    opts = {}
+    opts: dict[str, Any] = {}
     if "author" in raw_opts:
         opts["author"] = raw_opts["author"].strip("'\"")
     if "contents" in raw_opts:
@@ -171,8 +171,8 @@ def _parse_options(options_part: str) -> dict:
     if "opacity" in raw_opts:
         try:
             opts["opacity"] = float(raw_opts["opacity"])
-        except ValueError:
-            raise InvalidArgumentError(f"Invalid opacity value: '{raw_opts['opacity']}'")
+        except ValueError as exc:
+            raise InvalidArgumentError(f"Invalid opacity value: '{raw_opts['opacity']}'") from exc
 
     return opts
 

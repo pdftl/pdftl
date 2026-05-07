@@ -7,8 +7,8 @@
 import os
 import sys
 
+from pdftl.core.core_types import HelpExample
 from pdftl.core.registry import register_help_topic
-from pdftl.core.types import HelpExample
 from pdftl.utils.dependencies import ensure_dependencies
 
 

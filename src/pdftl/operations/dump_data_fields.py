@@ -13,8 +13,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.string_utils import fix_mojibake, xml_encode_for_info
 
@@ -115,20 +115,19 @@ _DUMP_DATA_FIELDS_EXAMPLES = [
 # --- CLI Hook ---
 
 
-def dump_fields_cli_hook(result, stage, _pipeline):
+def dump_fields_cli_hook(result, _stage, _pipeline):
     """Formats structured field data into the standard stanza-based text format."""
     if not result.data:
         return
 
-    output_file = stage.options.get("output")
-    if result.meta is not None:
-        escape_xml = result.meta.get("escape_xml", True)
-    else:
-        escape_xml = True
+    from pdftl.utils.hooks import from_result_meta
+
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
+    escape_xml = result.meta.get(c.META_ESCAPE_XML, True)
     logger.debug("escape_xml=%s", escape_xml)
 
     with smart_open_maybe_dash(output_file) as f:
-        for idx, field in enumerate(result.data):
+        for field in result.data:
             # pdftk prints the separator *before* the stanza
             print("---", file=f)
             _write_field_stanza(f, field, escape_xml)
@@ -150,7 +149,7 @@ def _write_field_stanza(file_handle, field: dict, escape_xml: bool):
         s_val = fix_mojibake(str(val)) if val is not None else ""
         return xml_encode_for_info(s_val) if escape_xml else s_val
 
-    def print_value_line(key_suffix, absent_value=None, only_if_truthy=False):
+    def print_value_line(key_suffix, absent_value=None):
         key = "Field" + key_suffix
         if absent_value is None and key not in field:
             return
@@ -316,7 +315,7 @@ def _get_states_from_node(node):
     return states
 
 
-def _extract_field_justification(field, field_type_out: str | None = None) -> str:
+def _extract_field_justification(field) -> str:
     """Determines the text alignment of a field (High Level or Raw)."""
     # If it's a pikepdf Field wrapper, access .obj, otherwise assume it's a raw dict
     obj = field.obj if hasattr(field, "obj") else field
@@ -379,7 +378,7 @@ def _extract_field_data_high_level(field, extra_info=False) -> OrderedDict[str, 
             data["FieldStateOption"] = btn_opts
 
     # 5. Justification
-    data["FieldJustification"] = _extract_field_justification(field, tk_type_str)
+    data["FieldJustification"] = _extract_field_justification(field)
 
     return data
 
@@ -495,5 +494,8 @@ def dump_data_fields(
         data=all_fields_data,
         pdf=pdf,
         is_discardable=True,
-        meta={"escape_xml": escape_xml},
+        meta={
+            c.META_ESCAPE_XML: escape_xml,
+            c.META_OUTPUT_FILE: output_file,
+        },
     )

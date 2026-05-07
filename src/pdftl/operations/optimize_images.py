@@ -15,8 +15,8 @@
 import logging
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import Compatibility, FeatureType, OpResult, Status
 from pdftl.core.registry import register_operation
-from pdftl.core.types import Compatibility, FeatureType, OpResult, Status
 from pdftl.exceptions import InvalidArgumentError, PackageError
 
 logger = logging.getLogger(__name__)

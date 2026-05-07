@@ -5,7 +5,7 @@ import pikepdf
 import pytest
 
 from pdftl.cli.pipeline import CliStage, PipelineManager
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 
 # --- Reuse Mock Infrastructure ---
 

@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.json import pdf_obj_to_json
 from pdftl.utils.string_utils import compact_json_string, xml_encode_for_info
@@ -45,7 +45,7 @@ _DUMP_ANNOTS_EXAMPLES = [
 ]
 
 
-def dump_annots_cli_hook(result: OpResult, _stage, _pipeline):
+def dump_annots_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI Hook for dump_annots.
     Serializes the raw annotation data to a compacted JSON string and outputs it.
@@ -137,7 +137,7 @@ def _generate_pdftk_annots_report(data, string_convert=xml_encode_for_info):
     return "\n---\n".join(data_strings)
 
 
-def dump_data_annots_cli_hook(result: OpResult, _stage, _pipeline):
+def dump_data_annots_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI Hook for dump_data_annots.
     Formats the raw structured data into the pdftk style report.

@@ -3,7 +3,7 @@
 """Core logic for extracting and building PDF Table of Contents (Outlines)."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pdftl.exceptions import OperationError
 from pdftl.utils.destinations import (
@@ -44,10 +44,13 @@ def extract_toc_tree(pdf: "pikepdf.Pdf") -> list[dict]:
 def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> dict:
     import pikepdf
 
-    node = {"title": item.title}
+    if not item.obj:
+        raise OperationError("Invalid item (no obj)")
+    node: dict[str, Any] = {"title": item.title}
     if color_array := item.obj.get("/C"):
-        node["color"] = [float(c) for c in color_array]
-    if flags := item.obj.get("/F"):
+        node["color"] = [float(c) for c in list(color_array)]
+    if flags_obj := item.obj.get("/F"):
+        flags = int(flags_obj)
         if flags & 1:
             node["italic"] = True
         if flags & 2:
@@ -168,6 +171,25 @@ def _filter_and_warn_bookmarks(items) -> list:
 def _build_item(node: dict, pdf) -> "pikepdf.OutlineItem":
     import pikepdf
 
+    item = _build_basic_item(node, pdf)
+    item.to_dictionary_object(pdf)
+    if item.obj is None:
+        raise OperationError("Invalid item (no obj)")
+    # Apply styling
+    if "color" in node and len(node["color"]) == 3:
+        item.obj.C = pikepdf.Array(node["color"])
+    if node.get("bold") or node.get("italic"):
+        item.obj.F = (2 if node.get("bold") else 0) + (1 if node.get("italic") else 0)
+
+    # Process children
+    for child_node in node.get("children", []):
+        item.children.append(_build_item(child_node, pdf))
+
+    return item
+
+def _build_basic_item(node: dict, pdf) -> "pikepdf.OutlineItem":
+    import pikepdf
+    
     title = node.get("title", "Untitled")
 
     if "dest" in node:
@@ -196,22 +218,12 @@ def _build_item(node: dict, pdf) -> "pikepdf.OutlineItem":
             # Create default and then overwrite the destination array for complex views
             item = pikepdf.OutlineItem(title, page_index)
             dest_type = pikepdf.Name(f"/{view_args[0]}")
-            item.destination = [pdf.pages[page_index].obj, dest_type, *view_args[1:]]
+            item.destination = pikepdf.Array(
+                [pdf.pages[page_index].obj, dest_type, *view_args[1:]]
+            )
 
     else:
         # Fallback to the first page if nothing is specified
         item = pikepdf.OutlineItem(title, 0)
-
-    item.to_dictionary_object(pdf)
-
-    # Apply styling
-    if "color" in node and len(node["color"]) == 3:
-        item.obj.C = pikepdf.Array(node["color"])
-    if node.get("bold") or node.get("italic"):
-        item.obj.F = (2 if node.get("bold") else 0) + (1 if node.get("italic") else 0)
-
-    # Process children
-    for child_node in node.get("children", []):
-        item.children.append(_build_item(child_node, pdf))
 
     return item

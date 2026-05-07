@@ -7,8 +7,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.dump import get_json_flag
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 
@@ -185,7 +185,7 @@ def _extract_encryption_info(encrypt_dict) -> dict:
 def _extract_permissions(pdf: "pikepdf.Pdf") -> dict:
     """Maps pikepdf's permission properties to pdftl's permission names."""
     if not pdf.is_encrypted:
-        return {perm_name: True for perm_name in PERM_MAPPING.keys()}
+        return {perm_name: True for perm_name in PERM_MAPPING}
 
     perms = pdf.allow
     return {perm_name: getattr(perms, pike_attr) for perm_name, pike_attr in PERM_MAPPING.items()}

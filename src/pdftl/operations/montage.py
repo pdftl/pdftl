@@ -10,9 +10,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.layouts import GridLayout
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import dim_str_to_pts
@@ -78,7 +78,7 @@ def montage_pages(pdf, operation_args) -> OpResult:
     new_pdf = pikepdf.new()
 
     # 1. Separate Page Selectors from Config Arguments
-    page_specs = []
+    page_specs: list[str] = []
     config = _parse_montage_config(operation_args, page_specs)
 
     # 2. Resolve Source Pages
@@ -138,10 +138,10 @@ def _update_config_from_keyval(key, val, config):
             cols, rows = val.split("x")
             config["cols"] = int(cols)
             config["rows"] = int(rows)
-        except ValueError:
+        except ValueError as exc:
             raise InvalidArgumentError(
                 f"Invalid grid format: '{val}'. Expected format: 'cols x rows', e.g. '2x2'."
-            )
+            ) from exc
     elif key == "canvas":
         # Use standard pdftl parser (e.g. "a4", "a4_l", "4x6")
         parsed_size = parse_paper_spec(val)
@@ -160,7 +160,9 @@ def _update_config_from_keyval(key, val, config):
         try:
             config[key] = int(val)
         except ValueError as e:
-            raise InvalidArgumentError(f"Could not parse {key} value '{val}' as an integer. ({e})")
+            raise InvalidArgumentError(
+                f"Could not parse {key} value '{val}' as an integer. ({e})"
+            ) from e
 
     return config
 
@@ -178,8 +180,8 @@ def _apply_montage_logic(
 
     try:
         target_w, target_h = canvas_size
-    except TypeError:
-        raise InvalidArgumentError(f"Invalid canvas_size: {canvas_size}")
+    except TypeError as exc:
+        raise InvalidArgumentError(f"Invalid canvas_size: {canvas_size}") from exc
 
     # Generate Layout Slots
     layout_stream = strategy.generate_slots(
@@ -192,12 +194,15 @@ def _apply_montage_logic(
     for src_page, slot in zip(source_pages, layout_stream):
         # A. Ensure Target Page Exists
         if slot.page_index not in output_pages:
-            while len(target_pdf.pages) <= slot.page_index:
+            for _ in range(slot.page_index + 1 - len(target_pdf.pages)):
                 target_pdf.add_blank_page(page_size=canvas_size)
             output_pages[slot.page_index] = target_pdf.pages[slot.page_index]
 
         target_page = output_pages[slot.page_index]
-        src_page.Rotate = (src_page.get("/Rotate", 0)) % 360
+        try:
+            src_page.Rotate = int(getattr(src_page, "Rotate", 0)) % 360
+        except (ValueError, TypeError) as exc:
+            raise OperationError("Invalid /Rotate") from exc
         target_page.add_overlay(
             src_page, Rectangle(Array([slot.x, slot.y, slot.x + slot.width, slot.y + slot.height]))
         )

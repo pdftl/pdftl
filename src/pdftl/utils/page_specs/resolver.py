@@ -4,13 +4,13 @@ from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.dimensions import get_visible_page_dimensions  # <-- Add this import
 
 from .parser import SpecParser
-from .types import PageTransform
+from .spec_types import PageTransform
 
 logger = logging.getLogger(__name__)
 
 
 def _handle_no_specs(inputs, opened_pdfs) -> list[PageTransform]:
-    page_tuples = []
+    page_tuples: list[PageTransform] = []
     if inputs is None:
         return page_tuples
     for input_idx in range(len(inputs)):

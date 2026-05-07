@@ -129,7 +129,6 @@ import pytest
 
 from pdftl.operations.overlay import _parse_operation_args
 
-
 # ---------------------------------------------------------------------------
 # _parse_operation_args — line 208 (page_specs.append) and surrounding logic
 # ---------------------------------------------------------------------------

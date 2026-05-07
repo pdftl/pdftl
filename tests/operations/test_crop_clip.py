@@ -78,6 +78,4 @@ def test_apply_or_preview_invalid_operation():
     page = pdf.add_blank_page(page_size=(100, 100))
 
     with pytest.raises(ValueError, match="Internal error: invalid operation 'smash'"):
-        _apply_or_preview(
-            pdf=pdf, page=page, new_box=(10, 10, 90, 90), preview=False, operation="smash"
-        )
+        _apply_or_preview(page=page, new_box=(10, 10, 90, 90), preview=False, operation="smash")

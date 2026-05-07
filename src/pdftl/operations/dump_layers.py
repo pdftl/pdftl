@@ -4,9 +4,12 @@
 
 """Dump Layer (Optional Content Group) information"""
 
+import json
+
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
+from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.type_helpers import as_iterable
 
@@ -166,12 +169,8 @@ def _get_active_usage_map(d_dict):
     return active_map
 
 
-def dump_layers_cli_hook(result: OpResult, _stage, _pipeline):
+def dump_layers_cli_hook(result: OpResult, stage, _pipeline):
     # Use smart_open to handle stdout vs file correctly
-    import json
-
-    from pdftl.utils.hooks import from_result_meta
-
     output_filename = from_result_meta(result, c.META_OUTPUT_FILE)
     with smart_open(output_filename) as f:
         json.dump(result.data, f, indent=2)

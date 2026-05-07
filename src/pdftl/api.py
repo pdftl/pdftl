@@ -43,7 +43,7 @@ def _normalize_inputs(
     final_opened = {}
     if user_opened:
         if isinstance(user_opened, list):
-            final_opened = {i: pdf for i, pdf in enumerate(user_opened)}
+            final_opened = dict(enumerate(user_opened))
         else:
             final_opened = user_opened.copy()
     if not user_inputs and final_opened:
@@ -186,7 +186,7 @@ def _process_operation_result(
     op_name: str, result: Any, context: dict, return_full: bool, run_hook: bool
 ) -> Any:
     """Unpacks OpResult and optionally runs CLI hooks."""
-    from pdftl.core.types import OpResult
+    from pdftl.core.core_types import OpResult
 
     if not isinstance(result, OpResult):
         return result

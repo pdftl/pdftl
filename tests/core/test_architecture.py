@@ -2,8 +2,8 @@ import inspect
 
 import pytest
 
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import registry
-from pdftl.core.types import OpResult
 
 
 def test_all_commands_return_op_result(clean_registry):

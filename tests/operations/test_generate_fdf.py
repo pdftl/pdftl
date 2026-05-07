@@ -128,7 +128,7 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
 import io
 from types import SimpleNamespace
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.operations.generate_fdf import _write_field_as_fdf_to_file
 
 

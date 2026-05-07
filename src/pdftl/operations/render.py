@@ -10,14 +10,13 @@ import logging
 import os
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.progress import get_track_progress
 from pdftl.utils.dependencies import ensure_dependencies
-from pdftl.utils.page_specs import expand_specs_to_pages
 from pdftl.utils.page_images import iter_pages_as_pil
-
+from pdftl.utils.page_specs import expand_specs_to_pages
+from pdftl.utils.progress import get_track_progress
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ def _save_single_pdf(image_generator, filename: str, dpi: float) -> int:
         images[0].save(filename, "PDF", resolution=dpi, save_all=True, append_images=images[1:])
         return len(images)
     except (OSError, ValueError) as exc:
-        raise InvalidArgumentError(f"Failed to render single PDF. Details: {exc}")
+        raise InvalidArgumentError(f"Failed to render single PDF. Details: {exc}") from exc
 
 
 def _save_multiple_images(image_generator) -> int:
@@ -85,13 +84,13 @@ def _save_multiple_images(image_generator) -> int:
         try:
             image.save(filename, format=fmt)
         except ValueError as exc:
-            raise InvalidArgumentError(f"Invalid render output template. Details: {exc}")
+            raise InvalidArgumentError(f"Invalid render output template. Details: {exc}") from exc
 
         count += 1
     return count
 
 
-def render_cli_hook(result: OpResult, _stage, _pipeline):
+def render_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI-specific side effect: Writes the rendered images to disk.
     This function is only called by the CLI pipeline.
@@ -173,7 +172,7 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
         # iter_pages_as_pil now efficiently fetches only requested pages in order
         page_iterator = iter_pages_as_pil(input_pdf, dpi, page_indices=page_indices)
 
-        for output_idx, (pdf_page_idx, image) in enumerate(
+        for output_idx, (_pdf_page_idx, image) in enumerate(
             track_progress(page_iterator, description="Rendering pages")
         ):
             try:

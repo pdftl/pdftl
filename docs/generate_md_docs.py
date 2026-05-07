@@ -20,7 +20,7 @@ from common import get_docs_data
 
 import pdftl.api
 from pdftl.cli.help import print_help
-from pdftl.core.types import HelpTopic, Operation
+from pdftl.core.core_types import HelpTopic, Operation
 
 
 def write_help_topic_to_file(topic, filepath):

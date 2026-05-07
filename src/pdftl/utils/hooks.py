@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 
 logger = logging.getLogger(__name__)

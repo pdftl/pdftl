@@ -217,8 +217,9 @@ def test_get_font_name_cache(drawer):
 
 # tests/operations/helpers/test_text_drawer.py
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from pdftl.operations.helpers.text_drawer import TextDrawer, _PageBox
 

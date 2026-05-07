@@ -3,14 +3,15 @@
 """Rescale entire pages to fit target dimensions or paper sizes."""
 
 from typing import TYPE_CHECKING
+
 import pdftl.core.constants as c
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult, HelpExample
-from pdftl.utils.page_specs import page_numbers_matching_page_spec
-from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
-from pdftl.utils.page_specs.types import PageTransform
-from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
+from pdftl.utils.keyval_parser import parse_keyval_string
+from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.page_specs.spec_types import PageTransform
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -83,7 +84,7 @@ def zoom_pages(source_pdf: "Pdf", zoom_specs: list) -> OpResult:
             raise InvalidArgumentError(f"Invalid zoom spec: '{spec}'. Expected 'range(params)'")
 
         range_part, params_raw = spec.rstrip(")").split("(", 1)
-        bare_tokens = []
+        bare_tokens: list[str] = []
         params = parse_keyval_string(params_raw, bare_tokens=bare_tokens, context="zoom")
 
         target_indices = page_numbers_matching_page_spec(range_part, total_pages)
@@ -126,7 +127,7 @@ def _calculate_zoom_factor(vw, vh, params, bare):
             th_str = dim_tokens[1] if len(dim_tokens) > 1 else tw_str
             target_h = dim_str_to_pts(th_str, vh, axis="height")
         except (InvalidArgumentError, ValueError) as exc:
-            raise InvalidArgumentError(f"Error parsing zoom dimensions. {exc}")
+            raise InvalidArgumentError(f"Error parsing zoom dimensions. {exc}") from exc
 
     ratios = []
     if target_w is not None:

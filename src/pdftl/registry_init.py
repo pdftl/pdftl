@@ -10,15 +10,14 @@ This function populates registry options and discovers all operations.
 """
 
 import logging
+import os
+import pathlib
+import sys
 from typing import Any, cast
 
 import pdftl
 
 logger = logging.getLogger(__name__)
-
-import os
-import pathlib
-import sys
 
 
 def _get_config_base():

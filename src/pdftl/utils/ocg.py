@@ -27,9 +27,9 @@ def get_xobject_ocg_ids(xobj) -> set:
     return set()
 
 
-def _ocg_ids_from_ocmd(ocgs, Array):
+def _ocg_ids_from_ocmd(ocgs, pikepdf_array):
     ocg_ids = set()
-    if isinstance(ocgs, Array):
+    if isinstance(ocgs, pikepdf_array):
         for o in ocgs:
             if hasattr(o, "objgen"):
                 ocg_ids.add(int(o.objgen[0]))
@@ -45,8 +45,8 @@ def get_page_layer_map(resources) -> tuple[dict, dict]:
     """
     import pikepdf
 
-    prop_map = {}
-    xobj_map = {}
+    prop_map: dict[str, int] = {}
+    xobj_map: dict[str, set] = {}
 
     if resources is None:
         return prop_map, xobj_map
@@ -95,25 +95,25 @@ def clean_ocproperties(pdf, target_ids: set):
     _clean_empty_shell(pdf, ocgs)
 
 
-def _clean_master_ocg_array(pdf, target_ids, NamePath):
+def _clean_master_ocg_array(pdf, target_ids, pikepdf_namepath):
     # 1. Clean Master OCGs Array
-    ocgs = pdf.Root.get(NamePath.OCProperties.OCGs)
+    ocgs = pdf.Root.get(pikepdf_namepath.OCProperties.OCGs)
     if ocgs is not None:
         _remove_targets_from_array(ocgs, target_ids)
     return ocgs
 
 
-def _clean_default_config(pdf, target_ids, NamePath):
+def _clean_default_config(pdf, target_ids, pikepdf_namepath):
     # 2. Clean Default Config
     for key in ["/ON", "/OFF", "/Order"]:
-        arr = pdf.Root.get(NamePath("/OCProperties", "/D", key))
+        arr = pdf.Root.get(pikepdf_namepath("/OCProperties", "/D", key))
         if arr is not None:
             _remove_targets_from_array(arr, target_ids)
 
 
-def _clean_alternate_configs(pdf, target_ids, NamePath):
+def _clean_alternate_configs(pdf, target_ids, pikepdf_namepath):
     # 3. Clean Alternate Configs
-    configs = pdf.Root.get(NamePath.OCProperties.Configs)
+    configs = pdf.Root.get(pikepdf_namepath.OCProperties.Configs)
     if configs is not None:
         for config in configs:
             for key in ["/ON", "/OFF", "/Order"]:
@@ -221,19 +221,21 @@ def set_layer_usage(pdf, target_ids: set, action: str):
         _process_ocg_layer_usage(ocg, action, target_ids, Dictionary, Name)
 
 
-def _process_ocg_layer_usage(ocg, action, target_ids, Dictionary, Name):
+def _process_ocg_layer_usage(ocg, action, target_ids, pikepdf_dictionary, pikepdf_name):
     if not (hasattr(ocg, "objgen") and int(ocg.objgen[0]) in target_ids):
         return
 
     if "/Usage" not in ocg:
-        ocg.Usage = Dictionary()
+        ocg.Usage = pikepdf_dictionary()
 
     if action in ("print", "noprint"):
         if "/Print" not in ocg.Usage:
-            ocg.Usage.Print = Dictionary(Subtype=Name.Print, PrintState=Name.ON)
-        ocg.Usage.Print.PrintState = Name.ON if action == "print" else Name.OFF
+            ocg.Usage.Print = pikepdf_dictionary(
+                Subtype=pikepdf_name.Print, PrintState=pikepdf_name.ON
+            )
+        ocg.Usage.Print.PrintState = pikepdf_name.ON if action == "print" else pikepdf_name.OFF
 
     elif action in ("screen", "noscreen"):
         if "/View" not in ocg.Usage:
-            ocg.Usage.View = Dictionary(ViewState=Name.ON)
-        ocg.Usage.View.ViewState = Name.ON if action == "screen" else Name.OFF
+            ocg.Usage.View = pikepdf_dictionary(ViewState=pikepdf_name.ON)
+        ocg.Usage.View.ViewState = pikepdf_name.ON if action == "screen" else pikepdf_name.OFF

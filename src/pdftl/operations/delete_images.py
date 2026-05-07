@@ -9,8 +9,8 @@
 import logging
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -212,7 +212,7 @@ def delete_images(pdf, specs) -> OpResult:
         specs = [""]  # Empty string will trigger global mode with no params
 
     # Track Object IDs to prevent double-processing and get an accurate count
-    modified_objects = set()
+    modified_objects: set[tuple] = set()
 
     for spec in specs:
         _apply_spec(pdf, spec, modified_objects, pikepdf)
@@ -281,8 +281,8 @@ def _validate_param(k, v):
                 int(h)
             else:
                 _parse_size_str(v.replace("pixels", ""))
-    except ValueError:
+    except ValueError as exc:
         raise InvalidArgumentError(
             f"Invalid value '{v}' for parameter '{k}'. "
             "Expected a size (e.g., '100k') or dimensions (e.g., '20x400')."
-        )
+        ) from exc

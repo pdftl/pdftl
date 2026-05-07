@@ -10,8 +10,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.ocg import create_layer
@@ -203,12 +203,12 @@ def _parse_operation_args(operation_args: list[str]) -> tuple[list[str], str | N
         if arg == "layer_name":
             try:
                 layer_name = next(it)
-            except StopIteration:
-                raise OperationError("The 'layer_name' option requires a value.")
+            except StopIteration as exc:
+                raise OperationError("The 'layer_name' option requires a value.") from exc
             # Nothing valid can follow layer_name before 'output', so we're done.
             break
-        else:
-            page_specs.append(arg)
+
+        page_specs.append(arg)
 
     return page_specs, layer_name
 

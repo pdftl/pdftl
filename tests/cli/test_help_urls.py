@@ -1,4 +1,5 @@
 import pytest
+
 from pdftl.cli.help import _get_rtd_url
 
 

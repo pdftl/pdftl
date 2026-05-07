@@ -1,7 +1,7 @@
 import pytest
 
+from pdftl.core.core_types import Compatibility, FeatureType, HelpExample, Status
 from pdftl.core.registry import Registry, registry
-from pdftl.core.types import Compatibility, FeatureType, HelpExample, Status
 
 
 @pytest.fixture(autouse=True)

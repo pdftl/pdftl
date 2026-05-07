@@ -93,7 +93,7 @@ def format_examples_block(examples, show_topics=False):
 
     for ex in examples:
         if not ("desc" in ex and "cmd" in ex):
-            logger.warn("Skipping incomplete example: %s", ex)
+            logger.warning("Skipping incomplete example: %s", ex)
             continue
 
         # Add topic heading if necessary

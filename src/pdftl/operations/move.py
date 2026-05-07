@@ -10,8 +10,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import UserCommandLineError
 from pdftl.operations.parsers.move_parser import parse_move_args
 from pdftl.operations.types.move_types import MoveSpec

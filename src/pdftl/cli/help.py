@@ -23,9 +23,9 @@ from pdftl.cli.help_render import (
     usage_as_markdown,
 )
 from pdftl.cli.metadata import get_project_version
-from pdftl.cli.whoami import WHOAMI, PACKAGE
+from pdftl.cli.whoami import PACKAGE, WHOAMI
+from pdftl.core.core_types import HelpExample
 from pdftl.core.registry import register_help_topic, registry
-from pdftl.core.types import HelpExample
 from pdftl.utils.string_utils import before_space
 
 TAG_PREFIX = "tag:"
@@ -296,8 +296,8 @@ def _print_help_dispatch_table():
             )
         }
     )
-    dispatch_table["output_options"] = (
-        lambda hprint, op_info=None, op_name=None: _print_output_options_help(hprint)
+    dispatch_table["output_options"] = lambda hprint, op_info=None, op_name=None: (
+        _print_output_options_help(hprint)
     )
     dispatch_table["examples"] = lambda hprint, op_info=None, op_name=None: _print_examples_help(
         hprint

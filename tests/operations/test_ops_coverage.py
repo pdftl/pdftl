@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import pdftl.core.constants as c
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.operations.generate_fdf import generate_fdf_cli_hook
 from pdftl.operations.update_info import update_info

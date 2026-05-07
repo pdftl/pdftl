@@ -86,10 +86,10 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
                 import yaml
 
                 data = yaml.safe_load(f)
-            except ImportError:
+            except ImportError as exc:
                 raise ImportError(
                     "PyYAML is required to load .yaml files. Install it with: pip install pyyaml"
-                )
+                ) from exc
         else:
             # Default to JSON
             import json

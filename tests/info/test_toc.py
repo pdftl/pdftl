@@ -1,9 +1,13 @@
 # tests/info/test_toc.py
 
+import logging
+from unittest.mock import MagicMock
+
 import pikepdf
 import pytest
 
-from pdftl.info.toc import build_toc_tree, extract_toc_tree
+from pdftl.exceptions import OperationError
+from pdftl.info.toc import _extract_item, build_toc_tree, extract_toc_tree
 
 
 @pytest.fixture
@@ -175,9 +179,6 @@ def test_extract_toc_tree_view_edge_cases(exotic_pdf):
 
 def test_extract_toc_tree_invalid_view_arg(exotic_pdf, caplog):
     """Covers the ValueError fallback for malformed view arguments."""
-    import logging
-
-    import pikepdf
 
     with exotic_pdf.open_outline() as outline:
         bad_arg_item = pikepdf.OutlineItem("Bad Arg", 0)
@@ -205,3 +206,69 @@ def test_extract_toc_tree_invalid_view_arg(exotic_pdf, caplog):
     # Verify the logger actually caught it
     assert "Ignoring unknown destination argument" in caplog.text
     assert "not_a_number" in caplog.text
+
+
+def test_extract_item_no_obj():
+    # Force a mock item that has item.obj = None
+    mock_item = MagicMock(spec=pikepdf.OutlineItem)
+    mock_item.obj = None
+    with pytest.raises(OperationError, match=r"Invalid item \(no obj\)"):
+        _extract_item(mock_item, None, {}, {})
+
+
+from unittest.mock import patch
+
+import pytest
+
+from pdftl.info.toc import _build_item
+
+
+def test_build_item_fails_to_create_obj():
+    """
+    Covers line 213: raise OperationError("Invalid item (no obj)")
+    """
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    # FIX: Mock the pages list so len(pdf.pages) >= 1
+    mock_pdf.pages = [MagicMock()]
+
+    node = {"title": "Ghost Item", "page": 1}
+
+    # Patching inside the 'pdftl.info.toc' namespace is often safer
+    # if it's already imported there.
+    with patch("pikepdf.OutlineItem") as MockItem:
+        instance = MockItem.return_value
+        instance.obj = None
+
+        with pytest.raises(OperationError, match=r"Invalid item \(no obj\)"):
+            _build_item(node, mock_pdf)
+
+
+def test_build_toc_validation_errors(caplog):
+    """Covers lines 136-137, 140-141, and 160-164 via logging/skipping."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = {}
+
+    # Test cases that trigger warnings but allow execution to continue
+    malformed_items = [
+        "not a dict",  # Line 136-137
+        {"page": 1},  # Line 140-141 (Missing title)
+        {"title": "Bad Child", "children": "not-a-list"},  # Line 160-164
+    ]
+
+    with caplog.at_level(logging.WARNING):
+        build_toc_tree(mock_pdf, malformed_items)
+
+    assert "Ignoring invalid bookmark entry (not a dictionary)" in caplog.text
+    assert "Ignoring invalid bookmark entry (missing 'title')" in caplog.text
+    assert "Ignoring invalid 'children' (must be a list)" in caplog.text
+
+
+def test_build_toc_strict_key_check():
+    """Covers line 148: OperationError for unrecognized keys (typos)."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+
+    # User made a typo 'pagee' instead of 'page'
+    bad_toc = [{"title": "Intro", "pagee": 1}]
+
+    with pytest.raises(OperationError, match="Invalid keys found in bookmark 'Intro': pagee"):
+        build_toc_tree(mock_pdf, bad_toc)

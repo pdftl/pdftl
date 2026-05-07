@@ -11,8 +11,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
@@ -219,9 +219,9 @@ def _parse_stream(content_stream, resources, initial_ctm, image_list):
         logger.warning("Error parsing content stream: %s", err)
 
 
-def _extract_image_info(pdf: "pikepdf.Pdf", specs: list = None) -> dict:
+def _extract_image_info(pdf: "pikepdf.Pdf", specs: list | None = None) -> dict:
     """Main entry point: Iterates pages and initiates extraction."""
-    result = {"pages": []}
+    result: dict[str, list] = {"pages": []}
     num_pages = len(pdf.pages)
 
     if not specs:
@@ -251,7 +251,7 @@ def _extract_image_info(pdf: "pikepdf.Pdf", specs: list = None) -> dict:
     return result
 
 
-def dump_images_cli_hook(result: OpResult, _stage, _pipeline):
+def dump_images_cli_hook(result: OpResult, stage, _pipeline):
     """Writes the image data to stdout or a file in JSON."""
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 

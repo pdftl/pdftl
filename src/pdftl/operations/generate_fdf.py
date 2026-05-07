@@ -9,8 +9,8 @@
 import os
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.user_input import filename_completer

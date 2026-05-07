@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from pdftl.core.types import LegacyDictAccess, OpResult
+from pdftl.core.core_types import LegacyDictAccess, OpResult
 
 
 @dataclass

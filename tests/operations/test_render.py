@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.render import _save_single_pdf, render_cli_hook, render_pdf
 

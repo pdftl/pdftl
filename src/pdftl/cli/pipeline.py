@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.cli.whoami import WHOAMI
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.executor import run_operation
 from pdftl.core.registry import register_help_topic, registry
-from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_content
 from pdftl.utils.io_helpers import smart_pikepdf_open

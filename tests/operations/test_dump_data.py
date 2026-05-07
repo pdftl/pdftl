@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import pdftl.core.constants as c
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.dump_data import dump_data_cli_hook, pdf_info
 

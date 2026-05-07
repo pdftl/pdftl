@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     pass
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages

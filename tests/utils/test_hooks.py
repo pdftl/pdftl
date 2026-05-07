@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.utils import hooks
 from pdftl.utils.hooks import (
     consume_output_option,

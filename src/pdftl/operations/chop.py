@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.operations.parsers.chop_parser import parse_chop_spec, parse_chop_specs_to_rules
 

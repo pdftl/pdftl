@@ -29,12 +29,12 @@ def test_extract_justification_exceptions():
     field_index_err = MagicMock()
     field_index_err.obj.Q = 5  # Valid align is 0,1,2
 
-    res = _extract_field_justification(field_index_err, "Tx")
+    res = _extract_field_justification(field_index_err)
     assert res == "Left"
 
     # 2. Test ValueError (Q value is not an integer)
     field_value_err = MagicMock()
     field_value_err.obj.Q = "invalid_int"
 
-    res = _extract_field_justification(field_value_err, "Tx")
+    res = _extract_field_justification(field_value_err)
     assert res == "Left"

@@ -14,10 +14,10 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 
 # Local imports
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.parsers.modify_annots_parser import specs_to_modification_rules
 

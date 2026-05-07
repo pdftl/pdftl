@@ -1,8 +1,8 @@
 import logging
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
 from pdftl.utils.ocg import (
     clean_ocproperties,
@@ -144,7 +144,7 @@ def _process_content_stream(pdf, stream_dict, resolved_targets, processed_xobjs=
 
     # Recursively process Form XObjects found in the resources
     if resources and "/XObject" in resources:
-        for local_name, xobj in resources.XObject.items():
+        for xobj in resources.XObject.values():
             if xobj.get("/Subtype") == "/Form":
                 _process_content_stream(pdf, xobj, resolved_targets, processed_xobjs)
 
@@ -206,12 +206,7 @@ def _process_block_start(
 
 
 def _process_xobject_invocation(
-    new_stream,
-    block_stack,
-    op_str,
-    operator,
     operands,
-    prop_map,
     resolved_targets,
     is_stripping,
     xobj_map,
@@ -274,12 +269,7 @@ def _process_stream_op(
         op_str == "Do"
         and len(operands) == 1
         and _process_xobject_invocation(
-            new_stream,
-            block_stack,
-            op_str,
-            operator,
             operands,
-            prop_map,
             resolved_targets,
             is_stripping,
             xobj_map,
@@ -368,23 +358,23 @@ def _modify_state_or_usage(pdf, resolved_targets):
         _ensure_auto_state(pdf)
 
 
-def _resolve_targets(pdf, rules_by_id: dict, rules_by_name: dict, default_action: str) -> dict:
+def _resolve_targets(pdf, rules_by_id: dict, rules_by_name: dict, default_actions: set) -> dict:
     """Maps strict IDs and sloppy names to their final global action."""
     from pikepdf import NamePath
 
-    final_targets = {}
+    final_targets: dict[int, set] = {}
     ocgs = pdf.Root.get(NamePath.OCProperties.OCGs)
 
     if not ocgs:
         return final_targets
 
     for ocg in ocgs:
-        _resolve_targets_for_ocg(ocg, default_action, rules_by_id, rules_by_name, final_targets)
+        _resolve_targets_for_ocg(ocg, default_actions, rules_by_id, rules_by_name, final_targets)
 
     return final_targets
 
 
-def _resolve_targets_for_ocg(ocg, default_actions, rules_by_id, rules_by_name, final_targets):
+def _resolve_targets_for_ocg(ocg, default_actions: set, rules_by_id, rules_by_name, final_targets):
     obj_id = int(ocg.objgen[0])
 
     # Initialize the set directly with our default actions

@@ -4,7 +4,7 @@ import pytest
 
 from pdftl import api
 from pdftl.core import constants as c
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 
 
 def test_map_positional_args_empty_break():

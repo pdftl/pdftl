@@ -86,8 +86,9 @@ class TestAddTextLogic(unittest.TestCase):
 
     def test_copy_annotations(self):
         """Covers lines 413-423: transferring annotations from overlay to main page."""
+        from pikepdf import Array, Dictionary, Name, Pdf
+
         from pdftl.operations.add_text import _copy_annotations
-        from pikepdf import Pdf, Dictionary, Name, Array
 
         # Use real Pdf objects instead of MagicMocks to safely test C++ bindings
         pdf = Pdf.new()

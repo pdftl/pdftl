@@ -181,22 +181,18 @@ def update_simple_cache(context_key, candidates, cache=None):
     # If the parser returned dynamic instructions like __FILE__, we cache that instruction,
     # but we don't try to cache the result of the file listing itself.
 
-    try:
-        if cache is None:
-            cache = load_simple_cache()
-        cache[context_key] = list(candidates)  # Ensure it's a list for JSON
+    if cache is None:
+        cache = load_simple_cache()
+    cache[context_key] = list(candidates)  # Ensure it's a list for JSON
 
-        path = get_simple_cache_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+    path = get_simple_cache_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        with open(path, "wb") as f:
-            marshal.dump(cache, f)
-    except Exception:
-        raise
-        # pass
+    with open(path, "wb") as f:
+        marshal.dump(cache, f)
 
 
-_cache_check_results = {}
+_cache_check_results: dict[str, bool] = {}
 
 
 def is_package_newer_than_cache(cache_path):

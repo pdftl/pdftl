@@ -9,8 +9,8 @@
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import HelpExample, OpResult
 from pdftl.exceptions import OperationError
 from pdftl.operations.parsers.place_parser import parse_place_args
 from pdftl.utils.affix_content import affix_content
@@ -24,7 +24,7 @@ from pdftl.utils.geometry import (
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 if TYPE_CHECKING:
-    pass
+    import pikepdf
 
 _PLACE_LONG_DESC = """
 Applies geometric transformations (direct similarities) to the content
@@ -90,7 +90,7 @@ _PLACE_EXAMPLES = [
         {},
     ),
 )
-def place_content(target_pdf, place_specs) -> OpResult:
+def place_content(target_pdf: "pikepdf.Pdf", place_specs) -> OpResult:
     import pikepdf
 
     total_pages = len(target_pdf.pages)
@@ -100,7 +100,7 @@ def place_content(target_pdf, place_specs) -> OpResult:
         page_nums = page_numbers_matching_page_spec(cmd.page_spec, total_pages)
 
         for p_num in page_nums:
-            if not (1 <= p_num <= total_pages):
+            if not 1 <= p_num <= total_pages:
                 continue
 
             page = target_pdf.pages[p_num - 1]
@@ -119,6 +119,53 @@ def place_content(target_pdf, place_specs) -> OpResult:
                 _update_annotations(page, matrix)
 
     return OpResult(success=True, pdf=target_pdf)
+
+
+# pikepdf Matrix explainer:
+# =========================
+#
+# @ is ordinary matrix multiplication of matrix
+#
+#    M = (a,b,c,d,e,f) = [a b 0 ; c d 0 ; e f 1] = [L 0; e f 1]
+#
+#    where L is the linear part, L = [a b; c d]
+#
+#    (matlab matrix conventions: [row; row])
+#
+# matrices transform ROW vectors v = (x,y) = (x,y,1) by RIGHT multiplication
+#
+# so M.transform(v) means v M
+#
+# viewing v=(x,y) rather than (x,y,1)
+# this means that Matrix.transform is a general affine transformation of the plane
+#
+# this way: M maps
+#
+# (0,0) to (0,0) M = (e,f)
+#
+# (1,0) to (1,0) M = (1,0) L + (e,f) = (a,b) + (e,f)
+#
+# (0,1) to (0,1) M = (0,1) L + (e,f) = (c,d) + (e,f)
+#
+# and, of course, composition goes from left to right.
+# so M1 @ M2 maps v to v M1 M2 = (v M1) M2 = M2.transform(M1.transform(v))
+#
+# other notes while we're at it:
+#
+# M.translated(s,t) = T_{s,t} @ M,
+# T_{s,t} = Matrix().translated(s,t) = [I_2 0; s t 0]
+#
+# M.rotated(a) = R_a @ M,
+# R_a = rotation by a about (0,0) = [cos(a) sin(a);-sin(a) cos(a)] (padded out)
+#
+# M.scaled(sx,sy) similar (pre-multiplication)
+#
+# M.inverse exists, and inverts the whole affine transformation
+#
+# Matrix() or M.identity() both give the identity matrix
+#
+# it is strange that there is no automatic 'coordinate change' method
+# which would take C, M and spit out inverse(C) @ M @ C
 
 
 def _calculate_transformation_matrix(page, operations):
@@ -156,15 +203,15 @@ def _calculate_transformation_matrix(page, operations):
     return m_u_to_v @ visual_matrix @ m_v_to_u
 
 
-def _step_matrix(op, v_x0, v_y0, v_w, v_h, Matrix):
-    step_matrix = Matrix()
+def _step_matrix(op, v_x0, v_y0, v_w, v_h, pikepdf_matrix):
+    step_matrix = pikepdf_matrix()
 
     if op.name == "shift":
         dx = _eval_dim(op.params["dx"], v_w)
         dy = _eval_dim(op.params["dy"], v_h)
-        step_matrix = Matrix().translated(dx, dy)
+        step_matrix = pikepdf_matrix().translated(dx, dy)
 
-    elif op.name == "scale" or op.name == "spin":
+    elif op.name in ("scale", "spin"):
         if op.params.get("anchor_type") == "coord":
             offset_x = _eval_dim(op.params["anchor_x"], v_w)
             offset_y = _eval_dim(op.params["anchor_y"], v_h)
@@ -173,16 +220,21 @@ def _step_matrix(op, v_x0, v_y0, v_w, v_h, Matrix):
             anchor_name = op.params.get("anchor_name", "center")
             ax, ay = resolve_anchor(anchor_name, v_x0, v_y0, v_w, v_h)
 
-        m1 = Matrix().translated(-ax, -ay)
-        m3 = Matrix().translated(ax, ay)
+        m1 = pikepdf_matrix().translated(-ax, -ay)
+        m3 = pikepdf_matrix().translated(ax, ay)
 
         if op.name == "scale":
             s = float(op.params["value"])
-            m2 = Matrix().scaled(s, s)
+            m2 = pikepdf_matrix().scaled(s, s)
         else:  # spin
             deg = float(op.params["value"])
-            m2 = Matrix().rotated(deg)
+            m2 = pikepdf_matrix().rotated(deg)
 
+        # translate anchor to origin: m1
+        # then linearly transform: m2
+        # then translate anchor back: m3
+        # see notes above:
+        # composition order here using @ is left to right
         step_matrix = m1 @ m2 @ m3
 
     return step_matrix

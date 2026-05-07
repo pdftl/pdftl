@@ -10,8 +10,8 @@ import logging
 from dataclasses import dataclass
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -118,12 +118,16 @@ class _BlankSpec:
     use_stddev: bool
 
 
-def _parse_float(value: str, name: str, min_val: float = None, max_val: float = None) -> float:
+def _parse_float(
+    value: str, name: str, min_val: float | None = None, max_val: float | None = None
+) -> float:
     """Parse a float param, raising InvalidArgumentError on bad input."""
     try:
         result = float(value)
-    except ValueError:
-        raise InvalidArgumentError(f"Invalid value '{value}' for '{name}': expected a number.")
+    except ValueError as exc:
+        raise InvalidArgumentError(
+            f"Invalid value '{value}' for '{name}': expected a number."
+        ) from exc
     if min_val is not None and result < min_val:
         raise InvalidArgumentError(f"Invalid value '{value}' for '{name}': must be >= {min_val}.")
     if max_val is not None and result > max_val:

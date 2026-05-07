@@ -118,7 +118,7 @@ class GrammarBuilder:
                 grammar.append(f"{rule_name}: {kw_term}")
 
         # Options
-        for name, opt_obj in registry.options.items():
+        for name in registry.options:
             clean_name, safe_name = sanitize(name)
             rule_name = f"opt_{safe_name}"
             opts_rules.append(rule_name)

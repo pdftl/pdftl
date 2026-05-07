@@ -6,6 +6,8 @@
 
 """Utilities for creating blank PDF pages."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,11 +15,11 @@ if TYPE_CHECKING:
 
 
 def make_blank_page(
-    pdf: "pikepdf.Pdf",
-    media_box: tuple[float, float, float, float],
-    crop_box: tuple[float, float, float, float] | None = None,
-    trim_box: tuple[float, float, float, float] | None = None,
-) -> "pikepdf.Page":
+    pdf: pikepdf.Pdf,
+    media_box: tuple[float, float, float, float] | pikepdf.Array,
+    crop_box: tuple[float, float, float, float] | pikepdf.Array | None = None,
+    trim_box: tuple[float, float, float, float] | pikepdf.Array | None = None,
+) -> pikepdf.Page:
     """
     Create a blank page of the given size and add it to pdf.
 

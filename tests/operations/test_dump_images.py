@@ -517,7 +517,7 @@ class TestExtractImageInfo:
 class TestDumpImagesCliHook:
     def test_writes_json_to_stdout(self):
         import pdftl.core.constants as c
-        from pdftl.core.types import OpResult
+        from pdftl.core.core_types import OpResult
 
         data = {"pages": [{"page": 1, "images": []}]}
         result = OpResult(success=True, data=data, meta={c.META_OUTPUT_FILE: None})
@@ -534,7 +534,7 @@ class TestDumpImagesCliHook:
 
     def test_writes_json_to_file(self):
         import pdftl.core.constants as c
-        from pdftl.core.types import OpResult
+        from pdftl.core.core_types import OpResult
 
         data = {"pages": []}
         result = OpResult(success=True, data=data, meta={c.META_OUTPUT_FILE: "out.json"})
@@ -554,7 +554,7 @@ class TestDumpImagesCliHook:
 
 class TestDumpImages:
     def test_returns_op_result_success(self):
-        from pdftl.core.types import OpResult
+        from pdftl.core.core_types import OpResult
 
         pdf = _make_simple_pdf()
         result = dump_images(pdf, specs=[], output_file=None)

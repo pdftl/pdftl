@@ -1,16 +1,16 @@
-import pytest
 import pikepdf
+import pytest
 
+from pdftl.exceptions import OperationError
 from pdftl.operations.set_props import (
-    _parse_to_datetime,
-    _format_date_for_docinfo,
-    _format_date_for_xmp,
     _apply_cli_to_docinfo,
-    _backfill_xmp,
     _apply_cli_to_xmp,
     _apply_metadata,
+    _backfill_xmp,
+    _format_date_for_docinfo,
+    _format_date_for_xmp,
+    _parse_to_datetime,
 )
-from pdftl.exceptions import OperationError
 
 
 def test_parse_to_datetime():

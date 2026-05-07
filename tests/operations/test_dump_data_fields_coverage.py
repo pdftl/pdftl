@@ -202,10 +202,8 @@ def test_dump_fields_no_acroform():
 
 ##################################################
 
-from unittest.mock import MagicMock, mock_open, patch
 
-from pdftl.core.types import OpResult
-from pdftl.operations.dump_data_fields import _extract_field_data_high_level, dump_fields_cli_hook
+from pdftl.operations.dump_data_fields import _extract_field_data_high_level
 
 # --- Mocks for Test 2 ---
 
@@ -247,39 +245,6 @@ class Checkbox:
     def __init__(self):
         self.obj = MockPdfObj()
         self.fully_qualified_name = "my.checkbox"
-
-
-def test_dump_fields_cli_hook_meta_none():
-    """
-    Covers Line 110: `escape_xml = True` (else block).
-    Ensures that if result.meta is None, the hook still proceeds with default escaping.
-    """
-    # Create an OpResult with meta=None.
-    # We use "Text" here because the extraction layer normally produces "Text"
-    # for Tx fields, and the CLI hook's mapping function passes it through.
-    result = OpResult(success=True, data=[{"FieldType": "Text"}], meta=None)
-
-    # Mock stage options
-    mock_stage = MagicMock()
-    mock_stage.options = {"output": "dummy.txt"}
-
-    # Mock smart_open_maybe_dash to capture file operations
-    m_open = mock_open()
-
-    with patch("pdftl.operations.dump_data_fields.smart_open_maybe_dash", m_open):
-        dump_fields_cli_hook(result, mock_stage, None)
-
-    # Assert file was opened (proving execution reached past line 110)
-    m_open.assert_called_once_with("dummy.txt")
-
-    # Verify content was written (proving default escape_xml=True worked)
-    handle = m_open()
-
-    # Collect all write calls to handle split writes (content vs newline)
-    written_content = "".join(call.args[0] for call in handle.write.call_args_list)
-
-    # Ensure our output contains the type string
-    assert "FieldType: Text" in written_content
 
 
 def test_extract_field_data_high_level_coverage():

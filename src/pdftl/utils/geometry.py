@@ -46,7 +46,7 @@ def _transform_point(x: float, y: float, m: "Matrix") -> tuple[float, float]:
     """Helper to apply pikepdf.Matrix to a raw (x,y) pair."""
     # x' = a*x + c*y + e
     # y' = b*x + d*y + f
-    m_arr = list(map(float, m.as_array()))
+    m_arr = [float(x) for x in m.as_array()]
     return (m_arr[0] * x + m_arr[2] * y + m_arr[4], m_arr[1] * x + m_arr[3] * y + m_arr[5])
 
 

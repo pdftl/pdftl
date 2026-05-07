@@ -10,7 +10,7 @@ from collections import OrderedDict
 from dataclasses import fields
 
 import pdftl.core.constants as c
-from pdftl.core.types import Compatibility, HelpExample, HelpTopic, Operation, Option
+from pdftl.core.core_types import Compatibility, HelpExample, HelpTopic, Operation, Option
 
 
 def caller_dict(current_frame):

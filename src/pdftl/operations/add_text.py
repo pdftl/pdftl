@@ -20,8 +20,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 
 _ADD_TEXT_LONG_DESC = r"""
@@ -409,22 +409,22 @@ def _rotate_rect(rect, page):
 
     # These are the PHYSICAL dimensions (e.g., 500 x 800)
     p1, p2, p3, p4 = page.trimbox
-    W, H = float(p3 - p1), float(p4 - p2)
+    w, h = float(p3 - p1), float(p4 - p2)
 
     x1, y1, x2, y2 = [float(t) for t in rect]
 
     if rotation == 90:
         # 90 CW: The visual X is the physical Y.
         # The visual Y is the physical (Width - X).
-        return [W - y2, x1, W - y1, x2]
+        return [w - y2, x1, w - y1, x2]
 
     if rotation == 180:
-        return [W - x2, H - y2, W - x1, H - y1]
+        return [w - x2, h - y2, w - x1, h - y1]
 
     if rotation == 270:
         # 270 CW: The visual X is physical (Height - Y)
         # The visual Y is physical X
-        return [y1, H - x2, y2, H - x1]
+        return [y1, h - x2, y2, h - x1]
 
     return rect
 

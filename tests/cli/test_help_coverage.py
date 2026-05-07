@@ -11,7 +11,7 @@ from pdftl.cli.help import (
     print_help,
 )
 from pdftl.cli.help_render import format_examples_block
-from pdftl.core.types import HelpExample
+from pdftl.core.core_types import HelpExample
 
 
 class TestHelpLogicEdgeCases(unittest.TestCase):

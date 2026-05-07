@@ -36,7 +36,7 @@ from .resolver import (  # Internals exposed for tests
     _new_tuples_from_spec_str,
     _resolve_alias_and_spec,
 )
-from .types import PageSpec, PageTransform
+from .spec_types import PageSpec, PageTransform
 
 logger = logging.getLogger(__name__)
 

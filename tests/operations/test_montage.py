@@ -1,9 +1,11 @@
 # tests/operations/test_montage.py
 
+from unittest.mock import MagicMock
+
 import pikepdf
 import pytest
 
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.operations.montage import _parse_montage_config, montage_pages
 
 # --- Helpers ---
@@ -167,3 +169,26 @@ def test_montage_invalid_integer_keys():
             pdf=pdf,
             operation_args=["rows=oops2"],
         )
+
+
+def test_montage_invalid_rotate():
+    from pdftl.operations.montage import _apply_montage_logic
+
+    mock_src = MagicMock()
+    mock_src.Rotate = "invalid"
+
+    mock_target = MagicMock()
+    # Start with an empty list
+    mock_target.pages = []
+
+    # Define what happens when add_blank_page is called
+    def side_effect(page_size=None):
+        mock_target.pages.append(MagicMock())
+
+    mock_target.add_blank_page.side_effect = side_effect
+
+    mock_strategy = MagicMock()
+    mock_strategy.generate_slots.return_value = [MagicMock(page_index=0)]
+
+    with pytest.raises(OperationError, match="Invalid /Rotate"):
+        _apply_montage_logic(mock_target, [mock_src], mock_strategy, (500, 500))

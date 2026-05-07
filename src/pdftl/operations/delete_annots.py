@@ -7,8 +7,8 @@
 """Delete annotations"""
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 _DELETE_ANNOTS_LONG_DESC = """

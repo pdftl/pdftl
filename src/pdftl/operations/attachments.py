@@ -15,8 +15,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.utils.user_input import dirname_completer
 
 _DUMP_FILES_LONG_DESC = """
@@ -177,8 +177,7 @@ def _resolve_output_dir(output_dir, get_input):
             "Enter an output directory for the attachments: ",
             completer=dirname_completer,
         )
-    else:
-        return output_dir
+    return output_dir
 
 
 @register_operation(

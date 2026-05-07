@@ -13,7 +13,7 @@ from rich.console import Console
 import pdftl.cli.console as console_mod
 import pdftl.cli.help as helpmod
 import pdftl.cli.help_version as helpvermod
-from pdftl.core.types import HelpExample
+from pdftl.core.core_types import HelpExample
 
 
 @pytest.fixture

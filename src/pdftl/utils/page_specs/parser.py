@@ -4,7 +4,7 @@ import re
 
 from pdftl.exceptions import InvalidArgumentError
 
-from .types import PageSpec
+from .spec_types import PageSpec
 
 logger = logging.getLogger(__name__)
 

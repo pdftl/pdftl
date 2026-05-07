@@ -17,8 +17,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.info.output_info import get_info, write_info
 from pdftl.utils.dump import get_json_flag
 from pdftl.utils.io_helpers import smart_open_maybe_dash

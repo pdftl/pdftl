@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     pass
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import Compatibility, FeatureType, OpResult, Parity, Status
 from pdftl.core.registry import register_operation
-from pdftl.core.types import Compatibility, FeatureType, OpResult, Parity, Status
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
 
@@ -83,7 +83,7 @@ def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     """
     from pikepdf import Pdf
 
-    if not (len(opened_pdfs) > 0):
+    if not opened_pdfs:
         raise ValueError("opened_pdfs must contain something")
 
     page_tuples_array = _get_page_tuples_array(inputs, specs, opened_pdfs, aliases)

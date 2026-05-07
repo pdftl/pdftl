@@ -11,9 +11,9 @@ import logging
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.hooks import text_dump_hook
 from pdftl.utils.string_utils import remove_ignored_nonprinting_chars
 
@@ -43,11 +43,6 @@ _DUMP_TEXT_EXAMPLES = [
         "desc": "Save text from in.pdf to out.txt",
     },
 ]
-
-_MISSING_DEPS_ERROR_MSG = """
-The dump_text operation requires the 'pypdfium2' library.
-To automatically install this optional dependency: pip install pdftl[dump-text]
-"""
 
 
 def _extract_text_from_pdf(pdf_pike: "pikepdf.Pdf", pdfium, password=None) -> list:
@@ -86,14 +81,17 @@ def dump_text(input_pdf, input_password, output_file=None) -> OpResult:
     """
     Dump text content of a PDF file.
     """
+    # FIXME: output_file unused, why?
+
     if input_password is None:
         logger.debug("No password supplied.")
         input_password = ""  # nosec
 
-    try:
-        import pypdfium2
-    except ImportError:
-        raise InvalidArgumentError(_MISSING_DEPS_ERROR_MSG)
+    ensure_dependencies(
+        feature_name="dump_text", dependencies=["pypdfium2"], extra_tag="dump-text"
+    )
+
+    import pypdfium2
 
     output_text = "\n\f\n".join(
         map(

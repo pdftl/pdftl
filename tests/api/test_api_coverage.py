@@ -9,7 +9,7 @@ import pikepdf
 import pytest
 
 from pdftl import api
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.exceptions import OperationError
 
 # ==================================================================
@@ -162,7 +162,7 @@ def test_process_user_input_with_bytes(temp_pdf):
     # the operation to do anything.
     from unittest.mock import patch
 
-    from pdftl.core.types import OpResult
+    from pdftl.core.core_types import OpResult
 
     with patch("pdftl.core.executor.run_operation") as mock_run:
         mock_run.return_value = OpResult(success=True, summary="Success", pdf=temp_pdf)

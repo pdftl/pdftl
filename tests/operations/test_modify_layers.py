@@ -82,7 +82,7 @@ def test_process_content_stream(mock_unparse, mock_parse, mock_get_map):
     ]
 
     assert operators == expected
-    # Verify the /OC key was deleted from the mergeed XObject
+    # Verify the /OC key was deleted from the merged XObject
     xobj_mock.__delitem__.assert_called_with("/OC")
 
 
@@ -203,7 +203,12 @@ def test_process_content_stream_recursive_form():
 
     # Setup resources for outer stream containing the form
     resources_mock = MagicMock()
-    resources_mock.__contains__.return_value = True  # Tells it "/XObject" is in resources
+    resources_mock.__contains__.return_value = True
+
+    # Fix: mock .values() to return a list containing your form_xobj
+    resources_mock.XObject.values.return_value = [form_xobj]
+
+    # (Optional) Keep .items() mocked if other parts of the code still use it
     resources_mock.XObject.items.return_value = [("/MyFormAlias", form_xobj)]
 
     # Make the outer stream return our mocked resources
@@ -322,6 +327,7 @@ def test_modify_layers_state_and_usage(mock_usage, mock_state, mock_resolve, moc
 
 
 import pikepdf
+
 from pdftl.operations.modify_layers import _ensure_auto_state
 
 
@@ -380,6 +386,7 @@ def test_ensure_auto_state_updates_existing_events():
 
 def test_ensure_auto_state_updates_existing_view_event():
     import pikepdf
+
     from pdftl.operations.modify_layers import _ensure_auto_state
 
     pdf = pikepdf.Pdf.new()

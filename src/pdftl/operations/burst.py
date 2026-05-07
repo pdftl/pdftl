@@ -11,9 +11,9 @@ import logging
 
 import pdftl.api
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.utils.outline_select import get_outlines_to_level_pages
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
@@ -97,10 +97,10 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
     CLI-specific side effect: Writes the burst pages to disk.
     This function is only called by the CLI pipeline.
     """
+    import pikepdf
+
     # The generator yields (filename, pil_image) tuples
-
     burst_generator = result.data
-
     if not burst_generator:
         logger.debug("No burst_generator")
         return
@@ -113,7 +113,10 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
         count += 1
 
     logger.info("Burst to %s files.", count)
-    pdftl.api.dump_data(result.pdf, output="doc_data.txt", run_cli_hook=True)
+    if isinstance(result.pdf, pikepdf.Pdf):
+        pdftl.api.dump_data(result.pdf, output="doc_data.txt", run_cli_hook=True)
+    else:
+        raise OperationError("Invalid result: not a PDF")
 
 
 @register_operation(
@@ -295,7 +298,7 @@ def get_effective_specs(source_pdf, specs):
                 if level <= 0:
                     raise ValueError("must be at least 1")
             except ValueError as exc:
-                raise InvalidArgumentError(f"Invalid bookmark level '{spec}': {exc}")
+                raise InvalidArgumentError(f"Invalid bookmark level '{spec}': {exc}") from exc
             effective_specs[i] = ",".join(
                 [
                     str(x)
@@ -312,15 +315,14 @@ def _parse_size_to_bytes(size_str: str) -> int:
         if size_str.endswith("MB") or size_str.endswith("M"):
             val = float(size_str.replace("MB", "").replace("M", ""))
             return int(val * 1024 * 1024)
-        elif size_str.endswith("KB") or size_str.endswith("K"):
+        if size_str.endswith("KB") or size_str.endswith("K"):
             val = float(size_str.replace("KB", "").replace("K", ""))
             return int(val * 1024)
-        else:
-            return int(size_str)
-    except ValueError:
+        return int(size_str)
+    except ValueError as exc:
         raise InvalidArgumentError(
             f"Invalid size format: '{size_str}'. Use format like 5M or 500K."
-        )
+        ) from exc
 
 
 def get_chunk_size(src_pdf, start_idx: int, end_idx: int) -> int:

@@ -6,8 +6,8 @@ import json
 import logging
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import MissingArgumentError, OperationError
 from pdftl.info.toc import build_toc_tree
 from pdftl.utils.dependencies import ensure_dependencies

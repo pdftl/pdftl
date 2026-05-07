@@ -8,13 +8,12 @@
 
 import logging
 import re
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from datetime import datetime
-
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import OperationError
 from pdftl.utils.keyval_parser import parse_keyval_list
 
@@ -323,13 +322,16 @@ def _parse_page_idx(page_str: str, total_pages: int) -> int:
 
 
 def _parse_view_arg(arg: str):
-    """Cast a view argument to None, float, or int."""
+    """Cast a view argument to None, int, or float."""
     if arg.lower() == "null":
         return None
     try:
-        return float(arg) if "." in arg else int(arg)
-    except ValueError as exc:
-        raise OperationError(f"Invalid open_action argument: {arg}") from exc
+        return int(arg)
+    except ValueError:
+        try:
+            return float(arg)
+        except ValueError as exc:
+            raise OperationError(f"Invalid open_action argument: {arg}") from exc
 
 
 def _build_dest_array(parts: list[str], page_obj, pikepdf) -> list:

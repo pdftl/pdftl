@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import HelpExample, OpResult
 
 if TYPE_CHECKING:
     from pikepdf import Pdf

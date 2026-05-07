@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pikepdf
 import pytest
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.operations.add_text import _build_static_context, add_text_pdf
 from pdftl.operations.dump_annots import (
     _data_item_to_string_helper,

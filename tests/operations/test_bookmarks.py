@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.core.types import OpResult
+from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError, OperationError
 from pdftl.operations.dump_bookmarks import dump_toc, dump_toc_cli_hook
 from pdftl.operations.update_bookmarks import update_toc

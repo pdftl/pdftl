@@ -18,9 +18,9 @@ VALID_ACTIONS = {
 
 def parse_modify_layers_rules(args) -> tuple[dict, dict, set]:
     """Parses arguments into explicit id_rules, name_rules, and a set of default actions."""
-    rules_by_id = {}
-    rules_by_name = {}
-    default_actions = set()
+    rules_by_id: dict[int, set] = {}
+    rules_by_name: dict[str, set] = {}
+    default_actions: set[str] = set()
 
     i = 0
     while i < len(args):

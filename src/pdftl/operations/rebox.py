@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.exceptions import UserCommandLineError
 from pdftl.operations.helpers.crop_fit import FitCropContext
 from pdftl.operations.parsers.rebox_parser import parse_rebox_content, specs_to_page_rules
@@ -201,7 +201,7 @@ def _apply_rule_to_page(page_rule, i, pdf, preview, fit_ctx, all_rules, operatio
         new_box[3],
     )
 
-    _apply_or_preview(pdf, page, new_box, preview, operation)
+    _apply_or_preview(page, new_box, preview, operation)
 
 
 def _calculate_new_box(page, spec_str, page_idx, fit_ctx, all_rules, operation):
@@ -217,20 +217,20 @@ def _calculate_new_box(page, spec_str, page_idx, fit_ctx, all_rules, operation):
         return None
 
     ux0, uy0, u_width, u_height = unrotated_dims
-    vx0, vy0, v_width, v_height = visual_dims
+    _vx0, _vy0, v_width, v_height = visual_dims
 
     # Use the master parser which handles fit/paper/margin modes based on visual dimensions
     parsed = parse_rebox_content(spec_str, v_width, v_height, operation)
 
     if parsed["type"] == "abs":
-        logger.debug(f"values={parsed['values']}")
+        logger.debug("values=%s", parsed["values"])
         return parsed["values"]
 
-    elif parsed["type"] == "fit":
+    if parsed["type"] == "fit":
         # 'fit' mode bounding boxes are extracted natively and bypass rotation shifts
         return fit_ctx.calculate_rect(page_idx, parsed, spec_str, all_rules)
 
-    elif parsed["type"] == "paper":
+    if parsed["type"] == "paper":
         left, top, right, bottom = _crop_margins_from_paper_size(
             v_width, v_height, *parsed["size"]
         )
@@ -270,7 +270,7 @@ def _box_width_height(box):
     return abs(box[2] - box[0]), abs(box[3] - box[1])
 
 
-def _apply_or_preview(pdf, page, new_box, preview, operation):
+def _apply_or_preview(page, new_box, preview, operation):
     if preview:
         _overlay_preview_rectangle(page, new_box)
     elif operation == "crop":
@@ -287,7 +287,7 @@ def _apply_or_preview(pdf, page, new_box, preview, operation):
 
 
 def _overlay_rect_args(box):
-    new_x0, new_y0, new_x1, new_y1 = box
+    new_x0, new_y0, _new_x1, _new_y1 = box
     crop_width, crop_height = _box_width_height(box)
     return f"{new_x0} {new_y0} {crop_width} {crop_height}"
 

@@ -6,9 +6,8 @@
 
 """Utilities for handling dependencies"""
 
-import sys
 import importlib.util
-
+import sys
 from pathlib import Path
 
 from pdftl.exceptions import InvalidArgumentError

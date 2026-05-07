@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_help_topic, register_operation
-from pdftl.core.types import HelpExample, OpResult
 
 # FIXME: repeated data here (cf CLI_DATA)
 

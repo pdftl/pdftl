@@ -7,19 +7,20 @@
 """Dump information about destinations in a PDF file"""
 
 import logging
-
-from pdftl.utils.type_helpers import as_iterable
-
-logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    pass
-
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.core.types import OpResult
 from pdftl.output.dump import dump
+from pdftl.utils.type_helpers import as_iterable
+
+if TYPE_CHECKING:
+    import pikepdf
+
+
+logger = logging.getLogger(__name__)
+
 
 # FIXME: compare this with json.py
 # FIXME: should be able to update this
@@ -99,7 +100,7 @@ _DUMP_DESTS_EXAMPLES = [
 ]
 
 
-def dump_dests_cli_hook(result: OpResult, _stage, _pipeline):
+def dump_dests_cli_hook(result: OpResult, stage, _pipeline):
     """
     CLI Hook for dump_dests.
     Serializes the raw destinations data to a compacted JSON string and outputs it.
@@ -122,7 +123,7 @@ def dump_dests_cli_hook(result: OpResult, _stage, _pipeline):
     examples=_DUMP_DESTS_EXAMPLES,
     args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
 )
-def dump_dests(pdf, output_file=None) -> OpResult:
+def dump_dests(pdf: "pikepdf.Pdf", output_file=None) -> OpResult:
     """
     Traverses the /Dests name tree of a PDF using pikepdf.NameTree.
     This provides a robust, iterable interface to the destinations.
