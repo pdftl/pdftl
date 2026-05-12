@@ -191,7 +191,7 @@ def _get_all_annots_data(pdf: "Pdf", compat=True):
     page_object_to_num_map = {p.obj.objgen: i + 1 for i, p in enumerate(pdf.pages)}
     named_dests = {}
     if Name.Names in pdf.Root and Name.Dests in pdf.Root.Names:
-        named_dests = dict(NameTree(pdf.Root.Names.Dests))
+        named_dests = NameTree(pdf.Root.Names.Dests)
     all_annots_data = []
     for page_num, page in enumerate(pdf.pages, 1):
         all_annots_data.extend(
