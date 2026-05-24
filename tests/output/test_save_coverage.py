@@ -57,7 +57,10 @@ def test_save_encryption_metadata_aes_flag(minimal_pdf):
     options = {"encrypt_aes128": True, "owner_pw": "secret", "no_encrypt_metadata": True}
 
     # Patch pikepdf.Encryption to inspect the kwargs passed to it
-    with patch("pikepdf.Encryption") as MockEncryption:
+    with (
+        patch("pikepdf.Encryption") as MockEncryption,
+        patch.object(minimal_pdf, "save") as mock_save,
+    ):
         save_pdf(minimal_pdf, output_filename="dummy.pdf", input_context=mock_ctx, options=options)
 
         # Verify the Encryption constructor was called with metadata=False
@@ -79,7 +82,7 @@ def test_save_encryption_metadata_rc4_warning(minimal_pdf, caplog):
     # We expect a logger warning
     with caplog.at_level(logging.WARNING):
         # We don't need to mock Encryption perfectly, just ensure the code runs to the logging point
-        with patch("pikepdf.Encryption"):
+        with patch("pikepdf.Encryption"), patch.object(minimal_pdf, "save") as mock_save:
             save_pdf(
                 minimal_pdf, output_filename="dummy.pdf", input_context=mock_ctx, options=options
             )

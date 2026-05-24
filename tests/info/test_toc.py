@@ -248,15 +248,16 @@ def test_build_toc_validation_errors(caplog):
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
     mock_pdf.Root = {}
 
-    # Test cases that trigger warnings but allow execution to continue
     malformed_items = [
-        "not a dict",  # Line 136-137
-        {"page": 1},  # Line 140-141 (Missing title)
-        {"title": "Bad Child", "children": "not-a-list"},  # Line 160-164
+        "not a dict",
+        {"page": 1},
+        {"title": "Bad Child", "children": "not-a-list"},
     ]
 
     with caplog.at_level(logging.WARNING):
-        build_toc_tree(mock_pdf, malformed_items)
+        # Prevent the deep pikepdf C++ layout from parsing our structural Page mocks
+        with patch("pikepdf.models.outlines.make_page_destination", return_value=[]):
+            build_toc_tree(mock_pdf, malformed_items)
 
     assert "Ignoring invalid bookmark entry (not a dictionary)" in caplog.text
     assert "Ignoring invalid bookmark entry (missing 'title')" in caplog.text

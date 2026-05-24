@@ -130,6 +130,7 @@ filterwarnings = [
 ]
 
 markers = [
+    "real_encryption: mark an integration test that requires unmocked pikepdf C++ components",
     "serial: marks tests to be run serially and in isolation",
     "pdftk_compat: integration tests ported from pdftk-java",
 ]

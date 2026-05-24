@@ -39,7 +39,7 @@ def mock_pdf():
     pdf.is_encrypted = False
 
     # DocInfo
-    pdf.docinfo = MagicMock(spec=pikepdf.Dictionary)
+    pdf.docinfo = MagicMock()
     pdf.docinfo.items.return_value = [
         (Name("/Title"), String("Test Title")),
         (Name("/Author"), String("Test Author")),
@@ -434,10 +434,15 @@ class TestSetInfo:
         # 3. Assert
         # Check that NumberTree was *not* created new
         mock_NumberTree.new.assert_not_called()
-        # Check that the existing tree was opened
-        mock_NumberTree.assert_called_once_with(mock_pdf.Root.PageLabels)
+
+        # Check that the existing tree was opened using the Dictionary structure
+        assert mock_NumberTree.call_count == 1
+        called_arg = mock_NumberTree.call_args[0][0]
+        assert isinstance(called_arg, pikepdf.Dictionary)
+
         # Check that the new label was set
         mock_nt_instance.__setitem__.assert_called_once()
+
         # Check that the root was updated
         assert mock_pdf.Root.PageLabels == mock_nt_instance.obj
 

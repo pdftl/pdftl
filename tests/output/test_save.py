@@ -88,39 +88,35 @@ def mock_pdf():
 
 
 @pytest.fixture(autouse=True)
-def patch_dependencies(mocker):
+def patch_dependencies(mocker, request):
     """
     Patch all external and internal dependencies to isolate
     each function.
     """
-    # Patch pikepdf.Encryption
-    mocker.patch("pikepdf.Encryption", autospec=True)
+    # Check if this specific test has the 'real_encryption' marker
+    if "real_encryption" not in request.keywords:
+        # Patch pikepdf.Encryption
+        mocker.patch("pikepdf.Encryption", autospec=True)
 
-    # ---
-    # DO NOT MOCK pikepdf.Permissions here.
-    # _default_permissions_object relies on inspecting the REAL class.
-    # ---
+        # --- Use the REAL permission strings from the help text ---
+        mock_permission_map = {
+            "Printing": ["print_highres", "print_lowres"],
+            "DegradedPrinting": ["print_lowres"],
+            "ModifyContents": ["modify", "modify_assembly"],
+            "Assembly": ["modify_assembly"],
+            "CopyContents": ["extract", "accessibility"],
+            "ScreenReaders": ["accessibility"],
+            "ModifyAnnotations": ["modify_annotation"],
+            "FillIn": ["fill_form"],
+            "BadFlag": ["non_existent_flag"],
+        }
+        mocker.patch.dict(
+            constants_module.ALLOW_PERMISSIONS_MAP,
+            mock_permission_map,
+            clear=True,
+        )
 
-    # --- Use the REAL permission strings from the help text ---
-    mock_permission_map = {
-        # Map user-facing strings (from help) to real pikepdf flags
-        "Printing": ["print_highres", "print_lowres"],
-        "DegradedPrinting": ["print_lowres"],
-        "ModifyContents": ["modify", "modify_assembly"],
-        "Assembly": ["modify_assembly"],
-        "CopyContents": ["extract", "accessibility"],  # Corrected from "Copying"
-        "ScreenReaders": ["accessibility"],
-        "ModifyAnnotations": ["modify_annotation"],
-        "FillIn": ["fill_form"],
-        "BadFlag": ["non_existent_flag"],  # For testing error
-    }
-    mocker.patch.dict(
-        constants_module.ALLOW_PERMISSIONS_MAP,
-        mock_permission_map,
-        clear=True,
-    )
-
-    # Patch logging
+    # Always patch logging to keep test outputs clean
     mocker.patch("pdftl.output.save.logging")
 
 
@@ -620,6 +616,7 @@ def test_save_unknown_type(tmp_path):
         save_content(bad_gen(), str(tmp_path), None)
 
 
+@pytest.mark.real_encryption
 def test_pdftl_aes_encryption_forces_accessibility(tmp_path, mock_input_context):
     """
     Tests that when pdftl saves a locked-down AES-128 file, the underlying
@@ -627,19 +624,15 @@ def test_pdftl_aes_encryption_forces_accessibility(tmp_path, mock_input_context)
     """
     out_path = tmp_path / "aes_locked.pdf"
 
-    # 1. Create a minimal blank PDF
-    pdf = pikepdf.Pdf.new()
-    pdf.add_blank_page()
+    # 1. Create and save a minimal blank PDF inside an isolated block
+    with pikepdf.Pdf.new() as pdf:
+        pdf.add_blank_page()
+        options = {"output": str(out_path), "encrypt_aes128": True}
 
-    # 2. Use pdftl's own save method with the exact options parsed by the CLI
-    # Omitting an 'allow' list triggers pdftl's _default_permissions_object (deny all)
-    options = {"output": str(out_path), "encrypt_aes128": True}
+        # Execute the pdftl save routine with real, pristine C++ structures
+        save_pdf(pdf, out_path, mock_input_context, options=options)
 
-    # Execute the pdftl save routine
-    save_pdf(pdf, out_path, mock_input_context, options=options)
-    pdf.close()
-
-    # 3. Re-open and verify the final binary output
+    # 2. Re-open and verify the final binary output safely
     with pikepdf.Pdf.open(out_path, password="") as encrypted_pdf:
         perms = encrypted_pdf.allow
 

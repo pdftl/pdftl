@@ -420,67 +420,53 @@ class MockName:
 
 
 def test_transform_destination_array_xyz_padding():
-    """
-    Covers Line 168: xyz_params.append(None)
+    # 1. Setup Context with a real native Object placeholder instead of a pure MagicMock
+    with pikepdf.Pdf.new() as template_pdf:
+        template_pdf.add_blank_page()
+        # Grab a real, low-level C++ underlying object mapping reference
+        target_page_obj = template_pdf.pages[0].obj
 
-    Trigger condition:
-    1. Rotation or Scale is present (angle != 0 or scale != 1.0).
-    2. Destination is /XYZ.
-    3. The parameter list is shorter than 3 elements (e.g., [x] instead of [x, y, zoom]).
-    """
-    # 1. Setup Context
-    target_page_obj = MagicMock()
-    target_page_obj.objgen = (1, 0)  # Mock the object generation ID
+        # Define a transform using the real generation identifier
+        page_transforms = {target_page_obj.objgen: ((90, False), 1.0)}
 
-    # Define a transform: 90 degrees rotation to trigger the logic block at Line 163
-    page_transforms = {(1, 0): ((90, False), 1.0)}
+        context = RemapperContext(
+            page_map={},
+            rev_maps={},
+            dest_caches={},
+            pdf_to_input_index={},
+            page_transforms=page_transforms,
+            include_instance=False,
+            include_pdf_id=False,
+        )
 
-    context = RemapperContext(
-        page_map={},
-        rev_maps={},
-        dest_caches={},
-        pdf_to_input_index={},
-        page_transforms=page_transforms,
-        include_instance=False,
-        include_pdf_id=False,
-    )
+        remapper = LinkRemapper(context)
 
-    remapper = LinkRemapper(context)
+        # 2. Setup Target Page mapping wrapper
+        mock_target_page = MagicMock()
+        mock_target_page.obj = target_page_obj
+        mock_target_page.MediaBox = [0, 0, 100, 200]
+        mock_target_page.get.return_value = [0, 0, 100, 200]
 
-    # 2. Setup Target Page
-    # The code calls target_page.get(Name.CropBox, ...)
-    mock_target_page = MagicMock()
-    mock_target_page.obj = target_page_obj
-    mock_target_page.MediaBox = [0, 0, 100, 200]
-    mock_target_page.get.return_value = [0, 0, 100, 200]  # Return MediaBox as CropBox
+        # 3. Setup Destination Array safely with a valid C++ object component
+        dest_array = [target_page_obj, "/XYZ", 10]
 
-    # 3. Setup Destination Array
-    # Structure: [PageObj, /XYZ, 10] -> Missing y and zoom
-    # We use strings for Names to simplify comparison, or mocks if strictly required.
-    # The code does: d_details[0] == Name.XYZ.
-    dest_array = [target_page_obj, "/XYZ", 10]
+        # 4. Execute
+        with patch("pikepdf.Name", MockName):
+            with patch(
+                "pdftl.pages.link_remapper.transform_destination_coordinates"
+            ) as mock_transform:
+                mock_transform.return_value = [10, None, None]
+                remapper._transform_destination_array(dest_array, mock_target_page)
 
-    # 4. Execute
-    with patch("pikepdf.Name", MockName):
-        # We assume transform_destination_coordinates works (it's imported).
-        # We just want to ensure the padding logic (while loop) runs without error.
-        with patch(
-            "pdftl.pages.link_remapper.transform_destination_coordinates"
-        ) as mock_transform:
-            # Mock return of transform to be a simple list so the list comprehension at Line 175 works
-            mock_transform.return_value = [10, None, None]
-
-            remapper._transform_destination_array(dest_array, mock_target_page)
-
-            # Verification:
-            # The key is that transform_destination_coordinates was called with
-            # a list that had been padded to length 3.
-            # Original params: [10]
-            # Expected passed to transform: [10, None, None]
-            args, _ = mock_transform.call_args
-            passed_xyz_params = args[0]
-            assert len(passed_xyz_params) == 3
-            assert passed_xyz_params == [10, None, None]
+                # Verification:
+                # The key is that transform_destination_coordinates was called with
+                # a list that had been padded to length 3.
+                # Original params: [10]
+                # Expected passed to transform: [10, None, None]
+                args, _ = mock_transform.call_args
+                passed_xyz_params = args[0]
+                assert len(passed_xyz_params) == 3
+                assert passed_xyz_params == [10, None, None]
 
 
 def test_find_remapped_page_invalid_target_ref():

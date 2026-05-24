@@ -34,6 +34,14 @@ import copy
 
 from pdftl.core.registry import registry
 
+import contextlib
+
+# Suppress nanobind's noisy exit warnings (upstream pikepdf/nanobind quirk)
+with contextlib.suppress(ImportError):
+    import nanobind
+
+    nanobind.disable_leak_warnings()
+
 
 @pytest.fixture
 def mock_missing_dependency():
@@ -171,7 +179,9 @@ def pdf_factory(assets_dir):
         created_files[num_pages] = pdf_path
         return pdf_path
 
-    return _get_or_create_pdf
+    yield _get_or_create_pdf
+
+    created_files.clear()
 
 
 @pytest.fixture(scope="session")

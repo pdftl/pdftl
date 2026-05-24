@@ -198,7 +198,7 @@ def test_attach_attachment_to_pdf(mock_from_filepath, mock_pdf):
 @patch("pikepdf.Dictionary")
 def test_attach_attachment_to_page_existing_spec(mock_Dict, mock_Annotation, mock_pdf):
     mock_page = MagicMock(cropbox=[0, 0, 100, 100])
-    mock_page.Annots = MagicMock(spec=pikepdf.Array)
+    mock_page.Annots = MagicMock()
     mock_pdf.pages = [mock_page]
     mock_file_spec_obj = MagicMock()
     mock_pdf.attachments["f.txt"] = MagicMock(obj=mock_file_spec_obj)
@@ -248,7 +248,7 @@ def test_page_attachment_with_relationship(
     mock_from_filepath.return_value = mock_spec
 
     mock_page = MagicMock(cropbox=[0, 0, 100, 100])
-    mock_page.Annots = MagicMock(spec=pikepdf.Array)
+    mock_page.Annots = MagicMock()
     mock_pdf.pages = [mock_page]
     mock_pdf.attachments = {}
 
