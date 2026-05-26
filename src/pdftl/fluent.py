@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from pathlib import Path
-    from pikepdf import Pdf
     from collections.abc import Callable
+    from pathlib import Path
+
+    from pikepdf import Pdf
 
 import pdftl.api as api
 import pdftl.core.constants as c

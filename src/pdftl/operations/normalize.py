@@ -8,12 +8,13 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.normalize import normalize_page_content_stream
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+
+logger = logging.getLogger(__name__)
 
 _NORMALIZE_LONG_DESC = """
 

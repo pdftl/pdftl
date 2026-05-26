@@ -12,12 +12,13 @@ See also: pdftl.output.attach for adding attachments to output.
 import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.user_input import dirname_completer
+
+logger = logging.getLogger(__name__)
 
 _DUMP_FILES_LONG_DESC = """
 

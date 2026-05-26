@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Union
 if TYPE_CHECKING:
     import pikepdf
 
-logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.cli.constants import SUB_END, SUB_START
 from pdftl.cli.whoami import WHOAMI
@@ -22,6 +21,8 @@ from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_content
 from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.user_input import pdf_filename_completer
+
+logger = logging.getLogger(__name__)
 
 
 def _first_or_none(x: list):

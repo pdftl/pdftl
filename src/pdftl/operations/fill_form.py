@@ -19,10 +19,11 @@ from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.user_input import filename_completer
 
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
+
+logger = logging.getLogger(__name__)
 
 _FILL_FORM_LONG_DESC = """
 

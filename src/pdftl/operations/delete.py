@@ -8,7 +8,6 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
 
 from typing import TYPE_CHECKING
 
@@ -19,6 +18,8 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+
+logger = logging.getLogger(__name__)
 
 _DELETE_LONG_DESC = """
 

@@ -13,7 +13,6 @@ which are then applied to the target pages.
 import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -23,6 +22,8 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
+
+logger = logging.getLogger(__name__)
 
 _ADD_TEXT_LONG_DESC = r"""
 Add user-specified text strings to PDF pages.

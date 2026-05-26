@@ -8,7 +8,6 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,6 +19,8 @@ from pdftl.core.registry import register_operation
 from pdftl.operations.parsers.inject_parser import parse_inject_args
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.page_specs import page_number_matches_page_spec
+
+logger = logging.getLogger(__name__)
 
 _INJECT_LONG_DESC = """
 

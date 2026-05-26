@@ -28,14 +28,15 @@ from dataclasses import dataclass
 
 from pdftl.utils.type_helpers import as_iterable
 
-logger = logging.getLogger(__name__)
 
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf, Dictionary, Array, Object
+    from pikepdf import Array, Dictionary, Object, Pdf
 
 from pdftl.utils.transform import transform_destination_coordinates
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

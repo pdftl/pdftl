@@ -10,10 +10,11 @@ import logging
 import re
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
 
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_string_respecting_quotes
+
+logger = logging.getLogger(__name__)
 
 # --- This logic is borrowed directly from add_text_parser.py ---
 # We use it to parse the (modifications) string.

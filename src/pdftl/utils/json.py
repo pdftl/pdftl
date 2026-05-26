@@ -8,10 +8,11 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
 
 from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.whatisit import is_page
+
+logger = logging.getLogger(__name__)
 
 KEY_ACTION_TYPE = "/S"
 KEY_DESTINATION = "/D"

@@ -9,7 +9,6 @@
 import logging
 from typing import TYPE_CHECKING, Union
 
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pikepdf import Array, Pdf
@@ -17,6 +16,8 @@ if TYPE_CHECKING:
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.page_specs import expand_specs_to_pages
 from pdftl.utils.scale import apply_scaling
+
+logger = logging.getLogger(__name__)
 
 
 def transform_pdf(source_pdf: "Pdf", specs: list):

@@ -10,7 +10,6 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -21,6 +20,8 @@ from pdftl.core.core_types import Compatibility, FeatureType, OpResult, Parity, 
 from pdftl.core.registry import register_operation
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
+
+logger = logging.getLogger(__name__)
 
 
 def _get_page_tuples_array(inputs, specs, opened_pdfs, aliases=None):

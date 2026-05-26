@@ -10,13 +10,14 @@ import logging
 from collections import OrderedDict
 from typing import Any
 
-logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.string_utils import fix_mojibake, xml_encode_for_info
+
+logger = logging.getLogger(__name__)
 
 _DUMP_DATA_FIELDS_UTF8_LONG_DESC = """
 

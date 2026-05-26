@@ -8,7 +8,6 @@
 
 import logging
 
-logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -22,6 +21,8 @@ from pdftl.operations.helpers.crop_fit import FitCropContext
 from pdftl.operations.parsers.rebox_parser import parse_rebox_content, specs_to_page_rules
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import get_visible_page_dimensions
+
+logger = logging.getLogger(__name__)
 
 _RECT_LONG_DESC = """
 

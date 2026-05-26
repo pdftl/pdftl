@@ -9,10 +9,9 @@
 import logging
 from typing import TYPE_CHECKING, Optional
 
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf, Array
+    from pikepdf import Array, Pdf
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
@@ -23,6 +22,8 @@ from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+
+logger = logging.getLogger(__name__)
 
 _INSERT_LONG_DESC = """
 

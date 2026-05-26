@@ -19,7 +19,6 @@ the outline for B, followed by the outline for A again.
 import logging
 from collections import namedtuple
 
-logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +28,8 @@ if TYPE_CHECKING:
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.pages.links import RebuildLinksPartialContext
 from pdftl.utils.progress import get_track_progress
+
+logger = logging.getLogger(__name__)
 
 # A helper to store info about each "chunk" of pages.
 # page_count = total number of pages in this chunk

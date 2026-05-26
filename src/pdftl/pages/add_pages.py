@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
     from pdftl.utils.page_specs import PageTransform
 
-logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
 from pdftl.pages.forms import handle_page_widgets, rebuild_acroform_index
@@ -24,6 +23,8 @@ from pdftl.pages.links import RebuildLinksPartialContext, rebuild_links, write_n
 from pdftl.pages.outlines import rebuild_outlines
 from pdftl.utils.progress import get_track_progress
 from pdftl.utils.scale import apply_scaling, scale_annotations_in_page
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_rotation(page, source_page, rotation):

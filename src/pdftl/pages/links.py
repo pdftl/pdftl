@@ -19,7 +19,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -28,6 +27,8 @@ logger = logging.getLogger(__name__)
 from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.utils.progress import get_track_progress
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

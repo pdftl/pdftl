@@ -10,7 +10,6 @@ import difflib
 import logging
 import sys
 
-logger = logging.getLogger(__name__)
 
 from pdftl.cli.constants import (
     COMPLETION_FLAGS,
@@ -30,6 +29,8 @@ from pdftl.core.registry import register_option
 from pdftl.exceptions import OperationError, PackageError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
 from pdftl.utils.user_input import UserInputContext, get_input
+
+logger = logging.getLogger(__name__)
 
 
 @register_option("verbose", desc="Turn on verbose output", type="flag")

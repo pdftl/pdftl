@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 
-logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
@@ -22,6 +21,8 @@ from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.normalize import get_normalized_page_content_stream, normalize_page_content_stream
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_escaped
+
+logger = logging.getLogger(__name__)
 
 _REPLACE_LONG_DESC = """
 

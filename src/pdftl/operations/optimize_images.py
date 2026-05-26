@@ -121,8 +121,8 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
     # pylint: disable=import-outside-toplevel
 
     try:
-        from ocrmypdf.optimize import DEFAULT_EXECUTOR  # FLATE_JPEG_THRESHOLD,
         from ocrmypdf.optimize import (
+            DEFAULT_EXECUTOR,  # FLATE_JPEG_THRESHOLD,
             DEFAULT_JPEG_QUALITY,
             DEFAULT_PNG_QUALITY,
             convert_to_jbig2,

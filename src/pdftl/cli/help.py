@@ -9,7 +9,6 @@
 import logging
 import sys
 
-logger = logging.getLogger(__name__)
 
 from pdftl.cli.console import get_console
 from pdftl.cli.help_data import (
@@ -27,6 +26,8 @@ from pdftl.cli.whoami import PACKAGE, WHOAMI
 from pdftl.core.core_types import HelpExample
 from pdftl.core.registry import register_help_topic, registry
 from pdftl.utils.string_utils import before_space
+
+logger = logging.getLogger(__name__)
 
 TAG_PREFIX = "tag:"
 

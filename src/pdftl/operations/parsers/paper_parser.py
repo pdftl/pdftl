@@ -9,9 +9,10 @@
 import logging
 import re
 
-logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import PAPER_SIZES
+
+logger = logging.getLogger(__name__)
 
 
 def parse_paper_spec(spec_str):

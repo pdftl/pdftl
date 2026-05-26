@@ -10,11 +10,12 @@ import logging
 import re
 from collections import defaultdict
 
-logger = logging.getLogger(__name__)
 
 from pdftl.core.constants import UNITS
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_string_respecting_quotes
+
+logger = logging.getLogger(__name__)
 
 # Set of valid, case-insensitive preset position keywords
 PRESET_POSITIONS = {

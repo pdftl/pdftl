@@ -9,7 +9,6 @@
 import logging
 import sys
 
-logger = logging.getLogger(__name__)
 
 from pdftl.cli.console import get_console
 from pdftl.cli.help_data import (
@@ -17,6 +16,8 @@ from pdftl.cli.help_data import (
 )
 from pdftl.cli.metadata import get_dependencies_status, get_project_version
 from pdftl.cli.whoami import DOCSPAGE, HOMEPAGE, PACKAGE, WHOAMI
+
+logger = logging.getLogger(__name__)
 
 
 def print_version(dest=None):

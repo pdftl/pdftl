@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import pikepdf
     from pikepdf import OutlineItem
-    from pdftl.info.info_types import PdfInfo, BookmarkEntry, PageMediaEntry, PageLabelEntry
+
+    from pdftl.info.info_types import BookmarkEntry, PageLabelEntry, PageMediaEntry, PdfInfo
 
 import pdftl.core.constants as c
 

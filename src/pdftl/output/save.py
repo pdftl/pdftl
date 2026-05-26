@@ -14,13 +14,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pikepdf
 
-logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.registry import register_option
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.fonts.form_font_replacer import replace_form_fonts
 from pdftl.output.flatten import flatten_pdf
 from pdftl.output.sign import parse_sign_options, save_and_sign
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Register options for PDF output

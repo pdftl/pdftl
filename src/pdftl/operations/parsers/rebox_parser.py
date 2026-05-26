@@ -9,11 +9,12 @@
 import logging
 import re
 
-logger = logging.getLogger(__name__)
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+
+logger = logging.getLogger(__name__)
 
 
 def specs_to_page_rules(specs, total_pages, operation):

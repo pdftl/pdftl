@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
-logger = logging.getLogger(__name__)
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
@@ -22,6 +21,8 @@ from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.utils.io_helpers import can_read_file
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.user_input import UserInputContext, filename_completer
+
+logger = logging.getLogger(__name__)
 
 _ATTACH_FILES_LONG_DESC = """Attach one or more files to the PDF, either
 at the document level or associated with specific pages.

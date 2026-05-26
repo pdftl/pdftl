@@ -9,7 +9,6 @@
 import logging
 import re
 
-logger = logging.getLogger(__name__)
 
 from typing import TYPE_CHECKING
 
@@ -18,6 +17,8 @@ if TYPE_CHECKING:
 
 from pdftl.core.constants import UNITS
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+
+logger = logging.getLogger(__name__)
 
 MAX_PIECES = 10_000
 

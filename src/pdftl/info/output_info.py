@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
 
 import pdftl.core.constants as c
 from pdftl.info.info_types import (
@@ -38,6 +37,8 @@ from pdftl.utils.string_utils import (
     pdf_rect_to_string,
     xml_encode_for_info,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_extra_info(info, pdf, input_filename):

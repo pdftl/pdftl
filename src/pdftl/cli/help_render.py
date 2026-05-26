@@ -9,10 +9,11 @@
 import logging
 import sys
 
-logger = logging.getLogger(__name__)
 
 from pdftl.cli.console import get_console
 from pdftl.cli.whoami import WHOAMI
+
+logger = logging.getLogger(__name__)
 
 
 def _load_help_markdown():
