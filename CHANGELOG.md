@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated API type stubs
 
+- Improve broken pipe handling: suppress tracebacks when piping to a pager
+
 ## [0.18.0] - 2026-05-05
 
 ### Added

@@ -494,10 +494,5 @@ def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
 
         # 4. Write raw bytes to the stdout buffer
         # 'sys.stdout' expects text (str), but 'sys.stdout.buffer' expects bytes.
-        try:
-            sys.stdout.buffer.write(pdf_bytes)
-            sys.stdout.buffer.flush()
-        except BrokenPipeError:
-            # Handle the case where the consumer (e.g., 'head') closes the pipe early
-            # This prevents ugly tracebacks in your CLI tool
-            sys.stderr.close()
+        sys.stdout.buffer.write(pdf_bytes)
+        sys.stdout.buffer.flush()

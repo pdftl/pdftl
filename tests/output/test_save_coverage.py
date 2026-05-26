@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import logging
 import pytest
 
 from pdftl.output.save import save_pdf
@@ -24,29 +25,6 @@ def test_save_to_stdout_success(minimal_pdf):
         assert mock_buffer.write.called
 
 
-def test_save_to_stdout_broken_pipe(minimal_pdf):
-    """
-    Covers save.py logic: Handle BrokenPipeError gracefully
-    """
-    # Fix 4: Patch sys.stderr as well, because the code calls sys.stderr.close() on error
-    with patch("sys.stdout") as mock_stdout, patch("sys.stderr") as mock_stderr:
-        # Configure the buffer.write to raise BrokenPipeError
-        mock_buffer = MagicMock()
-        mock_buffer.write.side_effect = BrokenPipeError
-        mock_stdout.buffer = mock_buffer
-
-        mock_ctx = MagicMock()
-
-        # Call with correct signature
-        save_pdf(minimal_pdf, output_filename="-", input_context=mock_ctx)
-
-        # Verify that the code handled the error by closing stderr (as per source code)
-        assert mock_stderr.close.called
-
-
-import logging
-
-
 def test_save_encryption_metadata_aes_flag(minimal_pdf):
     """
     Covers lines 267-268:
@@ -59,7 +37,7 @@ def test_save_encryption_metadata_aes_flag(minimal_pdf):
     # Patch pikepdf.Encryption to inspect the kwargs passed to it
     with (
         patch("pikepdf.Encryption") as MockEncryption,
-        patch.object(minimal_pdf, "save") as mock_save,
+        patch.object(minimal_pdf, "save"),
     ):
         save_pdf(minimal_pdf, output_filename="dummy.pdf", input_context=mock_ctx, options=options)
 
@@ -82,7 +60,7 @@ def test_save_encryption_metadata_rc4_warning(minimal_pdf, caplog):
     # We expect a logger warning
     with caplog.at_level(logging.WARNING):
         # We don't need to mock Encryption perfectly, just ensure the code runs to the logging point
-        with patch("pikepdf.Encryption"), patch.object(minimal_pdf, "save") as mock_save:
+        with patch("pikepdf.Encryption"), patch.object(minimal_pdf, "save"):
             save_pdf(
                 minimal_pdf, output_filename="dummy.pdf", input_context=mock_ctx, options=options
             )

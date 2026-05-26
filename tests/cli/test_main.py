@@ -14,6 +14,7 @@ from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_
 from pdftl.cli.main import _prepare_pipeline_from_remaining_args, _verbose_option
 from pdftl.cli.main import main as cli_main
 from pdftl.exceptions import OperationError, UserCommandLineError
+import os
 
 
 @pytest.fixture(autouse=True)
@@ -490,3 +491,50 @@ def test_validate_inputs_exist_handle_syntax(tmp_path):
 
     with pytest.raises(UserCommandLineError, match="Unable to find file: nonexistent.pdf"):
         _validate_inputs_exist(pipeline)
+
+
+def test_main_integration_broken_pipe(tmp_path):
+    """
+    Integration test: Runs main() through its real logic but simulates a
+    BrokenPipeError on pipeline run, verifying 100% line coverage in main.py.
+    """
+    dummy_pdf = tmp_path / "input.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4 mock content")
+
+    # Pass real arguments so main() executes all setup and validation blocks naturally
+    test_args = ["pdftl", "cat", str(dummy_pdf), "output", "-"]
+
+    with (
+        patch("pdftl.cli.pipeline.PipelineManager.run") as mock_run,
+        patch("os.open", return_value=999) as mock_os_open,
+        patch("os.dup2") as mock_os_dup2,
+        patch("sys.stdout.fileno", return_value=1),
+    ):
+        # Force the actual pipeline to throw the error
+        mock_run.side_effect = BrokenPipeError
+
+        exit_code = cli_main(test_args)
+
+        assert exit_code == 0
+        mock_os_open.assert_called_once_with(os.devnull, os.O_WRONLY)
+        mock_os_dup2.assert_called_once_with(999, 1)
+
+
+def test_main_broken_pipe_unsupported_operation_coverage(tmp_path):
+    """
+    Ensures coverage of the inner exception block where sys.stdout
+    lacks a real file descriptor.
+    """
+    dummy_pdf = tmp_path / "input.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4 mock content")
+    test_args = ["pdftl", "cat", str(dummy_pdf), "output", "-"]
+
+    # Using StringIO simulates a stream without a real OS file descriptor
+    with (
+        patch("pdftl.cli.pipeline.PipelineManager.run") as mock_run,
+        patch("sys.stdout", io.StringIO()),
+    ):
+        mock_run.side_effect = BrokenPipeError
+
+        exit_code = cli_main(test_args)
+        assert exit_code == 0

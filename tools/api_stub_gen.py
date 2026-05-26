@@ -1,4 +1,5 @@
 import inspect
+
 import pdftl.core.constants as c
 from pdftl.core.registry import registry
 from pdftl.fluent import pipeline

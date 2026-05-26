@@ -9,7 +9,7 @@
 import difflib
 import logging
 import sys
-
+import io
 
 from pdftl.cli.constants import (
     COMPLETION_FLAGS,
@@ -59,6 +59,20 @@ def main(argv=None):
         pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
         _validate_inputs_exist(pipeline)
         pipeline.run()
+        return 0
+
+    except BrokenPipeError:
+        # Centralized handling for closed pipes (e.g., 'pdftl ... | head')
+        # Redirect stdout's file descriptor to devnull to shield the terminal from
+        # secondary interpreter-level "Exception ignored in flush" error dumps on exit.
+        import os
+
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+        except (OSError, AttributeError, io.UnsupportedOperation):
+            # ignore OS-level fd failures, mocked stdout, or memory streams
+            pass
         return 0
 
     except (UserCommandLineError, PackageError, OperationError) as e:

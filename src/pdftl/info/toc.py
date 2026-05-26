@@ -187,9 +187,10 @@ def _build_item(node: dict, pdf) -> "pikepdf.OutlineItem":
 
     return item
 
+
 def _build_basic_item(node: dict, pdf) -> "pikepdf.OutlineItem":
     import pikepdf
-    
+
     title = node.get("title", "Untitled")
 
     if "dest" in node:

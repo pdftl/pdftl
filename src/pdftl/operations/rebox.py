@@ -77,7 +77,7 @@ of {verbing}.
 _CLIP_LONG_DESC = """
 
 Clip a page to a rectangle defined by offsets from the page edges, or
-in other ways. The `clip` operation is idential to `crop` in terms of
+in other ways. The `clip` operation is identical to `crop` in terms of
 specifying the rectangle, except that instead of cropping to the
 rectangle (by changing the page boundaries), all page content is
 enclosed in a clipping rectangle. The effect is then that any content

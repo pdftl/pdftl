@@ -153,7 +153,7 @@ def parse_rebox_margins(spec_str, page_width, page_height, operation):
 
     if not 1 <= num_parts <= 4:
         raise ValueError(
-            "{operation} spec must have between 1 and 4 comma-separated values, "
+            f"{operation} spec must have between 1 and 4 comma-separated values, "
             f"but found {num_parts}."
         )
 

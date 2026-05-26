@@ -126,7 +126,7 @@ def rebuild_outlines(
     Rebuilds the document outline (bookmarks) for the new PDF.
 
     Args:
-        new_pdf: The destination pikepd.Pdf object.
+        new_pdf: The destination pikepdf.Pdf object.
         source_pages_to_process: The flat list of PageTransform objects.
         call_context: The RebuildLinksPartialContext from PASS 1.
         pdf_to_input_index (dict): Maps source PDF ids to input order indices.
@@ -266,7 +266,7 @@ def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
     with source_pdf.open_outline() as source_outline:
         root_items = list(source_outline.root)
         logger.debug("Source outline has %s root items.", len(root_items))
-        for source_item in source_outline.root:
+        for source_item in root_items:
             copier.copy_item(
                 source_item,
                 new_outline.root,  # Append to the new root

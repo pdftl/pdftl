@@ -143,7 +143,6 @@ def page_numbers_matching_page_spec(page_spec, total_pages) -> list[int]:
 
 
 def page_numbers_matching_page_specs(specs, total_pages) -> list[int]:
-    flattened_specs = []
     grouped = _expand_square_brackets(specs)
     flattened_specs = _flatten_spec_list(grouped)
 
