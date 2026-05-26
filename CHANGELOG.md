@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [0.18.1] - 2026-05-25
+## [0.18.1] - 2026-05-26
 
 ### Fixed
 
