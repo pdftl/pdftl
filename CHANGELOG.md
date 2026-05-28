@@ -5,12 +5,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## [0.18.1] - 2026-05-26
+## [0.18.1] - 2026-05-28
+
+### Changed
+
+- When `--debug` is passed, `optimize_images` now outputs ocrmypdf debug messages
 
 ### Fixed
 
-- `dump_annots`: fix crash caused by named destinations which are not
-  valid python dictionary keys
+- `dump_annots`: fix crash caused by named destinations which are not valid python dictionary keys
 
 - Updated API type stubs
 

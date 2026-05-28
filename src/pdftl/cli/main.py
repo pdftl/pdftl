@@ -70,6 +70,7 @@ def main(argv=None):
         try:
             devnull = os.open(os.devnull, os.O_WRONLY)
             os.dup2(devnull, sys.stdout.fileno())
+            os.close(devnull)
         except (OSError, AttributeError, io.UnsupportedOperation):
             # ignore OS-level fd failures, mocked stdout, or memory streams
             pass

@@ -44,7 +44,7 @@ These options can be passed as arguments following `optimize_images`.
 * **medium** (default; aliases: `lossy_medium`, `lossy`):
     * Also allow some lossy optimizations.
 
-* **high** (aliases: `aggressive`, `high`, `lossy_high`):
+* **high** (aliases: `aggressive`, `lossy_high`):
     * Also allow more aggressive lossy optimizations.
 
 * **jbig2_lossy**:
@@ -86,7 +86,6 @@ class OptimizeOptions:
         self.optimize = optimize
         self.jpeg_quality = jpeg_quality
         self.png_quality = png_quality
-        self.jbig2_page_group_size = 0
         self.jbig2_lossy = jb2lossy
         self.jbig2_threshold = 0.85
         self.quiet = True
@@ -119,6 +118,10 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
     Optimize images in the given PDF.
     """
     # pylint: disable=import-outside-toplevel
+
+    if logger.getEffectiveLevel() == logging.DEBUG:
+        logging.getLogger("ocrmypdf").setLevel(logging.DEBUG)
+        logging.getLogger("ocrmypdf.optimize").setLevel(logging.DEBUG)
 
     try:
         from ocrmypdf.optimize import (

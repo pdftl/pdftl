@@ -14,6 +14,7 @@ keywords = ["pdf", "pdftk", "pdftl", "cli", "manipulation", "automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -90,7 +91,7 @@ dev = [
     "black",
     "isort",
     "ruff",
-    "toml; python_version < '3.11.0'",
+    "toml; python_version < '3.11'",
     "hypothesis",
     "PyMuPDF", # for testing only
     "reportlab",
@@ -111,7 +112,7 @@ dev-all = [
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "dirty-tag"
-write_to = "src/pdftl/_version.py"
+version_file = "src/pdftl/_version.py"
 
 [tool.setuptools.package-data]
 "pdftl" = ["*.pyi", "py.typed"]
@@ -122,7 +123,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 minversion = "6.0"
-addopts = "-s --strict-markers -rs --cov-report=term-missing"
+addopts = "-s --strict-markers -rs"
 testpaths = ["tests"]
 
 filterwarnings = [
