@@ -116,13 +116,6 @@ def patch_pikepdf_types():
 
 
 @pytest.fixture
-def mock_stdout():
-    """Patches sys.stdout with an in-memory buffer."""
-    with patch("sys.stdout", new_callable=io.StringIO) as m:
-        yield m
-
-
-@pytest.fixture
 def mock_pdf():
     """Creates a basic mock pikepdf.Pdf object."""
     pdf = MagicMock()
@@ -138,7 +131,7 @@ def mock_pdf():
 # ================================================================
 
 
-def test_dump_dests_no_dests_tree(mock_pdf, mock_stdout):
+def test_dump_dests_no_dests_tree(mock_pdf, capsys):
     """
     Tests the behavior when `pdf.Root.Names.Dests` is None.
     """
@@ -147,12 +140,12 @@ def test_dump_dests_no_dests_tree(mock_pdf, mock_stdout):
     result = dump_dests(mock_pdf, output_file=None)
     dump_dests_cli_hook(result, None, None)
 
-    result = json.loads(mock_stdout.getvalue())
+    result = json.loads(capsys.readouterr().out)
     assert result["dests"] == []
     assert result["errors"] == []
 
 
-def test_dump_dests_success(mock_pdf, mock_stdout, patch_pikepdf_types):
+def test_dump_dests_success(mock_pdf, capsys, patch_pikepdf_types):
     """
     Tests the happy path: a Dests tree is found, instantiated,
     and iterated over successfully.
@@ -177,14 +170,14 @@ def test_dump_dests_success(mock_pdf, mock_stdout, patch_pikepdf_types):
     patch_pikepdf_types.assert_called_once_with(mock_pdf.Root.Names.Dests)
 
     # 6. Verify output
-    result = json.loads(mock_stdout.getvalue())
+    result = json.loads(capsys.readouterr().out)
     assert len(result["dests"]) == 1
     assert result["dests"][0]["name"] == "Dest1"
     assert result["dests"][0]["value"] == ["<<Page 1>>", "/XYZ", 1, 2, 3]
     assert result["errors"] == []
 
 
-def test_dump_dests_nametree_init_fails(mock_pdf, mock_stdout, patch_pikepdf_types):
+def test_dump_dests_nametree_init_fails(mock_pdf, capsys, patch_pikepdf_types):
     """
     Tests that an exception during NameTree instantiation is caught.
     """
@@ -194,14 +187,14 @@ def test_dump_dests_nametree_init_fails(mock_pdf, mock_stdout, patch_pikepdf_typ
     result = dump_dests(mock_pdf, output_file=None)
     dump_dests_cli_hook(result, None, None)
 
-    result = json.loads(mock_stdout.getvalue())
+    result = json.loads(capsys.readouterr().out)
     assert result["dests"] == []
     assert len(result["errors"]) == 1
     assert "Failed to parse" in result["errors"][0]["error"]
     assert "Bad tree structure" in result["errors"][0]["details"]
 
 
-def test_dump_dests_item_processing_fails(mock_pdf, mock_stdout, patch_pikepdf_types):
+def test_dump_dests_item_processing_fails(mock_pdf, capsys, patch_pikepdf_types):
     """
     Tests that an exception during the processing of one item
     is caught, and processing continues (if there were more items).
@@ -217,7 +210,7 @@ def test_dump_dests_item_processing_fails(mock_pdf, mock_stdout, patch_pikepdf_t
         result = dump_dests(mock_pdf, output_file=None)
         dump_dests_cli_hook(result, None, None)
 
-    result = json.loads(mock_stdout.getvalue())
+    result = json.loads(capsys.readouterr().out)
     assert result["dests"] == []
     assert len(result["errors"]) == 1
     assert "Failed to process" in result["errors"][0]["error"]
@@ -298,13 +291,13 @@ def test_write_json_output_to_file():
     assert write_calls[1].args[0] == "\n"
 
 
-def test_write_json_output_to_stdout(mock_stdout):
+def test_write_json_output_to_stdout(capsys):
     data = {"a": 1}
     # The actual output is {"a": 1}\n, not { "a": 1 }\n
     compacted_expected = '{"a": 1}\n'  # Compacted + newline from print
 
     _write_json_output(data, output_file=None)
-    assert mock_stdout.getvalue() == compacted_expected
+    assert capsys.readouterr().out == compacted_expected
 
 
 import pytest
