@@ -195,57 +195,35 @@ def update_simple_cache(context_key, candidates, cache=None):
 _cache_check_results: dict[str, bool] = {}
 
 
+def _any_path_newer_than(paths, mtime):
+    return any(os.path.exists(p) and os.path.getmtime(p) > mtime for p in paths)
+
+
 def is_package_newer_than_cache(cache_path):
     if cache_path in _cache_check_results:
         return _cache_check_results[cache_path]
-
     try:
         cache_mtime = os.path.getmtime(cache_path)
-
-        # .../pdftl/cli/complete.py -> .../pdftl
         cli_dir = os.path.dirname(os.path.abspath(__file__))
         package_root = os.path.dirname(cli_dir)
-
-        # 1. Check Package Root (Covers pip installs/updates)
-        if os.path.getmtime(package_root) > cache_mtime:
-            _cache_check_results[cache_path] = True
-            return True
-
-        # 2. Check Critical Subdirectories (Covers local dev edits)
-        # Add the folders where your registry/grammar logic actually lives.
-        # e.g., if you add a new operation file in 'operations/', completion needs to know.
-        if os.name == "nt":
-            custom_op_base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
-        else:
-            custom_op_base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-
-        custom_op_dir = os.path.join(custom_op_base, "pdftl", "operations")
-
-        critical_dirs = [
+        custom_op_dir = os.path.join(
+            os.environ.get("APPDATA" if os.name == "nt" else "XDG_CONFIG_HOME")
+            or os.path.expanduser("~\\AppData\\Roaming" if os.name == "nt" else "~/.config"),
+            "pdftl",
+            "operations",
+        )
+        critical_paths = [
             package_root,
             os.path.join(package_root, "operations"),
             os.path.join(package_root, "completion"),
             custom_op_dir,
-            # add others if they affect the grammar
+            __file__,
         ]
-
-        for d in critical_dirs:
-            if os.path.exists(d) and os.path.getmtime(d) > cache_mtime:
-                _cache_check_results[cache_path] = True
-                return True
-
-        # 3. Check this script itself (logic changes)
-        if os.path.getmtime(__file__) > cache_mtime:
-            _cache_check_results[cache_path] = True
-            return True
-
+        result = _any_path_newer_than(critical_paths, cache_mtime)
     except OSError:
-        # If cache doesn't exist, it's infinitely old, so package is "newer"
-        _cache_check_results[cache_path] = True
-        return True
-
-    _cache_check_results[cache_path] = False
-    return False
+        result = True
+    _cache_check_results[cache_path] = result
+    return result
 
 
 def get_parser():
