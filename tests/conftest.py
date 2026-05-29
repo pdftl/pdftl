@@ -30,7 +30,6 @@ SCRIPT_PATH = TESTS_DIR / "scripts" / "generate_form.py"
 ASSETS_DIR = TESTS_DIR / "assets"
 FORM_PDF = ASSETS_DIR / "Form.pdf"
 
-import contextlib
 import copy
 
 from pdftl.core.registry import registry
