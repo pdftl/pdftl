@@ -43,13 +43,18 @@ def _parse_kv_pair(part: str) -> tuple[str, str]:
     return key, value
 
 
-# --- Parsing logic for modify_annots ---
-
-# This regex is the core pattern from crop_parser.py
-# It matches 'selector(mods)'
-# MOVED to module level for performance (compile once)
-# and to allow tests to access it.
-spec_pattern = re.compile(r"^([^(]*)?\((.*?)\)$")
+def _split_spec(spec: str) -> tuple[str, str | None]:
+    """Split 'selector(mods)' into ('selector', 'mods') or ('selector', None)."""
+    cleaned = spec.strip()
+    paren_pos = cleaned.find("(")
+    if paren_pos == -1:
+        return cleaned, None
+    if not cleaned.endswith(")"):
+        raise ValueError(
+            f"Invalid modification spec format: '{spec}'. "
+            "Expected a format like 'selector(Key=Value, ...)' or just 'selector'."
+        )
+    return cleaned[:paren_pos], cleaned[paren_pos + 1 : -1]
 
 
 @dataclass
@@ -59,6 +64,15 @@ class ModificationRule:
     page_numbers: list[int]
     type_selector: str | None
     modifications: list[tuple[str, str]]
+
+
+@dataclass
+class SelectionRule:
+    """Dataclass to hold a single selection rule."""
+
+    page_numbers: list[int]
+    type_selector: str | None
+    value_selectors: list[tuple[str, str]] | None
 
 
 def _parse_modification_string(mod_str: str) -> list[tuple[str, str]]:
@@ -106,30 +120,49 @@ def _parse_selector_string(selector_str: str) -> tuple[str, str | None]:
     return page_spec, type_spec
 
 
-def specs_to_modification_rules(specs: list[str], total_pages: int) -> list[ModificationRule]:
+def specs_to_selection_rules(specs: list[str], total_pages: int) -> list[SelectionRule]:
+    mod_rules = specs_to_modification_rules(specs, total_pages, require_keyval=False)
+    return [
+        SelectionRule(
+            page_numbers=x.page_numbers,
+            type_selector=x.type_selector,
+            value_selectors=x.modifications or None,
+        )
+        for x in mod_rules
+    ]
+
+
+def specs_to_modification_rules(
+    specs: list[str], total_pages: int, require_keyval: bool = True
+) -> list[ModificationRule]:
     """
-    Main parser for the modify_annots operation.
+    Main parser for the modify_annots and dump_annots operations.
     Converts a list of spec strings into a list of ModificationRule objects.
+    If require_keyval is True (default), raises if no (K=V...) part is present.
+    If require_keyval is False, modifications will be an empty list
+    (used as filters in dump_annots).
     """
     rules = []
-
     for spec in specs:
-        if not (match := spec_pattern.match(spec)):
-            raise ValueError(
-                f"Invalid modification spec format: '{spec}'. "
-                "Expected a format like 'selector(Key=Value, ...)'."
-            )
+        if not isinstance(spec, str):
+            raise ValueError("Invalid spec: not a string")
 
-        selector_str, mod_str = match.groups()
+        selector_str, mod_str = _split_spec(spec)
+
         logger.debug(
             "Parsing modify_annots spec: selector='%s', modifications='%s'",
             selector_str,
             mod_str,
         )
 
-        page_spec, type_selector = _parse_selector_string(selector_str.strip())
-        modifications = _parse_modification_string(mod_str)
+        if require_keyval and not mod_str:
+            raise ValueError(
+                f"Invalid modification spec format: '{spec}'. "
+                "Expected a format like 'selector(Key=Value, ...)'."
+            )
 
+        page_spec, type_selector = _parse_selector_string(selector_str.strip())
+        modifications = _parse_modification_string(mod_str) if mod_str else []
         page_numbers = page_numbers_matching_page_spec(page_spec, total_pages)
 
         rules.append(ModificationRule(page_numbers, type_selector, modifications))

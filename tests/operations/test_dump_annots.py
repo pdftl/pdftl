@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pikepdf
 import pytest
 
-from pdftl.operations.dump_annots import dump_annots, dump_data_annots
+from pdftl.operations.annots_filters import dump_annots, dump_data_annots
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def annot_pdf():
     return pdf
 
 
-from pdftl.operations.dump_annots import (
+from pdftl.operations.annots_filters import (
     dump_annots_cli_hook,
     dump_data_annots_cli_hook,
 )
@@ -86,7 +86,7 @@ def test_dump_annots_json(annot_pdf, capsys):
 
 
 def test_lines_from_datum_skips():
-    from pdftl.operations.dump_annots import _lines_from_datum
+    from pdftl.operations.annots_filters import _lines_from_datum
 
     # 1. Test missing /Subtype (Line 213)
     datum_no_subtype = {"Properties": {}, "Page": 1, "AnnotationIndex": 1}
@@ -109,7 +109,7 @@ from unittest.mock import MagicMock
 
 from pikepdf import Name
 
-from pdftl.operations.dump_annots import _get_all_annots_data
+from pdftl.operations.annots_filters import _get_all_annots_data
 
 
 def test_get_all_annots_with_named_destinations():
@@ -137,7 +137,7 @@ def test_get_all_annots_with_named_destinations():
 import pytest
 
 # Import the internal function directly for the unit test
-from pdftl.operations.dump_annots import (
+from pdftl.operations.annots_filters import (
     _key_value_lines,
 )
 
@@ -189,7 +189,7 @@ def test_dump_annots_error_handling(caplog):
         raise NotImplementedError("Simulated Failure")
 
     with patch(
-        "pdftl.operations.dump_annots._data_item_to_string_helper", side_effect=side_effect
+        "pdftl.operations.annots_filters._data_item_to_string_helper", side_effect=side_effect
     ):
         # We call the internal function directly.
         # We can use any key (like "FailMe") because we aren't restricted by the
@@ -211,7 +211,7 @@ def test_dump_annots_error_handling(caplog):
 
 import pytest
 
-from pdftl.operations.dump_annots import _lines_from_datum
+from pdftl.operations.annots_filters import _lines_from_datum
 
 
 def test_lines_from_datum_compat_false():

@@ -2,7 +2,7 @@
 
 import pikepdf
 
-from pdftl.operations.delete_annots import delete_annots
+from pdftl.operations.annots_filters import delete_annots
 
 
 def test_delete_annots_with_existing_annotations():

@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
 - Fix crash on outline items without a /Title
+
+### Added
+
+- Filter annotations in `dump_annots` and `delete_annots`
 
 ## [0.18.1] - 2026-05-29
 

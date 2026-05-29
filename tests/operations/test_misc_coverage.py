@@ -10,7 +10,7 @@ import pytest
 
 from pdftl.core.core_types import OpResult
 from pdftl.operations.add_text import _build_static_context, add_text_pdf
-from pdftl.operations.dump_annots import (
+from pdftl.operations.annots_filters import (
     _data_item_to_string_helper,
     dump_data_annots_cli_hook,
 )

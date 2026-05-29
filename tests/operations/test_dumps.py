@@ -1,6 +1,6 @@
 import pikepdf
 
-from pdftl.operations.dump_annots import dump_annots, dump_annots_cli_hook
+from pdftl.operations.annots_filters import dump_annots, dump_annots_cli_hook
 from pdftl.operations.dump_data import dump_data_cli_hook, pdf_info
 from pdftl.operations.dump_text import dump_text
 
@@ -43,9 +43,8 @@ def test_dump_data_to_stdout(two_page_pdf, capsys):
 
 
 def test_dump_text_to_stdout(two_page_pdf, capsys):
-    import pikepdf
-
-    data = dump_text(pikepdf.open(two_page_pdf), input_password="", output_file=None).data
+    with pikepdf.open(two_page_pdf) as pdf:
+        data = dump_text(pdf, input_password="", output_file=None).data
 
     captured = capsys.readouterr()
     # Assuming the dummy PDF is empty text, just check for no crash/errors

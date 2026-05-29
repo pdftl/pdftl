@@ -6,7 +6,7 @@ Requires 'pytest' and 'hypothesis'.
 """
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings, HealthCheck
 from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'map'
@@ -220,11 +220,22 @@ def test_parser_hypothesis_valid_specs(selector, kv_list):
     assert rules[0].modifications[0][0] == kv_list[0].split("=")[0]
 
 
-@given(spec=st.text().filter(lambda s: not ma_parser.spec_pattern.match(s)))
-def test_parser_hypothesis_invalid_specs(spec):
-    """
-    Tests that any string that does NOT match the spec pattern
-    correctly raises a ValueError.
-    """
+def test_split_spec_missing_closing_paren():
+    """A spec with an opening paren but no closing paren should raise."""
+    with pytest.raises(ValueError, match="Invalid modification spec format"):
+        ma_parser._split_spec("selector(Key=Value")
+
+
+@given(spec=st.text().filter(lambda s: "(" in s and not s.strip().endswith(")")))
+@settings(suppress_health_check=[HealthCheck.filter_too_much])
+def test_split_spec_hypothesis_unclosed_paren(spec):
+    """Any string with an opening paren but no closing paren should raise."""
     with pytest.raises(ValueError):
-        ma_parser.specs_to_modification_rules([spec], total_pages=10)
+        ma_parser._split_spec(spec)
+
+
+@given(spec=st.text().filter(lambda s: "(" not in s and s.strip()))
+def test_modification_rules_hypothesis_no_parens_require_keyval(spec):
+    """Any non-empty string without parens should raise when require_keyval=True."""
+    with pytest.raises((ValueError, TypeError)):
+        ma_parser.specs_to_modification_rules([spec], total_pages=10, require_keyval=True)
