@@ -35,12 +35,6 @@ import copy
 
 from pdftl.core.registry import registry
 
-# Suppress nanobind's noisy exit warnings (upstream pikepdf/nanobind quirk)
-with contextlib.suppress(ImportError):
-    import nanobind
-
-    nanobind.disable_leak_warnings()
-
 
 @pytest.fixture
 def mock_missing_dependency():
