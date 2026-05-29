@@ -142,7 +142,7 @@ def _get_bookmarks(info, pdf, page_map):
                 info.bookmarks = _extract_bookmarks_recursive(
                     list(outline.root), page_map, named_dest_dict
                 )
-    except OutlineStructureError as exc:
+    except (OutlineStructureError, AttributeError) as exc:
         logger.warning(
             "Warning: Could not read bookmarks. Outline may be corrupted. Error: %s",
             exc,

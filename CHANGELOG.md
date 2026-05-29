@@ -5,6 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+- Fix crash on outline items without a /Title
+
 ## [0.18.1] - 2026-05-29
 
 ### Changed
