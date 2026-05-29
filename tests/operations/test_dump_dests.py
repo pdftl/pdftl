@@ -1,4 +1,3 @@
-import io
 import json
 from unittest.mock import MagicMock, mock_open, patch
 

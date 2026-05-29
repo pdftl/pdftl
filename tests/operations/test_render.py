@@ -23,7 +23,7 @@ def test_render_pdf_invalid_args():
     mock_pdf = MagicMock()
     mock_pdf.pages = [MagicMock()] * 150
     # Test too many arguments
-    with pytest.raises(InvalidArgumentError, match="[Ii]nvalid part"):
+    with pytest.raises(InvalidArgumentError, match="[Ii]nvalid page spec modifier"):
         render_pdf(mock_pdf, ["150", "extra"])
 
     # Test invalid DPI

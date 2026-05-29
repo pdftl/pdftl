@@ -66,6 +66,15 @@ class SpecParser:
         step, modifier_str = self._parse_step(modifier_str)
         rotate, modifier_str = self._parse_rotation(modifier_str)
         scale, modifier_str = self._parse_scaling(modifier_str)
+
+        # 3. Check for unrecognised modifier before attempting omissions
+        if modifier_str and not modifier_str.startswith("~"):
+            raise InvalidArgumentError(
+                f"Invalid page spec modifier '{modifier_str}' in '{spec_str}'. "
+                f"Did you mean one of: even, odd, north, east, south, west, left, right, down, "
+                f"stepN, xN, zN, or ~N for omissions?"
+            )
+
         omissions, modifier_str = self._parse_omissions(modifier_str)
 
         return PageSpec(

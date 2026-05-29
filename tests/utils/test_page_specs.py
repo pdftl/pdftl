@@ -155,7 +155,7 @@ def test_parse_omissions(modifier_str, expected_omissions, expected_remaining):
 
 def test_parse_omissions_invalid():
     """Tests that a malformed omission string raises an error."""
-    with pytest.raises(InvalidArgumentError, match="Invalid part 'foo'"):
+    with pytest.raises(InvalidArgumentError, match="Invalid page spec modifier 'foo'"):
         _parse_omissions("~1-5foo", TOTAL_PAGES)
 
 
