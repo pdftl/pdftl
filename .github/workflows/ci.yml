@@ -13,7 +13,7 @@ env:
   PYTHONIOENCODING: "utf-8"
 
 jobs:
-  # 1. Primary Language/OS Matrix (Native Runners)
+  # 1. Primary Language/OS/Architecture Matrix (Native Runners)
   tests:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
@@ -35,6 +35,8 @@ jobs:
           - os: windows-latest
             python: "3.13"
           - os: macos-latest
+            python: "3.13"
+          - os: ubuntu-24.04-arm
             python: "3.13"
 
     steps:
@@ -66,9 +68,9 @@ jobs:
           name: coverage
           path: coverage.xml
 
-  # 2. Linux Distribution Ecosystem Matrix (Containerized Runners)
+  # 2. Linux Distribution Ecosystem Matrix (Containerized Runners, uses system python)
   distro-tests:
-    name: Tests (${{ matrix.distro }} / System Python)
+    name: Tests (${{ matrix.distro }} / ${{ matrix.arch }})
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.image }}
@@ -78,18 +80,19 @@ jobs:
         include:
           - distro: Arch Linux (Rolling)
             image: archlinux:latest
-            setup: |
-              pacman -Syu --noconfirm python python-pip git gcc
+            arch: x86_64
+            setup: pacman -Syu --noconfirm python python-pip git gcc
+
+          - distro: Alpine (musl / Minimal)
+            image: alpine:latest
+            arch: x86_64
+            setup: apk add --no-cache python3 py3-pip git gcc musl-dev python3-dev tzdata
 
           - distro: Fedora (RPM Ecosystem)
             image: fedora:latest
+            arch: x86_64
             setup: |
               dnf install -y python3 python3-pip git gcc
-
-          - distro: Alpine (musl-libc / Minimal)
-            image: alpine:latest
-            setup: |
-              apk add --no-cache python3 py3-pip git gcc musl-dev python3-dev tzdata
 
     steps:
       # 1. Install git (and other system prereqs) FIRST
