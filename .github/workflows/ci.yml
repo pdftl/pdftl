@@ -13,6 +13,7 @@ env:
   PYTHONIOENCODING: "utf-8"
 
 jobs:
+  # 1. Primary Language/OS Matrix (Native Runners)
   tests:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
@@ -39,6 +40,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # Needed for setuptools_scm
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
@@ -54,7 +57,6 @@ jobs:
       - name: Run tests
         working-directory: ${{ github.workspace }}
         run: |
-            # Always run in parallel (-n auto), only run coverage on one Linux job
             python -X utf8 -m pytest -n auto --dist loadfile ${{ matrix.coverage && matrix.os == 'ubuntu-latest' && '--cov=pdftl --cov-report=xml' || '' }}
 
       - name: Upload coverage artifact
@@ -64,12 +66,63 @@ jobs:
           name: coverage
           path: coverage.xml
 
+  # 2. Linux Distribution Ecosystem Matrix (Containerized Runners)
+  distro-tests:
+    name: Tests (${{ matrix.distro }} / System Python)
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: Arch Linux (Rolling)
+            image: archlinux:latest
+            setup: |
+              pacman -Syu --noconfirm python python-pip git gcc
+
+          - distro: Fedora (RPM Ecosystem)
+            image: fedora:latest
+            setup: |
+              dnf install -y python3 python3-pip git gcc
+
+          - distro: Alpine (musl-libc / Minimal)
+            image: alpine:latest
+            setup: |
+              apk add --no-cache python3 py3-pip git gcc musl-dev python3-dev tzdata
+
+    steps:
+      # 1. Install git (and other system prereqs) FIRST
+      - name: Install system dependencies
+        run: ${{ matrix.setup }}
+
+      # 2. NOW checkout the code, using the newly installed git
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # Needed for setuptools_scm
+
+      # 3. Pip install smoothly with full git metadata intact
+      - name: Install Python dependencies
+        run: |
+          git config --global --add safe.directory '*'
+          python3 -m pip install --break-system-packages -e .[dev-all]
+
+      - name: Generate stubs
+        run: python3 tools/api_stub_gen.py
+
+      - name: Run tests
+        run: python3 -X utf8 -m pytest -n auto --dist loadfile
+
+  # 3. Compatibility Test Suite
   phptests:
     name: php-pdftk test suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # Needed for setuptools_scm
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
@@ -88,6 +141,7 @@ jobs:
       - name: Run php-pdftk test suite via pytest
         run: pytest tests/test_php_compat.py
 
+  # 4. Coverage Publisher
   codecov:
     name: Upload coverage (Linux 3.13)
     needs: tests
