@@ -79,7 +79,22 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
             ),
             "input",
         ),
-        (("---", "pipeline", "pipeline syntax"), "pipeline"),
+        (
+            (
+                "---",
+                "pipeline",
+                "pipeline syntax",
+                "job",
+                "JOB",
+                "done",
+                "DONE",
+                "each",
+                "EACH",
+                "loop",
+                "iteraton",
+            ),
+            "pipeline",
+        ),
         (
             (
                 "pages",

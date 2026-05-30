@@ -13,3 +13,4 @@ VERSION_FLAGS = {"--version"}
 COMPLETION_FLAGS = {"--completion"}
 SUB_START = "JOB"
 SUB_END = "DONE"
+SUB_EACH = "EACH"

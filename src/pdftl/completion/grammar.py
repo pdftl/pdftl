@@ -7,13 +7,13 @@
 import re
 import textwrap
 
-from pdftl.cli.constants import SUB_END, SUB_START
+from pdftl.cli.constants import SUB_EACH, SUB_END, SUB_START
 from pdftl.core.registry import registry
 from pdftl.registry_init import initialize_registry
 
 # ============================== IMPORTANT ====================================
 # bump this if grammar output changes, both here and in src/pdf/cli/complete.py
-GRAMMAR_VERSION = "6"
+GRAMMAR_VERSION = "7"
 # =============================================================================
 
 
@@ -60,6 +60,7 @@ class GrammarBuilder:
 
             # Recursive definition for inline pipelines
             inline_pipeline: KW_SUB pipeline_body KW_END
+            each_pipeline: KW_EACH pipeline_body KW_END
             pipeline_body: input_section [op_section] [opt_section]
 
             input_section: file_ref+
@@ -69,10 +70,11 @@ class GrammarBuilder:
             CHAIN_SEP.10: "---"
 
             # Modified file_ref to accept recursive pipelines
-            file_ref: handle_prefix? (PDF_PATH | inline_pipeline)
+            file_ref: handle_prefix? (PDF_PATH | inline_pipeline | each_pipeline)
             handle_prefix: /[A-Z]=/
 
             KW_SUB.10: "{SUB_START}"
+            KW_EACH.10: "{SUB_EACH}"
             KW_END.10: "{SUB_END}"
 
             # Use a negative lookahead to prevent PDF_PATH from matching flags starting with --

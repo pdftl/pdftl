@@ -19,7 +19,6 @@ from pdftl.core.registry import register_operation
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.json import pdf_obj_to_json
 from pdftl.utils.string_utils import compact_json_string, xml_encode_for_info
-from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 logger = logging.getLogger(__name__)
 

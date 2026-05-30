@@ -1,8 +1,8 @@
 import pikepdf
 import pytest
 
-from pdftl.operations.delete import delete_pages
 from pdftl.operations.annots_filters import delete_annots
+from pdftl.operations.delete import delete_pages
 from pdftl.operations.filter import filter_pdf
 from pdftl.operations.modify_annots import modify_annots
 from pdftl.operations.place import place_content

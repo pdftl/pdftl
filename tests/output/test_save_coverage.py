@@ -1,6 +1,6 @@
+import logging
 from unittest.mock import MagicMock, patch
 
-import logging
 import pytest
 
 from pdftl.output.save import save_pdf

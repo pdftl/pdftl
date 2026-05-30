@@ -6,8 +6,9 @@ import sys
 import warnings
 from unittest.mock import MagicMock, patch
 
-from pdftl.cli.complete import get_cache_path, rebuild_cache, resolve_candidates
+from pdftl.cli.complete import get_cache_path
 from pdftl.cli.complete import main as complete_main
+from pdftl.cli.complete import rebuild_cache, resolve_candidates
 
 
 def test_complete_main_integration(tmp_path, monkeypatch):

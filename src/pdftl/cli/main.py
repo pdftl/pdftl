@@ -88,6 +88,8 @@ def _validate_inputs_exist(pipeline):
         for filespec in stage.inputs:
             if not isinstance(filespec, str) or filespec in ("-", "_"):
                 continue
+            if filespec in getattr(stage, "handles", {}):
+                continue
             if "=" in filespec:
                 # Handle A=file.pdf syntax
                 _, filespec = filespec.split("=", 1)

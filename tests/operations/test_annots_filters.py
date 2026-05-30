@@ -1,9 +1,12 @@
 # tests/operations/test_annots_filters_coverage.py
 
 import logging
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
+
+from pdftl.core.core_types import OpResult
 
 # ---------------------------------------------------------------------------
 # Helpers / internal imports
@@ -16,11 +19,11 @@ from pdftl.operations.annots_filters import (
     _get_all_annots_data,
     _lines_from_datum,
     _values_equal,
+    delete_annots,
+    dump_annots,
     dump_data_annots,
     dump_data_annots_cli_hook,
 )
-from pdftl.core.core_types import OpResult
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -148,7 +151,6 @@ def test_delete_annots_in_page_fast_path_wipe(simple_pdf):
     A rule with no type_selector and no value_selectors triggers the fast-path
     that sets page.Annots = [] directly (lines 326-330).
     """
-    from unittest.mock import MagicMock
 
     page = simple_pdf.pages[0]
     assert len(page.Annots) == 2
@@ -170,8 +172,6 @@ def test_delete_annots_in_page_selective_deletion(simple_pdf):
     A rule with a type_selector deletes only matching annotations, exercising
     the per-annotation loop (lines 331-335).
     """
-    from unittest.mock import MagicMock
-
     page = simple_pdf.pages[0]
     assert len(page.Annots) == 2  # Text + Highlight
 
@@ -269,8 +269,6 @@ def test_values_equal_boolean():
 
 
 def _make_rule(type_selector=None, value_selectors=None, page_numbers=None):
-    from unittest.mock import MagicMock
-
     r = MagicMock()
     r.type_selector = type_selector
     r.value_selectors = value_selectors or []
@@ -362,12 +360,6 @@ def test_data_item_to_string_helper_no_string_convert_name_value():
     """Same None path but with a Name-style value (leading slash stripped)."""
     result = _data_item_to_string_helper("/Subtype", "/Text", "Annot", None)
     assert result == "AnnotSubtype: Text"
-
-
-import pytest
-from unittest.mock import MagicMock, patch
-from pdftl.core.core_types import OpResult
-from pdftl.operations.annots_filters import dump_annots, delete_annots, _values_equal
 
 
 # Minimal structural mocks to simulate pikepdf structures

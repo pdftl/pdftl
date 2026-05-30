@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     import pikepdf
 
 import pdftl.core.constants as c
-from pdftl.cli.constants import SUB_END, SUB_START
+from pdftl.cli.constants import SUB_EACH, SUB_END, SUB_START
 from pdftl.cli.whoami import WHOAMI
 from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.executor import run_operation
@@ -39,6 +39,17 @@ class InlineSubPipeline:
     stages: list["CliStage"]
     original_text: str = "<inline_sub_pipeline>"
     handle_name: str | None = None
+
+    def __repr__(self):
+        return self.original_text
+
+
+@dataclass
+class EachSubPipeline:
+    """Wrapper for a per-input iteration sub-pipeline."""
+
+    stages: list["CliStage"]
+    original_text: str = "<each_sub_pipeline>"
 
     def __repr__(self):
         return self.original_text
@@ -95,7 +106,9 @@ class PipelineResult:
 class PipelineManager:
     """Orchestrates the execution of a multi-stage PDF processing pipeline."""
 
-    def __init__(self, stages, input_context, is_inline=False, handles=None) -> None:
+    def __init__(
+        self, stages, input_context, is_inline=False, is_each=False, handles=None
+    ) -> None:
         self.stages: list[CliStage] = stages
         self.pipeline_pdf = None
         self.kept_id = None
@@ -103,6 +116,7 @@ class PipelineManager:
         self.results: list[OpResult] = []
         self.result_discardable = False
         self.is_inline = is_inline
+        self.is_each = is_each
         self.handles = handles or {}
 
     def save_pdf_file(self, pdf, filename, stage):
@@ -173,7 +187,7 @@ class PipelineManager:
             logger.debug("Final stage is empty, proceeding to save.")
             return
 
-        is_first = i == 0
+        is_first = i == 0 and not self.is_each
         is_last = i == len(self.stages) - 1
 
         logger.debug("--- PIPELINE: STAGE %d ---", i + 1)
@@ -183,14 +197,13 @@ class PipelineManager:
         self._execute_stage(stage, is_first)
 
     def _execute_stage(self, stage, is_first):
-        """Opens PDFs and runs the operation for a single stage."""
         logger.debug("_execute_stage")
-        opened_pdfs = self._open_input_pdfs(stage, is_first)
+        opened_pdfs, effective_inputs, adjusted_handles = self._open_input_pdfs(stage, is_first)
 
         if self.pipeline_pdf and self.pipeline_pdf not in opened_pdfs:
             self.pipeline_pdf.close()
 
-        result = self._run_operation(stage, opened_pdfs)
+        result = self._run_operation(stage, opened_pdfs, effective_inputs, adjusted_handles)
         self._process_result(result, stage, opened_pdfs)
 
     def _unpack_result_value_and_run_hooks(self, result, stage, opened_pdfs):
@@ -291,7 +304,7 @@ class PipelineManager:
                 f"but received {effective_inputs} effective input(s)."
             )
 
-    def _run_operation(self, stage, opened_pdfs):
+    def _run_operation(self, stage, opened_pdfs, effective_inputs=None, adjusted_handles=None):
         """Dispatches to the correct command function based on the operation."""
         operation = stage.operation
         op_data = registry.operations.get(operation)
@@ -307,13 +320,13 @@ class PipelineManager:
 
         call_context = {
             c.OPERATION_NAME: operation,
-            c.INPUTS: stage.inputs,
+            c.INPUTS: stage.inputs if effective_inputs is None else effective_inputs,
             c.OPENED_PDFS: opened_pdfs,
             c.INPUT_FILENAME: _first_or_none(stage.inputs),
             c.INPUT_PASSWORD: _first_or_none(stage.input_passwords),
             c.INPUT_PDF: _first_or_none(opened_pdfs),
             c.OPERATION_ARGS: stage.operation_args,
-            c.ALIASES: stage.handles,
+            c.ALIASES: stage.handles if adjusted_handles is None else adjusted_handles,
             c.OVERLAY_PDF: _first_or_none(stage.operation_args),
             c.OUTPUT: stage.options.get(c.OUTPUT, None),
             c.OUTPUT_PATTERN: output_pattern,
@@ -387,152 +400,350 @@ class PipelineManager:
         """Opens all PDF inputs required for a stage."""
         logger.debug("_open_input_pdfs")
         opened_pdfs = []
-
-        # We assume global/final options (like keep_first_id) are attached to the LAST stage.
+        effective_inputs = []
         final_stage_options = self.stages[-1].options if self.stages else {}
+        adjusted_handles = {}  # handle name -> actual index in opened_pdfs after expansion
 
         for i, item in enumerate(stage.inputs):
             password = stage.input_passwords[i]
-
-            if isinstance(item, InlineSubPipeline):
-                logger.debug("Detected InlineSubPipeline input at index %s", i)
-                pdf_obj = self._get_subpipeline_output_pdf(stage, i, item, opened_pdfs)
-            # [CHANGE] Check if item is a sibling handle defined in THIS stage
-            elif isinstance(item, str) and item in stage.handles and stage.handles[item] < i:
-                pdf_obj = opened_pdfs[stage.handles[item]]
-            elif isinstance(item, str) and item in self.handles:
-                # Use the existing object from the outer scope
-                pdf_obj = self.handles[item]
-            elif item in ["-", "_"]:
-                pdf_obj = self._open_pdf_from_special_input(password, is_first)
-            else:
-                pdf_obj = self._open_pdf_from_file(item, password)
-
+            if isinstance(item, EachSubPipeline):
+                logger.debug("Detected EachSubPipeline input at index %s", i)
+                self._expand_each_in_place(item, opened_pdfs, effective_inputs)
+                continue
+            pdf_obj = self._resolve_input_item(item, i, stage, opened_pdfs, password, is_first)
             opened_pdfs.append(pdf_obj)
-            if (
-                final_stage_options.get("keep_first_id")
-                and is_first
-                and i == 0
-                and len(opened_pdfs) > 0
-            ):
-                self.kept_id = list(opened_pdfs[0].trailer.ID)
+            effective_inputs.append(item if isinstance(item, str) else repr(item))
+            # Register this item's adjusted index for any handle pointing to it
+            for h_name, h_idx in stage.handles.items():
+                if h_idx == i:
+                    adjusted_handles[h_name] = len(opened_pdfs) - 1
+            self._maybe_keep_first_id(final_stage_options, is_first, i, opened_pdfs)
 
         if final_stage_options.get("keep_final_id") and len(opened_pdfs) > 0:
             self.kept_id = list(opened_pdfs[-1].trailer.ID)
 
-        return opened_pdfs
+        return opened_pdfs, effective_inputs, adjusted_handles
 
-    def _get_subpipeline_output_pdf(self, stage, item_idx, item, opened_pdfs):
-        # [CHANGE] Construct the handle scope for the child
-        # 1. Start with inherited handles (from outer scopes)
+    def _expand_each_in_place(self, item, opened_pdfs, effective_inputs):
+        """Drain accumulated inputs, run EACH sub-pipeline over each, expand in place."""
+        if not opened_pdfs:
+            raise UserCommandLineError("EACH requires at least one input before it.")
+        per_input_pdfs = list(opened_pdfs)
+        per_input_names = list(effective_inputs)
+        opened_pdfs.clear()
+        effective_inputs.clear()
+        for source_pdf, name in zip(per_input_pdfs, per_input_names):
+            opened_pdfs.append(self._get_each_output_pdf(item, source_pdf))
+            effective_inputs.append(name)
+
+    def _resolve_input_item(
+        self, item, i, stage, opened_pdfs, password, is_first, adjusted_handles=None
+    ):
+        if isinstance(item, InlineSubPipeline):
+            logger.debug("Detected InlineSubPipeline input at index %s", i)
+            return self._get_subpipeline_output_pdf(stage, i, item, opened_pdfs, adjusted_handles)
+        if isinstance(item, str) and item in stage.handles and stage.handles[item] < i:
+            idx = (adjusted_handles or {}).get(item, stage.handles[item])
+            return opened_pdfs[idx]
+        if isinstance(item, str) and item in self.handles:
+            return self.handles[item]
+        if item in ["-", "_"]:
+            return self._open_pdf_from_special_input(password, is_first)
+        return self._open_pdf_from_file(item, password)
+
+    def _maybe_keep_first_id(self, final_stage_options, is_first, i, opened_pdfs):
+        if (
+            final_stage_options.get("keep_first_id")
+            and is_first
+            and i == 0
+            and len(opened_pdfs) > 0
+        ):
+            self.kept_id = list(opened_pdfs[0].trailer.ID)
+
+    def _get_each_output_pdf(
+        self, item: "EachSubPipeline", source_pdf: "pikepdf.Pdf"
+    ) -> "pikepdf.Pdf":
+        sub_manager = PipelineManager(
+            stages=item.stages,
+            input_context=self.input_context,
+            is_inline=True,
+            is_each=True,
+            handles=self.handles.copy(),
+        )
+        sub_manager.pipeline_pdf = source_pdf
+        sub_manager.run()
+        if sub_manager.pipeline_pdf is None:
+            raise UserCommandLineError("EACH sub-pipeline returned no output PDF.")
+        result = sub_manager.pipeline_pdf
+        sub_manager.pipeline_pdf = None
+        return result
+
+    def _get_subpipeline_output_pdf(
+        self, stage, item_idx, item, opened_pdfs, adjusted_handles=None
+    ):
         child_handles = self.handles.copy()
-        # 2. Add sibling handles defined earlier in THIS stage
-        # (e.g., in 'A=a.pdf B=JOB', B can see A)
         for h_name, h_idx in stage.handles.items():
             if h_idx < item_idx:
-                child_handles[h_name] = opened_pdfs[h_idx]
-
-        # 1. Create a FRESH PipelineManager for the inline stages.
-        #    We pass the same input_context (for prompts/stdin),
-        #    but the handle scope is implicitly reset because it's a new instance.
+                actual_idx = (adjusted_handles or {}).get(h_name, h_idx)
+                if actual_idx < len(opened_pdfs):
+                    child_handles[h_name] = opened_pdfs[actual_idx]
         sub_manager = PipelineManager(
             stages=item.stages,
             input_context=self.input_context,
             is_inline=True,
             handles=child_handles,
         )
-
-        # 2. Execute the inner pipeline
         sub_manager.run()
-
-        # 3. The result is our input.
-        # If pipeline_pdf is None (inner pipe had no output), this logic handles it
-        # by raising the appropriate error inside the sub-manager or returning None here.
         if sub_manager.pipeline_pdf is None:
-            # This usually happens if the inner pipeline was purely side-effects
-            # or failed silently. Treated as an error for process substitution.
             raise UserCommandLineError("Inline pipeline returned no output PDF.")
-
         pdf_obj = sub_manager.pipeline_pdf
-        # Transfer ownership of the object so we don't double-close incorrectly later,
-        # though sub_manager's finally block handles its own cleanup.
-        # Ideally, we want the result object to stay open.
         sub_manager.pipeline_pdf = None
-
         return pdf_obj
+
+
+_PIPELINE_HELP_EXAMPLES = [
+    # --- Existing Examples ---
+    HelpExample(
+        desc="Shuffle two documents, then crop the resulting pages to A4",
+        cmd="a.pdf b.pdf shuffle --- crop '(a4)' output out.pdf",
+    ),
+    HelpExample(
+        desc=(
+            "Crop all pages to A3 in landscape,\n"
+            "and preview the effect of cropping odd pages to A4"
+        ),
+        cmd="in.pdf crop '(A3_l)' --- crop 'odd(A4)' preview output out.pdf",
+    ),
+    HelpExample(
+        desc="Save a snapshot of a rotated file, then apply a stamp and save the final version",
+        cmd=(
+            "in.pdf rotate right output rotated_snapshot.pdf --- "
+            "background watermark.pdf output final.pdf"
+        ),
+    ),
+    HelpExample(
+        desc=(
+            "Use pipeline substitution (JOB...DONE) to rotate one file"
+            "before merging it with another."
+        ),
+        cmd=f"{SUB_START} in.pdf cat right {SUB_END} main.pdf cat output final.pdf",
+    ),
+    HelpExample(
+        desc="Rotate and stamp a.pdf, crop b.pdf, then combine selected pages from both",
+        cmd=(
+            f"A={SUB_START} a.pdf rotate right --- stamp logo.pdf {SUB_END} "
+            f"B={SUB_START} b.pdf crop '(a4)' {SUB_END} "
+            "cat A1-3 B2-end output combined.pdf"
+        ),
+    ),
+    HelpExample(
+        desc="Join a contract with a stamped copy of itself",
+        cmd=f"contract.pdf {SUB_START} contract.pdf stamp logo.pdf {SUB_END} output combined.pdf",
+    ),
+    # --- New Examples (Extracted from docstring) ---
+    HelpExample(
+        desc=(
+            "Chain multiple operations together "
+            "where the output of one becomes the input of the next"
+        ),
+        cmd="in.pdf rotate right --- crop '(a4)' output out.pdf",
+    ),
+    HelpExample(
+        desc="Assign named handles to inputs to re-use them later in the pipeline",
+        cmd="A=logo.pdf B=content.pdf cat A B A output out.pdf",
+    ),
+    HelpExample(
+        desc="Assign the result of a sub-pipeline to a named handle",
+        cmd=f"S={SUB_START} in.pdf rotate right {SUB_END} S main.pdf cat output out.pdf",
+    ),
+    HelpExample(
+        desc="Chain multiple operations inside a sub-pipeline",
+        cmd=f"A={SUB_START} in.pdf rotate right --- stamp logo.pdf {SUB_END} cat A output out.pdf",
+    ),
+    HelpExample(
+        desc=(
+            "Apply a sub-pipeline to multiple files independently "
+            "replacing each with its transformed result"
+        ),
+        cmd=f"a.pdf b.pdf c.pdf {SUB_EACH} rotate right {SUB_END} cat output out.pdf",
+    ),
+    HelpExample(
+        desc="Chain multiple operations inside an EACH block (e.g., select pages, then rotate)",
+        cmd=f"a.pdf b.pdf {SUB_EACH} cat 1-3 --- rotate right {SUB_END} cat output out.pdf",
+    ),
+    HelpExample(
+        desc="Use filename substitution inside an EACH block to stamp each file with its own name",
+        cmd=(
+            f"a.pdf b.pdf {SUB_EACH} insert before 1 --- "
+            f"add_text '/{{filename}}/(position=center)' {SUB_END} cat output combined.pdf"
+        ),
+    ),
+    HelpExample(
+        desc=(
+            "Wrap EACH inside a JOB to collect the results of all iterations into a single handle"
+        ),
+        cmd=f"R={SUB_START} a.pdf b.pdf {SUB_EACH} cat 1 {SUB_END} {SUB_END} cat R output out.pdf",
+    ),
+    HelpExample(
+        desc=(
+            "Use a JOB inside EACH to process a specific page "
+            "and prepend it to the current iteration's file"
+        ),
+        cmd=(
+            f"a.pdf b.pdf {SUB_EACH} R={SUB_START} _ cat 1 {SUB_END} "
+            f"cat R _ {SUB_END} cat output out.pdf"
+        ),
+    ),
+    HelpExample(
+        desc="Combine EACH and JOB as siblings in the same pipeline",
+        cmd=(
+            f"a.pdf b.pdf {SUB_EACH} cat 1 {SUB_END} "
+            f"R={SUB_START} cover.pdf stamp logo.pdf {SUB_END} cat R output out.pdf"
+        ),
+    ),
+]
 
 
 @register_help_topic(
     "pipeline",
     title="pipeline syntax",
     desc="Chaining operations, named handles, and pipeline substitution",
-    examples=[
-        HelpExample(
-            desc="Shuffle two documents, then crop the resulting pages to A4",
-            cmd="a.pdf b.pdf shuffle --- crop '(a4)' output out.pdf",
-        ),
-        HelpExample(
-            desc=(
-                "Crop all pages to A3 in landscape,\n"
-                "and preview the effect of cropping odd pages to A4"
-            ),
-            cmd="in.pdf crop '(A3_l)' --- crop 'odd(A4)' preview output out.pdf",
-        ),
-        HelpExample(
-            desc=(
-                "Save a snapshot of a rotated file, then apply a stamp and save the final version"
-            ),
-            cmd=(
-                "in.pdf rotate right output rotated_snapshot.pdf --- "
-                "background watermark.pdf output final.pdf"
-            ),
-        ),
-        HelpExample(
-            desc=(
-                "Use pipeline substitution (JOB...DONE) to rotate one file before "
-                "merging it with another."
-            ),
-            cmd=f"{SUB_START} in.pdf cat right {SUB_END} main.pdf cat output final.pdf",
-        ),
-        HelpExample(
-            desc=("Rotate and stamp a.pdf, crop b.pdf, then combine selected pages from both"),
-            cmd=(
-                f"A={SUB_START} a.pdf rotate right --- stamp logo.pdf {SUB_END} "
-                f"B={SUB_START} b.pdf crop '(a4)' {SUB_END} "
-                "cat A1-3 B2-end output combined.pdf"
-            ),
-        ),
-        HelpExample(
-            desc=("Join a contract with a stamped copy of itself"),
-            cmd=(
-                f"contract.pdf {SUB_START} contract.pdf stamp logo.pdf {SUB_END}"
-                " output combined.pdf"
-            ),
-        ),
-    ],
+    examples=_PIPELINE_HELP_EXAMPLES,
 )
 def _pipeline_help_topic():
     """
     Construct complex workflows using pipelines, handles, and substitution.
 
     **1. Chaining (`---`)**
-    Multiple operations can be chained together using `---`. The output of one
-    stage becomes the input for the next stage. If a stage has no explicit
-    inputs, it automatically uses the result from the previous stage.
+
+    Multiple operations can be chained together using `---`. The output of
+    one stage becomes the input for the next stage. If a stage has no
+    explicit inputs, it automatically uses the result from the previous
+    stage.
+
+    ```
+    pdftl in.pdf rotate right --- crop '(a4)' output out.pdf
+    ```
+
+    You can have as many stages as you like. Each `---` separator marks
+    the boundary between stages.
 
     **2. Named Handles (`X=...`)**
+
     You can assign single capital letter handles (A-Z) to inputs to refer
     to them later:
-      `pdftl A=logo.pdf B=content.pdf ...`
-    This allows you to re-use a specific file or result multiple times in
-    different stages (e.g., `cat A B A`).
 
-    **3. Pipeline Substitution (`X=JOB ... DONE`)**
-    Similar to command substitution in a shell, you can process files in a
-    temporary sub-pipeline before assigning them to a handle.
-      `S=JOB in.pdf rotate right DONE`
-    This runs the commands between JOB and DONE, and assigns the final result
-    to the handle `S`. You can then use `S` like any other input file.
+    ```
+    pdftl A=logo.pdf B=content.pdf ...
+    ```
+
+    This allows you to re-use a specific file or result multiple times in
+    different stages (e.g., `cat A B A`). Handles are visible to all
+    subsequent stages in the same pipeline.
+
+    **3. Pipeline Substitution (`JOB ... DONE`)**
+
+    Similar to command substitution in a shell (`$(...)` in bash), you can
+    process files in a temporary sub-pipeline and use the result as an
+    input — inline, without saving to a file first.
+
+    ```
+    pdftl JOB in.pdf rotate right DONE main.pdf cat output out.pdf
+    ```
+
+    The commands between `JOB` and `DONE` run first, and their output is
+    used as an input at that position. You can also assign the result to a
+    named handle:
+
+    ```
+    pdftl S=JOB in.pdf rotate right DONE S main.pdf cat output out.pdf
+    ```
+
+    Sub-pipelines can themselves contain `---` separators to chain
+    operations inside the substitution:
+
+    ```
+    pdftl A=JOB in.pdf rotate right --- stamp logo.pdf DONE ...
+    ```
+
+    Sub-pipelines can be nested arbitrarily. Each `DONE` always closes the
+    innermost open `JOB`.
+
+    **4. Per-file Iteration (`EACH ... DONE`)**
+
+    `EACH ... DONE` applies a sub-pipeline to every input file that
+    precedes it, independently, replacing each input with its transformed
+    result. This is similar to `map` in functional programming, or
+    `xargs` in the shell.
+
+    ```
+    pdftl a.pdf b.pdf c.pdf EACH rotate right DONE cat output out.pdf
+    ```
+
+    Here, `rotate right` is applied to each of `a.pdf`, `b.pdf`, and
+    `c.pdf` in turn. The results are then passed to `cat` for merging.
+
+    The sub-pipeline inside `EACH ... DONE` receives each input file via
+    the implicit pipeline input `_`, exactly as if it were a stage after
+    `---`. This means you can chain multiple operations inside `EACH`:
+
+    ```
+    pdftl a.pdf b.pdf EACH cat 1-3 --- rotate right DONE cat output out.pdf
+    ```
+
+    This selects pages 1–3 from each file, rotates them, and merges the
+    results.
+
+    **`EACH` and filename substitution**
+
+    Because each iteration runs as an isolated sub-pipeline with one input
+    file, operations that substitute the current filename (such as
+    `add_text`) work naturally inside `EACH`:
+
+    ```
+    pdftl *.pdf EACH insert before 1 --- add_text '/{filename}/(position=center)' DONE\
+      cat output combined.pdf
+    ```
+
+    This inserts a blank title page stamped with each file's own name
+    before merging everything together.
+
+    **5. Combining `JOB` and `EACH`**
+
+    `JOB` and `EACH` can be freely combined. Both use `DONE` as their
+    terminator; `DONE` always closes the innermost open block.
+
+    *`EACH` inside `JOB`*: the `JOB` collects the results of all
+    iterations into a single output:
+
+    ```
+    pdftl R=JOB a.pdf b.pdf EACH cat 1 DONE DONE cat R output out.pdf
+    ```
+
+    `EACH` selects page 1 from each of `a.pdf` and `b.pdf`; the enclosing
+    `JOB` merges them and assigns the 2-page result to `R`.
+
+    *`JOB` inside `EACH`*: each iteration can use its own sub-pipeline as
+    an additional input. Pass `_` explicitly to the `JOB` to refer to the
+    current iteration's file:
+
+    ```
+    pdftl a.pdf b.pdf EACH R=JOB _ cat 1 DONE cat R _ DONE cat output out.pdf
+    ```
+
+    For each input file, `JOB` extracts its first page into `R`, then
+    `cat R _` prepends that first page to the full file.
+
+    *Siblings*: `EACH` and `JOB` can appear as siblings in the same input
+    list. Each gets its own `DONE`:
+
+    ```
+    pdftl a.pdf b.pdf EACH cat 1 DONE R=JOB cover.pdf stamp logo.pdf DONE cat R output out.pdf
+    ```
+
+    The two `DONE` tokens close `EACH` and `JOB` respectively. The outer
+    `cat` receives: the `EACH` results (one page from each of `a` and `b`)
+    followed by `R` (the stamped cover), and merges all three.
     """
 
 

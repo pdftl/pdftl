@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Filter annotations in `dump_annots` and `delete_annots`
 
+- add `EACH` ... `JOB`, documented under `pdftl help pipeline`
+
 ## [0.18.1] - 2026-05-29
 
 ### Changed

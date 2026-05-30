@@ -1,6 +1,7 @@
 # tests/cli/test_main.py
 
 import io
+import os
 import sys
 import types
 from unittest.mock import MagicMock, patch
@@ -14,7 +15,6 @@ from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_
 from pdftl.cli.main import _prepare_pipeline_from_remaining_args, _verbose_option
 from pdftl.cli.main import main as cli_main
 from pdftl.exceptions import OperationError, UserCommandLineError
-import os
 
 
 @pytest.fixture(autouse=True)
@@ -538,3 +538,14 @@ def test_main_broken_pipe_unsupported_operation_coverage(tmp_path):
 
         exit_code = cli_main(test_args)
         assert exit_code == 0
+
+
+def test_validate_inputs_exist_skips_handle_names(tmp_path):
+    """Tests that handle name inputs (e.g. 'S' referring to a JOB result) are skipped."""
+    from pdftl.cli.main import _validate_inputs_exist
+
+    # 'S' is a handle name, not a file — should not raise even though it doesn't exist on disk
+    stage = types.SimpleNamespace(inputs=["S"], handles={"S": 0})
+    pipeline = types.SimpleNamespace(stages=[stage])
+
+    _validate_inputs_exist(pipeline)  # Should not raise

@@ -10,8 +10,8 @@ import logging
 from contextlib import suppress
 
 import pdftl.core.constants as c
-from pdftl.cli.constants import SUB_END, SUB_START
-from pdftl.cli.pipeline import CliStage, InlineSubPipeline
+from pdftl.cli.constants import SUB_EACH, SUB_END, SUB_START
+from pdftl.cli.pipeline import CliStage, EachSubPipeline, InlineSubPipeline
 from pdftl.core.registry import registry
 from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
@@ -344,7 +344,13 @@ def _recursive_group_pipelines(arg_iter, depth=0):
                 pipeline_obj.handle_name = handle
 
             result.append(pipeline_obj)
-
+        elif token == SUB_EACH:
+            inner_args = _recursive_group_pipelines(arg_iter, depth + 1)
+            inner_stages_raw = _split_flat_by_separator(inner_args, "---")
+            inner_stages_parsed = [
+                parse_cli_stage(s, is_first_stage=False) for s in inner_stages_raw
+            ]
+            result.append(EachSubPipeline(stages=inner_stages_parsed))
         elif token == SUB_END:
             _validate_final_depth(depth)
             return result

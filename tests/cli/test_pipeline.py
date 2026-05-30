@@ -132,7 +132,7 @@ def test_execute_stage_non_generator(monkeypatch):
     stage = CliStage(operation="single_op", inputs=["a.pdf"])
     manager = PipelineManager(stages=[], input_context=MagicMock())
 
-    manager._open_input_pdfs = MagicMock(return_value=[dummy_pdf1, dummy_pdf2])
+    manager._open_input_pdfs = MagicMock(return_value=([dummy_pdf1, dummy_pdf2], ["a.pdf"], {}))
     manager._run_operation = MagicMock(return_value=dummy_pdf1)
     manager._execute_stage(stage, is_first=True)
 
@@ -155,7 +155,7 @@ def test_execute_stage_generator(monkeypatch):
     def gen():
         yield ("out.pdf", dummy_pdf)
 
-    manager._open_input_pdfs = MagicMock(return_value=[dummy_pdf])
+    manager._open_input_pdfs = MagicMock(return_value=([dummy_pdf], ["a.pdf"], {}))
     manager._run_operation = MagicMock(return_value=gen())
 
     with patch("pdftl.cli.pipeline.save_content") as save_mock:
@@ -189,7 +189,7 @@ def test_open_input_pdfs_success(monkeypatch):
     # Initialize Manager with the stage (so it knows this is the last/only stage)
     manager = PipelineManager(stages=[stage], input_context=MagicMock())
 
-    pdfs = manager._open_input_pdfs(stage, is_first=True)
+    pdfs, _, _handles = manager._open_input_pdfs(stage, is_first=True)
     assert pdfs == [dummy_pdf, dummy_pdf]
     assert manager.kept_id == ["id1", "id2"]
 
@@ -200,7 +200,7 @@ def test_open_input_pdfs_success(monkeypatch):
     manager = PipelineManager(stages=[stage_final], input_context=MagicMock())
 
     # Even if is_first=False, keep_final_id should capture the ID of the opened PDFs
-    _pdfs = manager._open_input_pdfs(stage_final, is_first=False)
+    _pdfs, _, _handles = manager._open_input_pdfs(stage_final, is_first=False)
     assert manager.kept_id == ["id1", "id2"]
 
 
@@ -282,7 +282,9 @@ def test_pipeline_run_dummy_op(monkeypatch):
         PipelineManager, "_open_pdf_from_file", lambda self, filename, pw: DummyPdf()
     )
     monkeypatch.setattr(
-        PipelineManager, "_run_operation", lambda self, stage, opened_pdfs: DummyPdf()
+        PipelineManager,
+        "_run_operation",
+        lambda self, stage, opened_pdfs, effective_inputs=None, adjusted_handles=None: DummyPdf(),
     )
     with patch("pdftl.cli.pipeline.save_content") as save_mock:
         manager.run()

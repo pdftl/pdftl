@@ -12,9 +12,10 @@ import sys
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "6"
+GRAMMAR_VERSION = "7"
 
 HARDCODED_KEYWORDS = {
+    "EACH",
     "JOB",
     "DONE",
     "add_text",

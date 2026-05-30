@@ -6,7 +6,7 @@ Requires 'pytest' and 'hypothesis'.
 """
 
 import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 # We must import the module to test, aliased as 'map'

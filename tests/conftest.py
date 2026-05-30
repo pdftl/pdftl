@@ -326,6 +326,7 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
         "b.pdf",
         "c.pdf",
         "contract.pdf",
+        "content.pdf",
         "doc1.pdf",
         "doc2.pdf",
         "front.pdf",

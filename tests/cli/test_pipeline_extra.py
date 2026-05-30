@@ -60,7 +60,7 @@ def test_pipeline_op_result_hook_and_discard(mock_context, mock_registry, mock_s
     # without relying on side effects (exceptions) which vary by PDF type (memory vs file).
     with patch.object(real_pdf, "close", side_effect=real_pdf.close) as mock_pdf_close:
         # Pass the REAL pdf through the mock of _open_input_pdfs
-        with patch.object(manager, "_open_input_pdfs", return_value=[real_pdf]):
+        with patch.object(manager, "_open_input_pdfs", return_value=([real_pdf], ["in.pdf"], {})):
             with patch("pdftl.cli.pipeline.run_operation", return_value=op_result):
                 manager.run()
 

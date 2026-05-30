@@ -383,7 +383,7 @@ def test_open_input_pdfs_dispatches_special_inputs(mocker, mock_input_context):
     mock_file = mocker.patch.object(manager, "_open_pdf_from_file", return_value="PDF_FILE")
 
     # Execute
-    results = manager._open_input_pdfs(stage, is_first=True)
+    results, _, _handles = manager._open_input_pdfs(stage, is_first=True)
 
     # Assertions
     assert results == ["PDF_SPECIAL", "PDF_FILE"]
@@ -464,7 +464,7 @@ def test_sibling_handle_reference():
 
     mgr = PipelineManager(stages=[stage], input_context=MagicMock())
     with patch.object(mgr, "_open_pdf_from_file", return_value=mock_pdf):
-        opened = mgr._open_input_pdfs(stage, is_first=True)
+        opened, _, _handles = mgr._open_input_pdfs(stage, is_first=True)
         # The first was opened from file, the second was copied from the sibling list
         assert len(opened) == 2
         assert opened[1] is mock_pdf
