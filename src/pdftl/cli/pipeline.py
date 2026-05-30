@@ -395,6 +395,14 @@ class PipelineManager:
                 f"Could not open '{filename}': the file may be corrupted or is not a valid PDF.\n"
                 f"  (Details: {exception})"
             ) from exception
+        except OSError as exc:
+            if exc.errno == 24:  # EMFILE
+                raise UserCommandLineError(
+                    f"Too many input files: could not open '{filename}'.\n"
+                    f"  Hint: increase the number of files that can be opened"
+                    f" by running 'ulimit -n 4096' (for example) in your shell before retrying."
+                ) from exc
+            raise UserCommandLineError(f"Could not open '{filename}': {exc}") from exc
 
     def _open_input_pdfs(self, stage, is_first):
         """Opens all PDF inputs required for a stage."""

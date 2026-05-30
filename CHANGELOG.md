@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add `EACH` ... `JOB`, documented under `pdftl help pipeline`
 
+### Changed
+
+- Improve error message when too many files are opened
+
 ## [0.18.1] - 2026-05-29
 
 ### Changed

@@ -9,7 +9,7 @@
 import difflib
 import logging
 import sys
-import io
+import os
 
 from pdftl.cli.constants import (
     COMPLETION_FLAGS,
@@ -65,7 +65,7 @@ def main(argv=None):
         # Centralized handling for closed pipes (e.g., 'pdftl ... | head')
         # Redirect stdout's file descriptor to devnull to shield the terminal from
         # secondary interpreter-level "Exception ignored in flush" error dumps on exit.
-        import os
+        import io
 
         try:
             devnull = os.open(os.devnull, os.O_WRONLY)
@@ -82,19 +82,21 @@ def main(argv=None):
 
 def _validate_inputs_exist(pipeline):
     """Check input files exist before running the pipeline."""
-    import os
 
     for stage in pipeline.stages:
         for filespec in stage.inputs:
-            if not isinstance(filespec, str) or filespec in ("-", "_"):
-                continue
-            if filespec in getattr(stage, "handles", {}):
-                continue
-            if "=" in filespec:
-                # Handle A=file.pdf syntax
-                _, filespec = filespec.split("=", 1)
-            if not os.path.exists(filespec):
-                raise UserCommandLineError(f"Unable to find file: {filespec}")
+            _validate_single_input(filespec, stage)
+
+
+def _validate_single_input(filespec, stage):
+    if not isinstance(filespec, str) or filespec in ("-", "_"):
+        return
+    if filespec in getattr(stage, "handles", {}):
+        return
+    if "=" in filespec:
+        _, filespec = filespec.split("=", 1)
+    if not os.path.exists(filespec):
+        raise UserCommandLineError(f"Unable to find file: {filespec}")
 
 
 def _handle_error_from_main(e, debug):

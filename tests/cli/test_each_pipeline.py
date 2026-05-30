@@ -404,3 +404,21 @@ class TestEachIntegration:
         with pikepdf.open(output) as pdf:
             assert len(pdf.pages) == 2
             assert pdf.pages[0].get("/Rotate") == 90
+
+
+def test_open_pdf_from_file_emfile_error(tmp_path):
+    """errno 24 (EMFILE) gives a helpful hint about ulimit."""
+    manager = PipelineManager(stages=[], input_context=MagicMock())
+    err = OSError(24, "Too many open files")
+    with patch("pdftl.cli.pipeline.smart_pikepdf_open", side_effect=err):
+        with pytest.raises(UserCommandLineError, match="ulimit"):
+            manager._open_pdf_from_file("a.pdf", None)
+
+
+def test_open_pdf_from_file_other_oserror(tmp_path):
+    """Other OSErrors are wrapped in a clean UserCommandLineError."""
+    manager = PipelineManager(stages=[], input_context=MagicMock())
+    err = OSError(13, "Permission denied")
+    with patch("pdftl.cli.pipeline.smart_pikepdf_open", side_effect=err):
+        with pytest.raises(UserCommandLineError, match="a.pdf"):
+            manager._open_pdf_from_file("a.pdf", None)
