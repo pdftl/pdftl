@@ -68,9 +68,6 @@ def test_cache_io_flow(mock_cache_env):
         assert load_simple_cache() == {"key": ["val"]}
 
 
-import pytest
-
-
 def test_load_simple_cache_handles_corruption():
     """Hits lines 159-160: Returns {} on marshal/read errors."""
     m_open = mock_open(read_data=b"garbage")

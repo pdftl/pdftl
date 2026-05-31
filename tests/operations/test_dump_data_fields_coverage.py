@@ -1,6 +1,6 @@
 import pikepdf
 
-from pdftl.operations.dump_data_fields import dump_data_fields
+from pdftl.operations.dump_data_fields import _extract_field_data_high_level, dump_data_fields
 
 
 def test_dump_fields_checkbox_options():
@@ -202,8 +202,6 @@ def test_dump_fields_no_acroform():
 
 ##################################################
 
-
-from pdftl.operations.dump_data_fields import _extract_field_data_high_level
 
 # --- Mocks for Test 2 ---
 

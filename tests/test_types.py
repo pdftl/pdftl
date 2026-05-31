@@ -12,9 +12,6 @@ class MockLegacyObj(LegacyDictAccess):
     existing_attr: str = "value"
 
 
-from dataclasses import dataclass
-
-
 def test_legacy_dict_access_missing_key():
     """
     Covers lines 56-57: raise KeyError(key) from e

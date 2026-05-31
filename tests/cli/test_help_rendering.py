@@ -2,8 +2,10 @@ import io
 import logging
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from pdftl.cli.help import print_help
-from pdftl.cli.help_render import _load_help_markdown, format_examples_block
+from pdftl.cli.help_render import _load_help_markdown, format_examples_block, load_hprint
 
 
 def test_help_markdown_internals():
@@ -96,11 +98,6 @@ def test_hprint_no_console():
     with patch("pdftl.cli.help_render.get_console", return_value=None):
         with pytest.raises(RuntimeError, match="Rich console is not available"):
             hprint_file("some markdown")
-
-
-import pytest
-
-from pdftl.cli.help_render import load_hprint
 
 
 def test_load_hprint_file_no_console():

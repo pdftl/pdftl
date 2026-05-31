@@ -3,6 +3,16 @@ from unittest.mock import patch
 
 import pytest
 
+from pdftl.operations.parsers.add_text_parser import (
+    _compile_text_renderer,
+    _evaluate_token,
+    _normalize_options,
+    _parse_options_content,
+    _parse_var_expression,
+    _tokenize_text_string,
+    parse_add_text_specs_to_rules,
+)
+
 # Assume the module being tested is imported as 'parser'
 # from pdftl.operations.parsers import add_text_parser as parser
 
@@ -238,16 +248,6 @@ class TestAddTextParser:
         assert mock_evaluate(token, context) == 8
 
 
-from pdftl.operations.parsers.add_text_parser import (
-    _compile_text_renderer,
-    _evaluate_token,
-    _normalize_options,
-    _parse_options_content,
-    _parse_var_expression,
-    _tokenize_text_string,
-)
-
-
 class TestAddTextParserExtended:
     """
     Targeted tests to close coverage gaps in add_text_parser.py
@@ -344,13 +344,6 @@ class TestAddTextParserExtended:
 
         with pytest.raises(ValueError, match="Formatting error for {page:z}"):
             _evaluate_token(token, context)
-
-
-from unittest.mock import patch
-
-from pdftl.operations.parsers.add_text_parser import (
-    parse_add_text_specs_to_rules,
-)
 
 
 class TestAddTextParserCoverage:

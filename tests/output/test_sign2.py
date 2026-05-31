@@ -101,9 +101,6 @@ def test_save_and_sign_default_field(mock_writer_cls, mock_signer_load, mock_sig
     assert args[1].field_name == "Signature1"
 
 
-from unittest.mock import patch
-
-
 @patch("pyhanko.sign.signers.SimpleSigner.load")
 @patch("pyhanko.sign.signers.sign_pdf")
 @patch("pyhanko.pdf_utils.incremental_writer.IncrementalPdfFileWriter")
@@ -117,9 +114,6 @@ def test_save_and_sign_full_flow(mock_writer, mock_sign, mock_load):
 
     mock_load.assert_called_once_with("key.pem", "cert.pem", key_passphrase=b"password")
     assert mock_sign.called
-
-
-from unittest.mock import patch
 
 
 def test_save_and_sign_encryption_success_path():

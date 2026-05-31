@@ -1,9 +1,21 @@
-from unittest.mock import MagicMock, patch
+import io
+import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pikepdf
 import pytest
+from pikepdf import Name
+from pikepdf.form import RadioButtonGroup
 
-from pdftl.operations.generate_fdf import generate_fdf, generate_fdf_cli_hook
+from pdftl.core.constants import META_OUTPUT_FILE
+from pdftl.core.core_types import OpResult
+from pdftl.operations.generate_fdf import (
+    _write_field_as_fdf_to_file,
+    _write_string_to_binary_file,
+    generate_fdf,
+    generate_fdf_cli_hook,
+)
 
 
 @pytest.fixture
@@ -125,13 +137,6 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
             assert b"/V <BINARY>" in content
 
 
-import io
-from types import SimpleNamespace
-
-from pdftl.core.core_types import OpResult
-from pdftl.operations.generate_fdf import _write_field_as_fdf_to_file
-
-
 def test_generate_fdf_hook_failure():
     """
     Covers line 40: if not result.success: return
@@ -188,11 +193,6 @@ def test_generate_fdf_choice_field_null_value():
         _result = generate_fdf(mock_pdf, lambda x: "y", "out.fdf")
 
 
-from unittest.mock import PropertyMock
-
-from pikepdf import Name
-
-
 def test_generate_fdf_radio_button_exception_handling():
     """Triggers lines 124-128 by forcing an AttributeError on Opt."""
     mock_pdf = MagicMock()
@@ -212,9 +212,6 @@ def test_generate_fdf_radio_button_exception_handling():
         # This will hit the 'pass' in the except block
         result = generate_fdf(mock_pdf, lambda x: "y", "out.fdf")
         assert result.success
-
-
-import unittest
 
 
 class TestFDFFieldEdgeCases(unittest.TestCase):
@@ -256,12 +253,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
-import pytest
-from pikepdf.form import RadioButtonGroup
-
-from pdftl.operations.generate_fdf import _write_string_to_binary_file
-
-
 def test_write_string_utf8_fallback():
     """Covers lines 102-105: Fallback to UTF-8 for non-Latin-1 chars."""
     buffer = io.BytesIO()
@@ -300,11 +291,6 @@ def test_pikepdf_name_vs_string_formatting():
     _write_field_as_fdf_to_file("Toggle", name_field, name_buffer)
     assert b"/V /Yes" in name_buffer.getvalue()
     assert b"//Yes" not in name_buffer.getvalue()
-
-
-import pytest
-
-from pdftl.core.constants import META_OUTPUT_FILE
 
 
 def test_pikepdf_string_happy_path():

@@ -12,6 +12,8 @@ from pikepdf import Array, Name, Pdf, Rectangle
 # We import the module to reload it during cleanup
 from pdftl.operations.add_text import _build_static_context, add_text_pdf
 
+from .sandbox import ModuleSandboxMixin
+
 
 class TestAddTextLogic(unittest.TestCase):
     """
@@ -119,9 +121,6 @@ class TestAddTextLogic(unittest.TestCase):
         _copy_annotations(
             target_page, overlay_page_empty, pdf
         )  # Should return cleanly without error
-
-
-from .sandbox import ModuleSandboxMixin
 
 
 class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):

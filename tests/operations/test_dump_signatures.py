@@ -1,4 +1,5 @@
 import io
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -7,8 +8,14 @@ import pytest
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
 
+import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.operations.dump_signatures import dump_signatures, dump_signatures_cli_hook
+from pdftl.operations.dump_signatures import (
+    _validate_signatures_worker,
+    dump_signatures,
+    dump_signatures_cli_hook,
+)
 
 # --- Fixtures ---
 
@@ -177,15 +184,6 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
             assert "SignatureModificationLevel: SUSPICIOUS (Exception)" in output.getvalue()
 
 
-import sys
-
-import pytest
-
-import pdftl.core.constants as c
-from pdftl.core.core_types import OpResult
-from pdftl.operations.dump_signatures import _validate_signatures_worker
-
-
 def test_dump_signatures_hook_multiple_sigs():
     """
     Covers line 64: print("---", file=out)
@@ -248,9 +246,6 @@ def test_validate_signatures_missing_pyhanko():
         with pytest.raises(InvalidArgumentError, match="requires pyhanko"):
             # We call the worker directly or the main command; worker is direct access to the import block
             _validate_signatures_worker("dummy.pdf", None, None)
-
-
-import pytest
 
 
 def test_dump_signatures_raises_operation_error_on_validation_failure(signed_pdf_path, tmp_path):

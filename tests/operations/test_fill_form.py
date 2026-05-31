@@ -1,10 +1,12 @@
+import io
 from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
+from pikepdf.form import Form
 
 from pdftl.exceptions import UserCommandLineError
-from pdftl.operations.fill_form import fill_form
+from pdftl.operations.fill_form import _fill_form_from_fdf_data, _set_form_field_value, fill_form
 
 
 @pytest.fixture
@@ -123,11 +125,6 @@ def test_fill_form_radio_button_index(pdf, tmp_path):
 
     assert str(pdf.Root.AcroForm.Fields[0].V) == "/1"
 
-
-import pytest
-from pikepdf.form import Form
-
-from pdftl.operations.fill_form import _set_form_field_value
 
 # Bit 16 (Radio) + Bit 15 (NoToggleToOff)
 # We need NoToggleToOff to force pikepdf to raise ValueError when we try to set "/Off",
@@ -252,13 +249,6 @@ def test_radio_exception_reraise_real_error():
     # realize it's not the "uncheck" error, and re-raise it.
     with pytest.raises(ValueError, match="Some catastrophic failure"):
         _set_form_field_value(field, "/AnyValue")
-
-
-import io
-
-import pytest
-
-from pdftl.operations.fill_form import _fill_form_from_fdf_data
 
 
 def test_fill_form_fdf_fields_not_array():

@@ -1,5 +1,6 @@
 # tests/operations/test_bookmarks.py
 
+import io
 import json
 from unittest.mock import patch
 
@@ -223,9 +224,6 @@ def test_toc_filter_invalid_children(tmp_path, six_page_pdf, caplog):
     update_toc(pikepdf.open(six_page_pdf), [str(test_file)])
 
     assert "Ignoring invalid 'children' (must be a list)" in caplog.text
-
-
-import io
 
 
 def test_update_bookmarks_no_args():

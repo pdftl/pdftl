@@ -1,6 +1,8 @@
+import pikepdf
 import pytest
 
 from pdftl.operations.parsers.rebox_parser import parse_rebox_content
+from pdftl.operations.rebox import _apply_or_preview, crop_or_clip_pages
 
 
 def test_parse_rebox_content_abs_valid():
@@ -26,11 +28,6 @@ def test_parse_rebox_content_abs_invalid_length():
         parse_rebox_content(
             "abs, 10, 20, 90", page_width=100, page_height=100, operation="dummy_op"
         )
-
-
-import pikepdf
-
-from pdftl.operations.rebox import _apply_or_preview, crop_or_clip_pages
 
 
 def test_crop_with_abs_spec():

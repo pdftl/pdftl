@@ -1,6 +1,13 @@
 from unittest.mock import MagicMock, patch
 
-from pdftl.operations.modify_layers import _process_content_stream, _resolve_targets, modify_layers
+import pikepdf
+
+from pdftl.operations.modify_layers import (
+    _ensure_auto_state,
+    _process_content_stream,
+    _resolve_targets,
+    modify_layers,
+)
 
 
 # --- Mocks for Testing ---
@@ -283,9 +290,6 @@ def test_resolve_targets_no_match():
     assert targets == {}
 
 
-from unittest.mock import patch
-
-
 @patch("pdftl.operations.modify_layers.parse_modify_layers_rules")
 @patch("pdftl.operations.modify_layers._resolve_targets")
 @patch("pdftl.operations.modify_layers._process_content_stream")
@@ -324,11 +328,6 @@ def test_modify_layers_state_and_usage(mock_usage, mock_state, mock_resolve, moc
     mock_state.assert_any_call(pdf, {10}, "lock")
     mock_usage.assert_any_call(pdf, {11}, "noprint")
     mock_usage.assert_any_call(pdf, {11}, "screen")
-
-
-import pikepdf
-
-from pdftl.operations.modify_layers import _ensure_auto_state
 
 
 def test_ensure_auto_state_creates_missing_as_array():

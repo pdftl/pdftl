@@ -5,14 +5,14 @@ import pikepdf
 import pytest
 from pikepdf import Array, Dictionary, Name, Pdf, String
 
+from pdftl.pages.link_remapper import LinkRemapper, RemapperContext
+
 try:
     from pikepdf.exceptions import ForeignObjectError
 except ImportError:
     from pikepdf import ForeignObjectError
 
 # --- Import the class to test ---
-from pdftl.pages.link_remapper import LinkRemapper, RemapperContext
-
 # Import the module itself so we can reload it
 
 

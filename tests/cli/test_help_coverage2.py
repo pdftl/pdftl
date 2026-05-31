@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from pdftl.cli.help import print_help
+from pdftl.cli.help import print_help, print_main_help
 from pdftl.core.registry import registry
 
 
@@ -67,11 +67,6 @@ def test_print_multiple_topics_separator():
 
     # (Optional) Verify something was written
     assert output.getvalue() != ""
-
-
-import pytest
-
-from pdftl.cli.help import print_main_help
 
 
 def test_print_main_help_no_console():

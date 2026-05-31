@@ -231,8 +231,6 @@ def test_find_option_topic_command(patch_environment):
 ##################################################
 
 
-import pytest
-
 # --- Fixtures & Mocks ---
 
 

@@ -6,6 +6,7 @@ import pytest
 # Import the functions and classes to test
 from pdftl.operations.dump_dests import (
     _atomic_obj_to_json,
+    _compound_obj_to_json,
     _pdf_obj_to_json,
     _write_json_output,
     dump_dests,
@@ -297,11 +298,6 @@ def test_write_json_output_to_stdout(capsys):
 
     _write_json_output(data, output_file=None)
     assert capsys.readouterr().out == compacted_expected
-
-
-import pytest
-
-from pdftl.operations.dump_dests import _compound_obj_to_json
 
 
 def test_compound_obj_to_json_unknown_type():

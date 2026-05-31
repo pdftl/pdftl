@@ -6,7 +6,8 @@ import pikepdf
 import pytest
 
 from pdftl.exceptions import InvalidArgumentError, OperationError
-from pdftl.operations.montage import _parse_montage_config, montage_pages
+from pdftl.layouts import GridLayout
+from pdftl.operations.montage import _apply_montage_logic, _parse_montage_config, montage_pages
 
 # --- Helpers ---
 
@@ -121,9 +122,6 @@ def test_montage_mixed_page_sizes():
 
 
 # Add to test_montage.py
-
-from pdftl.layouts import GridLayout
-from pdftl.operations.montage import _apply_montage_logic
 
 
 def test_montage_aliases_branch():

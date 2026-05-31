@@ -8,11 +8,12 @@ Test suite for text_drawer.
 
 import subprocess
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from pdftl.operations.helpers import text_drawer
+from pdftl.operations.helpers.text_drawer import TextDrawer, _PageBox
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -216,12 +217,6 @@ def test_get_font_name_cache(drawer):
 
 
 # tests/operations/helpers/test_text_drawer.py
-
-from unittest.mock import patch
-
-import pytest
-
-from pdftl.operations.helpers.text_drawer import TextDrawer, _PageBox
 
 
 @pytest.fixture

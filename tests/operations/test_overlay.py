@@ -4,7 +4,7 @@ import pikepdf
 import pytest
 
 from pdftl.exceptions import OperationError
-from pdftl.operations.overlay import apply_overlay
+from pdftl.operations.overlay import _parse_operation_args, apply_overlay
 
 
 def test_apply_overlay_empty_pdf():
@@ -124,10 +124,6 @@ def test_apply_overlay_stdin():
 
 """Tests for page-range filtering and argument parsing added to overlay.py."""
 
-
-import pytest
-
-from pdftl.operations.overlay import _parse_operation_args
 
 # ---------------------------------------------------------------------------
 # _parse_operation_args — line 208 (page_specs.append) and surrounding logic
@@ -290,9 +286,6 @@ class TestApplyOverlayPageFiltering:
             assert called_indices == [0], (
                 f"_process_page should pass stamped_count 0 for the first applied stamp, got {called_indices}"
             )
-
-
-import pytest
 
 
 class TestApplyOverlayAdvancedSequencing:

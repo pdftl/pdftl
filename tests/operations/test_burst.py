@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import MagicMock, call, patch
 
 import pikepdf
@@ -5,7 +6,14 @@ import pytest
 
 from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError, OperationError
-from pdftl.operations.burst import burst_cli_hook, burst_pdf
+from pdftl.operations.burst import (
+    _generate_burst_chunks,
+    _parse_size_to_bytes,
+    burst_cli_hook,
+    burst_pdf,
+    get_chunk_size,
+    get_effective_specs,
+)
 
 
 def test_burst_basic(two_page_pdf):
@@ -159,7 +167,6 @@ def test_burst_cli_hook_empty_generator():
 
 
 # --- Imports from your module ---
-from pdftl.operations.burst import get_effective_specs
 
 
 @pytest.fixture
@@ -226,11 +233,6 @@ def test_get_effective_specs_invalid(mock_get_pages, mock_pdf, bad_spec, expecte
     mock_get_pages.assert_not_called()
 
 
-import pytest
-
-from pdftl.operations.burst import _parse_size_to_bytes
-
-
 def test_parse_size_to_bytes():
     # Test Megabytes
     assert _parse_size_to_bytes("5M") == 5 * 1024 * 1024
@@ -258,11 +260,6 @@ def test_burst_multiple_sizes_raises_error():
 
     with pytest.raises(InvalidArgumentError, match="More than one `size` spec passed"):
         burst_pdf(mock_pdfs, operation_args=["size5M", "size10M"])
-
-
-import logging
-
-from pdftl.operations.burst import _generate_burst_chunks, get_chunk_size
 
 
 @pytest.fixture

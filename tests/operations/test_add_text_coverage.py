@@ -1,12 +1,13 @@
 import io
 import logging
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
 
+import pdftl.core.constants as c
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.operations.add_text import add_text_pdf
+from pdftl.operations.add_text import _process_page, add_text_pdf
 
 from .sandbox import ModuleSandboxMixin
 
@@ -69,13 +70,6 @@ class TestAddTextCoverage(ModuleSandboxMixin):
         assert "Failed to apply overlay" in caplog.text
 
 
-from unittest.mock import MagicMock
-
-import pytest
-
-from pdftl.operations.add_text import _process_page
-
-
 def test_process_page_empty_overlay_log():
     """Triggers line 340: Overlay PDF exists but has no pages."""
     mock_page = MagicMock()
@@ -92,9 +86,6 @@ def test_process_page_empty_overlay_log():
 
         _process_page(0, mock_page, {0: [MagicMock()]}, {}, mock_drawer_class, MagicMock())
         # Line 340 is now hit (logger.debug for empty overlay)
-
-
-import pdftl.core.constants as c
 
 
 def test_process_page_with_source_meta():

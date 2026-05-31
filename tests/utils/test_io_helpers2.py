@@ -1,5 +1,5 @@
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from pdftl.utils.io_helpers import can_read_file, smart_open
 
@@ -62,9 +62,6 @@ def test_can_read_file_permission_denied(tmp_path):
 def test_can_read_file_is_directory(tmp_path):
     """Tests line 38: Path is a directory, not a file."""
     assert can_read_file(str(tmp_path)) is False
-
-
-from unittest.mock import MagicMock
 
 
 def test_smart_open_stdin_binary():

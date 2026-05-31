@@ -2,7 +2,7 @@ import json
 
 import pikepdf
 
-from pdftl.operations.dump_layers import dump_layers, dump_layers_cli_hook
+from pdftl.operations.dump_layers import _get_active_usage_map, dump_layers, dump_layers_cli_hook
 
 
 def test_dump_layers_no_ocg(tmp_path):
@@ -176,9 +176,6 @@ def test_dump_layers_extreme_edge_cases(tmp_path):
     assert "42" in res["ui_hierarchy"]
     # Verify Line 162: The hierarchy was still captured
     assert res["ui_hierarchy"][0]["name"] == "Layer1"
-
-
-from pdftl.operations.dump_layers import _get_active_usage_map
 
 
 def test_get_active_usage_map_coverage():

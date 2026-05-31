@@ -1,5 +1,7 @@
 # tests/operations/test_move.py
-from unittest.mock import MagicMock, patch
+import json
+import logging
+from unittest.mock import MagicMock, mock_open, patch
 
 import pikepdf
 import pytest
@@ -153,11 +155,6 @@ def test_non_contiguous_source(numbered_pdf):
     assert heights == expected
 
 
-import logging
-
-import pytest
-
-
 def test_move_empty_source_spec(two_page_pdf, caplog):
     """
     Covers lines 46-47:
@@ -185,12 +182,6 @@ def test_move_invalid_target_spec(two_page_pdf):
 
     with pytest.raises(UserCommandLineError, match="matched no pages"):
         move_pages(pikepdf.open(two_page_pdf), args)
-
-
-import json
-from unittest.mock import mock_open
-
-import pytest
 
 
 def test_move_command_loads_json_spec():

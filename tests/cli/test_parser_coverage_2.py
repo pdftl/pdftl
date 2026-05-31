@@ -3,6 +3,11 @@ from unittest.mock import patch
 import pytest
 
 from pdftl.cli import parser
+from pdftl.cli.parser import (
+    _recursive_group_pipelines,
+    parse_options_and_specs,
+    split_args_by_separator,
+)
 from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
 
@@ -55,9 +60,6 @@ def test_assign_passwords_stop_iteration():
         num_inputs=3, handles={}, passwords_by_handle={}, passwords_by_order=["pass1"]
     )
     assert passwords == ["pass1", None, None]
-
-
-from pdftl.cli.parser import parse_options_and_specs
 
 
 def test_parse_multiple_args_allow_no_args():
@@ -122,9 +124,6 @@ def test_duplicate_flags_are_accepted_and_deduplicated():
 
     # Check value option is captured
     assert options["owner_pw"] == "my_password"
-
-
-from pdftl.cli.parser import _recursive_group_pipelines, split_args_by_separator
 
 
 def test_parser_coverage_gaps():

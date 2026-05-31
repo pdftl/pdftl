@@ -14,6 +14,7 @@ from pdftl.operations.attach_files import (
     _attach_attachment,
     _attach_attachment_to_page,
     _attachment_rect,
+    _get_attachments_from_args,
     _raise_exception_if_invalid_after_keyword,
     _resolve_attachments,
     _set_page_specs_in_parsed_attachments,
@@ -286,10 +287,6 @@ def test_recursive_prompt_on_invalid_file():
 
 
 # tests/test_attach_files_coverage.py
-
-from unittest.mock import patch
-
-from pdftl.operations.attach_files import _get_attachments_from_args
 
 
 def test_get_attachments_from_args_coverage():

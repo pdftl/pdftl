@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.output.save import save_pdf
+from pdftl.output.save import _get_passwords_from_options, save_pdf
 
 
 def test_save_to_stdout_success(minimal_pdf):
@@ -84,9 +84,6 @@ def test_save_sign_to_stdout_error(minimal_pdf):
         NotImplementedError, match="Signing and saving to stdout is not yet implemented"
     ):
         save_pdf(minimal_pdf, output_filename="-", input_context=mock_ctx, options=options)
-
-
-from pdftl.output.save import _get_passwords_from_options
 
 
 def test_password_prompt_truncation():

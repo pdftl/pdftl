@@ -5,6 +5,7 @@ import pdftl
 
 # Skip this test if reportlab isn't installed (dev dependency)
 reportlab = pytest.importorskip("reportlab")
+
 from reportlab.lib.colors import black
 from reportlab.pdfgen import canvas
 

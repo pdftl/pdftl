@@ -3,13 +3,19 @@ import logging
 from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, patch
 
+import pikepdf
 import pytest
 
 # Import the code being tested
 from pdftl.cli.pipeline import (
     CliStage,
+    InlineSubPipeline,
     PipelineManager,
 )
+from pdftl.core.core_types import OpResult
+from pdftl.core.registry import registry
+from pdftl.exceptions import MissingArgumentError, UserCommandLineError
+from pdftl.utils.user_input import UserInputContext
 
 # --- Mock Classes and Setup ---
 
@@ -323,13 +329,7 @@ class TestPipelineManagerCoverage:
         assert result_pdf is expected_pdf
 
 
-import pikepdf
-
 # tests/cli/test_pipeline.py
-import pytest
-
-from pdftl.exceptions import UserCommandLineError
-from pdftl.utils.user_input import UserInputContext
 
 
 @pytest.fixture
@@ -395,13 +395,6 @@ def test_open_input_pdfs_dispatches_special_inputs(mocker, mock_input_context):
     mock_file.assert_called_once_with("normal.pdf", None)
 
 
-from unittest.mock import MagicMock
-
-import pytest
-
-from pdftl.core.core_types import OpResult
-
-
 def test_process_result_implicit_passthrough():
     """
     Test covering line 199 in pipeline.py:
@@ -434,14 +427,6 @@ def test_process_result_implicit_passthrough():
     # Verify we didn't accidentally close the input PDF inside _process_result
     # (The cleanup logic only closes inputs that *aren't* the result)
     mock_input_pdf.close.assert_not_called()
-
-
-from unittest.mock import MagicMock
-
-import pytest
-
-from pdftl.cli.pipeline import InlineSubPipeline
-from pdftl.exceptions import MissingArgumentError
 
 
 def test_pipeline_missing_output_error():
@@ -486,11 +471,6 @@ def test_inline_pipeline_no_output_error():
         # To hit line 423, the sub_manager.pipeline_pdf must be None.
         with pytest.raises(UserCommandLineError, match="Inline pipeline returned no output PDF"):
             mgr._open_input_pdfs(stage, is_first=True)
-
-
-import pytest
-
-from pdftl.core.registry import registry
 
 
 # This test is safe because it only uses the public API logic

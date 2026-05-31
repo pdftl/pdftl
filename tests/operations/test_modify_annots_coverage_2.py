@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pikepdf import Array, Dictionary, Name, Pdf
@@ -103,9 +103,6 @@ def test_apply_rule_logic():
     assert prop_count == 2
     assert page.Annots[0].C == [1.0, 0.0, 0.0]
     assert page.Annots[0].T == "New Title"
-
-
-from unittest.mock import patch
 
 
 def test_coverage_mop_up_array_exceptions():

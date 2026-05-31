@@ -4,6 +4,7 @@ import pikepdf
 import pytest
 
 from pdftl.core import constants as constants_module
+from pdftl.core.constants import PDFTL_SOURCE_INFO_KEY
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.output import save as save_module
 from pdftl.output.save import (
@@ -21,9 +22,11 @@ from pdftl.output.save import (
     _need_appearances_option,
     _output_option,
     _owner_pw_option,
+    _remove_source_info,
     _replacement_font_option,
     _set_permission_or_raise_error,
     _user_pw_option,
+    save_content,
     save_pdf,
 )
 from pdftl.output.sign import (
@@ -532,12 +535,6 @@ def test_save_pdf_need_appearances_fails(
     mock_pdf.save.assert_called_once()
 
 
-from unittest.mock import patch
-
-from pdftl.core.constants import PDFTL_SOURCE_INFO_KEY
-from pdftl.output.save import _remove_source_info, save_content
-
-
 def test_save_generator_logic(tmp_path):
     """
     Covers lines 301-305 (generator loop) and 313-320 (cleanup).
@@ -573,11 +570,6 @@ def test_remove_source_info_logic():
     _remove_source_info(pdf)
 
     assert target_key not in page
-
-
-from unittest.mock import patch
-
-import pytest
 
 
 def test_save_generator_image_routing_and_close(tmp_path):
@@ -647,9 +639,6 @@ def test_pdftl_aes_encryption_forces_accessibility(tmp_path, mock_input_context)
         encrypt_dict = encrypted_pdf.trailer.get("/Encrypt")
         raw_p = int(encrypt_dict.get("/P", 0))
         assert raw_p == -3392, f"Expected raw AES permissions flag -3392, got {raw_p}"
-
-
-import pytest
 
 
 def test_fast_option_registration():

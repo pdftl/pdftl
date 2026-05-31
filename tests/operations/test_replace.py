@@ -1,8 +1,10 @@
+from unittest.mock import MagicMock
+
 import pikepdf
 import pytest
 
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.operations.replace import replace_in_content_streams
+from pdftl.operations.replace import RegexReplaceContentStream, replace_in_content_streams
 
 
 @pytest.fixture
@@ -103,13 +105,6 @@ def test_replace_no_normalization(pdf_with_content):
 
     content = pdf_with_content.pages[0].Contents.read_bytes()
     assert b"(Hola World)" in content
-
-
-from unittest.mock import MagicMock
-
-import pytest
-
-from pdftl.operations.replace import RegexReplaceContentStream
 
 
 def test_replace_empty_spec_element():

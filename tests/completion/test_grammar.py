@@ -1,7 +1,9 @@
 # tests/completion/test_grammar.py
 
+from unittest.mock import patch
+
 from pdftl.cli.complete import GRAMMAR_VERSION as COMPLETE_PY_GRAMMAR_VERSION
-from pdftl.completion.grammar import GRAMMAR_VERSION
+from pdftl.completion.grammar import GRAMMAR_VERSION, GrammarBuilder
 
 
 def test_completion_cache_version_matches_grammar():
@@ -15,11 +17,6 @@ def test_completion_cache_version_matches_grammar():
         f"complete.py is v{COMPLETE_PY_GRAMMAR_VERSION}. \n"
         "Did you bump the version in src/pdftl/cli/complete.py?"
     )
-
-
-from unittest.mock import patch
-
-from pdftl.completion.grammar import GrammarBuilder
 
 
 def test_grammar_builder_empty_registry():

@@ -1,11 +1,17 @@
 import io
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pikepdf
 import pytest
 from pikepdf import Name
 
-from pdftl.operations.fill_form import fill_form
+from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.fill_form import (
+    _fill_form_from_xfdf_data,
+    _set_form_field_value,
+    fill_form,
+    fully_qualified_name,
+)
 
 # --- Helpers to construct in-memory PDF forms ---
 
@@ -262,15 +268,6 @@ def test_fill_form_robustness_missing_ap():
     assert pdf.Root.AcroForm.Fields[1].V == "/Yes"
 
 
-from unittest.mock import PropertyMock
-
-from pdftl.exceptions import UserCommandLineError
-from pdftl.operations.fill_form import (
-    _fill_form_from_xfdf_data,
-    _set_form_field_value,
-    fully_qualified_name,
-)
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -497,8 +494,6 @@ def test_fill_form_io_error():
         with pytest.raises(UserCommandLineError):
             fill_form(MagicMock(), ["missing.fdf"])
 
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Test: XFDF Missing Name (Line 173)

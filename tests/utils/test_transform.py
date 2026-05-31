@@ -5,6 +5,9 @@ import pikepdf
 import pytest
 from pikepdf import Array, Pdf
 
+from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.page_specs import PageTransform
+
 # --- Import functions to test ---
 from pdftl.utils.transform import (
     _rotate_pair,
@@ -165,11 +168,6 @@ def test_transform_pdf(
     mock_pages[3].rotate.assert_not_called()
 
 
-import pytest
-
-from pdftl.exceptions import InvalidArgumentError
-
-
 @pytest.fixture
 def dummy_pdf():
     # Create a simple 5-page PDF (default rotation 0)
@@ -218,9 +216,6 @@ def test_transform_page_out_of_bounds(dummy_pdf):
     assert "only 5 pages" in str(exc.value)
 
 
-import pytest
-
-
 def test_transform_pdf_index_error():
     """
     Covers transform.py lines 40-42:
@@ -254,11 +249,6 @@ def test_rotate_pair_invalid_angle(caplog):
     # Fallback behavior: returns original coords
     assert x == 10
     assert y == 10
-
-
-import pytest
-
-from pdftl.utils.page_specs import PageTransform
 
 
 def test_transform_pdf_invalid_angle(dummy_pdf):

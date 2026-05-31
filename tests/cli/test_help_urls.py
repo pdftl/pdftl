@@ -1,6 +1,6 @@
 import pytest
 
-from pdftl.cli.help import _get_rtd_url
+from pdftl.cli.help import _get_rtd_url, _print_help_trailer, _resolve_special_help_topic
 
 
 def test_get_rtd_url_standard_command(mocker):
@@ -29,9 +29,6 @@ def test_get_rtd_url_with_anchor_for_options(mocker):
     assert url == "https://pdftl.readthedocs.io/en/stable/misc/output_options.html#grid-columns"
 
 
-from pdftl.cli.help import _resolve_special_help_topic
-
-
 @pytest.mark.parametrize(
     "input_topic,expected",
     [
@@ -44,9 +41,6 @@ from pdftl.cli.help import _resolve_special_help_topic
 )
 def test_resolve_special_help_topic(input_topic, expected):
     assert _resolve_special_help_topic(input_topic) == expected
-
-
-from pdftl.cli.help import _print_help_trailer
 
 
 def test_print_help_trailer_formatting(mocker):

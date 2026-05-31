@@ -2,12 +2,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import io
 import logging
 from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
 
+import pdftl.api
 from pdftl import api
 from pdftl.core.core_types import OpResult
 from pdftl.exceptions import OperationError
@@ -139,9 +141,6 @@ class TestIntrospection:
             _ = api.invalid_op
 
 
-import io
-
-
 def test_process_user_input_with_bytes(temp_pdf):
     """
     Hits api.py:71-72 by passing raw PDF bytes.
@@ -173,9 +172,6 @@ def test_process_user_input_with_bytes(temp_pdf):
     # 3. Verification
     # No assertion needed for coverage, but let's ensure it didn't crash
     assert mock_run.called
-
-
-import pdftl.api
 
 
 def test_api_metadata():

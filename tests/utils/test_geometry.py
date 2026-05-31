@@ -3,6 +3,7 @@ import pytest
 from pikepdf import Matrix
 
 from pdftl.utils.geometry import (
+    get_visual_mapping_matrices,
     resolve_anchor,
     transform_quadpoints,
     transform_rect_bbox,
@@ -99,9 +100,6 @@ def test_transform_rect_bbox():
     assert bbox[1] == pytest.approx(0.0, abs=1e-3)  # Min Y
     assert bbox[2] == pytest.approx(7.071, abs=1e-3)  # Max X
     assert bbox[3] == pytest.approx(14.142, abs=1e-3)  # Max Y
-
-
-from pdftl.utils.geometry import get_visual_mapping_matrices
 
 
 @pytest.mark.parametrize("rotation", [90, 180, 270])

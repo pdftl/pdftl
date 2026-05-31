@@ -1,8 +1,11 @@
+import io
 from unittest.mock import MagicMock, patch
 
+import pikepdf
 import pytest
 
 from pdftl import api
+from pdftl.api import _normalize_inputs
 from pdftl.core import constants as c
 from pdftl.core.core_types import OpResult
 
@@ -75,11 +78,6 @@ def test_call_unsuccessful_operation():
             api.call("some_op")
 
 
-import io
-
-import pikepdf
-
-
 def test_normalize_inputs_with_list(temp_pdf):
     """Hits line 44: user_opened is a list."""
     # We pass a list of open PDF objects
@@ -108,9 +106,6 @@ def test_process_bytes_input():
 
     assert final_inputs == ["<bytes-obj-0>"]
     assert isinstance(final_opened[0], pikepdf.Pdf)
-
-
-from pdftl.api import _normalize_inputs
 
 
 @patch("pdftl.api._process_user_input")

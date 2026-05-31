@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
+import pdftl.core.constants as c
 from pdftl.core.executor import registry
 from pdftl.fluent import PdfPipeline, pipeline
 
@@ -100,11 +101,6 @@ class TestFluentApi:
         # Accessing the method should give us a function with the right name
         method = pipe.name_check_op
         assert method.__name__ == "name_check_op"
-
-
-from unittest.mock import patch
-
-import pdftl.core.constants as c
 
 
 def test_fluent_dir_discovery(mocker):

@@ -1,13 +1,13 @@
 # tests/info/test_toc.py
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
 
 from pdftl.exceptions import OperationError
-from pdftl.info.toc import _extract_item, build_toc_tree, extract_toc_tree
+from pdftl.info.toc import _build_item, _extract_item, build_toc_tree, extract_toc_tree
 
 
 @pytest.fixture
@@ -214,13 +214,6 @@ def test_extract_item_no_obj():
     mock_item.obj = None
     with pytest.raises(OperationError, match=r"Invalid item \(no obj\)"):
         _extract_item(mock_item, None, {}, {})
-
-
-from unittest.mock import patch
-
-import pytest
-
-from pdftl.info.toc import _build_item
 
 
 def test_build_item_fails_to_create_obj():

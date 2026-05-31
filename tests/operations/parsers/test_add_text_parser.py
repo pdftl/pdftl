@@ -16,6 +16,16 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.errors import InvalidArgument
 
+from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
+    PRESET_POSITIONS,
+    _compile_text_renderer,
+    _normalize_formatting,
+    _parse_options_content,
+    _parse_options_string,
+    _split_spec_string,
+    parse_add_text_specs_to_rules,
+)
+
 
 def _render_text(rule_or_fn, context):
     """Extracts plain text from a renderer result (list of runs)."""
@@ -37,15 +47,6 @@ MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "step", "qualifiers",
 
 # Now, we can import the functions to be tested from the *new* module path
 # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
-from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
-    PRESET_POSITIONS,
-    _compile_text_renderer,
-    _parse_options_content,
-    _parse_options_string,
-    _split_spec_string,
-    parse_add_text_specs_to_rules,
-)
-
 # # --- Monkey-patching the parser's imports ---
 # # We must replace the imported names *within the parser module*
 # pdftl.operations.parsers.add_text_parser.UNITS = UNITS
@@ -204,9 +205,6 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
 
 # Now, we can import the functions to be tested from the *new* module path
 # Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
-from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
-    PRESET_POSITIONS,
-)
 
 # # --- Monkey-patching the parser's imports ---
 # # We must replace the imported names *within the parser module*
@@ -532,8 +530,6 @@ class TestAddTextParser(unittest.TestCase):
             # This will fail at _split_spec_string with "Invalid text delimiter 'D'"
             parse_add_text_specs_to_rules(["1 /Missing Delim"], self.total_pages)
 
-
-from hypothesis import strategies as st
 
 # --- Strategies for generating valid-looking inputs ---
 # A valid non-alphanumeric delimiter
@@ -903,10 +899,8 @@ class TestMiscAddTextParser(unittest.TestCase):
 
 # tests/operations/parsers/test_add_text_parser.py
 
-import pytest
 
 # Adjust import paths based on your actual project structure
-from pdftl.operations.parsers.add_text_parser import _normalize_formatting
 
 
 def test_normalize_formatting_bgcolor_and_padding():

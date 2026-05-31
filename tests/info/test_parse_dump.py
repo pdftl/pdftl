@@ -1,6 +1,12 @@
-from unittest.mock import patch
+import logging
+from unittest.mock import MagicMock, patch
 
+import pikepdf
 import pytest
+from pikepdf import (
+    Name,
+    String,
+)
 
 # Import the functions directly for testing
 # Note: The functions are imported with their actual names from the source module
@@ -12,6 +18,9 @@ from pdftl.info.parse_dump import (
     _parse_info_field,
     _parse_top_level_field,
     _reset_state,
+    _safe_float_list,
+    _safe_int,
+    parse_dump_data,
 )
 
 
@@ -191,21 +200,7 @@ class TestParseDumpCoverage:
             _parse_top_level_field("AnotherBadKey", value, pdf_data_struct, TEST_DECODER)
 
 
-from unittest.mock import MagicMock, patch
-
-import pikepdf
-import pytest
-from pikepdf import (
-    Name,
-    String,
-)
-
 # --- Import Functions to Test ---
-from pdftl.info.parse_dump import (
-    _safe_float_list,
-    _safe_int,
-    parse_dump_data,
-)
 
 # --- Import Modules to Test ---
 
@@ -402,11 +397,6 @@ class TestParseDump:
         assert result["PageLabelList"][0] == {"NewIndex": 1, "Prefix": "A-"}
 
 
-import logging
-
-import pytest
-
-
 # Simple identity decoder for tests
 def dummy_decoder(x):
     return x
@@ -575,9 +565,6 @@ def test_parse_dump_data_consecutive_info_keys(caplog):
     # 2. Verify the dictionary state: 'FirstKey' should be dropped, 'SecondKey' kept
     assert "FirstKey" not in result["Info"]
     assert result["Info"]["SecondKey"] == "ValidValue"
-
-
-import pytest
 
 
 def test_parse_field_invalid_prefix():

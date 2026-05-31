@@ -4,6 +4,7 @@
 
 # tests/conftest.py
 
+import copy
 import importlib
 import logging
 import os
@@ -19,6 +20,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pdftl.core.registry import registry
+
 # need
 # pip install pytest PyMuPDF Pillow
 # or
@@ -29,10 +32,6 @@ TESTS_DIR = Path(__file__).parent
 SCRIPT_PATH = TESTS_DIR / "scripts" / "generate_form.py"
 ASSETS_DIR = TESTS_DIR / "assets"
 FORM_PDF = ASSETS_DIR / "Form.pdf"
-
-import copy
-
-from pdftl.core.registry import registry
 
 
 @pytest.fixture

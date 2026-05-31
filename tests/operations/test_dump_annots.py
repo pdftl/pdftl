@@ -1,10 +1,19 @@
 import logging
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
+from pikepdf import Name
 
-from pdftl.operations.annots_filters import dump_annots, dump_data_annots
+from pdftl.operations.annots_filters import (
+    _get_all_annots_data,
+    _key_value_lines,
+    _lines_from_datum,
+    dump_annots,
+    dump_annots_cli_hook,
+    dump_data_annots,
+    dump_data_annots_cli_hook,
+)
 
 
 @pytest.fixture
@@ -42,12 +51,6 @@ def annot_pdf():
 
     pdf.pages[0].Annots = pdf.make_indirect([link_annot, popup_annot, line_annot])
     return pdf
-
-
-from pdftl.operations.annots_filters import (
-    dump_annots_cli_hook,
-    dump_data_annots_cli_hook,
-)
 
 
 def test_dump_data_annots_pdftk_style(annot_pdf, capsys):
@@ -105,13 +108,6 @@ def test_lines_from_datum_skips():
     assert _lines_from_datum(datum_unknown, lambda x: x) == []
 
 
-from unittest.mock import MagicMock
-
-from pikepdf import Name
-
-from pdftl.operations.annots_filters import _get_all_annots_data
-
-
 def test_get_all_annots_with_named_destinations():
     """Hits line 171 by providing a PDF Root with Names and Dests."""
     mock_pdf = MagicMock()
@@ -134,12 +130,7 @@ def test_get_all_annots_with_named_destinations():
         mock_tree.assert_called_once()
 
 
-import pytest
-
 # Import the internal function directly for the unit test
-from pdftl.operations.annots_filters import (
-    _key_value_lines,
-)
 
 
 def test_dump_annots_pdftk_filters(annot_pdf, capsys):
@@ -208,10 +199,6 @@ def test_dump_annots_error_handling(caplog):
 
 
 # tests/test_dump_annots_coverage.py
-
-import pytest
-
-from pdftl.operations.annots_filters import _lines_from_datum
 
 
 def test_lines_from_datum_compat_false():

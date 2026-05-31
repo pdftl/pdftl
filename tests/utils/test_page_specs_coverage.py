@@ -1,8 +1,12 @@
+import unittest
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
-from pdftl.utils.page_specs import _expand_square_brackets, _flatten_spec_list
+from pdftl.utils.page_specs import _expand_square_brackets, _flatten_spec_list, parse_specs
 from pdftl.utils.page_specs.parser import SpecParser
+from pdftl.utils.page_specs.resolver import _aspect_ratio_pass
 
 
 def test_expand_square_brackets_logic():
@@ -58,9 +62,6 @@ def test_flatten_spec_list_handles_empty_or_whitespace_only():
     assert result == ["1", "", "2", "3"]
 
 
-import unittest
-
-
 class TestPageSpecs(unittest.TestCase):
     def test_expand_square_brackets_with_none(self):
         # Input list containing a valid spec and a None value
@@ -79,9 +80,6 @@ class TestPageSpecs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-from pdftl.utils.page_specs import parse_specs
 
 
 def test_parse_specs_pipeline_integration():
@@ -141,11 +139,6 @@ def test_handle_no_specs_returns_empty_when_inputs_none():
 
     result = _handle_no_specs(None, {})
     assert result == []
-
-
-from unittest.mock import MagicMock, patch
-
-from pdftl.utils.page_specs.resolver import _aspect_ratio_pass
 
 
 @patch("pdftl.utils.page_specs.resolver.get_visible_page_dimensions")

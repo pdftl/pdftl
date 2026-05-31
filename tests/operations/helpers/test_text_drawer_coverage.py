@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from pdftl.operations.helpers.text_drawer import (
     TextDrawer,
@@ -70,9 +70,6 @@ def test_draw_rule_invalid_data_warning(caplog):
     rule = {"text": "not-a-callable"}
     drawer.draw_rule(rule, {})
     assert "Skipping one text rule" in caplog.text
-
-
-from unittest.mock import patch
 
 
 def test_get_font_name_external_registry():

@@ -3,8 +3,11 @@ import pikepdf
 from pdftl.utils.ocg import (
     _remove_targets_from_array,
     clean_ocproperties,
+    create_layer,
     get_page_layer_map,
     get_xobject_ocg_ids,
+    set_layer_state,
+    set_layer_usage,
 )
 
 
@@ -165,9 +168,6 @@ def test_get_xobject_ocg_ids_invalid_oc():
     assert get_xobject_ocg_ids(xobj) == set()
 
 
-from pdftl.utils.ocg import create_layer
-
-
 def test_create_layer_initializes_missing_catalog():
     pdf = pikepdf.new()
     pdf.add_blank_page()
@@ -228,9 +228,6 @@ def test_create_layer_missing_order_and_on_in_existing_d():
 
     assert ocg in pdf.Root.OCProperties.D.Order
     assert ocg in pdf.Root.OCProperties.D.ON
-
-
-from pdftl.utils.ocg import set_layer_state, set_layer_usage
 
 
 def test_set_layer_state_all_actions():

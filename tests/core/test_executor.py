@@ -1,10 +1,12 @@
 # tests/core/test_executor_hardening.py
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import pdftl.core.constants as c
 from pdftl.core.executor import _resolve_arguments, run_operation
+from pdftl.core.registry import registry
 
 
 def test_executor_floor_defaults():
@@ -54,10 +56,6 @@ def test_executor_full_run():
 
 
 # tests/core/test_executor_coverage.py
-
-import logging
-
-from pdftl.core.registry import registry
 
 
 def test_run_operation_unregistered():

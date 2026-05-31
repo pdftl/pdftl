@@ -1,3 +1,4 @@
+import pikepdf
 import pytest
 from pikepdf import Array, Pdf
 
@@ -38,9 +39,6 @@ def test_rotate_pdf_invalid_spec(test_pdf):
     specs = ["invalid_spec"]
     with pytest.raises(InvalidArgumentError):
         normalize_content_streams(test_pdf, specs)
-
-
-import pikepdf
 
 
 def test_normalize_default_specs():
