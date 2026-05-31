@@ -21,7 +21,6 @@ HARDCODED_KEYWORDS = {
     "add_text",
     "attach_files",
     "background",
-    "background_layer",
     "booklet",
     "burst",
     "cat",
@@ -30,6 +29,8 @@ HARDCODED_KEYWORDS = {
     "crop",
     "delete",
     "delete_annots",
+    "delete_blank",
+    "delete_images",
     "dump_annots",
     "dump_bookmarks",
     "dump_data",
@@ -40,15 +41,18 @@ HARDCODED_KEYWORDS = {
     "dump_dests",
     "dump_encryption",
     "dump_files",
+    "dump_images",
     "dump_layers",
     "dump_signatures",
     "dump_text",
     "fill_form",
     "filter",
     "generate_fdf",
+    "highlight",
     "inject",
     "insert",
     "modify_annots",
+    "modify_layers",
     "montage",
     "move",
     "multibackground",
@@ -67,6 +71,7 @@ HARDCODED_KEYWORDS = {
     "update_bookmarks",
     "update_info",
     "update_info_utf8",
+    "zoom",
     "allow",
     "compress",
     "drop_info",
@@ -254,7 +259,9 @@ def resolve_candidates(allowed_tokens, parser):
 
     # Map for explicit terminals in GrammarBuilder
     # This must match the names in GrammarBuilder
+    # We hard-code these for speed rather than importing
     literal_map = {
+        "KW_EACH": "EACH",
         "KW_SUB": "JOB",
         "KW_END": "DONE",
         "HELP_KW": "help",
