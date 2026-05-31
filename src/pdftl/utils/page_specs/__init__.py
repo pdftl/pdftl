@@ -23,8 +23,8 @@ import logging
 from collections.abc import Generator
 
 from .help import _help_topic_page_specs
+from .parser import SPEC_REGEX  # Imported for testing/patching visibility
 from .parser import (  # Internals exposed for tests
-    SPEC_REGEX,  # Imported for testing/patching visibility
     SpecParser,
     _expand_square_brackets,
     _flatten_spec_list,

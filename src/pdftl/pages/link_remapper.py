@@ -25,11 +25,9 @@ maps describing the relationship between source and target pages.
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Union
 
 from pdftl.utils.type_helpers import as_iterable
-
-
-from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from pikepdf import Array, Dictionary, Object, Pdf

@@ -8,8 +8,8 @@
 
 import difflib
 import logging
-import sys
 import os
+import sys
 
 from pdftl.cli.constants import (
     COMPLETION_FLAGS,

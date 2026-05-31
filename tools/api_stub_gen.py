@@ -54,7 +54,7 @@ def generate():
         "    def __exit__(self, t: Any, v: Any, tb: Any) -> None: ...",
     ]
 
-    for name, op_data in registry.operations.items():
+    for name, op_data in sorted(registry.operations.items()):
         args_meta = getattr(op_data, "args", ([], {}, {}))
 
         # Track names for this specific function to prevent duplicates

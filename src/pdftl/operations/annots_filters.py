@@ -7,7 +7,6 @@
 """Dump annotations info, in JSON, or delete annotations"""
 
 import logging
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

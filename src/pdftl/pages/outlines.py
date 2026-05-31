@@ -18,7 +18,6 @@ the outline for B, followed by the outline for A again.
 
 import logging
 from collections import namedtuple
-
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 

@@ -9,7 +9,6 @@
 import logging
 from typing import TYPE_CHECKING, Union
 
-
 if TYPE_CHECKING:
     from pikepdf import Array, Pdf
 

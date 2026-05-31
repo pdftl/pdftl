@@ -19,7 +19,6 @@ from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.user_input import filename_completer
 
-
 if TYPE_CHECKING:
     from pikepdf import Pdf
 

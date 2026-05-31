@@ -7,7 +7,6 @@
 """Crop or clip pages in a PDF file or preview the effect"""
 
 import logging
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

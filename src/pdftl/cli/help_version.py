@@ -9,7 +9,6 @@
 import logging
 import sys
 
-
 from pdftl.cli.console import get_console
 from pdftl.cli.help_data import (
     VERSION_TEMPLATE,

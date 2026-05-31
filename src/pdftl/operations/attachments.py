@@ -12,7 +12,6 @@ See also: pdftl.output.attach for adding attachments to output.
 import logging
 from pathlib import Path
 
-
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation

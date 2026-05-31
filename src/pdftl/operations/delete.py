@@ -7,8 +7,6 @@
 """Delete pages from a single PDF file"""
 
 import logging
-
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

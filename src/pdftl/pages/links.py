@@ -19,14 +19,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
+from pdftl.pages.link_remapper import LinkRemapper
+from pdftl.utils.progress import get_track_progress
 
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
 
-from pdftl.pages.action_handlers import ACTION_HANDLERS, DEFAULT_ACTION_HANDLER
-from pdftl.pages.link_remapper import LinkRemapper
-from pdftl.utils.progress import get_track_progress
 
 logger = logging.getLogger(__name__)
 

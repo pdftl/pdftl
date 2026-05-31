@@ -10,7 +10,6 @@ import logging
 import re
 from collections import defaultdict
 
-
 from pdftl.core.constants import UNITS
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_string_respecting_quotes

@@ -8,7 +8,6 @@
 
 import logging
 
-
 from pdftl.utils.type_helpers import as_iterable
 from pdftl.utils.whatisit import is_page
 

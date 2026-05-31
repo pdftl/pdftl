@@ -10,7 +10,6 @@ import logging
 from collections import OrderedDict
 from typing import Any
 
-
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation

@@ -9,7 +9,6 @@
 import logging
 import re
 
-
 from pdftl.core.constants import PAPER_SIZES
 
 logger = logging.getLogger(__name__)
