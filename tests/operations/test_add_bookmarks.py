@@ -99,7 +99,7 @@ class TestParseSpec:
 
 
 class TestExpandTitle:
-    def _make_pdf(self, num_pages=6, filename="test.pdf", filepath="/tmp/test.pdf"):
+    def _make_pdf(self, num_pages=6, filename="test.pdf", filepath="/docs/test.pdf"):
         pdf = pikepdf.new()
         for _ in range(num_pages):
             pdf.pages.append(
