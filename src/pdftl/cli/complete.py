@@ -18,6 +18,7 @@ HARDCODED_KEYWORDS = {
     "EACH",
     "JOB",
     "DONE",
+    "add_bookmarks",
     "add_text",
     "attach_files",
     "background",

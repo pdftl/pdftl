@@ -334,7 +334,7 @@ def _delete_from_outline(
     "delete_bookmarks",
     tags=["in_place", "bookmarks", "outlines", "delete"],
     type="single input operation",
-    desc="Delete bookmarks from a PDF",
+    desc="Delete bookmarks",
     long_desc=_LONG_DESC,
     usage=(
         "<input> delete_bookmarks [<page_spec>...] [recursive] [no_dest] "

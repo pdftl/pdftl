@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `delete_bookmarks` operation
 
+- `add_bookmarks` operation
+
 ### Changed
 
 - Improve error message when too many files are opened

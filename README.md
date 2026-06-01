@@ -69,7 +69,7 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages, by bookmarks, by size,...), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages or [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html) pages.
 * **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html) page labels, document properties, ...
 * **Attachments:** [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html).
-* **Bookmarks:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html), [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html) and [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html) with high fidelity, using structured YAML or JSON.
+* **Bookmarks:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html), [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html), [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html) and [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html) with high fidelity, using structured YAML or JSON.
 * **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html) (single page), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
 
 ### ✂️ Geometry & splitting
@@ -198,6 +198,7 @@ See the **[API Tutorial][4]** for more details.
 
 | Operation                                                                                               | Description                                                     |
 |---------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html)                 | Add top-level bookmarks                                         |
 | [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages                    |
 | [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |
@@ -209,7 +210,7 @@ See the **[API Tutorial][4]** for more details.
 | [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages to a rectangle                                       |
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
-| [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarksx                                               |
+| [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
