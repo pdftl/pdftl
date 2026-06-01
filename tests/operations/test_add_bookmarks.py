@@ -307,6 +307,17 @@ def test_add_bookmarks_odd_pages(six_page_pdf):
     assert pages == [1, 3, 5]
 
 
+def test_add_bookmarks_even_pages(six_page_pdf):
+    """Page spec 'even' is respected — one bookmark per even page."""
+    pdf = pikepdf.open(six_page_pdf)
+
+    add_bookmarks(pdf, ["even/p{page}/"])
+
+    items = get_outline_titles_and_pages(pdf)
+    pages = [p for _, p in items]
+    assert pages == [2, 4, 6]
+
+
 def test_add_bookmarks_multiple_specs_all_tail_order_preserved(six_page_pdf):
     """Multiple tail specs are appended in argument order."""
     pdf = pikepdf.open(six_page_pdf)
