@@ -63,6 +63,7 @@ def fill_form(pdf: "Pdf", args: list[str], get_input: Callable = filename_comple
 
     data_file = args[0]
     while not data_file or data_file == "PROMPT":
+        # codeql[py/call/wrong-named-argument]
         data_file = get_input(
             "Enter a filename with FDF/XFDF input data: ", completer=filename_completer
         )

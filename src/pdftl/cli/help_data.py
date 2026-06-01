@@ -91,7 +91,7 @@ SPECIAL_HELP_TOPICS_MAP = OrderedDict(
                 "each",
                 "EACH",
                 "loop",
-                "iteraton",
+                "iteration",
             ),
             "pipeline",
         ),

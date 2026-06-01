@@ -557,7 +557,7 @@ _PIPELINE_HELP_EXAMPLES = [
         cmd="in.pdf rotate right --- crop '(a4)' output out.pdf",
     ),
     HelpExample(
-        desc="Assign named handles to inputs to re-use them later in the pipeline",
+        desc="Assign named handles to inputs to reuse them later in the pipeline",
         cmd="A=logo.pdf B=content.pdf cat A B A output out.pdf",
     ),
     HelpExample(
@@ -645,7 +645,7 @@ def _pipeline_help_topic():
     pdftl A=logo.pdf B=content.pdf ...
     ```
 
-    This allows you to re-use a specific file or result multiple times in
+    This allows you to reuse a specific file or result multiple times in
     different stages (e.g., `cat A B A`). Handles are visible to all
     subsequent stages in the same pipeline.
 

@@ -27,7 +27,7 @@ def get_normalized_page_content_stream(page):
 
 def normalize_page_content_stream(pdf, page):
     """Replace the content stream of a page with its
-    normalized verison.
+    normalized version.
 
     See get_normalized_page_content_stream for details of
     normalization.

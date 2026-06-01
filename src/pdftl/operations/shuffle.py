@@ -49,7 +49,7 @@ _SHUFFLE_EXAMPLES = [
     }
 ]
 
-_SHUFFLE_COMPATABILITY = Compatibility(
+_SHUFFLE_COMPATIBILITY = Compatibility(
     type=FeatureType.PDFTK_COMPAT,
     status=Status.STABLE,
     parity=Parity.FULL,
@@ -74,7 +74,7 @@ _SHUFFLE_COMPATABILITY = Compatibility(
         [c.INPUTS, c.OPERATION_ARGS, c.OPENED_PDFS],
         {c.ALIASES: c.ALIASES},
     ),
-    compatibility=_SHUFFLE_COMPATABILITY,
+    compatibility=_SHUFFLE_COMPATIBILITY,
 )
 def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     """

@@ -104,6 +104,7 @@ def get_pdf_path():
     then private). Skips the test if the file is missing.
     """
 
+    # codeql[py/mixed-returns]
     def _resolver(filename):
         # 1. Check Public Folder (Standard Git files)
         base = Path(__file__).parent

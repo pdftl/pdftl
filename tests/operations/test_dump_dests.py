@@ -27,6 +27,7 @@ class MockPdfObject:
     def __init__(self):
         global _objgen_counter
         self.objgen = (_objgen_counter, 0)
+        # codeql[py/unused-global-variable]
         _objgen_counter += 1
 
 

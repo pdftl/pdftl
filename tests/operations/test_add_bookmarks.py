@@ -99,7 +99,7 @@ class TestParseSpec:
 
 
 class TestExpandTitle:
-    def _make_pdf(self, num_pages=6, filename="test.pdf", filepath="/tmp/test.pdf"):
+    def _make_pdf(self, num_pages=6, filename="test.pdf", filepath="/docs/test.pdf"):
         pdf = pikepdf.new()
         for _ in range(num_pages):
             pdf.pages.append(
@@ -229,6 +229,24 @@ def test_add_multiple_specs_head_and_tail(six_page_pdf):
     assert titles == ["Head One", "Head Two", "Existing A", "Existing B", "Tail One"]
 
 
+def test_add_multiple_head_specs_empty_outline_preserves_argument_order(six_page_pdf):
+    """Multiple head specs on an empty outline should keep argument order."""
+    pdf = pikepdf.open(six_page_pdf)
+
+    add_bookmarks(
+        pdf,
+        [
+            "1/Head One/(position=head)",
+            "2/Head Two/(position=head)",
+            "3/Head Three/(position=head)",
+        ],
+    )
+
+    items = get_outline_titles_and_pages(pdf)
+    titles = [t for t, _ in items]
+    assert titles == ["Head One", "Head Two", "Head Three"]
+
+
 def test_add_page_range_multiple_bookmarks(six_page_pdf):
     """A range spec produces one bookmark per matched page."""
     pdf = pikepdf.open(six_page_pdf)
@@ -305,6 +323,17 @@ def test_add_bookmarks_odd_pages(six_page_pdf):
     items = get_outline_titles_and_pages(pdf)
     pages = [p for _, p in items]
     assert pages == [1, 3, 5]
+
+
+def test_add_bookmarks_even_pages(six_page_pdf):
+    """Page spec 'even' is respected — one bookmark per even page."""
+    pdf = pikepdf.open(six_page_pdf)
+
+    add_bookmarks(pdf, ["even/p{page}/"])
+
+    items = get_outline_titles_and_pages(pdf)
+    pages = [p for _, p in items]
+    assert pages == [2, 4, 6]
 
 
 def test_add_bookmarks_multiple_specs_all_tail_order_preserved(six_page_pdf):

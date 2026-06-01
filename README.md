@@ -169,7 +169,7 @@ pdftl in.pdf \
 ```
 
 ```
-# Content stream replacment with regular expressions (YMMV)
+# Content stream replacement with regular expressions (YMMV)
 # Change black to red
 pdftl in.pdf replace '/0 0 0 (RG|rg)/1 0 0 \1/' output redder.pdf
 ```

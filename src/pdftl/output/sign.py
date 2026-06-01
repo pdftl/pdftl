@@ -165,7 +165,7 @@ def _sign_pass_prompt_option():
 @register_help_topic(
     "signing",
     title="signing PDF files",
-    desc="Adding crytographic signatures to PDF files",
+    desc="Adding cryptographic signatures to PDF files",
 )
 def _help_topic_signing():
     """`pdftl` supports high-integrity digital signing of PDF
@@ -302,7 +302,7 @@ def _help_topic_signing():
 
     ### 3. Generate an Encrypted Key
 
-    To generate a passowrd protected key:
+    To generate a password protected key:
 
     ```bash
     # This will prompt you for a password during generation

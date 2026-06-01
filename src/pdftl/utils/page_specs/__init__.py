@@ -87,7 +87,7 @@ def expand_specs_to_pages(
     _handle_no_specs visible in this module (which might be patched by tests).
     """
     aliases = aliases or {}
-    opened_pdfs = opened_pdfs or {}
+    opened_pdfs = opened_pdfs or []
 
     if not inputs and not opened_pdfs:
         raise ValueError("no inputs or opened pdfs were passed to expand_specs_to_pages")

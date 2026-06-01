@@ -79,7 +79,7 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
 
     try:
         # this make_indirect call is needed, even if original_annot is indirect
-        # otherwise we encounter pollution issus
+        # otherwise we encounter pollution issues
         annot_to_copy = remapper.source_pdf.make_indirect(original_annot)
         new_annot = remapper.pdf.copy_foreign(annot_to_copy)
     except (ForeignObjectError, ValueError, RuntimeError) as e:
@@ -119,7 +119,7 @@ def _rebuild_annotations_for_page(
 
     Args:
         new_page (pikepdf.Page): The target page to populate.
-        source_page (pikepdf.Page): The correpsonding source page.
+        source_page (pikepdf.Page): The corresponding source page.
         page_idx (int): The index of the corresponding source page.
         remapper (LinkRemapper): Configured remapper for this PDF.
         pikepdf: (Any): dependency injection of pikepdf module.

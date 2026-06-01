@@ -116,7 +116,7 @@ def test_normalize_inputs_closes_opened_pdfs_on_exception(mock_process):
         if i == 0:
             # FIX: Just return a new list containing the mock PDF directly
             return final_inputs + [item], {0: mock_pdf_1}
-        elif i == 1:
+        else:
             raise ValueError("Simulated corruption on file 2")
 
     mock_process.side_effect = mock_process_side_effect

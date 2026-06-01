@@ -39,7 +39,7 @@ positive integer, to choose all bookmarks (a.k.a. outlines) at level
 up to n as split points. Similarly, `level<n>only` splits using only
 bookmarks at level `<n>`.
 
-What is a bookmark level? The highest level of the bookmark heirarchy
+What is a bookmark level? The highest level of the bookmark hierarchy
 is level 1, and this is the level of the root of the bookmark tree and
 its siblings. Children of these bookmark items have level 2, and so
 on.
