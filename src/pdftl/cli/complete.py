@@ -29,6 +29,7 @@ HARDCODED_KEYWORDS = {
     "crop",
     "delete",
     "delete_annots",
+    "delete_bookmarks",
     "delete_blank",
     "delete_images",
     "dump_annots",

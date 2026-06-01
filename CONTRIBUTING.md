@@ -47,7 +47,10 @@ ruff check src tests --fix      # should be no warnings here
 1. Create `src/pdftl/operations/your_op.py`
 2. Decorate with `@register_operation` — see any existing operation for the pattern
 3. Add tests in `tests/operations/test_your_op.py`
-4. Add an entry to `CHANGELOG.md` under `Unreleased`
+4. Update `HARDCODED_KEYWORDS` in `src/pdftl/cli/complete.py`
+  - FIXME: should we bump the grammar version every time?
+5. Update table and possibly body of `README.md`
+6. Add an entry to `CHANGELOG.md` under `Unreleased`
 
 The operation will be auto-discovered at startup — no registration file to update.
 

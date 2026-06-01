@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add `EACH` ... `JOB`, documented under `pdftl help pipeline`
 
+- `delete_bookmarks` operation
+
 ### Changed
 
 - Improve error message when too many files are opened
