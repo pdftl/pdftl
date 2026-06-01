@@ -119,7 +119,7 @@ def _rebuild_annotations_for_page(
 
     Args:
         new_page (pikepdf.Page): The target page to populate.
-        source_page (pikepdf.Page): The correpsonding source page.
+        source_page (pikepdf.Page): The corresponding source page.
         page_idx (int): The index of the corresponding source page.
         remapper (LinkRemapper): Configured remapper for this PDF.
         pikepdf: (Any): dependency injection of pikepdf module.
