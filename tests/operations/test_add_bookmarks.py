@@ -229,6 +229,24 @@ def test_add_multiple_specs_head_and_tail(six_page_pdf):
     assert titles == ["Head One", "Head Two", "Existing A", "Existing B", "Tail One"]
 
 
+def test_add_multiple_head_specs_empty_outline_preserves_argument_order(six_page_pdf):
+    """Multiple head specs on an empty outline should keep argument order."""
+    pdf = pikepdf.open(six_page_pdf)
+
+    add_bookmarks(
+        pdf,
+        [
+            "1/Head One/(position=head)",
+            "2/Head Two/(position=head)",
+            "3/Head Three/(position=head)",
+        ],
+    )
+
+    items = get_outline_titles_and_pages(pdf)
+    titles = [t for t, _ in items]
+    assert titles == ["Head One", "Head Two", "Head Three"]
+
+
 def test_add_page_range_multiple_bookmarks(six_page_pdf):
     """A range spec produces one bookmark per matched page."""
     pdf = pikepdf.open(six_page_pdf)
