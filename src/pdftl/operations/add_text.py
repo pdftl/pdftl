@@ -11,7 +11,6 @@ which are then applied to the target pages.
 """
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -21,6 +20,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.text_templates import build_static_context, build_page_context
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,8 @@ braces {}, in one of the following formats.
 number. Possible variables are:
 
    - `page`: The current page number (1-based index).
+
+   - `n`: The sequence number (1-based index within the current spec)
 
    - `total`: The total number of pages in the PDF.
 
@@ -220,41 +222,16 @@ _ADD_TEXT_EXAMPLES = [
             "output out.pdf"
         ),
     },
+    {
+        "desc": "Apply sequential sequence numbering that resets per specification",
+        "cmd": (
+            "in.pdf add_text "
+            "'1-3/Exhibit A-{n}/(position=top-left, size=10)' "
+            "'4-6/Exhibit B-{n}/(position=top-left, size=10)' "
+            "output out.pdf"
+        ),
+    },
 ]
-
-
-def _build_static_context(pdf: "Pdf", total_pages: int) -> dict:
-    """Builds the context dict for variables that are the same for all pages."""
-    try:
-        # .docinfo is a property that lazy-loads the info dict
-        metadata = {str(k).lstrip("/"): str(v) for k, v in pdf.docinfo.items()}
-    except (AttributeError, TypeError, ValueError):
-        logger.warning("Could not read PDF metadata for variable substitution.")
-        metadata = {}
-
-    filename = ""
-    filename_base = ""
-    filepath = ""
-
-    if pdf.filename:
-        p = Path(pdf.filename)
-        filename = p.name
-        filename_base = p.stem
-        filepath = str(p)
-
-    from datetime import datetime
-
-    now = datetime.now()
-    return {
-        "total": total_pages,
-        "metadata": metadata,
-        "filename": filename,
-        "filename_base": filename_base,
-        "filepath": filepath,
-        "date": now.strftime("%Y-%m-%d"),
-        "time": now.strftime("%H:%M:%S"),
-        "datetime": now.isoformat(),
-    }
 
 
 @register_operation(
@@ -282,7 +259,7 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
     total_pages = len(pdf.pages)
 
     # --- 1. Build static context ---
-    static_context = _build_static_context(pdf, total_pages)
+    static_context = build_static_context(pdf)
 
     # --- 2. Parse all specs ---
     try:
@@ -333,27 +310,7 @@ def _process_page(i, page, page_rules, static_context, drawer_class, pdf):
         visual_height = physical_height
 
     # --- Build Page Context ---
-    page_context = {**static_context, "page": i + 1}
-
-    # Retrieve "sticky" source metadata if available
-    source_meta = getattr(page, c.PDFTL_SOURCE_INFO_KEY, None)
-
-    if source_meta:
-        page_context.update({k[1:]: v for k, v in source_meta.items()})
-    else:
-        # Fallback: The "Source" is the current file.
-        page_context["source_filename"] = static_context.get("filename", "")
-        page_context["source_path"] = static_context.get("filepath", "")
-        page_context["source_page"] = i + 1
-        page_context["source_rotation"] = rotation
-        page_context["source_width"] = visual_width
-        page_context["source_height"] = visual_height
-        page_context["source_orientation"] = (
-            "Landscape" if visual_width > visual_height else "Portrait"
-        )
-        page_context["source_cropbox"] = str(list(page.cropbox))
-        page_context["source_mediabox"] = str(list(page.mediabox))
-        page_context["source_filesize"] = ""
+    page_context = build_page_context(static_context, page, i + 1)
 
     # --- 5. Delegate drawing to drawer ---
     # Create a new Rectangle using the VISUAL dimensions.
@@ -363,6 +320,7 @@ def _process_page(i, page, page_rules, static_context, drawer_class, pdf):
     drawer = drawer_class(page_box=visual_page_box)
 
     for rule in rules_for_page:
+        page_context["n"] = rule.get("n", 1)
         drawer.draw_rule(rule, page_context)
 
     # Get the completed overlay PDF bytes

@@ -8,7 +8,7 @@ import pytest
 import pikepdf
 
 from pdftl.core.core_types import OpResult
-from pdftl.operations.add_bookmarks import add_bookmarks, _parse_spec, _expand_title
+from pdftl.operations.add_bookmarks import add_bookmarks, _parse_spec
 from pdftl.utils.destinations import get_named_destinations, get_page_map, resolve_dest_to_page_num
 
 
@@ -91,56 +91,6 @@ class TestParseSpec:
     def test_malformed_option_no_equals(self):
         with pytest.raises(ValueError, match="expected key=value"):
             _parse_spec("1/Title/(tail)")
-
-
-# ---------------------------------------------------------------------------
-# _expand_title unit tests
-# ---------------------------------------------------------------------------
-
-
-class TestExpandTitle:
-    def _make_pdf(self, num_pages=6, filename="test.pdf", filepath="/docs/test.pdf"):
-        pdf = pikepdf.new()
-        for _ in range(num_pages):
-            pdf.pages.append(
-                pikepdf.Page(pikepdf.Dictionary(Type=pikepdf.Name.Page, MediaBox=[0, 0, 612, 792]))
-            )
-        pdf._source_filename = filename
-        pdf._source_filepath = filepath
-        return pdf
-
-    def test_page_variable(self):
-        pdf = self._make_pdf()
-        assert _expand_title("Chapter {page}", 3, pdf) == "Chapter 3"
-
-    def test_total_variable(self):
-        pdf = self._make_pdf(num_pages=6)
-        assert _expand_title("{total} pages", 1, pdf) == "6 pages"
-
-    def test_filename_variable(self):
-        pdf = self._make_pdf(filepath="/docs/report.pdf")
-        assert _expand_title("{filename}", 1, pdf) == "report.pdf"
-
-    def test_filename_base_variable(self):
-        pdf = self._make_pdf(filepath="/docs/report.pdf")
-        assert _expand_title("{filename_base}", 1, pdf) == "report"
-
-    def test_filepath_variable(self):
-        pdf = self._make_pdf(filepath="/docs/report.pdf")
-        assert _expand_title("{filepath}", 1, pdf) == "/docs/report.pdf"
-
-    def test_combined_variables(self):
-        pdf = self._make_pdf(num_pages=6, filepath="/docs/report.pdf")
-        result = _expand_title("{filename_base} - p.{page} of {total}", 2, pdf)
-        assert result == "report - p.2 of 6"
-
-    def test_unknown_variable_left_intact(self):
-        pdf = self._make_pdf()
-        assert _expand_title("{unknown_var}", 1, pdf) == "{unknown_var}"
-
-    def test_no_variables(self):
-        pdf = self._make_pdf()
-        assert _expand_title("Static Title", 1, pdf) == "Static Title"
 
 
 # ---------------------------------------------------------------------------
@@ -378,3 +328,39 @@ def test_add_bookmarks_cli_pipeline(runner, six_page_pdf, temp_dir):
     # "New Cover" prepended before "Existing"
     assert items[0] == ("New Cover", 1)
     assert items[1] == ("Existing", 3)
+
+
+def test_n_variable_basic(six_page_pdf):
+    """{n} gives 1-based ordinal within the matched pages of the spec."""
+    pdf = pikepdf.open(six_page_pdf)
+    add_bookmarks(pdf, ["2-6even/{n}/"])
+    items = get_outline_titles_and_pages(pdf)
+    # even pages 2,4,6 -> n=1,2,3
+    assert [t for t, _ in items] == ["1", "2", "3"]
+    assert [p for _, p in items] == [2, 4, 6]
+
+
+def test_n_variable_arithmetic(six_page_pdf):
+    """{n+3} offsets the ordinal."""
+    pdf = pikepdf.open(six_page_pdf)
+    # pages 1,3,5 (odd) -> n=1,2,3 -> titles Chapter 4, Chapter 5, Chapter 6
+    add_bookmarks(pdf, ["odd/Chapter {n+3}/"])
+    items = get_outline_titles_and_pages(pdf)
+    assert [t for t, _ in items] == ["Chapter 4", "Chapter 5", "Chapter 6"]
+
+
+def test_n_variable_resets_per_spec(six_page_pdf):
+    """n resets to 1 for each new spec independently."""
+    pdf = pikepdf.open(six_page_pdf)
+    add_bookmarks(pdf, ["1-3/A{n}/(position=head)", "4-6/B{n}/(position=tail)"])
+    items = get_outline_titles_and_pages(pdf)
+    titles = [t for t, _ in items]
+    assert titles == ["A1", "A2", "A3", "B1", "B2", "B3"]
+
+
+def test_n_variable_formatting(six_page_pdf):
+    """{n:03d} zero-pads the ordinal."""
+    pdf = pikepdf.open(six_page_pdf)
+    add_bookmarks(pdf, ["1-3/{n:03d}/"])
+    items = get_outline_titles_and_pages(pdf)
+    assert [t for t, _ in items] == ["001", "002", "003"]

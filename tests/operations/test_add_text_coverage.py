@@ -1,6 +1,6 @@
 import io
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, PropertyMock
 
 import pikepdf
 import pytest
@@ -8,6 +8,7 @@ import pytest
 import pdftl.core.constants as c
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.add_text import _process_page, add_text_pdf
+from pdftl.utils.text_templates import build_static_context
 
 from .sandbox import ModuleSandboxMixin
 
@@ -182,3 +183,30 @@ def test_add_text_bad_metadata_handled_gracefully():
     ):
         result = add_text_pdf(pdf, ["1-end/TEST/(position=mid-center)"])
         assert result.success
+
+
+# --- ADD_TEXT MOPPING ---
+
+
+def test_add_text_metadata_failure(caplog):
+    """Mops lines 171-173: Metadata read failure handling."""
+    mock_pdf = MagicMock()
+    # Trigger a TypeError when accessing docinfo
+    type(mock_pdf).docinfo = PropertyMock(side_effect=TypeError("Corrupt Info"))
+    mock_pdf.filename = "test.pdf"
+    mock_pdf.pages = [1, 2, 3]
+
+    with caplog.at_level(logging.WARNING):
+        ctx = build_static_context(mock_pdf)
+        assert ctx["metadata"] == {}
+        assert "Could not read PDF metadata" in caplog.text
+
+
+def test_add_text_no_rules():
+    """Mops line 229: Return early if no rules are parsed."""
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [1]
+    # Passing empty specs or specs that result in no rules
+    result = add_text_pdf(mock_pdf, [])
+    assert result.success is True
+    assert result.pdf == mock_pdf

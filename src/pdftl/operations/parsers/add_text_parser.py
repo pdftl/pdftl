@@ -30,7 +30,15 @@ PRESET_POSITIONS = {
     "bottom-right",
 }
 
-NUMERIC_VARS = {"page", "total", "source_page", "source_rotation", "source_width", "source_height"}
+NUMERIC_VARS = {
+    "page",
+    "total",
+    "source_page",
+    "source_rotation",
+    "source_width",
+    "source_height",
+    "n",
+}
 
 # Regex to capture either an escaped block {{...}} OR a variable block {...}
 TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
@@ -67,6 +75,7 @@ KNOWN_VARS = {
     "date",
     "time",
     "datetime",
+    "n",
     # Source metadata variables
     "source_filename",
     "source_path",
@@ -109,12 +118,15 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
             rule_dict = _parse_add_text_op(text_string, options_part)
 
             # 4. Use the central parser to resolve the page selection.
-            #    We pass the page_range_part as a single-element list.
-            # for page_spec in parse_specs([page_range_part], total_pages):
+            #    Track the 1-based match sequence 'n' independently per specification.
+            matched_pages = page_numbers_matching_page_spec(page_range_part, total_pages)
+            for n, p_num in enumerate(matched_pages, 1):
+                # Shallow copy the base dictionary so page tracking values don't collide
+                copied_rule = rule_dict.copy()
+                copied_rule["n"] = n
 
-            for p_num in page_numbers_matching_page_spec(page_range_part, total_pages):
                 # Convert from 1-based page number to 0-based index.
-                page_rules[p_num - 1].append(rule_dict)
+                page_rules[p_num - 1].append(copied_rule)
 
         except ValueError as exc:
             raise ValueError(f"Invalid add_text spec '{spec}': {exc}") from exc

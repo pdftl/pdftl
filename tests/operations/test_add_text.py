@@ -10,7 +10,9 @@ from pikepdf import Array, Name, Pdf, Rectangle
 
 # --- Local Imports ---
 # We import the module to reload it during cleanup
-from pdftl.operations.add_text import _build_static_context, add_text_pdf
+from pdftl.operations.add_text import add_text_pdf
+from pdftl.operations.parsers.add_text_parser import parse_add_text_specs_to_rules
+from pdftl.utils.text_templates import build_static_context
 
 from .sandbox import ModuleSandboxMixin
 
@@ -20,13 +22,14 @@ class TestAddTextLogic(unittest.TestCase):
     Unit tests for pure logic helpers.
     """
 
-    def setUp(self):
+    def setUp(self, num_pages=10):
         self.mock_pdf = MagicMock(spec=Pdf)
         self.mock_pdf.filename = "my-file.pdf"
         self.mock_pdf.docinfo = {Name.Title: "Title", Name.Author: "Author"}
+        self.mock_pdf.pages.__len__ = MagicMock(return_value=num_pages)
 
     def test_build_static_context(self):
-        context = _build_static_context(self.mock_pdf, 10)
+        context = build_static_context(self.mock_pdf)
         self.assertEqual(context["total"], 10)
         self.assertEqual(context["filename"], "my-file.pdf")
         self.assertEqual(context["metadata"]["Title"], "Title")
@@ -34,7 +37,7 @@ class TestAddTextLogic(unittest.TestCase):
     def test_build_static_context_missing_info(self):
         self.mock_pdf.filename = None
         self.mock_pdf.docinfo = {}
-        context = _build_static_context(self.mock_pdf, 5)
+        context = build_static_context(self.mock_pdf)
         self.assertEqual(context["filename"], "")
         self.assertEqual(context["metadata"], {})
 
@@ -122,6 +125,29 @@ class TestAddTextLogic(unittest.TestCase):
             target_page, overlay_page_empty, pdf
         )  # Should return cleanly without error
 
+    def test_parse_error_raises_invalid_argument_error(self):
+        # Line 259-260: ValueError from parser is wrapped in InvalidArgumentError
+        from pdftl.exceptions import InvalidArgumentError
+
+        pdf = Pdf.new()
+        pdf.add_blank_page()
+        with self.assertRaises(InvalidArgumentError):
+            add_text_pdf(pdf, ["BADINPUT_NO_DELIMITER"])
+
+    def test_empty_page_rules_returns_early(self):
+        # Line 263: if page_rules is empty, return immediately without drawing
+        from unittest.mock import patch
+
+        pdf = Pdf.new()
+        pdf.add_blank_page()
+        # Parser returns empty dict -> early return, no TextDrawer instantiated
+        with patch(
+            "pdftl.operations.parsers.add_text_parser.parse_add_text_specs_to_rules",
+            return_value={},
+        ):
+            result = add_text_pdf(pdf, ["1/text/"])
+        assert result.success is True
+
 
 class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
     """
@@ -202,6 +228,33 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
         # Should be converted to Rectangle (510 - 10)
         self.assertEqual(page_kwargs["page_box"].width, 500)
 
+    def test_page_with_no_rules_is_skipped(self):
+        # Line 283: _process_page returns early when no rules match the page
+        # Add two pages but only give rules for page 0; page 1 should be skipped
+        self.pdf.add_blank_page(page_size=(500, 800))
+        self.pdf.add_blank_page(page_size=(500, 800))
+        self.mock_parser.return_value = {0: [self.mock_rule]}  # only page 0
+
+        add_text_pdf(self.pdf, ["spec"])
+
+        # TextDrawer instantiated once for dep check + once for page 0 only
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+
+    def test_rotation_90_visual_dimensions_swapped(self):
+        # Lines 297-298: for 90/270 rotation, visual w/h are swapped
+        from pikepdf import Name
+
+        self.pdf.add_blank_page(page_size=(500, 800))
+        self.pdf.pages[0].obj[Name.Rotate] = 90
+        self.mock_parser.return_value = {0: [self.mock_rule]}
+
+        add_text_pdf(self.pdf, ["spec"])
+
+        # With 90-degree rotation: visual width=800, visual height=500
+        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
+        self.assertEqual(page_kwargs["page_box"].width, 800)
+        self.assertEqual(page_kwargs["page_box"].height, 500)
+
 
 class TestAddTextMissingDependency(unittest.TestCase):
     """
@@ -266,3 +319,46 @@ class TestAddTextMissingDependency(unittest.TestCase):
 
             with pytest.raises(CurrentError):
                 add_text_pdf(self.pdf, ["dummy"])
+
+
+def test_add_text_sequence_counter_stamping():
+    """
+    Verify that the {n} counter increments per matched page within a spec
+    and resets back to 1 for subsequent specs.
+    """
+    # Simulate a 6-page PDF document
+    total_pages = 6
+
+    # Spec 1 targets pages 1-3 (indices 0, 1, 2) -> expected n = 1, 2, 3
+    # Spec 2 targets pages 2-4 (indices 1, 2, 3) -> expected n = 1, 2, 3
+    specs = ["1-3/x{n}/(position=top-left)", "2-4/y{n}/(position=top-left)"]
+
+    page_rules = parse_add_text_specs_to_rules(specs, total_pages)
+
+    # --- Page 1 (Index 0) ---
+    # Should only have the first spec's rule (n=1)
+    rules_p1 = page_rules[0]
+    assert len(rules_p1) == 1
+    assert getattr(rules_p1[0], "n", None) == 1 or rules_p1[0].get("n") == 1
+
+    # --- Page 2 (Index 1) ---
+    # Should have Spec 1 (n=2) and Spec 2 (n=1)
+    rules_p2 = page_rules[1]
+    assert len(rules_p2) == 2
+
+    n_values_p2 = [getattr(r, "n", None) if hasattr(r, "n") else r.get("n") for r in rules_p2]
+    assert n_values_p2 == [2, 1]
+
+    # --- Page 3 (Index 2) ---
+    # Should have Spec 1 (n=3) and Spec 2 (n=2)
+    rules_p3 = page_rules[2]
+    assert len(rules_p3) == 2
+
+    n_values_p3 = [getattr(r, "n", None) if hasattr(r, "n") else r.get("n") for r in rules_p3]
+    assert n_values_p3 == [3, 2]
+
+    # --- Page 4 (Index 3) ---
+    # Should only have the second spec's rule (n=3)
+    rules_p4 = page_rules[3]
+    assert len(rules_p4) == 1
+    assert getattr(rules_p4[0], "n", None) == 3 or rules_p4[0].get("n") == 3

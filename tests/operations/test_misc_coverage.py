@@ -3,13 +3,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
 
 from pdftl.core.core_types import OpResult
-from pdftl.operations.add_text import _build_static_context, add_text_pdf
 from pdftl.operations.annots_filters import (
     _data_item_to_string_helper,
     dump_data_annots_cli_hook,
@@ -17,33 +16,6 @@ from pdftl.operations.annots_filters import (
 from pdftl.operations.modify_annots import modify_annots
 from pdftl.operations.rebox import _apply_rule_to_page
 from pdftl.utils.dimensions import get_visible_page_dimensions
-
-# --- ADD_TEXT MOPPING ---
-
-
-def test_add_text_metadata_failure(caplog):
-    """Mops lines 171-173: Metadata read failure handling."""
-    mock_pdf = MagicMock()
-    # Trigger a TypeError when accessing docinfo
-    type(mock_pdf).docinfo = PropertyMock(side_effect=TypeError("Corrupt Info"))
-    mock_pdf.filename = "test.pdf"
-    mock_pdf.pages = [1, 2, 3]
-
-    with caplog.at_level(logging.WARNING):
-        ctx = _build_static_context(mock_pdf, 3)
-        assert ctx["metadata"] == {}
-        assert "Could not read PDF metadata" in caplog.text
-
-
-def test_add_text_no_rules():
-    """Mops line 229: Return early if no rules are parsed."""
-    mock_pdf = MagicMock()
-    mock_pdf.pages = [1]
-    # Passing empty specs or specs that result in no rules
-    result = add_text_pdf(mock_pdf, [])
-    assert result.success is True
-    assert result.pdf == mock_pdf
-
 
 # --- CROP MOPPING ---
 

@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
+from pdftl.utils.text_templates import build_page_context, build_static_context, render_template
+from pdftl.utils.page_specs import parse_specs
+from pdftl.utils.page_specs.resolver import _filter_page_numbers
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,8 @@ The title string supports `{variable}` substitution, using the same variables
 as `add_text`:
 
   - `{page}`           — current page number (1-based)
+  - `{n}`              — 1-based sequential counter within the matched
+                         pages of the current spec
   - `{total}`          — total number of pages in the PDF
   - `{filename}`       — input filename including extension
   - `{filename_base}`  — input filename without extension
@@ -73,22 +78,6 @@ The final outline is:
 Within each batch, bookmarks are ordered by the sequence the page range produces
 them — so a reversed range `3-1/{title}/` produces three bookmarks in the order
 page 3, page 2, page 1.
-
-### Worked examples
-
-    add_bookmarks '1/{filename_base}/'
-        Add a bookmark pointing to page 1, titled with the base filename,
-        prepended before any existing bookmarks (position=head is default).
-
-    add_bookmarks '1/{filename_base}/(position=tail)'
-        Same but appended after existing bookmarks.
-
-    add_bookmarks '1-3/Chapter {page}/'
-        Add three bookmarks for pages 1, 2, 3 titled "Chapter 1",
-        "Chapter 2", "Chapter 3". All prepended as a batch.
-
-    add_bookmarks '1/{filename_base}/(position=head)' '5/Appendix/(position=tail)'
-        Prepend a title bookmark and append an appendix bookmark in one pass.
 """
 
 _EXAMPLES = [
@@ -102,7 +91,11 @@ _EXAMPLES = [
     },
     {
         "cmd": "in.pdf add_bookmarks '1-3/Chapter {page}/' output out.pdf",
-        "desc": "Add a bookmark for each of pages 1-3, titled 'Chapter N'",
+        "desc": "Add a bookmark for each of pages 1-3, titled 'Chapter N' for N=1,2,3",
+    },
+    {
+        "cmd": "in.pdf add_bookmarks '3,5,6/Chapter {n+1}/' output out.pdf",
+        "desc": "Add a bookmark for each of pages 2,5,6, titled 'Chapter N' for N=2,3,4",
     },
     {
         "cmd": (
@@ -183,47 +176,6 @@ def _parse_spec(raw: str) -> tuple[str, str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Title variable expansion
-# ---------------------------------------------------------------------------
-
-
-def _expand_title(template: str, page_num: int, pdf: "pikepdf.Pdf") -> str:
-    """
-    Expand {variable} placeholders in a title template.
-
-    Supports {page}, {total}, {filename}, {filename_base}, {filepath}.
-    Unknown variables are left unexpanded rather than raising.
-    """
-    total = len(pdf.pages)
-
-    # Retrieve source-file metadata stashed by the pipeline, if available.
-    # The pipeline stashes this in pdf.docinfo or a custom attribute; fall back
-    # gracefully to empty strings so the operation is self-contained.
-    source_filename = getattr(pdf, "_source_filename", None) or ""
-    source_filepath = getattr(pdf, "_source_filepath", None) or source_filename
-
-    import os
-
-    filename = os.path.basename(source_filepath) if source_filepath else source_filename
-    filename_base = os.path.splitext(filename)[0] if filename else ""
-    filepath = source_filepath or ""
-
-    replacements = {
-        "page": str(page_num),
-        "total": str(total),
-        "filename": filename,
-        "filename_base": filename_base,
-        "filepath": filepath,
-    }
-
-    def _replace(m):
-        key = m.group(1).strip()
-        return replacements.get(key, m.group(0))  # leave unknown vars intact
-
-    return re.sub(r"\{([^}]+)\}", _replace, template)
-
-
-# ---------------------------------------------------------------------------
 # Core logic
 # ---------------------------------------------------------------------------
 
@@ -238,12 +190,11 @@ def _build_bookmarks(
     Items are ready to insert into an outline root.
     """
     from pikepdf import OutlineItem
-    from pdftl.utils.page_specs import parse_specs
-    from pdftl.utils.page_specs.resolver import _filter_page_numbers
 
     num_pages = len(pdf.pages)
     head_items: list = []
     tail_items: list = []
+    static_context = build_static_context(pdf)
 
     for raw in specs:
         page_range, title_template, position = _parse_spec(raw)
@@ -263,8 +214,12 @@ def _build_bookmarks(
             )
             matched_pages.extend(final_pages)
 
-        for page_num in matched_pages:
-            title = _expand_title(title_template, page_num, pdf)
+        for n, page_num in enumerate(matched_pages, 1):
+            page = pdf.pages[page_num - 1]
+            context = build_page_context(static_context, page, page_num)
+            context["n"] = n
+            title = render_template(title_template, context)
+
             # OutlineItem destination is a 0-based page index
             item = OutlineItem(title, page_num - 1)
             if position == _POSITION_HEAD:

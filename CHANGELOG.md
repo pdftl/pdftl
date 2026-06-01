@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.19.0] - 2026-06-01
 
 ### Fixed
 
@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `delete_bookmarks` operation
 
 - `add_bookmarks` operation
+
+- add `{n}` template to `add_text` (and `add_bookmarks`)
 
 ### Changed
 
