@@ -110,6 +110,7 @@ class HelpExample(LegacyDictAccess):
     cmd: str
     desc: str
     topic: str | None = None
+    test_example: bool = True
 
 
 @dataclass

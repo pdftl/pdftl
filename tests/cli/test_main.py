@@ -354,19 +354,36 @@ def test_cli_handles_completion_flag():
         mock_setup.assert_called_once_with("bash")
 
 
-def test_main_completion_missing_equals():
-    """Targets lines 198-199: Bare --completion without shell."""
-    # We patch _print_help_and_chill to avoid actual help output in logs
-    # and to verify it was called with the correct topic.
-    with patch("pdftl.cli.main._print_help_and_chill") as mock_help:
-        mock_help.return_value = 0
-
+def test_main_completion_auto_detect_success():
+    """Targets: Bare --completion without shell, successful auto-detection."""
+    # Mock the infer logic to simulate finding a shell, and mock the script output
+    with (
+        patch("pdftl.cli.completion_setup._infer_active_shell", return_value="bash"),
+        patch(
+            "pdftl.cli.completion_setup._get_completion_scripts",
+            return_value={"bash": "echo 'bash code'"},
+        ),
+    ):
         # ACT: Call main with just the bare flag
         result = cli_main(["pdftl", "--completion"])
 
-        # ASSERT
-        assert result == 1  # Logic returns 1 after showing help
-        mock_help.assert_called_once_with("--completion")
+        # ASSERT: It should succeed and return 0
+        assert result == 0
+
+
+def test_main_completion_auto_detect_failure(capsys):
+    """Targets: Bare --completion without shell, failed auto-detection."""
+    # Mock the infer logic to simulate a completely scrubbed environment (None)
+    with patch("pdftl.cli.completion_setup._infer_active_shell", return_value=None):
+        # ACT
+        result = cli_main(["pdftl", "--completion"])
+
+        # ASSERT: It should return 1 and print our custom error to stderr
+        assert result == 1
+
+        captured = capsys.readouterr()
+        assert "Error: Could not automatically detect your shell" in captured.err
+        assert "Please specify it explicitly" in captured.err
 
 
 def test_main_completion_not_implemented():

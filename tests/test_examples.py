@@ -24,39 +24,23 @@ initialize_registry()
 
 
 def discover_examples():
-    """
-    Finds all example commands in CLI_DATA, including operation examples
-    and pipeline examples, and yields them for pytest.
-    Omit any with PROMPT, for now.
-    """
     all_examples = []
 
-    # 1. Discover examples from each operation
-    for op_name, op_data in registry.operations.items():
-        examples = op_data.get("examples", [])
-        if not examples and "example" in op_data:  # Fallback for single example
-            examples = [{"cmd": op_data["example"], "desc": ""}]
+    def _add_or_omit(example, test_id):
+        cmd = example.get("cmd", None)
+        if not cmd or "PROMPT" in cmd or not example.get("test_example", True):
+            return
+        all_examples.append(pytest.param(cmd, id=test_id))
 
-        for i, example in enumerate(examples):
-            if (cmd := example.get("cmd")) and "PROMPT" not in cmd:
-                test_id = f"{op_name}-example{i + 1}"
-                all_examples.append(pytest.param(cmd, id=test_id))
-
-    # 2. Discover examples from the dedicated pipeline help section
-    # if "pipeline_help" in CLI_DATA and "examples" in CLI_DATA["pipeline_help"]:
-    for topic_name, topic in registry.help_topics.items():
-        if "examples" in topic:
-            for i, example in enumerate(topic["examples"]):
-                if example.get("cmd"):
-                    test_id = f"{topic_name}-example{i + 1}"
-                    all_examples.append(pytest.param(example["cmd"], id=test_id))
-
-    for topic_name, topic in registry.options.items():
-        if "examples" in topic:
-            for i, example in enumerate(topic["examples"]):
-                if example.get("cmd"):
-                    test_id = f"{topic_name}-example{i + 1}"
-                    all_examples.append(pytest.param(example["cmd"], id=test_id))
+    sources = [
+        registry.operations,
+        registry.help_topics,
+        registry.options,
+    ]
+    for collection in sources:
+        for name, data in collection.items():
+            for i, example in enumerate(data.get("examples", [])):
+                _add_or_omit(example, f"{name}-example{i + 1}")
 
     return all_examples
 

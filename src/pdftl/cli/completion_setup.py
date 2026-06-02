@@ -29,6 +29,11 @@ from pdftl.utils.dependencies import ensure_dependencies
             desc="output powershell completion code. This must be sourced from powershell.",
             cmd="--completion powershell",
         ),
+        HelpExample(
+            desc="attempt to guess your shell and output appropriate completion code.",
+            cmd="--completion",
+            test_example=False,
+        ),
     ],
 )
 def shell_completion_help_topic():
@@ -52,12 +57,71 @@ def shell_completion_help_topic():
     The first time you use completion, a cache file is generated to speed up
     future runs, which means the first run might feel a bit slow.
 
-    **Note**: ensure that pdftl is in your PATH if you want to use completion.
+    Notes:
+
+    - ensure that pdftl is in your PATH if you want to use completion.
+
+    - `pdftk --completion` will attempt to guess your shell and output appropriate
+       code for you to source from the shell. It might fail, or be wrong.
     """
     pass
 
 
-def completion_setup(shell):
+def _infer_active_shell() -> str | None:
+    """Heuristic to detect bash/zsh on Unix or default to powershell on Windows."""
+    # 1. Check $SHELL for Unix environments
+    unix_shells = ["zsh", "bash"]
+
+    shell_env = os.environ.get("SHELL", "").lower()
+    for known_shell in unix_shells:
+        if known_shell in shell_env:
+            return known_shell
+
+    try:
+        shell = _infer_unix_shell(unix_shells)
+        if shell is not None:
+            return shell
+    except OSError:
+        # just continue
+        pass
+
+    if sys.platform == "win32":
+        return "powershell"
+
+    return None
+
+
+def _infer_unix_shell(unix_shells):
+    ppid = os.getppid()
+    comm_path = f"/proc/{ppid}/comm"
+    if os.path.exists(comm_path):
+        # Linux and Cygwin
+        with open(comm_path) as f:
+            parent_name = f.read().strip().lower()
+    elif sys.platform == "darwin":
+        # macOS
+        import ctypes
+        import ctypes.util
+
+        libproc_path = ctypes.util.find_library("proc")
+        if libproc_path:
+            libproc = ctypes.CDLL(libproc_path)
+            buf = ctypes.create_string_buffer(1024)
+            libproc.proc_name(ppid, buf, len(buf))
+            parent_name = buf.value.decode("utf-8", errors="ignore").lower()
+        else:
+            parent_name = ""
+    else:
+        parent_name = ""
+
+    for known_shell in unix_shells:
+        if known_shell in parent_name:
+            return known_shell
+
+    return None
+
+
+def completion_setup(shell=None):
     """Outputs a shell completion script with baked-in fast paths."""
     ensure_dependencies(
         feature_name="shell completion",
@@ -65,9 +129,20 @@ def completion_setup(shell):
         extra_tag="shell-completion",
     )
 
-    completion_scripts = _get_completion_scripts()
+    # Infer if not explicitly provided
+    if shell is None:
+        shell = _infer_active_shell()
 
-    # 1. Common baked paths
+    # Handle the fallback failure securely
+    if shell is None:
+        print(
+            "Error: Could not automatically detect your shell.\n"
+            "Please specify it explicitly, e.g.: pdftl --completion bash",
+            file=sys.stderr,
+        )
+        return 1
+
+    completion_scripts = _get_completion_scripts()
 
     if shell in completion_scripts:
         print(completion_scripts[shell])

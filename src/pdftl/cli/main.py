@@ -254,10 +254,9 @@ def _handle_special_flags(nonverbose_cli_args):
             x for x in enumerate(nonverbose_cli_args) if (x[1] == "--completion")
         )
         if i + 1 >= len(nonverbose_cli_args):
-            _print_help_and_chill("--completion")
-            return 1
-
-        shell = nonverbose_cli_args[i + 1]
+            shell = None
+        else:
+            shell = nonverbose_cli_args[i + 1]
         return _handle_completion_arg(shell)
     except StopIteration:
         return None

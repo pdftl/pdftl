@@ -312,3 +312,18 @@ def test_evaluate_token_defensive_fallback():
     result = _evaluate_token(("page", "dummy", None), {"page": 99})
 
     assert result == 99
+
+
+def test_build_static_context_invalid_filename_type():
+    """Cover lines 438-440: Fallback when Path(pdf.filename) raises TypeError/ValueError."""
+    mock_pdf = MagicMock()
+    # An integer is truthy but will cause Path(12345) to raise a TypeError
+    mock_pdf.filename = 12345
+    mock_pdf.pages = [1]
+    mock_pdf.docinfo = {}
+
+    static_ctx = build_static_context(mock_pdf)
+
+    assert static_ctx["filepath"] == 12345
+    assert static_ctx["filename"] == 12345
+    assert static_ctx["filename_base"] == 12345

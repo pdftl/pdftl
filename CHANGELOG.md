@@ -5,6 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Added
+
+- Guess shell for `--completion` if it is not specified
+
+- add `{count}` as an alias for `{n}` in `add_text` and `add_bookmarks`
+
 ## [0.19.0] - 2026-06-01
 
 ### Fixed

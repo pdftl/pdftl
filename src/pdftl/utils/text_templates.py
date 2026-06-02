@@ -302,12 +302,6 @@ def tokenize_text_string(text_str: str) -> list:
     return parts
 
 
-# Private alias for backward compatibility with any call sites that
-# imported _tokenize_text_string directly from this module or from
-# add_text_parser before the refactor.
-_tokenize_text_string = tokenize_text_string
-
-
 # ---------------------------------------------------------------------------
 # Renderer
 # ---------------------------------------------------------------------------
@@ -358,10 +352,6 @@ def compile_text_renderer(text_str: str):
     """
     parts = tokenize_text_string(text_str)
     return lambda context: _render_runs(parts, context)
-
-
-# Private alias for backward compatibility.
-_compile_text_renderer = compile_text_renderer
 
 
 # ---------------------------------------------------------------------------
@@ -425,10 +415,14 @@ def build_static_context(pdf: "pikepdf.Pdf") -> dict:
     filename_base = ""
     filepath = ""
     if pdf.filename:
-        p = Path(pdf.filename)
-        filename = p.name
-        filename_base = p.stem
-        filepath = str(p)
+        filepath = pdf.filename
+        try:
+            p = Path(pdf.filename)
+            filename = p.name
+            filename_base = p.stem
+        except (TypeError, ValueError):
+            filename = pdf.filename
+            filename_base = pdf.filename
 
     now = datetime.now()
 

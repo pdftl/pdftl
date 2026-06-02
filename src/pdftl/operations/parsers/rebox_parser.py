@@ -40,7 +40,7 @@ def specs_to_page_rules(specs, total_pages, operation):
         # We pass (0, 0) as dimensions because we don't care about the numeric result
         # of percentages here, only the structural validity.
         try:
-            parse_rebox_content(content_str, 1000, 1000, "dummy_op")
+            parse_rebox_content(content_str, 1000, 1000, operation)
         except (ValueError, TypeError, AttributeError, InvalidArgumentError) as e:
             raise ValueError(
                 f"Error parsing {operation} content '{content_str}' in spec '{spec}': {e}"
