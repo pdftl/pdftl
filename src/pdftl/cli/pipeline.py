@@ -580,10 +580,13 @@ _PIPELINE_HELP_EXAMPLES = [
         cmd=f"a.pdf b.pdf {SUB_EACH} cat 1-3 --- rotate right {SUB_END} cat output out.pdf",
     ),
     HelpExample(
-        desc="Use filename substitution inside an EACH block to stamp each file with its own name",
+        desc=(
+            "Use filename substitution inside an EACH block "
+            "to add a cover page to each file, with its filename, then merge"
+        ),
         cmd=(
             f"a.pdf b.pdf {SUB_EACH} insert before 1 --- "
-            f"add_text '/{{filename}}/(position=center)' {SUB_END} cat output combined.pdf"
+            f"add_text '1/{{filename}}/(position=center)' {SUB_END} cat output combined.pdf"
         ),
     ),
     HelpExample(
