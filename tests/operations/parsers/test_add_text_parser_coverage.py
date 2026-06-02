@@ -4,14 +4,17 @@ from unittest.mock import patch
 import pytest
 
 from pdftl.operations.parsers.add_text_parser import (
-    _compile_text_renderer,
-    _evaluate_token,
     _normalize_options,
     _parse_options_content,
-    _parse_var_expression,
-    _tokenize_text_string,
     parse_add_text_specs_to_rules,
 )
+from pdftl.utils.text_templates import (
+    compile_text_renderer,
+    tokenize_text_string,
+    _evaluate_token,
+    _parse_var_expression,
+)
+
 
 # Assume the module being tested is imported as 'parser'
 # from pdftl.operations.parsers import add_text_parser as parser
@@ -197,10 +200,8 @@ class TestAddTextParser:
     # =========================================================================
 
     @patch(
-        "pdftl.operations.parsers.add_text_parser._evaluate_token",
-        wraps=__import__(
-            "pdftl.operations.parsers.add_text_parser"
-        ).operations.parsers.add_text_parser._evaluate_token,
+        "pdftl.utils.text_templates._evaluate_token",
+        wraps=__import__("pdftl.utils.text_templates").utils.text_templates._evaluate_token,
     )
     def test_evaluate_token_arithmetic_on_non_numeric_variable(self, mock_evaluate):
         """Covers line 509: raise ValueError for arithmetic on non-numeric variable"""
@@ -218,10 +219,8 @@ class TestAddTextParser:
             mock_evaluate(token, context)
 
     @patch(
-        "pdftl.operations.parsers.add_text_parser._evaluate_token",
-        wraps=__import__(
-            "pdftl.operations.parsers.add_text_parser"
-        ).operations.parsers.add_text_parser._evaluate_token,
+        "pdftl.utils.text_templates._evaluate_token",
+        wraps=__import__("pdftl.utils.text_templates").utils.text_templates._evaluate_token,
     )
     def test_evaluate_token_arithmetic_add(self, mock_evaluate):
         """Covers line 512: return base_value + val"""
@@ -233,10 +232,8 @@ class TestAddTextParser:
         assert mock_evaluate(token, context) == 15
 
     @patch(
-        "pdftl.operations.parsers.add_text_parser._evaluate_token",
-        wraps=__import__(
-            "pdftl.operations.parsers.add_text_parser"
-        ).operations.parsers.add_text_parser._evaluate_token,
+        "pdftl.utils.text_templates._evaluate_token",
+        wraps=__import__("pdftl.utils.text_templates").utils.text_templates._evaluate_token,
     )
     def test_evaluate_token_arithmetic_sub(self, mock_evaluate):
         """Covers subtraction logic"""
@@ -310,7 +307,7 @@ class TestAddTextParserExtended:
         """
         # "{page}{total}" splits to ['', '{page}', '', '{total}', '']
         input_str = "{page}{total}"
-        parts = _tokenize_text_string(input_str)
+        parts = tokenize_text_string(input_str)
 
         # Should contain parsed tuples, no empty strings
         assert len(parts) == 2
@@ -323,7 +320,7 @@ class TestAddTextParserExtended:
         Covers the elif part.startswith("{{") branch in tokenizer.
         """
         input_str = "Value: {{page}}"
-        renderer = _compile_text_renderer(input_str)
+        renderer = compile_text_renderer(input_str)
         result = renderer({"page": 99})
 
         # Should render literal {page}, not the value 99

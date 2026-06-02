@@ -4,15 +4,25 @@
 
 # src/pdftl/operations/parsers/add_text_parser.py
 
-"""Parser for add_text arguments"""
+"""Parser for add_text spec strings.
+
+This module is responsible for parsing the add_text spec format:
+
+    [page_range]<delim><text><delim>[(options)]
+
+and resolving page ranges to per-page rule dicts. Variable tokenisation,
+evaluation, and rendering have moved to pdftl.utils.text_templates.
+"""
 
 import logging
-import re
 from collections import defaultdict
 
 from pdftl.core.constants import UNITS
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_string_respecting_quotes
+from pdftl.utils.text_templates import (
+    compile_text_renderer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,81 +40,23 @@ PRESET_POSITIONS = {
     "bottom-right",
 }
 
-NUMERIC_VARS = {
-    "page",
-    "total",
-    "source_page",
-    "source_rotation",
-    "source_width",
-    "source_height",
-    "n",
-}
-
-# Regex to capture either an escaped block {{...}} OR a variable block {...}
-TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
-
-LINK_REGEX = re.compile(r"\[([^\]\\]*(?:\\.[^\]\\]*)*)\]\(([^)]*)\)")
-
-# 1: (total-page)
-COMPLEX_VAR_REGEX = re.compile(r"^\s*(total-page)\s*$")
-
-# 1: (meta:Title)
-META_VAR_REGEX = re.compile(r"^\s*(meta:\w+)\s*$", re.IGNORECASE)
-
-# MASTER REGEX: Handles Var, optional Arithmetic, and optional Formatting
-# Capture Groups:
-#   var: The variable name (e.g. 'page')
-#   op:  The operator (e.g. '+')
-#   num: The operand (e.g. '5000')
-#   fmt: The python format string (e.g. '06d')
-# Examples: "{page}", "{page+1}", "{page:06d}", "{page+5000:06d}"
-MASTER_VAR_REGEX = re.compile(
-    r"^\s*(?P<var>[a-zA-Z_]\w*)"  # Variable name
-    r"(?:\s*(?P<op>[+-])\s*(?P<num>\d+))?"  # Optional Arithmetic (+/- int)
-    r"(?::(?P<fmt>.+))?"  # Optional Format Specifier (start with :)
-    r"\s*$"
-)
-
-# Define the set of known simple variables
-KNOWN_VARS = {
-    "page",
-    "total",
-    "filename",
-    "filename_base",
-    "filepath",
-    "date",
-    "time",
-    "datetime",
-    "n",
-    # Source metadata variables
-    "source_filename",
-    "source_path",
-    "source_page",
-    "source_rotation",
-    "source_width",
-    "source_height",
-    "source_orientation",
-    "source_cropbox",
-    "source_mediabox",
-    "source_filesize",
-}
-
 
 def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
     """
-    Parses a list of add_text specifications into a dictionary of rules
+    Parse a list of add_text specifications into a dictionary of rules
     mapping page indices to their specific text-addition instructions.
 
-    Unlike chop, a page can have *multiple* add_text operations, so the
-    dictionary maps:
-        page_index (int) -> list[rule_dict (dict)]
+    A page can have multiple add_text operations, so the dict maps:
+        page_index (int, 0-based) -> list[rule_dict]
+
+    Each rule_dict includes a "n" key with the 1-based ordinal of
+    that page within the matched pages of its spec, and "count" as a
+    backward-compat alias.
     """
     page_rules = defaultdict(list)
 
     for spec in specs:
         try:
-            # 2. Split the spec into its three main parts.
-            #    e.g. "1-5/my text/(pos=top)" -> "1-5", "my text", "(pos=top)"
             page_range_part, text_string, options_part = _split_spec_string(spec)
 
             logger.debug(
@@ -114,18 +66,12 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
                 options_part,
             )
 
-            # 3. Parse the operation string into a structured rule dictionary ONCE.
             rule_dict = _parse_add_text_op(text_string, options_part)
 
-            # 4. Use the central parser to resolve the page selection.
-            #    Track the 1-based match sequence 'n' independently per specification.
             matched_pages = page_numbers_matching_page_spec(page_range_part, total_pages)
-            for n, p_num in enumerate(matched_pages, 1):
-                # Shallow copy the base dictionary so page tracking values don't collide
+            for count, p_num in enumerate(matched_pages, 1):
                 copied_rule = rule_dict.copy()
-                copied_rule["n"] = n
-
-                # Convert from 1-based page number to 0-based index.
+                copied_rule["n"] = count
                 page_rules[p_num - 1].append(copied_rule)
 
         except ValueError as exc:
@@ -134,15 +80,13 @@ def parse_add_text_specs_to_rules(specs: list[str], total_pages: int):
     return dict(page_rules)
 
 
-##################################################
-# SPEC PARSING HELPERS
-##################################################
+# ---------------------------------------------------------------------------
+# Spec parsing helpers
+# ---------------------------------------------------------------------------
 
 
 def _find_options_part(s):
-    # Find the options_part (if it exists) by searching from the right.
-    # As per the prompt, we assume if a balanced (...) block exists at
-    # the end, it is the options block.
+    """Find the trailing (options) block in a spec string, if present."""
     options_part = ""
     rest_of_spec = s
     if not s.endswith(")"):
@@ -156,14 +100,11 @@ def _find_options_part(s):
             nest_level += 1
         elif char == "(":
             nest_level -= 1
-
         if nest_level == 0 and char == "(":
-            # Found the start of the balanced block
             split_pos = i
             break
 
     if split_pos != -1:
-        # We found a balanced block. Treat it as the options.
         options_part = s[split_pos:].strip()
         rest_of_spec = s[:split_pos].strip()
 
@@ -172,23 +113,19 @@ def _find_options_part(s):
 
 def _split_spec_string(spec_str: str):
     """
-    Splits a raw add_text spec string into its constituent parts,
-    based on a robust right-to-left parsing algorithm.
-    Syntax: [<page range>]<delimiter><text-string><delimiter>[<options>]
+    Split a raw add_text spec string into (page_range_part, text_string, options_part).
 
-    Returns a tuple: (page_range_part, text_string, options_part)
+    Syntax: [<page range>]<delimiter><text-string><delimiter>[<options>]
     """
     s = spec_str.strip()
     if not s:
         raise ValueError("Empty add_text spec")
 
-    # 1. Find the options_part (if it exists)
     options_part, rest_of_spec = _find_options_part(s)
 
     if not rest_of_spec:
         raise ValueError("Missing text string component")
 
-    # 2. Find the delimiter. It's the last character of the remaining string.
     delimiter = rest_of_spec[-1]
     if delimiter.isalnum() or delimiter in "()":
         raise ValueError(
@@ -197,24 +134,15 @@ def _split_spec_string(spec_str: str):
         )
     logger.debug("Found delimiter: '%s'", delimiter)
 
-    # 3. Find the *first* occurrence of the delimiter to split
-    #    page_range from the text_string.
-
-    # We use `rfind` to find the last delimiter (which we know is at the end)
-    # and `find` to find the first.
     first_delim_pos = rest_of_spec.find(delimiter)
-    last_delim_pos = len(rest_of_spec) - 1  # We already know this is the delimiter
+    last_delim_pos = len(rest_of_spec) - 1
 
     if first_delim_pos == last_delim_pos:
-        # Only one delimiter was found (e.g., "1-5/text").
-        # This is an unmatched delimiter error.
         raise ValueError(f"Unmatched text delimiter '{delimiter}'")
 
-    # 4. Extract the three parts based on the delimiter positions
     page_range_part = rest_of_spec[:first_delim_pos].strip()
     text_string = rest_of_spec[first_delim_pos + 1 : last_delim_pos]
 
-    # 5. Apply default page range if it was omitted
     if not page_range_part:
         page_range_part = "1-end"
 
@@ -222,25 +150,19 @@ def _split_spec_string(spec_str: str):
 
 
 def _parse_add_text_op(text_string: str, options_part: str):
-    """
-    Parses the text string and options part into a structured rule dict.
-    """
-    rule = {"text": _compile_text_renderer(text_string)}
+    """Parse the text string and options part into a structured rule dict."""
+    rule = {"text": compile_text_renderer(text_string)}
     options = _parse_options_string(options_part)
     rule.update(options)
     return rule
 
 
 def _parse_options_string(options_part: str):
-    """
-    Parses the (key=value, ...) string into a normalized dictionary.
-    """
+    """Parse the (key=value, ...) string into a normalised dictionary."""
     if not options_part:
-        return {}  # No options provided
+        return {}
 
     if not (options_part.startswith("(") and options_part.endswith(")")):
-        # If it doesn't look like options, it might be part of the text if parsed wrongly,
-        # but here we expect strictly options or empty.
         raise ValueError(
             f"Options block must be enclosed in parentheses, e.g., (...), but got: {options_part}"
         )
@@ -250,16 +172,12 @@ def _parse_options_string(options_part: str):
 
 
 def _parse_options_content(content: str):
-    """
-    Parses the inner content of an options string: "key=val, key2=val2".
-    Used by both the main command options and variable parameter parsing.
-    """
+    """Parse the inner content of an options string: "key=val, key2=val2"."""
     if not content:
         return {}
 
     options_dict = {}
 
-    # 1. Split by commas, but respect commas inside quotes.
     try:
         parts = split_string_respecting_quotes(content, delimiter=",")
     except (ValueError, TypeError, AttributeError) as exc:
@@ -269,35 +187,24 @@ def _parse_options_content(content: str):
         part = part.strip()
         if not part:
             continue
-
-        # 2. Split *each part* on the first '='
         key_val = part.split("=", 1)
-
         if len(key_val) != 2:
             raise ValueError(f"Invalid option format: '{part}'")
-
         key, value = key_val
         key = key.strip()
-        value = value.strip().strip("'\"")  # Un-quote and strip
-
+        value = value.strip().strip("'\"")
         if not key:
             raise ValueError(f"Option missing key: '{part}'")
-
         options_dict[key] = value
 
     return _normalize_options(options_dict)
 
 
 def _normalize_options(options_dict: dict):
-    """
-    Converts a dictionary of string values into a structured dict with
-    parsed and validated types.
-    """
+    """Convert string option values into parsed and validated types."""
     normalized = {}
     options_copy = options_dict.copy()
 
-    # Special handling for "format" and "start" which appear in variable params,
-    # but not in the main rule options. We pass them through if present.
     if "format" in options_copy:
         normalized["format"] = options_copy.pop("format")
     if "start" in options_copy:
@@ -306,13 +213,10 @@ def _normalize_options(options_dict: dict):
         except ValueError as exc:
             raise ValueError("Variable parameter 'start' must be an integer") from exc
 
-    # Standard rule options
     _normalize_positioning(options_copy, normalized)
     _normalize_layout(options_copy, normalized)
     _normalize_formatting(options_copy, normalized)
 
-    # If anything remains, it's either an error or a custom param we don't know yet.
-    # For strictness, we raise error.
     if options_copy:
         raise ValueError(f"Unknown options: {', '.join(options_copy.keys())}")
 
@@ -320,7 +224,7 @@ def _normalize_options(options_dict: dict):
 
 
 def _normalize_positioning(options: dict, normalized: dict):
-    """Handles 'position', 'x', and 'y' options."""
+    """Handle 'position', 'x', and 'y' options."""
     position = options.pop("position", None)
     x = options.pop("x", None)
     y = options.pop("y", None)
@@ -343,7 +247,7 @@ def _normalize_positioning(options: dict, normalized: dict):
 
 
 def _normalize_layout(options: dict, normalized: dict):
-    """Handles 'offset-x', 'offset-y', and 'rotate' options."""
+    """Handle 'offset-x', 'offset-y', and 'rotate' options."""
     if "offset-x" in options:
         normalized["offset-x"] = _parse_dimension(options.pop("offset-x"))
     if "offset-y" in options:
@@ -357,7 +261,7 @@ def _normalize_layout(options: dict, normalized: dict):
 
 
 def _normalize_formatting(options: dict, normalized: dict):
-    """Handles 'font', 'size', 'color', 'align', and 'linkcolor' options."""
+    """Handle 'font', 'size', 'color', 'align', and 'linkcolor' options."""
     if "font" in options:
         normalized["font"] = options.pop("font")
     if "size" in options:
@@ -381,13 +285,18 @@ def _normalize_formatting(options: dict, normalized: dict):
         normalized["linkcolor"] = _parse_color(options.pop("linkcolor"))
 
 
+def _find_unit(input_str: str):
+    """Find a unit from UNITS in the string."""
+    for unit_name in UNITS:
+        if input_str.endswith(unit_name):
+            return unit_name
+    return None
+
+
 def _parse_dimension(size_str: str):
-    """
-    Parses a size string (e.g., "10pt", "5%", "1cm") into a structured
-    dict: {'type': 'pt' | '%', 'value': float}.
-    """
+    """Parse a size string into {'type': 'pt'|'%', 'value': float}."""
     if not isinstance(size_str, str):
-        return size_str  # Already parsed
+        return size_str
 
     size_str = size_str.strip()
     if size_str.endswith("%"):
@@ -411,9 +320,7 @@ def _parse_dimension(size_str: str):
 
 
 def _parse_color(color_str: str):
-    """
-    Parses a space-separated color string into a list of floats.
-    """
+    """Parse a space-separated color string into a list of floats."""
     color_str = color_str.strip()
     try:
         parts = [float(c) for c in color_str.split()]
@@ -434,174 +341,3 @@ def _parse_color(color_str: str):
         f"Color string '{color_str}' must have 1, 3, or 4 space-separated numbers. "
         f"Got {num_parts}."
     )
-
-
-##################################################
-# TEXT VARIABLE PARSING
-##################################################
-
-
-def _parse_var_expression(expr: str):
-    """
-    Parses the inner content of a {variable} block into a token tuple.
-    """
-    # 1. Complex variables
-    if COMPLEX_VAR_REGEX.fullmatch(expr):
-        return ("total-page", None, {})
-
-    # 2. Metadata variables
-    if match := META_VAR_REGEX.fullmatch(expr):
-        return (f"meta:{match.group(1).split(':', 1)[1]}", None, {})
-
-    # 3. MASTER REGEX: Handles Simple, Arithmetic, and Formatting
-    #    e.g. "page", "page+1", "page:06d", "page+5000:06d"
-    if match := MASTER_VAR_REGEX.fullmatch(expr):
-        groups = match.groupdict()
-        var = groups["var"].lower()
-        if var not in KNOWN_VARS:
-            raise ValueError(f"Unknown variable: {{{var}}}")
-
-        # Build the operation payload
-        # payload = (arithmetic_value, format_string)
-        op_val = int(groups["num"]) if groups["num"] else 0
-        if groups["op"] == "-":
-            op_val = -op_val
-
-        # If arithmetic is requested (op_val != 0), ensure variable is numeric.
-        if op_val != 0 and var not in NUMERIC_VARS:
-            raise ValueError(f"Cannot apply arithmetic to non-numeric variable: {var}")
-
-        fmt_spec = groups["fmt"]  # None if missing
-
-        return (var, "master", (op_val, fmt_spec))
-
-    raise ValueError(f"Unknown variable expression: {{{expr}}}")
-
-
-def _evaluate_token(token: tuple, context: dict):
-    """
-    Evaluates a single parsed token against the runtime context.
-    """
-    var, op, param = token
-
-    # --- Case 1: Special Logic Variables ---
-    if var == "total-page":
-        return context.get("total", 0) - context.get("page", 0)
-
-    if var.startswith("meta:"):
-        meta_key = var[5:]
-        return context.get("metadata", {}).get(meta_key, "")
-
-    # --- Case 2: Standard Variables ---
-    base_value = context.get(var, "")
-
-    # Handle "master" (Arithmetic + Formatting)
-    if op == "master":
-        offset, fmt_spec = param  # param is (int_offset, str_format)
-
-        # Apply Arithmetic (only if base is numeric)
-        final_val = base_value
-        if offset != 0:
-            if isinstance(base_value, (int, float)):
-                final_val = base_value + offset
-            else:
-                raise ValueError(f"Cannot apply arithmetic to non-numeric variable: {var}")
-
-        # Apply Formatting
-        if fmt_spec:
-            try:
-                # Python string formatting: "{:06d}".format(val)
-                return "{:{}}".format(final_val, fmt_spec)
-            except (ValueError, TypeError) as e:
-                # Fallback or strict error? Let's be strict for bates stamping.
-                raise ValueError(f"Formatting error for {{{var}:{fmt_spec}}}: {e}")
-
-        return final_val
-
-    return base_value
-
-
-def _find_unit(input_str: str):
-    """Find a unit from UNITS in the string"""
-    for unit_name in UNITS:
-        if input_str.endswith(unit_name):
-            return unit_name
-    return None
-
-
-def _tokenize_plain_segment(text_str: str) -> list:
-    """Tokenizes a plain (non-link) segment into literals and variable tokens."""
-    parts = []
-    for i, part in enumerate(TOKEN_REGEX.split(text_str)):
-        if not part:
-            continue
-        if i % 2 == 0:
-            parts.append(part.replace(r"\[", "[").replace(r"\]", "]"))
-        elif part.startswith("{{"):
-            parts.append(part[1:-1])
-        else:
-            parts.append(_parse_var_expression(part[1:-1]))
-    return parts
-
-
-def _tokenize_text_string(text_str: str) -> list:
-    """
-    Splits a text string into literals, variable tokens, and link tokens.
-    Link tokens: ("link", display_parts, url_parts)
-    Markdown syntax: [display](url). Supports {variables} in both parts.
-    Escaped brackets: \\[ and \\] are treated as literals.
-    """
-    parts = []
-    segments = LINK_REGEX.split(text_str)
-    i = 0
-    while i < len(segments):
-        if segments[i]:
-            parts.extend(_tokenize_plain_segment(segments[i]))
-        if i + 2 < len(segments):
-            parts.append(
-                (
-                    "link",
-                    _tokenize_plain_segment(segments[i + 1]),
-                    _tokenize_plain_segment(segments[i + 2]),
-                )
-            )
-            i += 3
-        else:
-            i += 1
-    return parts
-
-
-def _default_renderer(parts: list, context: dict) -> str:
-    """Renders parts to a plain string. Link display text is included; URL discarded."""
-    result = []
-    for part in parts:
-        if isinstance(part, str):
-            result.append(part)
-        elif isinstance(part, tuple) and part[0] == "link":
-            result.append(_default_renderer(part[1], context))
-        else:
-            result.append(str(_evaluate_token(part, context)))
-    return "".join(result)
-
-
-def _compile_text_renderer(text_str: str):
-    """
-    Compiles a text string into a render function.
-    Returns a callable: context -> list of (text, url_or_None) tuples.
-    """
-    parts = _tokenize_text_string(text_str)
-    return lambda context: _render_runs(parts, context)
-
-
-def _render_part_to_run(part, context) -> tuple[str, str | None]:
-    """Renders a single part to a (text, url_or_None) run tuple."""
-    if isinstance(part, str):
-        return (part, None)
-    if isinstance(part, tuple) and part[0] == "link":
-        return (_default_renderer(part[1], context), _default_renderer(part[2], context))
-    return (str(_evaluate_token(part, context)), None)
-
-
-def _render_runs(parts: list, context: dict) -> list[tuple[str, str | None]]:
-    """Renders all parts to a list of (text, url_or_None) run tuples."""
-    return [run for part in parts if (run := _render_part_to_run(part, context)) and run[0]]

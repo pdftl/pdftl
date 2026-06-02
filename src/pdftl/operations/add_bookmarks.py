@@ -46,7 +46,7 @@ The title string supports `{variable}` substitution, using the same variables
 as `add_text`:
 
   - `{page}`           — current page number (1-based)
-  - `{n}`              — 1-based sequential counter within the matched
+  - `{n}` or `{count}` — 1-based sequential counter within the matched
                          pages of the current spec
   - `{total}`          — total number of pages in the PDF
   - `{filename}`       — input filename including extension

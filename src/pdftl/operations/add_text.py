@@ -48,7 +48,7 @@ number. Possible variables are:
 
    - `page`: The current page number (1-based index).
 
-   - `n`: The sequence number (1-based index within the current spec)
+   - `n` or `count`: The sequence number (1-based index within the current spec)
 
    - `total`: The total number of pages in the PDF.
 

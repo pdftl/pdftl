@@ -18,12 +18,16 @@ from hypothesis.errors import InvalidArgument
 
 from pdftl.operations.parsers.add_text_parser import (  # Import new function for testing
     PRESET_POSITIONS,
-    _compile_text_renderer,
     _normalize_formatting,
     _parse_options_content,
     _parse_options_string,
     _split_spec_string,
     parse_add_text_specs_to_rules,
+)
+from pdftl.utils.text_templates import (
+    compile_text_renderer,
+    _parse_var_expression,
+    _evaluate_token,
 )
 
 
@@ -46,7 +50,7 @@ MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "step", "qualifiers",
 
 
 # Now, we can import the functions to be tested from the *new* module path
-# Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
+# Changed '_parse_text_string_to_renderer' to 'compile_text_renderer'
 # # --- Monkey-patching the parser's imports ---
 # # We must replace the imported names *within the parser module*
 # pdftl.operations.parsers.add_text_parser.UNITS = UNITS
@@ -204,7 +208,7 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
 
 
 # Now, we can import the functions to be tested from the *new* module path
-# Changed '_parse_text_string_to_renderer' to '_compile_text_renderer'
+# Changed '_parse_text_string_to_renderer' to 'compile_text_renderer'
 
 # # --- Monkey-patching the parser's imports ---
 # # We must replace the imported names *within the parser module*
@@ -383,7 +387,7 @@ class TestAddTextParser(unittest.TestCase):
         text_str = (
             "Page {page-1} of {total}. Report: {meta:Title}. File: {filename_base}. {{Literal}}"
         )
-        render_fn = _compile_text_renderer(text_str)
+        render_fn = compile_text_renderer(text_str)
 
         self.assertTrue(callable(render_fn))
 
@@ -412,7 +416,7 @@ class TestAddTextParser(unittest.TestCase):
         )
 
         # Test complex var
-        render_fn_complex = _compile_text_renderer("{total-page} pages left")
+        render_fn_complex = compile_text_renderer("{total-page} pages left")
         self.assertEqual(_render_text(render_fn_complex, context1), "15 pages left")
 
     # This is a new, explicit test for the logic in _evaluate_token
@@ -420,7 +424,7 @@ class TestAddTextParser(unittest.TestCase):
         # The parser *should* fail (correctly) when it sees math
         # on a non-numeric variable.
         with self.assertRaisesRegex(ValueError, "Cannot apply arithmetic"):
-            _compile_text_renderer("File: {filename-1}")
+            compile_text_renderer("File: {filename-1}")
 
     def test_parse_specs_simple(self):
         """Test the main function with a simple spec."""
@@ -794,7 +798,6 @@ class TestMiscAddTextParser(unittest.TestCase):
 
     def test_variable_expression_errors(self):
         """Covers unknown variables, bad arithmetic, and bad formatting."""
-        from pdftl.operations.parsers.add_text_parser import _evaluate_token, _parse_var_expression
 
         # Unknown variable (Line 445-446)
         with self.assertRaisesRegex(ValueError, "Unknown variable"):
@@ -863,11 +866,11 @@ class TestMiscAddTextParser(unittest.TestCase):
 
     def test_markdown_link_rendering(self):
         """Covers lines 545-552, 560-568, and 585: Markdown links with variables."""
-        from pdftl.operations.parsers.add_text_parser import _compile_text_renderer
+        from pdftl.utils.text_templates import compile_text_renderer
 
         # A string with literal text and a Markdown link containing a variable
         text_str = "Visit [Page {page}](http://example.com/p{page})"
-        renderer = _compile_text_renderer(text_str)
+        renderer = compile_text_renderer(text_str)
 
         context = {"page": 5}
         runs = renderer(context)
@@ -880,20 +883,20 @@ class TestMiscAddTextParser(unittest.TestCase):
         self.assertEqual(runs[0], ("Visit ", None))
         self.assertEqual(runs[1], ("Page 5", "http://example.com/p5"))
 
-    def test_default_renderer_direct(self):
+    def test_render_parts_to_string_direct(self):
         """Directly covers line 560-568 by invoking the default renderer logic."""
-        from pdftl.operations.parsers.add_text_parser import (
-            _default_renderer,
-            _tokenize_text_string,
+        from pdftl.utils.text_templates import (
+            render_parts_to_string,
+            tokenize_text_string,
         )
 
         # Create a complex token structure with a nested link
         text_str = "[Go {page}](url)"
-        parts = _tokenize_text_string(text_str)
+        parts = tokenize_text_string(text_str)
 
-        # _default_renderer is used when we need a plain string version
+        # default_renderer is used when we need a plain string version
         # of a segment (e.g., to generate the final URL string)
-        plain_text = _default_renderer(parts, {"page": 1})
+        plain_text = render_parts_to_string(parts, {"page": 1})
         self.assertEqual(plain_text, "Go 1")
 
 
