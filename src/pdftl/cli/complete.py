@@ -35,6 +35,7 @@ HARDCODED_KEYWORDS = {
     "delete_images",
     "dump_annots",
     "dump_bookmarks",
+    "dump_colorspaces",
     "dump_data",
     "dump_data_annots",
     "dump_data_fields",

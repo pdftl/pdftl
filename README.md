@@ -215,6 +215,7 @@ See the **[API Tutorial][4]** for more details.
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
 | [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html)               | Extract PDF bookmarks into YAML or JSON                         |
+| [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html)           | Report color spaces used                                        |
 | [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html)                         | Metadata, page and bookmark info (XML-escaped)                  |
 | [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html)           | Dump annotation info in pdftk style                             |
 | [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html)           | Print PDF form field data with XML-style escaping               |
