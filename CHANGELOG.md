@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add `{count}` as an alias for `{n}` in `add_text` and `add_bookmarks`
 
+- `unpause` operation
+
 ## [0.19.0] - 2026-06-01
 
 ### Fixed

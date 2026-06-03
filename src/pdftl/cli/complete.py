@@ -70,6 +70,7 @@ HARDCODED_KEYWORDS = {
     "shuffle",
     "stamp",
     "unpack_files",
+    "unpause",
     "update_bookmarks",
     "update_info",
     "update_info_utf8",

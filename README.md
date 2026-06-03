@@ -250,6 +250,7 @@ See the **[API Tutorial][4]** for more details.
 | [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |
 | [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |
 | [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                                         |
+| [`unpause`](https://pdftl.readthedocs.io/en/latest/operations/unpause.html)                             | Remove 'pause' frames from a slide deck                         |
 | [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html)           | Replace PDF bookmarks from a YAML or JSON file                  |
 | [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html)                     | Update PDF metadata from dump_data instructions                 |
 | [`update_info_utf8`](https://pdftl.readthedocs.io/en/latest/operations/update_info_utf8.html)           | Update PDF metadata from dump_data_utf8 instructions            |
