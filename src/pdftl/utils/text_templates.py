@@ -128,7 +128,9 @@ KNOWN_VARS = {
 # ---------------------------------------------------------------------------
 
 # Captures either an escaped block {{...}} OR a variable block {...}
-TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
+# Intentionally disallows nested braces inside a single token to avoid
+# cross-brace overmatching on malformed templates.
+TOKEN_REGEX = re.compile(r"(\{\{[^{}]*\}\}|\{[^{}]*\})")
 
 LINK_REGEX = re.compile(r"\[([^\]\\]*(?:\\.[^\]\\]*)*)\]\(([^)]*)\)")
 
