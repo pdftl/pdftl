@@ -303,73 +303,45 @@ def test_copy_item_recursive_pruning(mock_remapper):
 
 @patch("pdftl.pages.outlines._build_outline_chunks")
 @patch("pdftl.pages.outlines.OutlineCopier.copy_item")
-def test_rebuild_outlines_processes_chunks(  # 1b. Renamed test
+@patch("pikepdf.models.outlines.Outline")
+def test_rebuild_outlines_processes_chunks(
+    mock_outline_class,
     mock_copy_recursive,
     mock_build_chunks,
-    # mock_LinkRemapper (REMOVED)
-    # mock_build_caches (REMOVED)
-    mock_context,  # Fixture
-    mock_source_pdf,  # Fixture
+    mock_context,
+    mock_source_pdf,
 ):
-    """
-    Tests that rebuild_outlines correctly iterates chunks and calls
-    the remapper for each one.
-    """
-    # 1. Arrange
     mock_pdf = MagicMock(spec=Pdf)
-
-    # 2. CREATE the mock remapper to be injected
     mock_remapper_instance = MagicMock(spec=LinkRemapper)
 
-    # Mock source outlines
     mock_source_pdf.Root.Outlines = True
-    mock_source_pdf.open_outline.return_value.__enter__.return_value.root = [
-        "item_A",
-        "item_B",
-    ]
 
-    # Mock the chunking helper
+    # Mock the Outline instance returned when Outline(source_pdf) is called
+    mock_outline_instance = MagicMock()
+    mock_outline_instance.root = ["item_A", "item_B"]
+    mock_outline_class.return_value = mock_outline_instance
+
     chunks = [
-        MagicMock(pdf=mock_source_pdf, instance_num=0, output_start_page=1),  # Chunk 1
-        MagicMock(pdf=mock_source_pdf, instance_num=1, output_start_page=3),  # Chunk 2
+        MagicMock(pdf=mock_source_pdf, instance_num=0, output_start_page=1),
+        MagicMock(pdf=mock_source_pdf, instance_num=1, output_start_page=3),
     ]
     mock_build_chunks.return_value = chunks
 
-    # (mock_build_caches logic is GONE)
-
-    # Mock the PDF's outline manager
     mock_new_outline = MagicMock()
     mock_pdf.open_outline.return_value.__enter__.return_value = mock_new_outline
 
-    # (mock_remapper_instance is now created above)
+    result_dests = rebuild_outlines(mock_pdf, [], mock_context, mock_remapper_instance)
+    print(f"mock_outline_class.call_count: {mock_outline_class.call_count}")
 
-    # 2. Act
-    result_dests = rebuild_outlines(
-        mock_pdf,
-        [],  # source_pages_to_process
-        mock_context,
-        mock_remapper_instance,
-    )
-
-    # 3. Assert
-    # Check that chunks were built (this is still correct)
     mock_build_chunks.assert_called_once_with(mock_context.processed_page_info)
-
-    # 4. DELETE all the old assertions for cache/remapper creation
-
-    # 5. KEEP the assertions for remapper *usage* (these are still correct)
-    # Check that set_call_context was called TWICE, once for each chunk
     assert mock_remapper_instance.set_call_context.call_count == 2
     mock_remapper_instance.set_call_context.assert_has_calls(
         [
-            call(mock_pdf, mock_source_pdf, 0),  # Chunk 1
-            call(mock_pdf, mock_source_pdf, 1),  # Chunk 2
+            call(mock_pdf, mock_source_pdf, 0),
+            call(mock_pdf, mock_source_pdf, 1),
         ]
     )
-
-    # Check that copy_item was called for all items in both chunks
     assert mock_copy_recursive.call_count == 4
-
     # Check that the (empty) list of destinations was returned
     assert result_dests == []
 

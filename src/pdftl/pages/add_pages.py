@@ -88,6 +88,25 @@ def add_pages(
     rebuild_acroform_index(new_pdf)
 
 
+def _compute_source_page_meta(src, page_idx, src_page) -> tuple:
+    """
+    Compute the metadata fields derived purely from a source page.
+    These are invariant across all output instances of the same source page,
+    so callers should cache the result keyed on (id(src), page_idx).
+    """
+    src_filename = getattr(src, "filename", "")
+    src_basename = os.path.basename(src_filename) if src_filename else ""
+    src_abspath = os.path.abspath(src_filename) if src_filename else ""
+    orig_rotation = int(src_page.get("/Rotate", 0))
+    mediabox = src_page.MediaBox
+    width = float(mediabox[2] - mediabox[0])
+    height = float(mediabox[3] - mediabox[1])
+    if orig_rotation % 180 != 0:
+        width, height = height, width
+    orientation = "portrait" if height >= width else "landscape"
+    return src_basename, src_abspath, orig_rotation, width, height, orientation
+
+
 def process_source_pages(
     new_pdf, source_pages_to_process: list["PageTransform"]
 ) -> tuple[RebuildLinksPartialContext, list]:
@@ -122,6 +141,10 @@ def process_source_pages(
 
     OPTIMIZED: Uses a "Clean Master" strategy to allow independent transformations
     of identical source pages without re-importing resources.
+
+    Source-page metadata (filename, dimensions, orientation) is computed lazily
+    and cached per (source_pdf, page_index) so it is never recomputed across
+    multiple output instances of the same source page.
     """
     from pikepdf import Dictionary, Page
 
@@ -141,6 +164,12 @@ def process_source_pages(
     for src in unique_sources:
         source_pages_cache[id(src)] = list(src.pages)
 
+    # Lazy cache for per-source-page metadata (filename, dimensions, orientation).
+    # Keyed on (id(src), page_idx). Populated on first encounter of each source page.
+    # This avoids recomputing os.path.abspath, MediaBox, and /Rotate for every
+    # output instance of the same source page (e.g. in `cat A A`).
+    source_page_meta_cache: dict[tuple, tuple] = {}
+
     new_pdf_pages_append = new_pdf.pages.append
 
     track = get_track_progress(interactive=True)
@@ -155,6 +184,7 @@ def process_source_pages(
 
         ret.unique_source_pdfs.add(page_data.pdf)
         new_pdf_make_indirect = new_pdf.make_indirect
+
         if page_key not in clean_masters_map:
             # --- FIRST ENCOUNTER ---
             # 1. Append source directly. pikepdf handles the import.
@@ -166,8 +196,8 @@ def process_source_pages(
             # 3. Create the "Clean Master" immediately
             # We make a shallow copy of the dictionary *before* we modify new_page.
             # This ensures we have a pristine reference for future clones.
-            master_vars = new_page.obj.copy()  # dict(new_page.obj)
-            del master_vars["/Parent"]  # master_vars.pop("/Parent", None)
+            master_vars = new_page.obj.copy()
+            del master_vars["/Parent"]
 
             # Store as an indirect object in new_pdf (orphaned from page tree, but valid)
             clean_master = new_pdf_make_indirect(Dictionary(master_vars))
@@ -179,8 +209,6 @@ def process_source_pages(
             clean_master = clean_masters_map[page_key]
 
             # 2. Clone it
-            # We copy the dictionary from the clean master.
-            # Since clean_master is already in new_pdf, this is fast and safe.
             clone_vars = dict(clean_master)
 
             # 3. Create new indirect object and wrap as Page
@@ -189,14 +217,21 @@ def process_source_pages(
             new_pdf_pages_append(new_page)
 
         # --- COMMON POST-PROCESSING ---
-        # Now we can safely rotate/scale `new_page`.
-        # Even if it's the first encounter, modifying `new_page` does NOT affect
-        # `clean_master` because they are distinct indirect objects (though they share children).
 
         instance_num = instance_counts.get(page_key, 0)
         instance_counts[page_key] = instance_num + 1
 
-        _stash_page_source_data(new_page, source_page, page_data, instance_num)
+        # Lazily compute and cache source-page-invariant metadata.
+        # abspath, basename, MediaBox, and /Rotate are computed at most once
+        # per unique (source_pdf, page_index) pair regardless of how many
+        # output instances are produced.
+        if page_key not in source_page_meta_cache:
+            source_page_meta_cache[page_key] = _compute_source_page_meta(
+                page_data.pdf, page_data.index, source_page
+            )
+        source_meta = source_page_meta_cache[page_key]
+
+        _stash_page_source_data(new_page, source_meta, page_data, instance_num)
 
         widget_queue.append((new_pdf, new_page, source_page, instance_num))
 
@@ -214,33 +249,23 @@ def process_source_pages(
     return ret, widget_queue
 
 
-def _stash_page_source_data(new_page, source_page, page_data, instance_num):
-    # Calculate metadata for variable expansion
+def _stash_page_source_data(new_page, source_meta, page_data, instance_num):
+    """
+    Write per-output-page source metadata into the PDF page dictionary.
+
+    source_meta is a pre-computed tuple from _compute_source_page_meta,
+    containing fields that are invariant across output instances of the
+    same source page. page_data and instance_num vary per output page.
+    """
     from pikepdf import Dictionary
 
-    filename = getattr(page_data.pdf, "filename", "")
-    orig_rotation = int(source_page.get("/Rotate", 0))
-    mediabox = source_page.MediaBox
-    width = float(mediabox[2] - mediabox[0])
-    height = float(mediabox[3] - mediabox[1])
+    src_basename, src_abspath, orig_rotation, width, height, orientation = source_meta
 
-    if orig_rotation % 180 != 0:
-        width, height = height, width
-
-    orientation = "portrait" if height >= width else "landscape"
-
-    # Inject comprehensive source data into the PDF page object.
-    # NOTE: We only store serializable data here (strings, numbers).
-    # We do NOT store the pikepdf.Pdf object itself, as it cannot be
-    # serialized to a PDF dictionary.
-    # Internal tools (like Link Rebuilding) use the returned
-    # RebuildLinksPartialContext to access the PDF objects.
-    # Downstream tools (like add_text) use this dictionary for variables.
     info_dict = Dictionary(
         {
             # User-facing variable data
-            "/source_filename": os.path.basename(filename) if filename else "",
-            "/source_path": os.path.abspath(filename) if filename else "",
+            "/source_filename": src_basename,
+            "/source_path": src_abspath,
             "/source_page": page_data.index + 1,
             "/source_rotation": orig_rotation,
             "/source_width": width,
@@ -255,5 +280,4 @@ def _stash_page_source_data(new_page, source_page, page_data, instance_num):
         }
     )
 
-    # Store in a custom key in the PDF Page Dictionary
     new_page["/" + c.PDFTL_SOURCE_INFO_KEY] = info_dict

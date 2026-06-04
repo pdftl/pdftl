@@ -44,8 +44,11 @@ def mock_remapper(mocker):
     """
     Creates a mock LinkRemapper instance.
     """
+    import pikepdf
+
     # Create a mock that has the correct class spec
     remapper = MagicMock(spec=LinkRemapper)
+    remapper.pikepdf = pikepdf
 
     # Add the .pdf and .source_pdf attributes that the module code accesses
     remapper.pdf = MagicMock(spec=Pdf)

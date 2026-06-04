@@ -27,7 +27,6 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Union
 
-from pdftl.utils.type_helpers import as_iterable
 
 if TYPE_CHECKING:
     from pikepdf import Array, Dictionary, Object, Pdf
@@ -73,11 +72,14 @@ class LinkRemapper:
     """
 
     def __init__(self, context: RemapperContext):
+        import pikepdf
+
         self.context = context
         # Initialize Per-Call Context
         self.pdf: Pdf | None = None
         self.source_pdf: Pdf | None = None
         self.instance_num: int | None = None
+        self.pikepdf = pikepdf
 
     def set_call_context(self, pdf: "Pdf", source_pdf: "Pdf", instance_num: int):
         """Set per-call remapper context variables.
@@ -105,14 +107,12 @@ class LinkRemapper:
             Dictionary | None: A deep copy of the action, owned by `self.pdf`,
             or None if copying failed due to a ForeignObjectError.
         """
-        from pikepdf import ForeignObjectError
-
         if self.source_pdf is None or self.pdf is None:
             raise ValueError("Unconfigured LinkRemapper attempted to use _copy_action")
         try:
             indirect_action = self.source_pdf.make_indirect(original_action)
             return self.pdf.copy_foreign(indirect_action)
-        except ForeignObjectError as fo_error:
+        except self.pikepdf.ForeignObjectError as fo_error:
             logger.warning("Failed to copy action object: %s", fo_error)
             return None
 
@@ -158,10 +158,8 @@ class LinkRemapper:
         Optimized version: Modifies pikepdf.Array in-place to avoid
         expensive Python list marshaling in the common case.
         """
-        from pikepdf import Array, Name
-
         # 1. Fast Clone: Copy the array in C++ (avoid converting to Python list)
-        new_dest = Array(as_iterable(dest_array))
+        new_dest = dest_array.copy()
 
         # 2. Fast Update: Set the page object directly
         new_dest[0] = target_page.obj
@@ -176,13 +174,17 @@ class LinkRemapper:
         # If no rotation is needed, return immediately.
         # We avoid ALL Python list allocations here.
         # We check indices manually to avoid slicing errors.
-        if (angle == 0 and scale == 1.0) or len(new_dest) < 2 or new_dest[1] != Name.XYZ:
+        if (
+            (angle == 0 and scale == 1.0)
+            or len(new_dest) < 2
+            or new_dest[1] != self.pikepdf.Name.XYZ
+        ):
             return new_dest
 
         # --- SLOW PATH (Rotation needed) ---
         # It is safe to allocate lists here because rotation is rare.
 
-        page_box = target_page.get(Name.CropBox, target_page.MediaBox)
+        page_box = target_page.get(self.pikepdf.Name.CropBox, target_page.MediaBox)
 
         # Manual iteration to extract coords (index 2 onwards) without slicing
         # new_dest is [Page, /XYZ, x, y, zoom]
@@ -199,7 +201,7 @@ class LinkRemapper:
 
         # We cannot slice-assign into pikepdf.Array, so we construct a new one.
         # This is fine because we are already in the slow path.
-        return Array([target_page.obj, Name.XYZ] + new_params)
+        return self.pikepdf.Array([target_page.obj, self.pikepdf.Name.XYZ] + new_params)
 
     def _find_remapped_page(self, source_dest_array: "Array"):
         """
@@ -230,6 +232,7 @@ class LinkRemapper:
         page_key = (id(self.source_pdf), target_idx, self.instance_num)
         return self.context.page_map.get(page_key)
 
+    # @profile
     def _remap_explicit_destination_data(self, resolved_array: "Array"):
         """
         Remap an explicit (array-based) GoTo destination.
@@ -270,8 +273,6 @@ class LinkRemapper:
                 - new_named_dest (tuple | None): A (String, Dictionary) pair defining the
                   new named destination, or None if remapping failed.
         """
-        from pikepdf import Array, Dictionary
-
         if self.pdf is None:
             raise ValueError(
                 "Unconfigured LinkRemapper attempted to use _remap_named_destination_data"
@@ -298,7 +299,7 @@ class LinkRemapper:
         except ValueError:
             dest_array = dest_obj
 
-        if not isinstance(dest_array, Array):
+        if not isinstance(dest_array, self.pikepdf.Array):
             logger.warning(
                 "Named destination '%s' is not an array. Link will be dropped.",
                 original_name,
@@ -312,7 +313,7 @@ class LinkRemapper:
         new_dest_array = self._transform_destination_array(dest_array, target_page)
 
         new_name_str = self._get_new_destination_name(original_name)
-        dest_dict = self.pdf.make_indirect(Dictionary({"/D": new_dest_array}))
+        dest_dict = self.pdf.make_indirect(self.pikepdf.Dictionary({"/D": new_dest_array}))
 
         new_named_dest = (new_name_str, dest_dict)
         new_action_dest = new_name_str
@@ -333,16 +334,15 @@ class LinkRemapper:
                 - new_action (Dictionary | None): The remapped action object.
                 - new_named_dest (tuple | None): A new named destination, if created.
         """
-        from pikepdf import Array, Name, String
 
         dest = action.D
         new_action_dest = None
         new_named_dest = None
 
         # Dispatch based on destination type
-        if isinstance(dest, (String, Name)):
+        if isinstance(dest, self.pikepdf.String | self.pikepdf.Name):
             new_action_dest, new_named_dest = self._remap_named_destination_data(dest)
-        elif isinstance(dest, Array):
+        elif isinstance(dest, self.pikepdf.Array):
             new_action_dest, new_named_dest = self._remap_explicit_destination_data(dest)
 
         if new_action_dest is None:
@@ -379,9 +379,7 @@ class LinkRemapper:
         Returns:
             tuple: (new_action, None)
         """
-        from pikepdf import Name
-
-        action_type: Object | str | None = action.get(Name.S, None)
+        action_type: Object | str | None = action.get(self.pikepdf.Name.S, None)
         if action_type is None:
             action_type = "Unknown"
         logger.warning(

@@ -8,6 +8,7 @@ from pikepdf import Dictionary, Name, Pdf
 from pdftl.pages.add_pages import (
     _apply_rotation,
     _stash_page_source_data,
+    _compute_source_page_meta,
     add_pages,
     process_source_pages,
 )
@@ -348,51 +349,32 @@ class MockPageTransform:
 
 
 def test_stash_page_source_data_rotation_swap():
-    """
-    Covers Lines 231-232:
-    Verify that if the source page has a rotation of 90 (or 270),
-    the width and height are swapped in the metadata.
-    """
-    # 1. Setup Mocks
     mock_new_page = MagicMock()
     mock_source_page = MagicMock()
     mock_pdf = MagicMock()
     mock_pdf.filename = "test.pdf"
 
-    # Setup MediaBox: [0, 0, 100, 200] -> Width 100, Height 200
-    # We must ensure both .MediaBox (property) and .obj (raw dict) behave
     mbox_val = [0, 0, 100, 200]
     mock_source_page.MediaBox = mbox_val
 
-    # FIX: Ensure .obj.get() returns None so the code falls back to the property
-    mock_source_page.obj.get.return_value = None
-
-    # Setup Rotation: 90
-    # Handle .get() calls for Rotation
     def get_side_effect(key, default=None):
-        # Handle both string "/Rotate" and pikepdf.Name objects
         if str(key) == "/Rotate":
             return 90
         return default
 
     mock_source_page.get.side_effect = get_side_effect
-    # Also handle .obj.get() calls if the code checks there for rotation
-    mock_source_page.obj.get.side_effect = lambda k, d=None: 90 if str(k) == "/Rotate" else None
 
     page_data = MockPageTransform(pdf=mock_pdf, index=0)
 
-    # 2. Execute
-    _stash_page_source_data(mock_new_page, mock_source_page, page_data, 0)
+    # Compute meta as the production code now does
+    source_meta = _compute_source_page_meta(mock_pdf, page_data.index, mock_source_page)
 
-    # 3. Verification
-    assert mock_new_page.__setitem__.called
-    call_args = mock_new_page.__setitem__.call_args
-    info_dict = call_args[0][1]
+    _stash_page_source_data(mock_new_page, source_meta, page_data, 0)
 
-    # Original Width: 100, Height: 200. Rotation 90 -> Swap.
-    # Width should now be 200.
-    assert info_dict["/source_width"] == 200.0
-    assert info_dict["/source_height"] == 100.0
+    # width and height should be swapped due to 90° rotation
+    written = mock_new_page.__setitem__.call_args[0][1]
+    assert float(written["/source_width"]) == 200.0
+    assert float(written["/source_height"]) == 100.0
 
     # Orientation should be 'landscape' because 200 >= 100
-    assert info_dict["/source_orientation"] == "landscape"
+    assert written["/source_orientation"] == "landscape"

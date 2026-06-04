@@ -54,6 +54,7 @@ class RebuildLinksPartialContext:
     unique_source_pdfs: set = field(default_factory=set)
 
 
+# @profile
 def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
     """
     Copy and remap a single annotation from a source page.
@@ -72,7 +73,6 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
             - new_annotation (Dictionary | None): The copied annotation.
             - new_named_dest_data (list | None): A flat list of (name, dest) pairs.
     """
-    from pikepdf import ForeignObjectError, Name
 
     if remapper.pdf is None or remapper.source_pdf is None:
         return None, None
@@ -82,7 +82,7 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
         # otherwise we encounter pollution issues
         annot_to_copy = remapper.source_pdf.make_indirect(original_annot)
         new_annot = remapper.pdf.copy_foreign(annot_to_copy)
-    except (ForeignObjectError, ValueError, RuntimeError) as e:
+    except (remapper.pikepdf.ForeignObjectError, ValueError, RuntimeError) as e:
         logger.warning(
             "Skipping potentially corrupt annotation from source page %s. "
             "Reason: %s\nAnnotation: %s",
@@ -92,14 +92,17 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
         )
         return None, None
 
-    if new_annot.get(Name.Subtype) != Name.Link or Name.A not in new_annot:
-        # Non-link or non-action annotations are copied as-is
+    # Non-link or non-action annotations are copied as-is
+    action = getattr(original_annot, "A", None)
+    if action is None:
+        return new_annot, None
+    subtype = getattr(original_annot, "Subtype", None)
+    if subtype != remapper.pikepdf.Name.Link:
         return new_annot, None
 
-    original_action = original_annot.A
-    action_type = original_action.get(Name.S)
+    action_type = getattr(action, "S", None)
     handler = ACTION_HANDLERS.get(action_type, DEFAULT_ACTION_HANDLER)
-    new_action, new_named_dest_data = handler(remapper, original_action)
+    new_action, new_named_dest_data = handler(remapper, action)
 
     if new_action:
         new_annot.A = new_action

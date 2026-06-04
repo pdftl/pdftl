@@ -62,7 +62,6 @@ class OutlineCopier:
         """
         from pikepdf import OutlineItem
 
-        # logger.debug("  source_item title is '%s'", source_item.title)
         # --- 1. Get/Create a GoTo Action Dictionary ---
         source_action = _get_source_action(source_item)
         final_destination = None  # This will be passed to the constructor
@@ -128,7 +127,7 @@ def rebuild_outlines(
         new_pdf: The destination pikepdf.Pdf object.
         source_pages_to_process: The flat list of PageTransform objects.
         call_context: The RebuildLinksPartialContext from PASS 1.
-        pdf_to_input_index (dict): Maps source PDF ids to input order indices.
+        remapper: The pre-configured LinkRemapper instance.
 
     Returns:
         list: a flat list of [name, dest, ...] for all new dests.
@@ -147,7 +146,17 @@ def rebuild_outlines(
     with new_pdf.open_outline() as new_outline:
         for chunk in track(chunks, description="Bookmark chunk handling", transient=True):
             remapper.set_call_context(new_pdf, chunk.pdf, chunk.instance_num)
-            chunk_dests = _process_chunk(chunk, remapper, new_outline)
+
+            # Instantiate without using as a context manager — we are reading only.
+            # The context manager's __exit__ unconditionally calls _save(), which
+            # re-serialises the entire outline tree even if nothing was modified.
+            # Accessing .root directly populates the cache without triggering write-back.
+            from pikepdf.models.outlines import Outline
+
+            source_outline = Outline(chunk.pdf)
+            root_items = list(source_outline.root)
+
+            chunk_dests = _process_chunk(chunk, remapper, new_outline, root_items)
             new_dests_from_outlines.extend(chunk_dests)
 
     return new_dests_from_outlines
@@ -241,34 +250,37 @@ def _build_outline_chunks_helper(
     return state
 
 
-def _process_chunk(chunk, remapper: LinkRemapper, new_outline):
-    from pikepdf import Name
+def _process_chunk(chunk, remapper: LinkRemapper, new_outline, root_items: list) -> list:
+    """
+    Process a single outline chunk, copying its items into new_outline.
 
-    source_pdf = chunk.pdf
+    Args:
+        chunk: ChunkData describing the source PDF and page range.
+        remapper: Active LinkRemapper for this chunk.
+        new_outline: The destination Outline object (open context manager).
+        root_items: Pre-loaded list of OutlineItem objects from the source PDF.
+            Passed in rather than loaded here so that callers control the
+            Outline lifecycle and tests can inject items directly.
 
-    # --- Get instance_num from chunk ---
+    Returns:
+        list: Flat list of (name, dest) pairs for new named destinations.
+    """
     logger.debug(
         "Processing outline chunk: start_page=%s, instance_num=%s",
         chunk.output_start_page,
         chunk.instance_num,
     )
+    logger.debug("Source outline has %s root items.", len(root_items))
 
-    has_outlines = bool(source_pdf.Root.get(Name.Outlines))
-    logger.debug("Processing chunk. Source PDF has outlines: %s", has_outlines)
-
-    if not has_outlines:
-        logger.debug("short-circuiting _process_chunk")
+    if not root_items:
         return []
 
     copier = OutlineCopier(remapper)
 
-    with source_pdf.open_outline() as source_outline:
-        root_items = list(source_outline.root)
-        logger.debug("Source outline has %s root items.", len(root_items))
-        for source_item in root_items:
-            copier.copy_item(
-                source_item,
-                new_outline.root,  # Append to the new root
-            )
+    # Capture new_outline.root once — accessing it repeatedly re-parses the
+    # outline tree on each call.
+    new_root = new_outline.root
+    for source_item in root_items:
+        copier.copy_item(source_item, new_root)
 
     return copier.new_dests_list
