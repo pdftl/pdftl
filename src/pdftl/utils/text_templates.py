@@ -43,6 +43,7 @@ reset_global_count() -> None
 
 import logging
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -64,18 +65,21 @@ logger = logging.getLogger(__name__)
 # before exercising {global_count} to ensure deterministic values.
 
 _global_count: int = 0
+_global_count_lock = threading.Lock()
 
 
 def reset_global_count() -> None:
     """Reset the global counter to 0. Exposed primarily for testing."""
     global _global_count
-    _global_count = 0
+    with _global_count_lock:
+        _global_count = 0
 
 
 def _get_and_increment_global_count() -> int:
     global _global_count
-    _global_count += 1
-    return _global_count
+    with _global_count_lock:
+        _global_count += 1
+        return _global_count
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +132,9 @@ KNOWN_VARS = {
 # ---------------------------------------------------------------------------
 
 # Captures either an escaped block {{...}} OR a variable block {...}
-TOKEN_REGEX = re.compile(r"(\{\{.*?\}\}|\{.*?\})")
+# Intentionally disallows nested braces inside a single token to avoid
+# cross-brace overmatching on malformed templates.
+TOKEN_REGEX = re.compile(r"(\{\{[^{}]*\}\}|\{[^{}]*\})")
 
 LINK_REGEX = re.compile(r"\[([^\]\\]*(?:\\.[^\]\\]*)*)\]\(([^)]*)\)")
 
@@ -218,7 +224,7 @@ def _evaluate_token(token: tuple, context: dict):
 
     # --- count is an alias for n ---
     elif var in ("n", "count"):
-        base_value = context.get("n", 1)
+        base_value = context.get("count", context.get("n", 1))
 
     # --- Standard context lookup ---
     else:
