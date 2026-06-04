@@ -24,6 +24,11 @@ def DEFAULT_GS():
     return {
         "fill_cs": {"family": "unknown"},
         "stroke_cs": {"family": "unknown"},
+        "rendering_intent": "RelativeColorimetric",
+        "overprint_fill": False,
+        "overprint_stroke": False,
+        "overprint_mode": 0,
+        "blend_mode": "Normal",
     }
 
 
@@ -399,6 +404,50 @@ def process_operator(
         )
     elif op == "sh" and operands:
         _process_shading_op(operands, resources, pikepdf_module, detail, op_idx, stream_id)
+    elif op == "ri" and operands:
+        gs["rendering_intent"] = str(operands[0]).lstrip("/")
+    elif op == "op" and operands:  # lowercase: fill overprint (PDF 1.2)
+        gs["overprint_fill"] = bool(operands[0])
+    elif op == "OP" and operands:  # uppercase: stroke overprint
+        gs["overprint_stroke"] = bool(operands[0])
+    elif op == "gs" and operands:  # ExtGState resource reference
+        _apply_ext_gstate(str(operands[0]), resources, pikepdf_module, gs)
+
+
+def _apply_ext_gstate(name: str, resources, pikepdf_module, gs: dict):
+    """Apply a named ExtGState resource to the current graphics state."""
+    try:
+        ext_gstates = resources.get("/ExtGState")
+        if ext_gstates is None:
+            return
+        gstate = ext_gstates.get(name if name.startswith("/") else f"/{name}")
+        if gstate is None:
+            return
+
+        if (ri := gstate.get("/RI")) is not None:
+            gs["rendering_intent"] = str(ri).lstrip("/")
+
+        # Per spec: OP sets both stroke and fill overprint, UNLESS op is also
+        # present in the same dictionary, in which case OP sets stroke only.
+        op_entry = gstate.get("/op")  # fill overprint (PDF 1.3+)
+        OP_entry = gstate.get("/OP")  # stroke overprint (and fill if op absent)
+
+        if OP_entry is not None:
+            gs["overprint_stroke"] = bool(OP_entry)
+            if op_entry is None:
+                gs["overprint_fill"] = bool(OP_entry)
+
+        if op_entry is not None:
+            gs["overprint_fill"] = bool(op_entry)
+
+        if (opm := gstate.get("/OPM")) is not None:
+            gs["overprint_mode"] = int(opm)
+
+        if (bm := gstate.get("/BM")) is not None:
+            gs["blend_mode"] = str(bm).lstrip("/")
+
+    except (AttributeError, TypeError, ValueError) as err:
+        logger.debug("ExtGState application failed for %s: %s", name, err)
 
 
 def walk_stream(

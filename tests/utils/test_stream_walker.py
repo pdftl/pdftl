@@ -923,3 +923,80 @@ def test_final_catch_all_exception_coverage(pikepdf_mock):
         full=False,
         stream_id="s",
     )
+
+
+def test_process_operator_gs_state_ops(pikepdf_mock):
+    gs = DEFAULT_GS()
+    stack = []
+    detail = {"fills": [], "strokes": [], "patterns": []}
+
+    # ri
+    process_operator(
+        "ri", ["/Perceptual"], None, pikepdf_mock, gs, stack, detail, set(), False, 1, False, "s"
+    )
+    assert gs["rendering_intent"] == "Perceptual"
+
+    # op (fill overprint)
+    process_operator(
+        "op", [True], None, pikepdf_mock, gs, stack, detail, set(), False, 2, False, "s"
+    )
+    assert gs["overprint_fill"] is True
+
+    # OP (stroke overprint)
+    process_operator(
+        "OP", [False], None, pikepdf_mock, gs, stack, detail, set(), False, 3, False, "s"
+    )
+    assert gs["overprint_stroke"] is False
+
+    # gs — delegates to _apply_ext_gstate; just verify it doesn't raise with no resources
+    process_operator(
+        "gs", ["/GS1"], None, pikepdf_mock, gs, stack, detail, set(), False, 4, False, "s"
+    )
+
+
+def test_apply_ext_gstate(pikepdf_mock):
+    from pdftl.utils.stream_walker import _apply_ext_gstate
+
+    gs = DEFAULT_GS()
+
+    # No ExtGState in resources
+    res = MagicMock()
+    res.get.return_value = None
+    _apply_ext_gstate("/GS1", res, pikepdf_mock, gs)
+    assert gs["rendering_intent"] == "RelativeColorimetric"  # unchanged
+
+    # ExtGState present but named entry missing
+    res.get.return_value = {}
+    _apply_ext_gstate("/GS1", res, pikepdf_mock, gs)
+
+    # OP only — should set both stroke and fill
+    gstate = MagicMock()
+    gstate.get.side_effect = lambda k, d=None: (True if k == "/OP" else None)
+    res.get.return_value = {"/GS1": gstate}
+    _apply_ext_gstate("/GS1", res, pikepdf_mock, gs)
+    assert gs["overprint_stroke"] is True
+    assert gs["overprint_fill"] is True
+
+    # OP + op — OP sets stroke only, op sets fill
+    gstate.get.side_effect = lambda k, d=None: (
+        True if k == "/OP" else False if k == "/op" else None
+    )
+    _apply_ext_gstate("/GS1", res, pikepdf_mock, gs)
+    assert gs["overprint_stroke"] is True
+    assert gs["overprint_fill"] is False
+
+    # RI, OPM, BM, name without leading slash
+    gstate.get.side_effect = lambda k, d=None: {
+        "/RI": "/AbsoluteColorimetric",
+        "/OPM": 1,
+        "/BM": "/Multiply",
+    }.get(k)
+    res.get.return_value = {"/GS1": gstate}  # leading slash — matches f"/{name}" lookup
+    _apply_ext_gstate("GS1", res, pikepdf_mock, gs)
+    assert gs["rendering_intent"] == "AbsoluteColorimetric"
+    assert gs["overprint_mode"] == 1
+    assert gs["blend_mode"] == "Multiply"
+
+    # AttributeError — should not raise
+    res.get.side_effect = AttributeError
+    _apply_ext_gstate("/GS1", res, pikepdf_mock, gs)
