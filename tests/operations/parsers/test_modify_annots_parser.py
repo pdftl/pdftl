@@ -226,15 +226,24 @@ def test_split_spec_missing_closing_paren():
         ma_parser._split_spec("selector(Key=Value")
 
 
-@given(spec=st.text().filter(lambda s: "(" in s and not s.strip().endswith(")")))
+@given(
+    prefix=st.text(),
+    suffix=st.text().filter(lambda s: not s.strip().endswith(")")),
+)
 @settings(suppress_health_check=[HealthCheck.filter_too_much])
-def test_split_spec_hypothesis_unclosed_paren(spec):
+def test_split_spec_hypothesis_unclosed_paren(prefix, suffix):
     """Any string with an opening paren but no closing paren should raise."""
+    spec = prefix + "(" + suffix
     with pytest.raises(ValueError):
         ma_parser._split_spec(spec)
 
 
-@given(spec=st.text().filter(lambda s: "(" not in s and s.strip()))
+@given(
+    spec=st.text(
+        alphabet=st.characters(blacklist_characters="("),
+        min_size=1,
+    ).filter(str.strip)
+)
 def test_modification_rules_hypothesis_no_parens_require_keyval(spec):
     """Any non-empty string without parens should raise when require_keyval=True."""
     with pytest.raises((ValueError, TypeError)):

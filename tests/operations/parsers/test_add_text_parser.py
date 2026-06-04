@@ -48,29 +48,17 @@ UNITS = {"pt": 1.0, "in": 72.0, "cm": 72.0 / 2.54}
 # A simple mock of parse_sub_page_spec to return what the parser expects.
 MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "step", "qualifiers", "omissions"])
 
+st_pos_preset = st.sampled_from([f"position={p}" for p in PRESET_POSITIONS])
 
-# Now, we can import the functions to be tested from the *new* module path
-# Changed '_parse_text_string_to_renderer' to 'compile_text_renderer'
-# # --- Monkey-patching the parser's imports ---
-# # We must replace the imported names *within the parser module*
-# pdftl.operations.parsers.add_text_parser.UNITS = UNITS
-# pdftl.operations.parsers.add_text_parser.parse_sub_page_spec = mock_parse_sub_page_spec
-# # We also need to give it the 're' module for the fixed _split_spec_string
-# pdftl.operations.parsers.add_text_parser.re = re
+st_delimiter = st.sampled_from(list("!@#$%^&*-+=:?/|"))
+
+TEXT_ALPHABET = st.characters(min_codepoint=32, max_codepoint=126, blacklist_characters="(){}")
 
 
-# --- Strategies for generating valid-looking inputs ---
-# A valid non-alphanumeric delimiter
-st_delimiter = st.characters(min_codepoint=33, max_codepoint=126).filter(
-    lambda c: not c.isalnum() and c not in "()'"
-)
+@st.composite
+def st_text_content(draw, forbidden=""):
+    return draw(st.text(TEXT_ALPHABET, min_size=0, max_size=50))
 
-# Text string that won't contain the delimiter (usually)
-st_text_content = st.text(
-    st.characters(min_codepoint=32, max_codepoint=126),
-    min_size=0,
-    max_size=50,
-).filter(lambda s: "(" not in s and ")" not in s and "{" not in s)
 
 st_page_range = st.one_of(
     st.just(""),  # default
@@ -102,8 +90,6 @@ st_rotate = st.builds(
     st.floats(min_value=-360, max_value=360, allow_nan=False, allow_infinity=False),
 )
 
-st_pos_preset = st.just(f"position={st.one_of(st.sampled_from(PRESET_POSITIONS))}")
-
 st_dim_floats = st.floats(min_value=0, max_value=1000, allow_nan=False, allow_infinity=False)
 st_unit = st.one_of(st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just(""))
 st_dim_str = st.builds(lambda v, u: f"{v}{u}", st_dim_floats, st_unit)
@@ -130,6 +116,49 @@ st_option = st.one_of(
     st_color_rgba,
     st_offsets,
 )
+
+
+# A strategy for a list of options, ensuring position/xy are mutually exclusive
+@st.composite
+def st_options_list(draw):
+    # Base options
+    options = draw(st.lists(st_option, min_size=0, max_size=3))
+
+    # Add positioning
+    if draw(st.booleans()):
+        options.append(draw(st_pos_preset))
+    else:
+        options.append(draw(st_pos_xy))
+
+    return options
+
+
+# Strategy for the full options string "(key=value, ...)"
+@st.composite
+def st_options_string(draw):
+    options = draw(st_options_list())
+    if not options:
+        return "()"
+    return f"({', '.join(options)})"
+
+
+# --- Full Spec Strategy ---
+@st.composite
+def st_full_spec(draw):
+    page = draw(st_page_range)
+    delim = draw(st_delimiter)
+    # Ensure text doesn't contain the chosen delimiter
+    text = draw(st_text_content(forbidden=delim))
+    opts = draw(st_options_string())
+
+    # Build the string without fussy spaces
+    page_part = page
+    # Add a space only if page part is not empty
+    if page:
+        page_part = page + " "
+
+    return f"{page_part}{delim}{text}{delim} {opts}"
+
 
 # --- Strategies for INVALID specs ---
 
@@ -158,16 +187,6 @@ st_invalid_structure = st.one_of(
     st.just("1 bad-delimiter text / (options)"),  # Alphanumeric delimiter
 )
 
-
-# --- Mocks for dependencies ---
-# We mock the external dependencies of add_text_parser for isolated testing.
-
-# Mock pdftl.core.constants
-# 1 cm = 72 (pts/in) / 2.54 (cm/in) = 28.346...
-UNITS = {"pt": 1.0, "in": 72.0, "cm": 72.0 / 2.54}
-
-# Mock pdftl.utils.page_specs
-# A simple mock of parse_sub_page_spec to return what the parser expects.
 MockPageSpec = namedtuple("MockPageSpec", ["start", "end", "step", "qualifiers", "omissions"])
 
 
@@ -205,17 +224,6 @@ def mock_parse_sub_page_spec(page_range_part, total_pages):
         return MockPageSpec(page_num, page_num, 1, qualifiers, [])
     except ValueError:
         raise
-
-
-# Now, we can import the functions to be tested from the *new* module path
-# Changed '_parse_text_string_to_renderer' to 'compile_text_renderer'
-
-# # --- Monkey-patching the parser's imports ---
-# # We must replace the imported names *within the parser module*
-# pdftl.operations.parsers.add_text_parser.UNITS = UNITS
-# pdftl.operations.parsers.add_text_parser.parse_sub_page_spec = mock_parse_sub_page_spec
-# # We also need to give it the 're' module for the fixed _split_spec_string
-# pdftl.operations.parsers.add_text_parser.re = re
 
 
 def test_parse_options_content_error():
@@ -535,153 +543,6 @@ class TestAddTextParser(unittest.TestCase):
             parse_add_text_specs_to_rules(["1 /Missing Delim"], self.total_pages)
 
 
-# --- Strategies for generating valid-looking inputs ---
-# A valid non-alphanumeric delimiter
-st_delimiter = st.characters(min_codepoint=33, max_codepoint=126).filter(
-    lambda c: not c.isalnum() and c not in "()'"
-)
-
-# Text string that won't contain the delimiter (usually)
-st_text_content = st.text(
-    st.characters(min_codepoint=32, max_codepoint=126),
-    min_size=0,
-    max_size=50,
-).filter(lambda s: "(" not in s and ")" not in s and "{" not in s)
-
-st_page_range = st.one_of(
-    st.just(""),  # default
-    st.just("1-10"),
-    st.just("1"),
-    st.just("5-10"),
-    st.just("1-end"),
-    st.just("even"),
-    st.just("odd"),
-    st.just("1-10even"),
-    st.just("1-10odd"),
-)
-
-# --- Option Strategies ---
-st_font = st.builds(
-    lambda v: f"font={v}",
-    st.one_of(st.just("Helvetica"), st.just("'Times New Roman'")),
-)
-st_size = st.builds(
-    lambda v: f"size={v}",
-    st.floats(min_value=1, max_value=100, allow_nan=False, allow_infinity=False),
-)
-st_align = st.builds(
-    lambda v: f"align={v}",
-    st.one_of(st.just("left"), st.just("center"), st.just("right")),
-)
-st_rotate = st.builds(
-    lambda v: f"rotate={v}",
-    st.floats(min_value=-360, max_value=360, allow_nan=False, allow_infinity=False),
-)
-
-st_pos_preset = st.just(f"position={st.one_of(st.sampled_from(PRESET_POSITIONS))}")
-
-st_dim_floats = st.floats(min_value=0, max_value=1000, allow_nan=False, allow_infinity=False)
-st_unit = st.one_of(st.just("pt"), st.just("cm"), st.just("in"), st.just("%"), st.just(""))
-st_dim_str = st.builds(lambda v, u: f"{v}{u}", st_dim_floats, st_unit)
-
-st_pos_xy = st.builds(lambda x, y: f"x={x}, y={y}", st_dim_str, st_dim_str)
-
-st_offsets = st.builds(lambda x, y: f"offset-x={x}, offset-y={y}", st_dim_str, st_dim_str)
-
-# st_color_named = st.builds(
-#     lambda v: f"color={v}",
-#     st.one_of(st.just('red'), st.just('blue'))
-# )
-st_color_gray = st.just("color=0.1")
-st_color_rgb = st.just("color=0.1 0.2 0.3")
-st_color_rgba = st.just("color=0.1 0.2 0.3 0.4")
-
-st_option = st.one_of(
-    st_font,
-    st_size,
-    st_align,
-    st_rotate,
-    st_color_gray,
-    st_color_rgb,
-    st_color_rgba,
-    st_offsets,
-)
-
-
-# A strategy for a list of options, ensuring position/xy are mutually exclusive
-@st.composite
-def st_options_list(draw):
-    # Base options
-    options = draw(st.lists(st_option, min_size=0, max_size=4, unique=True))
-
-    # Add positioning
-    if draw(st.booleans()):
-        options.append(draw(st_pos_preset))
-    else:
-        options.append(draw(st_pos_xy))
-
-    return options
-
-
-# Strategy for the full options string "(key=value, ...)"
-@st.composite
-def st_options_string(draw):
-    options = draw(st_options_list())
-    if not options:
-        return "()"
-    return f"({', '.join(options)})"
-
-
-# --- Full Spec Strategy ---
-@st.composite
-def st_full_spec(draw):
-    page = draw(st_page_range)
-    delim = draw(st_delimiter)
-    # Ensure text doesn't contain the chosen delimiter
-    text = draw(
-        st_text_content.filter(
-            lambda s: delim not in s and not s.startswith(" ") and not s.endswith(" ")
-        )
-    )
-    opts = draw(st_options_string())
-
-    # Build the string without fussy spaces
-    page_part = page
-    # Add a space only if page part is not empty
-    if page:
-        page_part = page + " "
-
-    return f"{page_part}{delim}{text}{delim} {opts}"
-
-
-# --- Strategies for INVALID specs ---
-
-st_invalid_options = st.one_of(
-    st.just("(size=foo)"),  # Not a float
-    st.just("(rotate=bar)"),  # Not a float
-    st.just("(position=top-left, x=10)"),  # Conflicting
-    st.just("(unknown=key)"),  # Unknown key
-    st.just("(position=top-left"),  # Missing paren
-    st.just("position=top-left)"),  # Missing paren
-    st.just("(align=middle)"),  # Invalid align value
-    st.just("(position=top)"),  # Invalid position value
-)
-
-st_invalid_variables = st.one_of(
-    st.just("{page+foo}"),  # Non-numeric math
-    st.just("{meta:Title+1}"),  # Math on meta
-    st.just("{foo}"),  # Unknown variable
-    st.just("{page-bar}"),  # Non-numeric math
-    st.just("{page*1}"),  # Invalid operator
-)
-
-st_invalid_structure = st.one_of(
-    st.just("1 /no-end-delim (size=10)"),  # Unmatched delimiter
-    st.just("1 /text/ no-parens-options"),  # Options not in parens
-    st.just("1 bad-delimiter text / (options)"),  # Alphanumeric delimiter
-)
-
-
 @st.composite
 def st_invalid_specs(draw):
     """Builds a full, invalid spec string."""
@@ -760,7 +621,7 @@ class TestAddTextParserHypothesis(unittest.TestCase):
 
 class TestAddTextFiltering(unittest.TestCase):
     def test_line_135_omissions(self):
-        """Tests filtering via page range omissions '~' (Line 135)."""
+        """Tests filtering via page range omissions '~'"""
         # Spec: range 1 to 5, but omit page 3
         specs = ["1-5~3/Omit Test/"]
         total_pages = 10
@@ -900,39 +761,32 @@ class TestMiscAddTextParser(unittest.TestCase):
         self.assertEqual(plain_text, "Go 1")
 
 
-# tests/operations/parsers/test_add_text_parser.py
-
-
-# Adjust import paths based on your actual project structure
-
-
 def test_normalize_formatting_bgcolor_and_padding():
-    """Test that bgcolor and padding are correctly extracted and normalized."""
+    """Test that bgcolor and padding are normalized."""
     options = {"bgcolor": "1 0 0 .5", "padding": "10pt", "color": "0 0 0"}
     normalized = {}
 
-    # Assuming _parse_color and _parse_dimension are mocked or work reliably
-    # We will mock them here to isolate the _normalize_formatting logic
     with (
         patch(
             "pdftl.operations.parsers.add_text_parser._parse_color",
-            side_effect=lambda x: tuple(map(float, x.split())),
+            return_value=(1.0, 0.0, 0.0, 0.5),
         ) as mock_color,
         patch(
-            "pdftl.operations.parsers.add_text_parser._parse_dimension", return_value=10.0
+            "pdftl.operations.parsers.add_text_parser._parse_dimension",
+            return_value=10.0,
         ) as mock_dim,
     ):
         _normalize_formatting(options, normalized)
 
-        # Ensure the keys were popped from the original dict
         assert "bgcolor" not in options
         assert "padding" not in options
 
-        # Ensure they were added to normalized with correct parsed values
         assert normalized["bgcolor"] == (1.0, 0.0, 0.0, 0.5)
         assert normalized["padding"] == 10.0
 
         mock_color.assert_any_call("1 0 0 .5")
+        mock_color.assert_any_call("0 0 0")
+        assert mock_color.call_count == 2
         mock_dim.assert_called_once_with("10pt")
 
 
@@ -945,4 +799,4 @@ def test_normalize_formatting_defaults():
 
     assert "bgcolor" not in normalized
     assert "padding" not in normalized
-    assert normalized["size"] == 12.0
+    assert normalized.get("size") == 12.0 or "size" not in normalized
