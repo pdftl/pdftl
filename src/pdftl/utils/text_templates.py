@@ -218,7 +218,7 @@ def _evaluate_token(token: tuple, context: dict):
 
     # --- count is an alias for n ---
     elif var in ("n", "count"):
-        base_value = context.get("n", 1)
+        base_value = context.get("count", context.get("n", 1))
 
     # --- Standard context lookup ---
     else:
