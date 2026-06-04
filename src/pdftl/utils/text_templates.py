@@ -170,7 +170,8 @@ def _parse_var_expression(expr: str) -> tuple:
 
     # 2. Metadata variables
     if match := META_VAR_REGEX.fullmatch(expr):
-        return (f"meta:{match.group(1).split(':', 1)[1]}", None, {})
+        meta_key = match.group(1).split(':', 1)[1].lower()
+        return (f"meta:{meta_key}", None, {})
 
     # 3. Master regex: simple / arithmetic / formatting
     if match := MASTER_VAR_REGEX.fullmatch(expr):
