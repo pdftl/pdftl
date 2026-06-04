@@ -10,6 +10,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from pdftl.utils.icc_profiles import extract_icc_profile_name
+
 
 def family_from_device_op(op: str) -> str:
     """Return the color family implied by a device-space shorthand operator."""
@@ -74,7 +76,6 @@ def resolve_array(cs_array, resources, pikepdf) -> dict:
 
 
 def resolve_icc(cs_array, pikepdf) -> dict:
-    """Resolve an ICC profile color space."""
     result: dict = {"family": "icc"}
     try:
         stream = cs_array[1]
@@ -88,15 +89,9 @@ def resolve_icc(cs_array, pikepdf) -> dict:
 
         try:
             raw = stream.read_raw_bytes()
-            desc_offset = raw.find(b"desc")
-            if desc_offset != -1 and desc_offset + 12 < len(raw):
-                size = int.from_bytes(raw[desc_offset + 8 : desc_offset + 12], "big")
-                start = desc_offset + 12
-                candidate = raw[start : start + min(size, 128)]
-                null_idx = candidate.find(b"\x00")
-                if null_idx != -1:
-                    candidate = candidate[:null_idx]
-                result["profile_name"] = candidate.decode("ascii", errors="ignore").strip()
+            profile_name = extract_icc_profile_name(raw)
+            if profile_name:
+                result["profile_name"] = profile_name
         except (pikepdf.PdfError, AttributeError, ValueError, TypeError) as err:
             logger.debug("ICC profile name extraction failed: %s", err)
     except (IndexError, AttributeError) as err:

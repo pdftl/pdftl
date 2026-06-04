@@ -78,16 +78,26 @@ def test_resolve_array(pikepdf_mock):
 
 
 def test_resolve_icc(pikepdf_mock):
-    # Setup mock stream
     stream = MagicMock()
     stream.get.side_effect = (
         lambda k, d=None: 3 if k == "/N" else "/DeviceRGB" if k == "/Alternate" else d
     )
 
-    # Valid binary desc (b"desc" at offset 0, pad to 8, size at 8, name at 12)
-    size_bytes = (10).to_bytes(4, "big")
-    valid_raw = b"desc" + b"\x00" * 4 + size_bytes + b"sRGB\x00extra"
-    stream.read_raw_bytes.return_value = valid_raw
+    # Build a minimal spec-valid ICC profile with a v2 'desc' tag.
+    # Layout: 128-byte header | tag_count (4) | tag_table (12) | tag_data
+    name_bytes = b"sRGB\x00"
+    tag_data = (
+        b"desc"  # type signature
+        + b"\x00" * 4  # reserved
+        + len(name_bytes).to_bytes(4, "big")  # ASCII string length
+        + name_bytes
+    )
+    tag_data_offset = 128 + 4 + 12  # header + tag_count field + one 12-byte table entry
+    tag_table_entry = (
+        b"desc" + tag_data_offset.to_bytes(4, "big") + len(tag_data).to_bytes(4, "big")
+    )
+    raw = b"\x00" * 128 + (1).to_bytes(4, "big") + tag_table_entry + tag_data
+    stream.read_raw_bytes.return_value = raw
 
     res = resolve_icc(["/ICCBased", stream], pikepdf_mock)
     assert res["components"] == 3
@@ -95,12 +105,12 @@ def test_resolve_icc(pikepdf_mock):
     assert res["alternate"] == "devicergb"
     assert res["profile_name"] == "sRGB"
 
-    # Bad binary desc size handling / PdfError
+    # PdfError path — profile_name should be absent
     stream.read_raw_bytes.side_effect = pikepdf_mock.PdfError("Bad stream")
     res2 = resolve_icc(["/ICCBased", stream], pikepdf_mock)
     assert "profile_name" not in res2
 
-    # IndexError
+    # IndexError path
     assert resolve_icc(["/ICCBased"], pikepdf_mock) == {"family": "icc"}
 
 
