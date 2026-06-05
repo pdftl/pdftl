@@ -55,7 +55,7 @@ You can optionally provide page specifications to limit extraction to specific p
 _DUMP_IMAGES_EXAMPLES = [
     {"cmd": "in.pdf dump_images", "desc": "Print image metadata for in.pdf to console"},
     {
-        "cmd": "in.pdf dump_images output imagesa.json",
+        "cmd": "in.pdf dump_images output images.json",
         "desc": "Save image metadata for in.pdf to a file",
     },
     {

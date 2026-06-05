@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_colorspaces` operation
 
+- `delete_attachments` operation
+
 ### Changed
 
 - Performance improvements in link/outline remapping
