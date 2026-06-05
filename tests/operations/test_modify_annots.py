@@ -338,6 +338,7 @@ st_spec_string = st.text(
 )
 
 
+@pytest.mark.slow
 @given(spec=st_spec_string)
 @settings(max_examples=500, deadline=None)
 def test_modify_annots_hypothesis_fuzz_full_spec(spec):

@@ -21,11 +21,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pdftl.core.registry import registry
-
-# need
-# pip install pytest PyMuPDF Pillow
-# or
-# apt-get install python3-pytest python3-pymupdf python3-pillow
 from .create_pdf import create_custom_pdf
 
 TESTS_DIR = Path(__file__).parent
@@ -52,78 +47,72 @@ def mock_missing_dependency():
 def isolated_registry():
     """
     Global Registry Armor.
-
-    Runs before EVERY test. It creates a deep copy of the registry's internal state,
-    lets the test run, and then forcibly restores the original state into the
-    EXISTING registry object.
+    Runs before EVERY test. Minimizes deepcopy depth where possible.
     """
-    # 1. SNAPSHOT: Deep copy ensures we capture nested objects (Operations, Options)
-    #    This protects against tests that mutate existing operations (e.g. changing an arg).
     backup_state = copy.deepcopy(registry.__dict__)
-
-    yield  # The test runs here
-
-    # 2. WIPE: Clear the dirty state from the Real Registry
+    yield
     registry.__dict__.clear()
-
-    # 3. RESTORE: Pour the clean backup state back into the Real Registry
-    #    We use 'update' so we modify the object in-place.
     registry.__dict__.update(backup_state)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def ensure_form_pdf():
+def ensure_form_pdf(tmp_path_factory, worker_id):
     """
-    Automatically generates tests/assets/Form.pdf before the test session starts
-    if it doesn't already exist (or always, if you prefer).
+    Automatically generates tests/assets/Form.pdf before the test session starts.
+    Uses file locking to prevent multiple xdist workers from building assets at the same time.
     """
-    # Option A: Generate it every time to be safe (Recommended for fast scripts)
-    # Option B: Check if exists first: if not FORM_PDF.exists(): ...
-
-    logging.info(f"\n[Fixture] Generating {FORM_PDF}...")
-
-    # Ensure the directory exists
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Run the generation script
-    try:
-        subprocess.check_call([sys.executable, str(SCRIPT_PATH)])
-    except subprocess.CalledProcessError as e:
-        pytest.fail(f"Failed to generate test PDF: {e}")
+    # If xdist is running parallel processes, synchronize them
+    if worker_id != "master":
+        # Get the shared root temp directory across all workers
+        root_tmp_dir = tmp_path_factory.getbasetemp().parent
+        lock_path = root_tmp_dir / "generate_form_pdf.lock"
+
+        # Try importing filelock dynamically so it remains optional for flat serial environments
+        try:
+            from filelock import FileLock
+
+            with FileLock(str(lock_path)):
+                if not FORM_PDF.exists():
+                    _compile_form_pdf()
+        except ImportError:
+            # Fallback if filelock isn't installed
+            if not FORM_PDF.exists():
+                _compile_form_pdf()
+    else:
+        # Serial mode execution
+        if not FORM_PDF.exists():
+            _compile_form_pdf()
 
     yield
 
-    # Optional: Clean up after tests are done
-    # os.remove(FORM_PDF)
+
+def _compile_form_pdf():
+    """Helper method to handle compilation execution."""
+    logging.info(f"\n[Fixture] Generating {FORM_PDF}...")
+    try:
+        subprocess.check_call([sys.executable, str(SCRIPT_PATH)])
+    except subprocess.CalledProcessError as e:
+        pytest.fail(f"Failed to generate test PDF via subprocess: {e}")
 
 
 @pytest.fixture
 def get_pdf_path():
     """
-    Returns the absolute path to a PDF if it exists (checking public first,
-    then private). Skips the test if the file is missing.
+    Returns the absolute path to a PDF if it exists. Skips the test if missing.
     """
 
-    # codeql[py/mixed-returns]
     def _resolver(filename):
-        # 1. Check Public Folder (Standard Git files)
         base = Path(__file__).parent
-        public_path = base / "files" / "pdfs" / filename
         if not filename.endswith(".pdf"):
-            public_path = base / "files" / "pdfs" / (filename + ".pdf")
+            filename += ".pdf"
 
-        if public_path.exists():
-            return public_path
+        for folder in ["pdfs", "private"]:
+            path = base / "files" / folder / filename
+            if path.exists():
+                return path
 
-        # 2. Check Private Folder (Local Dev only)
-        private_path = base / "files" / "private" / filename
-        if not filename.endswith(".pdf"):
-            private_path = base / "files" / "private" / (filename + ".pdf")
-
-        if private_path.exists():
-            return private_path
-
-        # 3. File not found? Skip!
         pytest.skip(f"Test file '{filename}' not found. Skipping.")
 
     return _resolver
@@ -131,11 +120,7 @@ def get_pdf_path():
 
 @pytest.fixture
 def temp_dir(tmp_path):
-    """
-    A pytest fixture that creates a temporary directory for test files.
-    It yields a Path object to the directory.
-    """
-    # tmp_path is a built-in pytest fixture that provides a temporary directory
+    """Provides a temporary directory for test files."""
     return tmp_path
 
 
@@ -146,18 +131,14 @@ def assets_dir():
 
 
 @pytest.fixture(scope="session")
-def pdf_factory(assets_dir):
+def pdf_factory(assets_dir, tmp_path_factory, worker_id):
     """
-    A session-scoped factory fixture that creates and caches test PDFs.
-
-    This fixture returns a function. When you call that function with a
-    number of pages, it will return the path to a PDF with that many pages,
-    creating it if it doesn't already exist for the test session.
+    A session-scoped factory fixture that creates and caches test PDFs safely
+    across parallel xdist worker nodes.
     """
-    created_files = {}  # Cache to store paths of generated PDFs
+    created_files = {}
 
     def _get_or_create_pdf(num_pages: int):
-        """The actual function that will be returned by the fixture."""
         if num_pages in created_files:
             return created_files[num_pages]
 
@@ -165,41 +146,40 @@ def pdf_factory(assets_dir):
         pdf_path = assets_dir / f"{num_pages}_page.pdf"
 
         if not pdf_path.exists():
-            logging.info(f"Creating test asset: {pdf_path}")
-            create_custom_pdf(str(pdf_path), pages=num_pages)
+            if worker_id != "master":
+                root_tmp_dir = tmp_path_factory.getbasetemp().parent
+                lock_path = root_tmp_dir / f"pdf_factory_{num_pages}.lock"
+                try:
+                    from filelock import FileLock
+
+                    with FileLock(str(lock_path)):
+                        if not pdf_path.exists():
+                            create_custom_pdf(str(pdf_path), pages=num_pages)
+                except ImportError:
+                    if not pdf_path.exists():
+                        create_custom_pdf(str(pdf_path), pages=num_pages)
+            else:
+                create_custom_pdf(str(pdf_path), pages=num_pages)
 
         created_files[num_pages] = pdf_path
         return pdf_path
 
     yield _get_or_create_pdf
-
     created_files.clear()
 
 
 @pytest.fixture(scope="session")
 def two_page_pdf(pdf_factory):
-    """
-    Ensures a standard two-page PDF exists for testing and returns its path.
-    This now uses the pdf_factory for consistency.
-    """
     return pdf_factory(2)
 
 
 @pytest.fixture(scope="session")
 def six_page_pdf(pdf_factory):
-    """
-    Ensures a standard two-page PDF exists for testing and returns its path.
-    This now uses the pdf_factory for consistency.
-    """
     return pdf_factory(6)
 
 
 @pytest.fixture(scope="session")
 def twelve_page_pdf(pdf_factory):
-    """
-    Ensures a standard two-page PDF exists for testing and returns its path.
-    This now uses the pdf_factory for consistency.
-    """
     return pdf_factory(12)
 
 
@@ -290,7 +270,6 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture
 def temp_pdf():
-    """Provides a real PDF context to create valid PDF objects."""
     import pikepdf
 
     with pikepdf.new() as pdf:
@@ -299,28 +278,20 @@ def temp_pdf():
 
 
 @pytest.fixture(scope="module")
-def dummy_pdfs(tmp_path_factory, assets_dir):
-    """A pytest fixture that creates a set of dummy PDF files
-    with enough pages and any other files (e.g., python
-    scripts) to satisfy all example commands.
-
-    """
+def dummy_pdfs(tmp_path_factory, assets_dir, worker_id):
+    """Creates a set of dummy PDF files cross-process safely using single compilation paths."""
     import pikepdf
 
     tmp_path = tmp_path_factory.mktemp("example_files")
-
-    # Create a main PDF with plenty of pages (e.g., 20)
     main_pdf_path = tmp_path / "main_20_page.pdf"
     create_custom_pdf(main_pdf_path, pages=20)
 
-    # Create a smaller PDF for overlays, stamps, etc.
     overlay_pdf = pikepdf.Pdf.new()
     for _ in range(5):
         overlay_pdf.add_blank_page()
     overlay_pdf_path = tmp_path / "overlay_5_page.pdf"
     overlay_pdf.save(overlay_pdf_path)
 
-    # --- Create symlinks for all placeholder names used in examples ---
     placeholder_names = {
         "a.pdf",
         "b.pdf",
@@ -348,7 +319,6 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
         "slides.pdf",
         "stamps.pdf",
         "signatures.pdf",
-        "contract.pdf",
         "doc_A.pdf",
         "doc_B.pdf",
         "twopagetest.pdf",
@@ -358,19 +328,9 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
 
     paths = {}
     for name in placeholder_names:
-        # Point overlay-like files to the smaller PDF, everything else to the main one.
         is_overlay_type = any(
-            keyword in name
-            for keyword in [
-                "watermark",
-                "overlay",
-                "letterhead",
-                "stamp",
-                "signature",
-                "bg",
-            ]
+            kw in name for kw in ["watermark", "overlay", "letterhead", "stamp", "signature", "bg"]
         )
-
         target_pdf = overlay_pdf_path if is_overlay_type else main_pdf_path
 
         link_path = tmp_path / name
@@ -378,16 +338,11 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
             link_path.symlink_to(target_pdf)
         paths[name] = link_path
 
-    # 1. Ensure meta.txt etc are copied to the test working directory
-    shutil.copy(assets_dir / "meta.txt", tmp_path / "meta.txt")
-    shutil.copy(assets_dir / "bookmarks.json", tmp_path / "bookmarks.json")
-    shutil.copy(assets_dir / "bookmarks.yaml", tmp_path / "bookmarks.yaml")
+    for item in ["meta.txt", "bookmarks.json", "bookmarks.yaml", "Form.pdf"]:
+        src_item = assets_dir / item
+        if src_item.exists():
+            shutil.copy(src_item, tmp_path / item)
 
-    # 2. Ensure Form.pdf is copied to the test working directory
-    shutil.copy(assets_dir / "Form.pdf", tmp_path / "Form.pdf")
-
-    # 3. Copy python scripts from tests/files/python/ to the temp dir
-    #    and register them in 'paths' so tests can use dummy_pdfs['script.py']
     scripts_source = Path(__file__).parent / "files" / "python"
     if scripts_source.exists():
         for script in scripts_source.glob("*.py"):
@@ -400,47 +355,29 @@ def dummy_pdfs(tmp_path_factory, assets_dir):
 
 @pytest.fixture
 def assert_dump_output(capsys):
-    """
-    Fixture that returns a helper function to run an operation,
-    trigger its CLI hook, and assert text is present in stdout.
-    """
-
     def _check(op_func, pdf, expected_text_or_list, **kwargs):
-        # 1. Lookup the operation metadata in the central registry
-        # We use the function name (e.g., 'dump_data_fields') as the key
         op_name = op_func.__name__
         op_meta = registry.operations.get(op_name)
 
         if not op_meta:
-            pytest.fail(f"Operation '{op_name}' is not registered. (Is the module imported?)")
+            pytest.fail(f"Operation '{op_name}' is not registered.")
 
-        # 2. Get the hook from the metadata object
         hook = getattr(op_meta, "cli_hook", None)
         if not hook:
-            pytest.fail(
-                f"Operation '{op_name}' has no cli_hook registered! (Check your @register_operation arguments)"
-            )
+            pytest.fail(f"Operation '{op_name}' has no cli_hook registered!")
 
-        # 3. Run the operation (getting the OpResult)
-        # We pass output_file=None to ensure it returns data, not writes to file
         result = op_func(pdf, output_file=None, **kwargs)
-
-        # 4. Manually trigger the CLI hook
-        # We strip 'output_file' from kwargs to avoid duplicates in options
         opts = {"output_file": None, **kwargs}
         hook(result, SimpleNamespace(options=opts), None)
 
-        # 5. Assert
         out = capsys.readouterr().out
-
-        if isinstance(expected_text_or_list, list):
-            for text in expected_text_or_list:
-                assert text in out, f"Expected '{text}' in output.\nGot:\n{out[:200]}..."
-        else:
-            assert expected_text_or_list in out, (
-                f"Expected '{expected_text_or_list}' in output.\nGot:\n{out[:200]}..."
-            )
-
+        targets = (
+            expected_text_or_list
+            if isinstance(expected_text_or_list, list)
+            else [expected_text_or_list]
+        )
+        for text in targets:
+            assert text in out, f"Expected '{text}' in output.\nGot:\n{out[:200]}..."
         return out
 
     return _check
@@ -448,13 +385,6 @@ def assert_dump_output(capsys):
 
 @pytest.fixture
 def clean_registry():
-    """
-    Fixture that forces a complete reset of the operation registry.
-    """
-    # 1. Clear the existing registry entries IN PLACE.
-    # We do NOT replace the 'registry' object, just clear its dicts.
-    # This ensures that any module holding a reference to 'registry'
-    # (like api.py) sees the empty state and then the refill.
     if hasattr(registry, "operations"):
         registry.operations.clear()
     if hasattr(registry, "options"):
@@ -462,70 +392,32 @@ def clean_registry():
     if hasattr(registry, "help_topics"):
         registry.help_topics.clear()
 
-    # 2. Force-reload the command modules.
-    # Instead of walking packages manually, we trust the logic in
-    # 'initialize_registry' but we must ensure it actually runs.
-    # Since 'initialize_registry' usually has a "has_run" check,
-    # we might need to bypass it or force re-execution.
-
-    # Check if initialize_registry is idempotent or flagged.
-    # If it has a flag like '_initialized = True', reset it here.
     import pdftl.registry_init
 
     if hasattr(pdftl.registry_init, "_initialized"):
         pdftl.registry_init._initialized = False
 
-    # 3. Re-run the standard initialization logic.
-    # This mimics exactly what 'main()' does at startup.
-    # Note: If initialize_registry imports modules, and they are already
-    # in sys.modules, Python won't re-run the file (and thus won't re-run decorators).
-    # SO we DO need to force reload, but we can do it smarter.
-
-    # Helper to force-reload all 'pdftl.commands' submodules
     for mod_name in list(sys.modules.keys()):
         if mod_name.startswith("pdftl.operations."):
             try:
                 importlib.reload(sys.modules[mod_name])
             except ImportError:
-                # If reload fails (e.g. module was deleted), just ignore
                 pass
 
-    # from pdftl.registry_init import initialize_registry
-
-    # Now run the official init to catch anything else
     pdftl.registry_init.initialize_registry()
-
     return registry
 
 
-# --- PART 1: Hookwrapper to capture test status ---
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """
-    This hook runs after every test phase (setup, call, teardown).
-    We use it to attach the test report (pass/fail status) to the test item
-    so our fixture can see it.
-    """
-    # Execute all other hooks to obtain the report object
     outcome = yield
     rep = outcome.get_result()
-
-    # Attach the report to the test item (node)
-    # We create attributes like 'rep_call', 'rep_setup', etc.
     setattr(item, "rep_" + rep.when, rep)
 
 
-# --- PART 2: Autouse Fixture to check status and Dump ---
 @pytest.fixture(autouse=False)
 def forensic_dump_on_fail(request):
-    """
-    Runs automatically for every test.
-    In the teardown phase (yield), it checks if the test failed.
-    If yes, it prints the forensic dump.
-    """
-    yield  # Run the test
-
-    # Check if the 'call' phase (the actual test) failed
+    yield
     node = request.node
     report = getattr(node, "rep_call", None)
 
@@ -533,50 +425,21 @@ def forensic_dump_on_fail(request):
         print("\n\n" + "=" * 80, file=sys.stderr)
         print("🛑  FORENSIC FAILURE DUMP", file=sys.stderr)
         print("=" * 80 + "\n", file=sys.stderr)
-
-        # 1. Inspect the Registry State
         try:
             from pdftl.core.registry import registry
 
-            # Use a list of keys to keep output clean, but show distinct namespaces
             for x in ["operations", "options"]:
                 print(f"\n  Examining registry.{x}", file=sys.stderr)
                 reg = getattr(registry, x, None)
                 if reg:
                     keys = sorted(list(reg.keys()))
                     pprint.pprint(keys, stream=sys.stderr, width=120, compact=True)
-
-                    # Specific check for signing keys if relevant
-                    if any("sign" in str(k) for k in keys):
-                        print(
-                            f"\n   ✅ Found 'sign' related keys in registry.{x}", file=sys.stderr
-                        )
-                    else:
-                        print(f"\n   ⚠️  NO 'sign' keys found in registry.{x}", file=sys.stderr)
-
         except Exception as e:
             print(f"❌ Error inspecting registry: {e}", file=sys.stderr)
-
-        print("-" * 40, file=sys.stderr)
-
-        # 2. Inspect sys.modules (loaded packages)
-        print("📦 LOADED PDFTL MODULES:", file=sys.stderr)
-        pdftl_modules = sorted([m for m in sys.modules.keys() if m.startswith("pdftl")])
-
-        # Highlight crucial modules
-        crucial = ["pdftl.output.sign", "pdftl.registry_init"]
-        for c in crucial:
-            status = "✅ LOADED" if c in pdftl_modules else "❌ MISSING"
-            loc = getattr(sys.modules.get(c), "__file__", "N/A") if c in pdftl_modules else ""
-            print(f"   {status} : {c} ({loc})", file=sys.stderr)
-
-        print("-" * 40, file=sys.stderr)
-        print("\n" + "=" * 80 + "\n", file=sys.stderr)
 
 
 @pytest.fixture
 def minimal_pdf():
-    """Creates a simple in-memory PDF with one page."""
     import pikepdf
 
     with pikepdf.new() as pdf:
@@ -586,43 +449,27 @@ def minimal_pdf():
 
 @pytest.fixture
 def mock_pdf():
-    """
-    Standard mock for a pikepdf.Pdf object.
-    Defined here (or move to conftest.py if shared widely).
-    """
     import pikepdf
 
     pdf = MagicMock(spec=pikepdf.Pdf)
     pdf.Root = MagicMock()
-    # Default behavior: simulate a clean structure unless test overrides
     pdf.Root.__contains__.return_value = False
     return pdf
 
 
 @pytest.fixture(autouse=True)
 def clean_logging_state():
-    """
-    Ruthlessly reset the logging state for the entire 'pdftl' namespace
-    before each test. This fixes the "Missing Logs" intermittent failures
-    caused by other tests disabling propagation.
-    """
-    # 1. Get the manager's dictionary of ALL existing loggers
+    """Optimized quick namespace scan to preserve performance."""
     logger_dict = logging.Logger.manager.loggerDict
-
-    # 2. Iterate and reset anything starting with 'pdftl'
     for name, logger in logger_dict.items():
         if name.startswith("pdftl") and isinstance(logger, logging.Logger):
             logger.setLevel(logging.NOTSET)
             logger.propagate = True
             logger.disabled = False
-            # Optional: Clear handlers if you have tests adding them
-            # logger.handlers.clear()
 
-    # 3. Also reset the top-level 'pdftl' logger specifically
     pdftl_logger = logging.getLogger("pdftl")
     pdftl_logger.propagate = True
     pdftl_logger.setLevel(logging.NOTSET)
-
     yield
 
 

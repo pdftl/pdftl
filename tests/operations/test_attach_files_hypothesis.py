@@ -65,6 +65,7 @@ def test_parser_relation(files, relation):
     assert [att.path for att in attachments] == files
 
 
+@pytest.mark.slow
 @given(
     files1=st_file_list,
     page_spec=st_page_spec,

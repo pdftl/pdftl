@@ -69,7 +69,7 @@ def test_parse_paper_spec_property(paper_spec):
     assert result is not None
     assert isinstance(result, tuple)
     assert len(result) == 2
-    assert isinstance(result[0], (int, float))
+    assert isinstance(result[0], int | float)
 
     # Test landscape property
     if paper_spec.endswith("_l"):
@@ -132,6 +132,7 @@ def test_parse_rebox_margins_shorthand_property(parts):
         )
 
 
+@pytest.mark.slow
 @given(
     page_range=st.one_of(st.just(""), st.just("1-3"), st.just("even"), st.just("2-8odd")),
     margin_spec=st.one_of(st.just("10pt,20pt"), st_paper_sizes),

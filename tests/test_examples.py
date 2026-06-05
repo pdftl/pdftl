@@ -48,6 +48,7 @@ def discover_examples():
 # --- The Main Test Function ---
 
 
+@pytest.mark.slow
 @pytest.mark.serial
 @pytest.mark.parametrize("command_str", discover_examples())
 def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.slow
 def test_mypy_validation_isolated(tmp_path):
     """
     Verifies that Mypy enforces the API contract using a simulated

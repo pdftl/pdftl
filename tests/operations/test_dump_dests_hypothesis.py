@@ -53,6 +53,7 @@ st_json_serializable = st.recursive(
 )
 
 
+@pytest.mark.slow
 @given(data=st_json_serializable)
 def test_write_json_output_compaction_does_not_crash(data):
     """
@@ -83,6 +84,7 @@ def test_write_json_output_compaction_does_not_crash(data):
             )
 
 
+@pytest.mark.slow
 @given(
     simple_list=st.lists(st_atomic_values, min_size=1, max_size=5).filter(
         # A "simple" list contains no nested objects OR CHARACTERS
@@ -113,6 +115,7 @@ def test_write_json_output_compaction_compacts_simple_lists(simple_list):
         assert "\n" not in list_str, f"Simple list was not compacted:\n{output_string}"
 
 
+@pytest.mark.slow
 @given(
     complex_list=st.lists(
         st.one_of(st.dictionaries(st.text(min_size=1), st.integers())),
@@ -371,6 +374,7 @@ st_pdf_object = st.recursive(
 )
 
 
+@pytest.mark.slow
 @given(obj=st_pdf_object)
 def test_pdf_obj_to_json_handles_nested_structures(obj):
     """

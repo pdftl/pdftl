@@ -166,6 +166,7 @@ st_full_spec_string = st.builds(
 )
 
 
+@pytest.mark.slow
 @settings(deadline=1000)
 @given(
     specs=st.lists(st_full_spec_string, min_size=1, max_size=5),

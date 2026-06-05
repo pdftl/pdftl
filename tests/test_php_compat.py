@@ -30,6 +30,7 @@ def prerequisites_met():
     return True
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux only")
 @pytest.mark.skipif(not prerequisites_met(), reason="php-pdftk repo or dependencies missing")
 def test_php_pdftk_compatibility(tmp_path):

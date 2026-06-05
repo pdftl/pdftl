@@ -203,6 +203,7 @@ st_selector = st.one_of(
 )
 
 
+@pytest.mark.slow
 @given(selector=st_selector, kv_list=st_kv_list)
 def test_parser_hypothesis_valid_specs(selector, kv_list):
     """

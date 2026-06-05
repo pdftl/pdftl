@@ -383,3 +383,37 @@ class TestAddTextParserCoverage:
 
         result = _evaluate_token(token, context)
         assert result == "success"
+
+
+@pytest.mark.parametrize(
+    "invalid_spec, expected_error_match",
+    [
+        # Syntax & Delimiter errors
+        ("   ", "Empty add_text spec"),
+        ("1-endAtextA", "Invalid text delimiter"),  # Alphanumeric delim
+        ("1-end/text", "Invalid text delimiter"),  # Missing closing delim
+        # Options formatting errors
+        ("1-end/text/ x=10", "Invalid text delimiter"),  # Missing parens
+        ("1-end/text/(=10)", "Option missing key"),  # Empty key
+        ("1-end/text/(x)", "Invalid option format"),  # Missing '='
+        ("1-end/text/(fake_key=10)", "Unknown options"),  # Unrecognized key
+        # Type & Value errors in specific options
+        ("1-end/text/(start=abc)", "must be an integer"),
+        ("1-end/text/(position=center, x=10)", "Cannot specify both 'position' and 'x'/'y'"),
+        ("1-end/text/(position=moon)", "Unknown position"),
+        ("1-end/text/(rotate=abc)", "Invalid rotate value"),
+        ("1-end/text/(size=abc)", "Invalid size value"),
+        ("1-end/text/(align=top)", "Invalid align value"),
+        # Dimension parsing errors
+        ("1-end/text/(x=abc%)", "Invalid percentage value"),
+        ("1-end/text/(x=abcpt)", "Invalid size value"),
+        ("1-end/text/(x=abc)", "Invalid size or unit"),
+        # Color parsing errors
+        ("1-end/text/(color=red)", "Invalid characters in color string"),
+        ("1-end/text/(color=1 1)", "must have 1, 3, or 4"),
+    ],
+)
+def test_add_text_parser_fast_validation_errors(invalid_spec, expected_error_match):
+    """Deterministically hit all ValueError branches without needing Hypothesis fuzzing."""
+    with pytest.raises(ValueError, match=expected_error_match):
+        parse_add_text_specs_to_rules([invalid_spec], total_pages=1)
