@@ -27,10 +27,10 @@ PDF file, if there are any.
 The output format is
 
 ```
-  filesize filename
+  filesize location filename
 ```
-
-where filesize is in bytes.
+where `filesize` is in bytes, and `location` specifies if the file is
+attached at the `Document` level or pinned to specific `Page(s)`.
 
 """
 
@@ -46,7 +46,7 @@ _UNPACK_FILES_LONG_DESC = """
 
 The `unpack_files` operation unpacks files attached to the input
 PDF file, if there are any. The directory to save attachments in
-defaults to the working directory, any may be controlled by adding
+defaults to the working directory, and may be controlled by adding
 `output <directory>`.
 
 **Warning** This command will silently overwrite any existing files with
@@ -91,7 +91,8 @@ def dump_files_cli_hook(result: OpResult, stage, _pipeline):
     for item in result.data:
         # Show where the file would be saved (projected path)
         display_path = base_path / item["name"]
-        print(f"{item['size']:>9} {display_path}")
+        # Format: [size] [location] [path]
+        print(f"{item['size']:>9}  {item['location']:<14} {display_path}")
 
 
 def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
@@ -151,18 +152,43 @@ def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
 def dump_files(input_filename, pdf, get_input, output_dir=None) -> OpResult:
     """
     List files attached to the PDF.
-    Returns a list of dicts: {'name': str, 'size': int}.
+    Returns a list of dicts: {'name': str, 'size': int, 'location': str}.
     """
+    import pikepdf
+
     if not pdf.attachments:
         return OpResult(success=True, data=[], meta={"input_filename": input_filename})
+
+    # Map attachments to the pages they appear on
+    annot_map = {}
+    for p_num, page in enumerate(pdf.pages, start=1):
+        if "/Annots" in page:
+            for annot in page.Annots:
+                if annot.get("/Subtype") == "/FileAttachment":
+                    fs = annot.get("/FS")
+                    if fs is not None:
+                        annot_map.setdefault(fs.objgen, set()).add(p_num)
 
     # Handle prompt logic for consistency (even if just displaying projected path)
     final_output_dir = _resolve_output_dir(output_dir, get_input)
 
     data = []
     for name, attachment in pdf.attachments.items():
-        file_bytes = attachment.get_file().read_bytes()
-        data.append({"name": name, "size": len(file_bytes)})
+        objgen = attachment.obj.objgen
+        pages = sorted(list(annot_map.get(objgen, [])))
+
+        if not pages:
+            location = "Document"
+        else:
+            p_str = ",".join(str(p) for p in pages)
+            location = f"Pages:{p_str}"
+
+        filesize = "unknown"
+        try:
+            filesize = attachment.get_file().size
+        except (pikepdf.PdfError, AttributeError):
+            logger.warning("Could not get a valid file for attachment '%s'", name)
+        data.append({"name": name, "size": filesize, "location": location})
 
     return OpResult(
         success=True,
@@ -200,6 +226,8 @@ def unpack_files(pdf, get_input, output_dir=None) -> OpResult:
     Unpacks attachments from a single PDF file.
     Returns a generator yielding (filename, bytes).
     """
+    import pikepdf
+
     # Resolve output path prompt here because it requires user interaction
     final_output_dir = _resolve_output_dir(output_dir, get_input)
 
@@ -210,7 +238,13 @@ def unpack_files(pdf, get_input, output_dir=None) -> OpResult:
 
         for name, attachment in pdf.attachments.items():
             logger.debug("found attachment=%s", name)
-            file_bytes = attachment.get_file().read_bytes()
+            try:
+                file = attachment.get_file()
+                file_bytes = file.read_bytes()
+            except (pikepdf.PdfError, AttributeError):
+                logger.warning("Skipping attachment '%s': invalid or missing internal data.", name)
+                continue
+
             yield name, file_bytes
 
     return OpResult(success=True, data=_generator(), meta={"output_dir": final_output_dir})

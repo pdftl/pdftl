@@ -560,3 +560,58 @@ def test_write_named_dests_odd_length():
 
     with pytest.raises(ValueError, match="must have even length"):
         write_named_dests(pdf, odd_dests)
+
+
+def test_process_annotation_non_link_with_action():
+    """Ensure annotations with actions but non-Link subtypes copy as-is without remapping."""
+    # 1. Setup Remapper Context
+    remapper = MagicMock(spec=LinkRemapper)
+    remapper.pdf = MagicMock()
+    remapper.source_pdf = MagicMock()
+    remapper.pikepdf = pikepdf
+
+    mock_copied_annot = MagicMock()
+    remapper.source_pdf.make_indirect.return_value = MagicMock()
+    remapper.pdf.copy_foreign.return_value = mock_copied_annot
+
+    # 2. Create annotation that has an Action ("A") but Subtype is Widget (not Link)
+    original_annot = MagicMock()
+    original_annot.A = MagicMock()
+    original_annot.Subtype = pikepdf.Name.Widget  # Triggers line 101 path
+
+    # Execute
+    new_annot, new_named_dest_data = _process_annotation(original_annot, 0, remapper)
+
+    # Verify it returned early with the copy but skipped processing handlers
+    assert new_annot == mock_copied_annot
+    assert new_named_dest_data is None
+
+
+def test_rebuild_links_skips_pages_without_annotations():
+    """Ensure rebuild_links gracefully continues when a source page has no annotations."""
+    from unittest.mock import MagicMock
+    from pdftl.pages.links import rebuild_links
+    from pdftl.pages.link_remapper import LinkRemapper
+
+    # 1. Setup destination PDF with a blank target page
+    mock_target_page = MagicMock()
+    mock_dest_pdf = MagicMock()
+    mock_dest_pdf.pages = [mock_target_page]
+
+    # 2. Setup source PDF with a page that explicitly lacks the /Annots key
+    mock_src_page = MagicMock()
+    mock_src_page.__contains__.return_value = False  # Tells 'not in' to evaluate to True
+
+    mock_src_pdf = MagicMock()
+    mock_src_pdf.pages = [mock_src_page]
+
+    # 3. Pair them up in the processed page info profile
+    processed_page_info = [(mock_src_pdf, 0, 1)]
+    mock_remapper = MagicMock(spec=LinkRemapper)
+
+    # Execute the link-rebuilding orchestration pipeline
+    all_named_dests = rebuild_links(mock_dest_pdf, processed_page_info, mock_remapper)
+
+    # Verify that it hits 'continue' early and never builds any context or configurations
+    assert all_named_dests == []
+    mock_remapper.set_call_context.assert_not_called()
