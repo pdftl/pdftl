@@ -207,20 +207,25 @@ def split_escaped(text: str, delimiter: str) -> list[str]:
     return parts
 
 
-def compact_json_string(json_string):
+def compact_json_string(json_string, fold_dicts=True, max_content=None):
     """Use regex heuristics to compact a json string, by eliminating some linebreaks"""
+    import re
 
     def compact_simple_array(match):
         # Extract the content of the array
         array_content = match.group(2)
+        if max_content is not None and len(array_content) > max_content:
+            return match.group(0)
         # Remove newlines and reduce whitespace to single spaces
         compacted_content = " ".join(array_content.strip().split())
         return f"{match.group(1)}{compacted_content}{match.group(3)}"
 
     ret = json_string
-    import re
 
-    for regex_str in [r"(\[)\s*([^\[\]]*?)\s*(\])", r"(\{)\s*([^\{\}]*?)\s*(\})"]:
+    regular_expressions = [r"(\[)\s*([^\[\]]*?)\s*(\])"]
+    if fold_dicts:
+        regular_expressions.append(r"(\{)\s*([^\{\}]*?)\s*(\})")
+    for regex_str in regular_expressions:
         ret = re.sub(regex_str, compact_simple_array, ret)
     return ret
 

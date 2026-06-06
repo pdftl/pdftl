@@ -9,35 +9,57 @@
 See also: pdftl.output.attach for adding attachments to output.
 """
 
+import json
 import logging
 from pathlib import Path
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
+from pdftl.output.dump import dump
 from pdftl.utils.user_input import dirname_completer
+from pdftl.utils.attachment_utils import attachment_metadata
+from pdftl.utils.string_utils import compact_json_string
+from pdftl.utils.hooks import from_result_meta
 
 logger = logging.getLogger(__name__)
 
 _DUMP_FILES_LONG_DESC = """
+The `dump_files` operation lists files attached to the input PDF as JSON.
 
-The `dump_files` operation lists files attached to the input
-PDF file, if there are any.
+Each attachment is an object with the following fields (all optional except
+`key` and `filename`):
 
-The output format is
+| Field         | Description                                                  |
+| :------------ | :----------------------------------------------------------- |
+| `key`         | Internal NameTree key (may differ from `filename`)           |
+| `filename`    | Attachment filename as stored in the filespec                |
+| `description` | Human-readable description, if present                       |
+| `mime_type`   | MIME type (e.g. `/text/plain`, `/application/pdf`)           |
+| `relationship`| Relationship type (e.g. `Source`, `Data`, `Unspecified`)     |
+| `file_size`   | Uncompressed file size in bytes                              |
+| `stored_size` | Size as stored in PDF (compressed), in bytes                 |
+| `compression` | PDF filter name (e.g. `/FlateDecode`), if compressed         |
+| `created`     | Creation date in PDF date format                             |
+| `modified`    | Modification date in PDF date format                         |
+| `pages`       | List of pages this attachment is attached to                 |
 
-```
-  filesize location filename
-```
-where `filesize` is in bytes, and `location` specifies if the file is
-attached at the `Document` level or pinned to specific `Page(s)`.
-
+Note: document-level attachments are attachments which are not attached to any pages.
+In this case, the `pages` field is absent.
 """
 
 _DUMP_FILES_EXAMPLES = [
     {
         "cmd": "a.pdf dump_files",
-        "desc": "List all files attached to a.pdf",
+        "desc": "List all files attached to a.pdf as JSON",
+    },
+    {
+        "cmd": "a.pdf dump_files | jq '.[] | select(.file_size > 1000000)'",
+        "desc": "List attachments larger than 1MB",
+    },
+    {
+        "cmd": "a.pdf dump_files | jq '.[].filename'",
+        "desc": "List just the filenames of all attachments",
     },
 ]
 
@@ -71,7 +93,7 @@ _UNPACK_FILES_EXAMPLES = [
 
 
 def dump_files_cli_hook(result: OpResult, stage, _pipeline):
-    """CLI Hook to print the file list."""
+    """CLI Hook to print the attachment list as JSON."""
 
     if not result.success:
         return
@@ -79,20 +101,12 @@ def dump_files_cli_hook(result: OpResult, stage, _pipeline):
     if result.meta is None:
         raise AttributeError("Missing metadata")
 
-    if not result.data:
-        # Original behavior: print message if empty
-        input_filename = result.meta.get("input_filename", "input")
-        print(f"No attachments found in {input_filename}")
-        return
+    output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
-    output_dir = result.meta.get("output_dir")
-    base_path = Path(output_dir) if output_dir else Path(".")
-
-    for item in result.data:
-        # Show where the file would be saved (projected path)
-        display_path = base_path / item["name"]
-        # Format: [size] [location] [path]
-        print(f"{item['size']:>9}  {item['location']:<14} {display_path}")
+    dump(
+        compact_json_string(json.dumps(result.data, indent=2), fold_dicts=False, max_content=50),
+        dest=output_file,
+    )
 
 
 def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
@@ -105,23 +119,17 @@ def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
         raise AttributeError("Missing metadata")
 
     output_dir = result.meta.get("output_dir")
-
-    # We iterate the generator here to trigger the file saves
-    # The generator yields nothing if there were no attachments
     has_attachments = False
 
     if output_dir:
         output_path = Path(output_dir)
         if not output_path.is_dir():
-            # We can try to create it, or raise error as per original logic
-            # Original raised ValueError inside command.
-            # We'll log error here to not crash pipeline.
             logger.error("Output directory %s does not seem to be a directory", output_path)
             return
 
-    for name, file_bytes in result.data:
+    for filename, file_bytes in result.data:
         has_attachments = True
-        out_path = Path(output_dir) / name if output_dir else Path(name)
+        out_path = Path(output_dir) / filename if output_dir else Path(filename)
 
         logger.debug("saving %s bytes to %s", len(file_bytes), out_path)
         try:
@@ -138,26 +146,25 @@ def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
     "dump_files",
     tags=["attachments", "info"],
     type="single input operation",
-    desc="List file attachments",
+    desc="List file attachments as JSON",
     long_desc=_DUMP_FILES_LONG_DESC,
     cli_hook=dump_files_cli_hook,
-    usage="<input> dump_files [output <dir>]",
+    usage="<input> dump_files [output <output>]",
     examples=_DUMP_FILES_EXAMPLES,
     args=(
-        [c.INPUT_FILENAME, c.INPUT_PDF, c.GET_INPUT],
-        {"output_dir": c.OUTPUT},
+        [c.INPUT_FILENAME, c.INPUT_PDF],
+        {"output_file": c.OUTPUT},
     ),
     skip_pipeline_save=True,
 )
-def dump_files(input_filename, pdf, get_input, output_dir=None) -> OpResult:
+def dump_files(input_filename, pdf, output_file=None) -> OpResult:
     """
     List files attached to the PDF.
-    Returns a list of dicts: {'name': str, 'size': int, 'location': str}.
+    Returns a list of dicts with all available attachment metadata.
     """
-    import pikepdf
-
+    meta = {"input_filename": input_filename, c.META_OUTPUT_FILE: output_file}
     if not pdf.attachments:
-        return OpResult(success=True, data=[], meta={"input_filename": input_filename})
+        return OpResult(success=True, data=[], meta=meta)
 
     # Map attachments to the pages they appear on
     annot_map = {}
@@ -169,31 +176,23 @@ def dump_files(input_filename, pdf, get_input, output_dir=None) -> OpResult:
                     if fs is not None:
                         annot_map.setdefault(fs.objgen, set()).add(p_num)
 
-    # Handle prompt logic for consistency (even if just displaying projected path)
-    final_output_dir = _resolve_output_dir(output_dir, get_input)
-
     data = []
     for name, attachment in pdf.attachments.items():
         objgen = attachment.obj.objgen
-        pages = sorted(list(annot_map.get(objgen, [])))
-
-        if not pages:
-            location = "Document"
-        else:
-            p_str = ",".join(str(p) for p in pages)
-            location = f"Pages:{p_str}"
-
-        filesize = "unknown"
-        try:
-            filesize = attachment.get_file().size
-        except (pikepdf.PdfError, AttributeError):
-            logger.warning("Could not get a valid file for attachment '%s'", name)
-        data.append({"name": name, "size": filesize, "location": location})
+        record = {
+            "key": name,
+            "filename": attachment.filename,
+        }
+        pages = sorted(annot_map.get(objgen, []))
+        if pages:
+            record["pages"] = pages
+        record.update(attachment_metadata(attachment))
+        data.append(record)
 
     return OpResult(
         success=True,
         data=data,
-        meta={"input_filename": input_filename, "output_dir": final_output_dir},
+        meta=meta,
     )
 
 
@@ -228,10 +227,8 @@ def unpack_files(pdf, get_input, output_dir=None) -> OpResult:
     """
     import pikepdf
 
-    # Resolve output path prompt here because it requires user interaction
     final_output_dir = _resolve_output_dir(output_dir, get_input)
 
-    # We return a generator to keep memory usage low for large attachments
     def _generator():
         if not pdf.attachments:
             return
@@ -239,12 +236,14 @@ def unpack_files(pdf, get_input, output_dir=None) -> OpResult:
         for name, attachment in pdf.attachments.items():
             logger.debug("found attachment=%s", name)
             try:
-                file = attachment.get_file()
-                file_bytes = file.read_bytes()
+                file_bytes = attachment.get_file().read_bytes()
             except (pikepdf.PdfError, AttributeError):
                 logger.warning("Skipping attachment '%s': invalid or missing internal data.", name)
                 continue
 
-            yield name, file_bytes
+            # Strip any directory components from the filename to prevent
+            # path traversal (e.g. attachments with names like /home/user/file.png)
+            safe_name = Path(attachment.filename).name
+            yield safe_name, file_bytes
 
     return OpResult(success=True, data=_generator(), meta={"output_dir": final_output_dir})

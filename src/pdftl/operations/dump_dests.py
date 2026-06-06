@@ -49,7 +49,7 @@ def _pdf_obj_to_json(obj, page_object_to_num_map, visited=None):
     if hasattr(obj, "objgen") and obj.objgen in page_object_to_num_map:
         return f"<<Page {page_object_to_num_map[obj.objgen]}>>"
 
-    if isinstance(obj, (Array, Dictionary)):
+    if isinstance(obj, Array | Dictionary):
         return _compound_obj_to_json(obj, page_object_to_num_map, visited)
 
     return _atomic_obj_to_json(obj)
@@ -74,9 +74,9 @@ def _atomic_obj_to_json(obj):
 
     if isinstance(obj, Name):
         return str(obj)
-    if isinstance(obj, (String, Stream)):
+    if isinstance(obj, String | Stream):
         return str(obj)
-    if isinstance(obj, (int, float, bool, str)):
+    if isinstance(obj, int | float | bool | str):
         return obj
     if obj is None:
         return None
@@ -86,9 +86,7 @@ def _atomic_obj_to_json(obj):
 
 
 _DUMP_DESTS_LONG_DESC = """
-
 The `dump_dests` operation prints document-level metadata to the console, in JSON format.
-
 """
 
 _DUMP_DESTS_EXAMPLES = [
@@ -119,7 +117,7 @@ def dump_dests_cli_hook(result: OpResult, stage, _pipeline):
     type="single input operation",
     desc="Print named destination data to the console",
     long_desc=_DUMP_DESTS_LONG_DESC,
-    usage="<input> dump_dests",
+    usage="<input> dump_dests [output <output>]",
     examples=_DUMP_DESTS_EXAMPLES,
     args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
 )
