@@ -260,14 +260,17 @@ class PipelineManager:
 
     def _validate_stage_args(self, stage, is_first, is_last):
         """Validates arguments for a given stage."""
-        if not stage.inputs and is_first:
+        op_data = registry.operations.get(stage.operation, {})
+        op_type = op_data.get("type")
+
+        # Allow 'source operation' to bypass the first-stage input check
+        if not stage.inputs and is_first and op_type != "source operation":
             raise MissingArgumentError(
                 "No initial input files provided. "
                 "\n  Maybe you put an operation before the input file?"
                 f"\n  Correct syntax: {WHOAMI} <input>... <operation> [<other arguments>]"
             )
 
-        op_data = registry.operations.get(stage.operation, {})
         op_requires_output = " output " in op_data.get("usage", "")
 
         # Check if the stage has an output option
@@ -293,6 +296,14 @@ class PipelineManager:
             return
         op_type = op_data.get("type")
         logger.debug("operation=%s, op_type=%s", operation, op_type)
+
+        # Ensure source operations don't receive unexpected inputs
+        if op_type == "source operation" and effective_inputs > 0:
+            raise UserCommandLineError(
+                f"The '{operation}' operation creates a new PDF from scratch "
+                f"and does not take input files, but received {effective_inputs} input(s)."
+            )
+
         if op_type == "single input operation" and effective_inputs != 1:
             raise UserCommandLineError(
                 f"The '{operation}' operation requires one input, "

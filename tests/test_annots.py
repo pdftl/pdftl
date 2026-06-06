@@ -45,8 +45,12 @@ def _compare_annotations(original_dump: str, processed_dump: str) -> list[str]:
     """
     errors = []
     try:
-        original_data = json.loads(original_dump) if original_dump else []
-        processed_data = json.loads(processed_dump) if processed_dump else []
+        # Parse the JSON and immediately extract the 'annotations' list
+        original_parsed = json.loads(original_dump) if original_dump else {}
+        processed_parsed = json.loads(processed_dump) if processed_dump else {}
+
+        original_data = original_parsed.get("annotations", [])
+        processed_data = processed_parsed.get("annotations", [])
     except json.JSONDecodeError as e:
         return [f"Failed to parse annotation JSON: {e}\nOriginal dump:\n{original_dump}"]
 
