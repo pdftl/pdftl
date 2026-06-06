@@ -44,6 +44,7 @@ HARDCODED_KEYWORDS = {
     "dump_data_utf8",
     "dump_dests",
     "dump_encryption",
+    "dump_fonts",
     "dump_files",
     "dump_images",
     "dump_layers",
