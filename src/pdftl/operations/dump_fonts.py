@@ -1,7 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 # src/pdftl/operations/dump_fonts.py
 
 """Dump information about embedded and referenced fonts in a PDF file"""
@@ -13,10 +9,11 @@ from typing import TYPE_CHECKING
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.fonts.font_extraction_utils import extract_resource_fonts
+from pdftl.fonts.font_extraction_utils import process_single_font
 from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.utils.pdf_resources import get_all_fonts_recursive
 from pdftl.utils.string_utils import compact_json_string
 
 if TYPE_CHECKING:
@@ -30,6 +27,8 @@ The `dump_fonts` operation extracts comprehensive structural and layout metadata
 about both embedded and un-embedded fonts defined across the document's page resources.
 
 Outputs a normalized JSON object grouping fonts by their internal object IDs, including:
+* **name**: Raw PostScript name of the font exactly as it appears in the PDF (including subset
+  prefix)
 * **base_font**: Cleaned PostScript name of the font (e.g., Helvetica-Bold)
 * **subtype**: The layout design specification style (e.g., TrueType, Type0, Type1, Type3)
 * **is_embedded**: Boolean indicating if the binary font asset stream exists inside the PDF
@@ -39,11 +38,11 @@ Outputs a normalized JSON object grouping fonts by their internal object IDs, in
 * **has_to_unicode**: True if a /ToUnicode translation CMap exists (crucial for reliable text
   extraction)
 * **traits**: Decoded stylistic metadata dictionary extracted from the font's descriptor bitmask
-* **metrics**: Extracted typography metrics (like ascent, descent, and italic angle),
-  only including keys natively present in the PDF descriptor.
+* **metrics**: Extracted typography metrics (like ascent, descent, and italic angle), only
+  including keys natively present in the PDF descriptor.
 * **obj_id**: PDF indirect object reference index number
-* **usages**: A dictionary mapping the local resource name (e.g., "F1") to an array of pages where
-  it appears.
+* **usages**: A dictionary mapping the local resource name (e.g., "F1") to an array of pages
+  where it appears.
 
 You can optionally provide page specifications to limit inspection to specific pages.
 """
@@ -70,53 +69,49 @@ def _extract_font_info(pdf: "pikepdf.Pdf", specs: list | None = None) -> dict:
     else:
         target_pages = sorted(list(page_numbers_matching_page_specs(specs, num_pages)))
 
-    logger.debug("Starting font extraction parsing map for %d pages.", len(target_pages))
+    logger.debug("Starting recursive font extraction for %d pages.", len(target_pages))
 
-    # Temporary dictionary to aggregate fonts by a unique key
     aggregated_fonts = {}
 
-    for page_num in target_pages:
-        page = pdf.pages[page_num - 1]
-
+    for local_name, font_obj, page_num in get_all_fonts_recursive(pdf, target_pages):
         try:
-            page_fonts = extract_resource_fonts(page.get("/Resources"))
-        except (AttributeError, KeyError, TypeError) as err:
-            logger.warning("Error parsing Font dictionary targets on Page %d: %s", page_num, err)
+            font = process_single_font(local_name, font_obj)
+            if not font:
+                continue
+        except (AttributeError, KeyError, TypeError, ValueError) as err:
+            logger.warning("Error parsing Font on Page %d: %s", page_num, err)
             continue
 
-        for font in page_fonts:
-            # Group by obj_id if available, otherwise fallback to a composite key
-            # for inline/weird fonts
-            f_id = (
-                str(font["obj_id"])
-                if font.get("obj_id")
-                else f"inline_{font['name']}_{font['base_font']}"
-            )
+        f_id = (
+            str(font["obj_id"])
+            if font.get("obj_id")
+            else f"inline_{font['resource_name']}_{font['base_font']}"
+        )
 
-            if f_id not in aggregated_fonts:
-                aggregated_fonts[f_id] = {
-                    "base_font": font["base_font"],
-                    "subtype": font["subtype"],
-                    "is_embedded": font["is_embedded"],
-                    "font_bytes": font["font_bytes"],
-                    "is_subset": font["is_subset"],
-                    "encoding": font["encoding"],
-                    "has_to_unicode": font["has_to_unicode"],
-                    "traits": font["traits"],
-                    "metrics": font["metrics"],
-                    "obj_id": font["obj_id"],
-                    "usages": {},
-                }
+        if f_id not in aggregated_fonts:
+            aggregated_fonts[f_id] = {
+                "name": font["name"],
+                "base_font": font["base_font"],
+                "subtype": font["subtype"],
+                "is_embedded": font["is_embedded"],
+                "font_bytes": font["font_bytes"],
+                "is_subset": font["is_subset"],
+                "encoding": font["encoding"],
+                "has_to_unicode": font["has_to_unicode"],
+                "traits": font["traits"],
+                "metrics": font["metrics"],
+                "obj_id": font["obj_id"],
+                "usages": {},
+            }
 
-            local_name = font["name"]
-            if local_name not in aggregated_fonts[f_id]["usages"]:
-                aggregated_fonts[f_id]["usages"][local_name] = []
+        if local_name not in aggregated_fonts[f_id]["usages"]:
+            aggregated_fonts[f_id]["usages"][local_name] = []
 
+        if page_num not in aggregated_fonts[f_id]["usages"][local_name]:
             aggregated_fonts[f_id]["usages"][local_name].append(page_num)
 
     logger.debug("Font extraction complete. Found %d unique fonts.", len(aggregated_fonts))
 
-    # Convert the aggregated dictionary values to a list for standard JSON array output
     return {"fonts": list(aggregated_fonts.values())}
 
 

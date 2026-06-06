@@ -290,3 +290,62 @@ def test_pipeline_run_dummy_op(monkeypatch):
         manager.run()
         assert isinstance(manager.pipeline_pdf, DummyPdf)
         save_mock.assert_called_once()
+
+
+class TestPipelineValidationCoverage:
+    def test_missing_output_raises_error(self):
+        """
+        Test lines 279-287: Missing output for 'filter' (or an op requiring output)
+        in the final stage correctly raises a MissingArgumentError.
+        """
+        # Create a stage that uses 'filter' but lacks the OUTPUT option
+        stage = CliStage(operation="filter", inputs=["dummy.pdf"], options={})
+
+        pm = PipelineManager(stages=[stage], input_context=MagicMock(), is_inline=False)
+
+        with pytest.raises(MissingArgumentError) as exc_info:
+            pm._validate_stage_args(stage, is_first=True, is_last=True)
+
+        assert "requires 'output <file>' in the final stage" in str(exc_info.value)
+
+    def test_inline_skips_output_validation(self):
+        """
+        Test lines 279-287: Inline pipelines bypass the missing output requirement.
+        """
+        stage = CliStage(operation="filter", inputs=["dummy.pdf"], options={})
+
+        # is_inline=True forces the condition at line 281 to fail, skipping the error block
+        pm = PipelineManager(stages=[stage], input_context=MagicMock(), is_inline=True)
+
+        try:
+            pm._validate_stage_args(stage, is_first=True, is_last=True)
+        except MissingArgumentError as e:
+            # If a MissingArgumentError is raised later in the function (like effective inputs),
+            # we just want to ensure it wasn't the output validation error we bypassed.
+            assert "requires 'output <file>'" not in str(e)
+        except Exception:
+            pass  # We don't care about other downstream validation exceptions here
+
+
+class TestPipelineSourceOpValidation:
+    @patch("pdftl.cli.pipeline.registry")
+    def test_source_operation_with_inputs_raises_error(self, mock_registry):
+        """
+        Test lines 301-305: Providing inputs to a 'source operation'
+        correctly raises a UserCommandLineError.
+        """
+        # Tell the mocked registry that 'mock_source_op' is a source operation
+        mock_registry.operations.get.return_value = {"type": "source operation"}
+
+        # Setup a minimal PipelineManager (stages aren't needed since we are calling the validator directly)
+        pm = PipelineManager(stages=[], input_context=MagicMock())
+
+        with pytest.raises(UserCommandLineError) as exc_info:
+            # effective_inputs=1 (> 0) natively triggers the raise on line 302
+            pm._validate_number_of_effective_inputs(operation="mock_source_op", effective_inputs=1)
+
+        # Verify the custom error message is generated correctly
+        error_msg = str(exc_info.value)
+        assert "mock_source_op" in error_msg
+        assert "creates a new PDF from scratch" in error_msg
+        assert "received 1 input" in error_msg

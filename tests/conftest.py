@@ -108,7 +108,7 @@ def get_pdf_path():
         if not filename.endswith(".pdf"):
             filename += ".pdf"
 
-        for folder in ["pdfs", "private"]:
+        for folder in ["pdfs", "private", Path("private") / "pop"]:
             path = base / "files" / folder / filename
             if path.exists():
                 return path
