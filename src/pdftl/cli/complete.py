@@ -12,7 +12,7 @@ import sys
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "7"
+GRAMMAR_VERSION = "8"
 
 HARDCODED_KEYWORDS = {
     "EACH",
@@ -27,6 +27,7 @@ HARDCODED_KEYWORDS = {
     "cat",
     "chop",
     "clip",
+    "create",
     "crop",
     "delete",
     "delete_annots",

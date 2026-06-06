@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `delete_attachments` operation
 
+- `dump_fonts` operation
+
+- `create` operation
+
 ### Changed
 
 - Performance improvements in link/outline remapping

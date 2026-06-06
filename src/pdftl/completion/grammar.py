@@ -13,7 +13,7 @@ from pdftl.registry_init import initialize_registry
 
 # ============================== IMPORTANT ====================================
 # bump this if grammar output changes, both here and in src/pdf/cli/complete.py
-GRAMMAR_VERSION = "7"
+GRAMMAR_VERSION = "8"
 # =============================================================================
 
 
@@ -37,7 +37,7 @@ class GrammarBuilder:
         grammar = [
             textwrap.dedent(
                 f"""
-            start: global_flag* input_section [op_section] [opt_section]
+            start: global_flag* cmd_args_section [opt_section]
                  | global_flag* help_cmd [help_topic]
 
             help_cmd: HELP_KW | HELP_FLAG
@@ -63,6 +63,8 @@ class GrammarBuilder:
             each_pipeline: KW_EACH pipeline_body KW_END
             pipeline_body: input_section [op_section] [opt_section]
 
+            cmd_args_section: input_section [op_section]
+                            | source_operation [op_section]
             input_section: file_ref+
             op_section: (operation | CHAIN_SEP)+
             opt_section: option+ global_flag*
@@ -96,6 +98,7 @@ class GrammarBuilder:
         ]
 
         ops_rules = []
+        source_ops_rules = []
         opts_rules = []
 
         def sanitize(name):
@@ -107,7 +110,12 @@ class GrammarBuilder:
         for name, op_obj in registry.operations.items():
             clean_name, safe_name = sanitize(name)
             rule_name = f"op_{safe_name}"
-            ops_rules.append(rule_name)
+            is_source = getattr(op_obj, "type", None) == "source operation"
+
+            if is_source:
+                source_ops_rules.append(rule_name)
+            else:
+                ops_rules.append(rule_name)
 
             kw_term = f"KW_{safe_name.upper()}"
             grammar.append(f'{kw_term}.5: "{clean_name}"')
@@ -138,6 +146,11 @@ class GrammarBuilder:
             grammar.append(f"!operation: {' | '.join(ops_rules)}")
         else:
             grammar.append('!operation: "noop"')
+
+        if source_ops_rules:
+            grammar.append(f"!source_operation: {' | '.join(source_ops_rules)}")
+        else:
+            grammar.append('!source_operation: "noop"')
 
         if opts_rules:
             grammar.append(f"!option: {' | '.join(opts_rules)}")
