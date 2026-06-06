@@ -121,7 +121,7 @@ def dump_encryption_cli_hook(result: OpResult, stage, _pipeline):
 
     with smart_open_maybe_dash(output_file) as f:
         if json_output:
-            json.dump(result.data, f, indent=2)
+            json.dump({"encryption": result.data}, f, indent=2)
             f.write("\n")
         else:
             _write_stanza_text_output(result.data, f)

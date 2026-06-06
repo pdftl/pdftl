@@ -193,15 +193,16 @@ class TestDumpFilesCliHook:
         dump_files_cli_hook(result, None, None)
         out = capsys.readouterr().out
         parsed = json.loads(out)
-        assert isinstance(parsed, list)
-        assert parsed[0]["filename"] == "hello.txt"
+        atts = parsed["attachments"]
+        assert isinstance(atts, list)
+        assert atts[0]["filename"] == "hello.txt"
 
     def test_empty_prints_empty_array(self, pdf_no_attachment, capsys):
         with pikepdf.open(pdf_no_attachment) as pdf:
             result = dump_files("f.pdf", pdf)
         dump_files_cli_hook(result, None, None)
         out = capsys.readouterr().out
-        assert json.loads(out) == []
+        assert json.loads(out) == {"attachments": []}
 
     def test_failure_returns_silently(self, capsys):
         result = OpResult(success=False)
@@ -219,7 +220,7 @@ class TestDumpFilesCliHook:
             result = dump_files("f.pdf", pdf, output_file=out_path)
         dump_files_cli_hook(result, None, None)
         data = json.loads(Path(out_path).read_text())
-        assert data[0]["filename"] == "hello.txt"
+        assert data["attachments"][0]["filename"] == "hello.txt"
 
     def test_pages_array_compacted(self, capsys):
         """pages array should appear on one line (compact_json_string)."""

@@ -135,7 +135,7 @@ def dump_annots_cli_hook(result: OpResult, stage, _pipeline):
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
     # Serialize to JSON string
-    json_string = json.dumps(result.data, indent=2)
+    json_string = json.dumps({"annotations": result.data}, indent=2)
     # Apply custom compaction
     compacted_string = compact_json_string(json_string)
 
@@ -353,7 +353,7 @@ def _values_equal(actual, expected) -> bool:
     # Numeric: compare as float to handle int/float mismatch
     if isinstance(expected, bool) or isinstance(actual, bool):
         return actual is expected
-    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+    if isinstance(expected, int | float) and isinstance(actual, int | float):
         return float(actual) == float(expected)
     # Name: strip leading slash for comparison
     if isinstance(expected, str) and isinstance(actual, str):

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_files` output format changed to JSON, with more detail
 
+- Several JSON dump output formats changed from flat lists to `{"name": [...]}` format
+
 ## [0.19.0] - 2026-06-01
 
 ### Fixed

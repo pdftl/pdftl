@@ -243,7 +243,7 @@ def dump_colorspaces_cli_hook(result: OpResult, stage, _pipeline):
     compact_json = re.sub(
         r"\[\s+([^\[\]\{\}]+?)\s+\]",
         lambda match: "[" + re.sub(r"\s+", " ", match.group(1)) + "]",
-        json.dumps(result.data, indent=2),
+        json.dumps({"colorspaces": result.data}, indent=2),
     )
     with smart_open_maybe_dash(output_file) as f:
         f.write(compact_json + "\n")

@@ -186,10 +186,11 @@ def test_cli_hook_json_output(mock_smart_open):
 
     output = mock_smart_open.getvalue()
     parsed_json = json.loads(output)
+    enc = parsed_json["encryption"]
 
-    assert parsed_json["IsEncrypted"] is False
-    assert parsed_json["Permissions"]["Printing"] is True
-    assert parsed_json["Permissions"]["FillIn"] is False
+    assert enc["IsEncrypted"] is False
+    assert enc["Permissions"]["Printing"] is True
+    assert enc["Permissions"]["FillIn"] is False
 
 
 def test_cli_hook_text_unencrypted(mock_smart_open):

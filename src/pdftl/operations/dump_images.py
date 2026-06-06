@@ -16,6 +16,7 @@ from pdftl.core.registry import register_operation
 from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.utils.string_utils import compact_json_string
 
 if TYPE_CHECKING:
     import pikepdf
@@ -219,9 +220,9 @@ def _parse_stream(content_stream, resources, initial_ctm, image_list):
         logger.warning("Error parsing content stream: %s", err)
 
 
-def _extract_image_info(pdf: "pikepdf.Pdf", specs: list | None = None) -> dict:
+def _extract_image_info(pdf: "pikepdf.Pdf", specs: list | None = None) -> list:
     """Main entry point: Iterates pages and initiates extraction."""
-    result: dict[str, list] = {"pages": []}
+    result: list = []
     num_pages = len(pdf.pages)
 
     if not specs:
@@ -236,16 +237,19 @@ def _extract_image_info(pdf: "pikepdf.Pdf", specs: list | None = None) -> dict:
     for page_num in target_pages:
         # target_pages are 1-indexed, but pdf.pages is 0-indexed
         page = pdf.pages[page_num - 1]
-        page_info = {"page": page_num, "images": []}
+        # page_info = {"page": page_num, "images": []}
+        images_on_page = []
         try:
             identity_ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-            _parse_stream(page, page.Resources, identity_ctm, page_info["images"])
+            _parse_stream(page, page.Resources, identity_ctm, images_on_page)
         except AttributeError:
             logger.debug("Page %d skipped: no resources.", page_num)
 
-        if page_info["images"]:
-            result["pages"].append(page_info)
-            logger.debug("Found %d images on Page %d.", len(page_info["images"]), page_num)
+        if images_on_page:
+            logger.debug("Found %d images on Page %d.", len(images_on_page), page_num)
+            for x in images_on_page:
+                x.update({"page": page_num})
+            result.extend(images_on_page)
 
     logger.debug("Image extraction complete.")
     return result
@@ -256,8 +260,10 @@ def dump_images_cli_hook(result: OpResult, stage, _pipeline):
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
     with smart_open_maybe_dash(output_file) as file:
-        json.dump(result.data, file, indent=2)
-        file.write("\n")
+        json_string = compact_json_string(
+            json.dumps({"images": result.data}, indent=2), fold_dicts=False
+        )
+        file.write(json_string + "\n")
 
 
 @register_operation(

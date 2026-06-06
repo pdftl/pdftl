@@ -133,7 +133,7 @@ def test_dump_toc_cli_hook_json_output(tmp_path):
     dump_toc_cli_hook(result, stage="post", _pipeline=None)
 
     saved_data = json.loads(out_file.read_text())
-    assert saved_data[0]["title"] == "Test JSON"
+    assert saved_data["bookmarks"][0]["title"] == "Test JSON"
 
 
 def test_dump_toc_cli_hook_yaml_output(tmp_path):

@@ -103,10 +103,11 @@ def dump_files_cli_hook(result: OpResult, stage, _pipeline):
 
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
-    dump(
-        compact_json_string(json.dumps(result.data, indent=2), fold_dicts=False, max_content=50),
-        dest=output_file,
+    json_string = compact_json_string(
+        json.dumps({"attachments": result.data}, indent=2), fold_dicts=False, max_content=50
     )
+
+    dump(json_string, dest=output_file)
 
 
 def unpack_files_cli_hook(result: OpResult, stage, _pipeline):

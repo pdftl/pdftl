@@ -453,8 +453,8 @@ class TestExtractImageInfo:
     def test_all_pages_processed_by_default(self):
         pdf = _make_simple_pdf()
         result = _extract_image_info(pdf)
-        assert len(result["pages"]) == 1
-        assert result["pages"][0]["page"] == 1
+        assert len(result) == 1
+        assert result[0]["page"] == 1
 
     def test_page_with_no_images_excluded(self):
         pdf = pikepdf.Pdf.new()
@@ -467,7 +467,7 @@ class TestExtractImageInfo:
         )
         pdf.pages.append(pikepdf.Page(page_obj))
         result = _extract_image_info(pdf)
-        assert result["pages"] == []
+        assert result == []
 
     def test_page_specs_filter_pages(self):
         # Two-page PDF; only request page 1
@@ -483,22 +483,21 @@ class TestExtractImageInfo:
         )
         pdf.pages.append(pikepdf.Page(page_obj))
         result = _extract_image_info(pdf, specs=["1"])
-        assert len(result["pages"]) == 1
-        assert result["pages"][0]["page"] == 1
+        assert len(result) == 1
+        assert result[0]["page"] == 1
 
     def test_page_without_resources_is_skipped(self):
         pdf = _make_pdf_no_resources()
         result = _extract_image_info(pdf)
-        assert result["pages"] == []
+        assert result == []
 
     def test_returns_correct_structure(self):
         pdf = _make_simple_pdf()
         result = _extract_image_info(pdf)
-        assert "pages" in result
-        page = result["pages"][0]
-        assert "page" in page
-        assert "images" in page
-        img = page["images"][0]
+        assert isinstance(result, list)
+        assert len(result) == 1
+        img = result[0]
+        assert "page" in img
         for key in ("name", "bbox", "width_px", "height_px", "colorspace", "bits"):
             assert key in img
 
@@ -519,7 +518,7 @@ class TestDumpImagesCliHook:
         import pdftl.core.constants as c
         from pdftl.core.core_types import OpResult
 
-        data = {"pages": [{"page": 1, "images": []}]}
+        data = []
         result = OpResult(success=True, data=data, meta={c.META_OUTPUT_FILE: None})
 
         with patch("pdftl.operations.dump_images.smart_open_maybe_dash") as mock_open:
@@ -530,13 +529,13 @@ class TestDumpImagesCliHook:
             output = mock_file.getvalue()
 
         parsed = json.loads(output)
-        assert parsed == data
+        assert parsed == {"images": data}
 
     def test_writes_json_to_file(self):
         import pdftl.core.constants as c
         from pdftl.core.core_types import OpResult
 
-        data = {"pages": []}
+        data = []
         result = OpResult(success=True, data=data, meta={c.META_OUTPUT_FILE: "out.json"})
 
         with patch("pdftl.operations.dump_images.smart_open_maybe_dash") as mock_open:
@@ -561,10 +560,10 @@ class TestDumpImages:
         assert isinstance(result, OpResult)
         assert result.success is True
 
-    def test_result_data_has_pages_key(self):
+    def test_result_data_is_list(self):
         pdf = _make_simple_pdf()
         result = dump_images(pdf, specs=[], output_file=None)
-        assert "pages" in result.data
+        assert isinstance(result.data, list)
 
     def test_output_file_stored_in_meta(self):
         import pdftl.core.constants as c
@@ -576,12 +575,12 @@ class TestDumpImages:
     def test_no_specs_extracts_all_pages(self):
         pdf = _make_simple_pdf()
         result = dump_images(pdf, specs=None, output_file=None)
-        assert len(result.data["pages"]) == 1
+        assert len(result.data) == 1
 
     def test_known_bbox_end_to_end(self):
         pdf = _make_simple_pdf(x=100, y=200, w=300, h=150)
         result = dump_images(pdf, specs=[], output_file=None)
-        bbox = result.data["pages"][0]["images"][0]["bbox"]
+        bbox = result.data[0]["bbox"]
         assert bbox == [100.0, 200.0, 400.0, 350.0]
 
     def test_get_format_array_filter(self):
@@ -620,4 +619,4 @@ def test_dump_images_output_is_json_not_pdf(run_pdftl, tmp_path):
         "Output is a PDF stream, not JSON — skip_pipeline_save missing?"
     )
     parsed = json.loads(content)
-    assert "pages" in parsed
+    assert "images" in parsed

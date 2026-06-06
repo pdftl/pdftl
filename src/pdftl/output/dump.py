@@ -11,7 +11,7 @@ import sys
 
 def dump(data, dest=None):
     """Dump data to stdout or a file"""
-    if dest is None:
+    if dest is None or dest == "-":
         print(data, file=sys.stdout)
     else:
         with open(dest, "w", encoding="utf-8") as file:

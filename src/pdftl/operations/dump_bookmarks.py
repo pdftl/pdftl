@@ -86,7 +86,7 @@ def dump_toc_cli_hook(result: OpResult, stage, _pipeline):
 
     with smart_open_maybe_dash(output_file) as file:
         if json_output:
-            json.dump(result.data, file, indent=2)
+            json.dump({"bookmarks": result.data}, file, indent=2)
             file.write("\n")
         else:
             ensure_dependencies(
