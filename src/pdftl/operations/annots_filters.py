@@ -155,6 +155,7 @@ def dump_annots_cli_hook(result: OpResult, stage, _pipeline):
     usage="<input> dump_annots [<selector>...] [output <output>]",
     examples=_DUMP_ANNOTS_EXAMPLES,
     args=([c.INPUT_PDF], {"specs": c.OPERATION_ARGS, "output_file": c.OUTPUT}),
+    skip_pipeline_save=True,
 )
 def dump_annots(pdf, specs=None, output_file=None) -> OpResult:
     """
@@ -170,7 +171,9 @@ def dump_annots(pdf, specs=None, output_file=None) -> OpResult:
         rules = specs_to_selection_rules(specs, len(pdf.pages))
 
     all_annots_data = _get_all_annots_data(pdf, compat=False, rules=rules)
-    return OpResult(success=True, data=all_annots_data, meta={c.META_OUTPUT_FILE: output_file})
+    return OpResult(
+        success=True, data=all_annots_data, meta={c.META_OUTPUT_FILE: output_file}, pdf=pdf
+    )
 
 
 _DUMP_DATA_ANNOTS_LONG_DESC = """

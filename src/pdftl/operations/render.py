@@ -74,6 +74,9 @@ def _save_single_pdf(image_generator, filename: str, dpi: float) -> int:
 
 def _save_multiple_images(image_generator) -> int:
     """Helper to save generated images to individual files."""
+    from PIL import Image
+
+    Image.init()
     count = 0
     for filename, image in image_generator:
         _, extension = os.path.splitext(filename)
@@ -82,10 +85,15 @@ def _save_multiple_images(image_generator) -> int:
             fmt = "JPEG"
 
         try:
+            if fmt not in Image.SAVE:
+                raise ValueError(
+                    f"Unsupported image format: {fmt}. Choose from {list(Image.SAVE.keys())}"
+                )
             image.save(filename, format=fmt)
         except ValueError as exc:
-            raise InvalidArgumentError(f"Invalid render output template. Details: {exc}") from exc
-
+            raise InvalidArgumentError(
+                f"Invalid render output template. Details:\n  {exc}"
+            ) from exc
         count += 1
     return count
 

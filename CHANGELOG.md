@@ -5,6 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Fixed
+
+- `render` should no longer segfault when an unknown output file extension is passed
+
+- `dump_annots` now properly passing the PDF down the pipeline
+
 ## [0.20.0] - 2026-06-07
 
 ### Added
