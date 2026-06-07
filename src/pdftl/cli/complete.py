@@ -54,6 +54,7 @@ HARDCODED_KEYWORDS = {
     "fill_form",
     "filter",
     "generate_fdf",
+    "grep",
     "highlight",
     "inject",
     "insert",

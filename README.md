@@ -9,9 +9,9 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pdftl)](https://pypi.org/project/pdftl/)
 [![Static Badge](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-lightgrey)](#quick-start)
 
-**pdftl** ("PDF tackle") is a CLI tool for PDF manipulation written in Python. It is intended to be a command-line compatible extension of the venerable `pdftk`.
+**pdftl** ("PDF tackle") is a CLI tool for PDF manipulation written in Python. It started as a command-line compatible extension of the venerable `pdftk`, and has since gained many new features.
 
-Leveraging the power of [`pikepdf`](https://github.com/pikepdf/pikepdf) ([qpdf](https://github.com/qpdf/qpdf)) and other modern libraries, it offers advanced capabilities like cropping, chopping, regex text replacement, adding text and arbitrary content stream injection.
+Leveraging [`pikepdf`](https://github.com/pikepdf/pikepdf) ([qpdf](https://github.com/qpdf/qpdf)) and other modern libraries, it offers advanced capabilities like cropping, chopping, adding/finding text and arbitrary content stream injection/replacement.
 
 ## Quick start
 ```bash
@@ -37,13 +37,14 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 
 | Feature              | `pdftk` (Legacy)         | `pdftl` (Modern)                                                        |
 |:---------------------|:-------------------------|:------------------------------------------------------------------------|
-| **Pipelining**       | ❌ (Requires temp files) | ✅ **Native** (Chain ops with `---`)                                    |
+| **Pipelining**       | ❌                       | ✅ **Native** (Chain ops with `---`)                                    |
 | **Encryption**       | ⚠️ (Obsolete RC4)         | ✅ **AES-256 Support**                                                  |
 | **Syntax**           | Standard                 | ✅ **Compatible Extension**                                             |
 | **Page Geometry**    | ❌                       | ✅ **Crop to fit, Zoom, & Chop**                                        |
 | **Pipelined Logic**  | ❌                       | ✅ **Rotate + Stamp in one command**                                    |
 | **Plugins**          | ❌                       | ✅ **Custom operations/mutation scripts written in Python**             |
-| **Installation**     | Often complex binary     | ✅ **Simple `pipx install pdftl`**                                      |
+| **Text Processing**  | ❌                       | ✅ **Geometry-aware full text search, and text dumping**                |
+| **Installation**     | Often complex binary     | ✅ **Simple: `pipx install pdftl`**                                      |
 | **Performance**      | Variable                 | ✅ **Powered by pikepdf/qpdf**                                          |
 | **Link Integrity**   | ⚠️ Often breaks TOC/Links | ✅ **Preserves internal cross-refs**                                    |
 | **Shell Completion** | ⚠️ zsh                    | ✅  **bash, zsh and powershell**                                        |
@@ -59,7 +60,7 @@ pipx install pdftl[full]
 
 A simple `pip install pdftl[full]` install is also supported.
 
-**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction and robust flattening, and [`pyHanko`][6] for cryptographic signature functionality. Omit `[full]` to omit those features and dependencies.
+**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction, search and robust flattening, and [`pyHanko`][6] for cryptographic signature functionality. Omit `[full]` to omit those features and dependencies.
 
 ## Key features
 
@@ -81,8 +82,9 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Montage:** [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html) multiple pages onto a grid layout for contact sheets and N-up handouts.
 * **Booklet:** create a print-ready [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html) with optional RTL support and signature splitting.
 
-### 📝 Forms & annotations
+### 📝 Text, Forms & annotations
 
+* **Text search:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) for pattern matching to extract text with visual bounding box coordinates, and [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html) for plain text extraction.
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
 * **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html) by full-text regular expression search.
 
@@ -93,7 +95,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 ### 🛠️ Advanced
 
-* **Text replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) text in content streams using regular expressions (experimental).
+* **Content stream replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of raw content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
 * **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, and [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
@@ -234,6 +236,7 @@ See the **[API Tutorial][4]** for more details.
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |
 | [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |
 | [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
+| [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html)                                   | Match text patterns and get bounding boxes                      |
 | [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)                         | Highlight text matching a regex pattern                         |
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
