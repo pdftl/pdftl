@@ -95,7 +95,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 * **Text replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) text in content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images.
+* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, and [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
@@ -249,6 +249,7 @@ See the **[API Tutorial][4]** for more details.
 | [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                             |
 | [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams                       |
 | [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                                      |
+| [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html)             | Resample images                                                 |
 | [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
 | [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html)                                     | Set document properties, viewer preferences, and page labels    |
 | [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |

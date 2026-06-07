@@ -69,6 +69,7 @@ HARDCODED_KEYWORDS = {
     "place",
     "render",
     "replace",
+    "resample_images",
     "rotate",
     "set",
     "shuffle",

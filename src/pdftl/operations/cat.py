@@ -6,11 +6,6 @@
 
 """Concatenate PDFs, attempting to preserve links as far as possible."""
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
-
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation

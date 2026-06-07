@@ -12,16 +12,17 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-from pdftl.operations.dump_images import (
+from pdftl.utils.image_utils import (
     _calculate_bbox,
-    _extract_image_info,
     _extract_image_metadata,
-    _get_colorspace_name,
     _get_format,
     _handle_do_operator,
     _multiply_matrices,
     _parse_stream,
     _process_form_xobject,
+    extract_pdf_images,
+)
+from pdftl.operations.dump_images import (
     dump_images,
     dump_images_cli_hook,
 )
@@ -74,6 +75,11 @@ def _make_pdf_no_resources():
     return pdf
 
 
+def _make_resources_with_image(pdf):
+    image = _make_image_stream(pdf)
+    return pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image))
+
+
 # ---------------------------------------------------------------------------
 # _multiply_matrices
 # ---------------------------------------------------------------------------
@@ -90,7 +96,6 @@ class TestMultiplyMatrices:
         assert _multiply_matrices(I, m) == m
 
     def test_translation_composition(self):
-        # Two pure translations should add their tx/ty
         t1 = [1, 0, 0, 1, 10, 20]
         t2 = [1, 0, 0, 1, 5, 15]
         result = _multiply_matrices(t1, t2)
@@ -110,7 +115,6 @@ class TestMultiplyMatrices:
     def test_known_result(self):
         m1 = [1, 2, 3, 4, 5, 6]
         m2 = [7, 8, 9, 10, 11, 12]
-        # Computed by hand
         result = _multiply_matrices(m1, m2)
         assert result == [
             1 * 7 + 2 * 9,
@@ -129,7 +133,6 @@ class TestMultiplyMatrices:
 
 class TestCalculateBbox:
     def test_simple_scale_and_translate(self):
-        # cm = [w 0 0 h x y]
         ctm = [300, 0, 0, 150, 100, 200]
         assert _calculate_bbox(ctm) == [100.0, 200.0, 400.0, 350.0]
 
@@ -138,11 +141,10 @@ class TestCalculateBbox:
         assert _calculate_bbox(ctm) == [0, 0, 1, 1]
 
     def test_negative_scale_still_gives_correct_min_max(self):
-        # Flipped horizontally: a=-300 means x goes from 100 down to -200
         ctm = [-300, 0, 0, 150, 100, 200]
         result = _calculate_bbox(ctm)
-        assert result[0] < result[2]  # x_min < x_max
-        assert result[1] < result[3]  # y_min < y_max
+        assert result[0] < result[2]
+        assert result[1] < result[3]
 
     def test_rounding_to_two_decimal_places(self):
         ctm = [100 / 3, 0, 0, 100 / 3, 0, 0]
@@ -151,7 +153,6 @@ class TestCalculateBbox:
             assert round(v, 2) == v
 
     def test_rotation_90_degrees(self):
-        # 90 degree rotation matrix, no translation
         ctm = [0, 1, -1, 0, 0, 0]
         result = _calculate_bbox(ctm)
         assert result[0] <= result[2]
@@ -159,25 +160,47 @@ class TestCalculateBbox:
 
 
 # ---------------------------------------------------------------------------
-# _get_colorspace_name
+# image_colorspace (replaces _get_colorspace_name)
 # ---------------------------------------------------------------------------
 
 
-class TestGetColorspaceName:
+class TestImageColorspace:
+    """image_colorspace() returns a resolved dict, not a bare string."""
+
     def test_device_rgb(self):
+        from pdftl.utils.colorspaces import image_colorspace
+
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         xobj["/ColorSpace"] = pikepdf.Name("/DeviceRGB")
-        assert _get_colorspace_name(xobj, pikepdf) == "/DeviceRGB"
+        result = image_colorspace(xobj, None, pikepdf)
+        assert result["family"] == "rgb"
 
-    def test_iccbased_array(self):
+    def test_device_cmyk(self):
+        from pdftl.utils.colorspaces import image_colorspace
+
+        pdf = pikepdf.Pdf.new()
+        xobj = pikepdf.Stream(pdf, b"")
+        xobj["/ColorSpace"] = pikepdf.Name("/DeviceCMYK")
+        result = image_colorspace(xobj, None, pikepdf)
+        assert result["family"] == "cmyk"
+
+    def test_iccbased_array_reports_icc_family(self):
+        from pdftl.utils.colorspaces import image_colorspace
+
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         icc_stream = pikepdf.Stream(pdf, b"\x00" * 10)
+        icc_stream["/N"] = 3  # 3-component = RGB
         xobj["/ColorSpace"] = pikepdf.Array([pikepdf.Name("/ICCBased"), icc_stream])
-        assert _get_colorspace_name(xobj, pikepdf) == "/ICCBased"
+        result = image_colorspace(xobj, None, pikepdf)
+        assert result["family"] == "icc"
+        assert result["icc_family"] == "rgb"
+        assert result["components"] == 3
 
     def test_indexed_array(self):
+        from pdftl.utils.colorspaces import image_colorspace
+
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         xobj["/ColorSpace"] = pikepdf.Array(
@@ -188,18 +211,17 @@ class TestGetColorspaceName:
                 pikepdf.String(b"\x00" * 768),
             ]
         )
-        assert _get_colorspace_name(xobj, pikepdf) == "/Indexed"
+        result = image_colorspace(xobj, None, pikepdf)
+        assert result["family"] == "indexed"
+        assert result["base_family"] == "rgb"
 
     def test_missing_colorspace_returns_unknown(self):
-        pdf = pikepdf.Pdf.new()
-        xobj = pikepdf.Stream(pdf, b"")
-        assert _get_colorspace_name(xobj, pikepdf) == "Unknown"
+        from pdftl.utils.colorspaces import image_colorspace
 
-    def test_device_cmyk(self):
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
-        xobj["/ColorSpace"] = pikepdf.Name("/DeviceCMYK")
-        assert _get_colorspace_name(xobj, pikepdf) == "/DeviceCMYK"
+        result = image_colorspace(xobj, None, pikepdf)
+        assert result["family"] == "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -211,19 +233,20 @@ class TestExtractImageMetadata:
     def test_appends_correct_metadata(self):
         pdf = pikepdf.Pdf.new()
         xobj = _make_image_stream(pdf)
-        # Override width/height for variety
         xobj["/Width"] = 640
         xobj["/Height"] = 480
         ctm = [300, 0, 0, 150, 100, 200]
+        resources = _make_resources_with_image(pdf)
         image_list = []
-        _extract_image_metadata(xobj, "/Im1", ctm, image_list, pikepdf)
+        _extract_image_metadata(xobj, "/Im1", ctm, resources, image_list, pikepdf)
         assert len(image_list) == 1
         img = image_list[0]
         assert img["name"] == "/Im1"
         assert img["bbox"] == [100.0, 200.0, 400.0, 350.0]
         assert img["width_px"] == 640
         assert img["height_px"] == 480
-        assert img["colorspace"] == "/DeviceRGB"
+        # colorspace is now a resolved dict
+        assert img["colorspace"]["family"] == "rgb"
         assert img["bits"] == 8
 
     def test_missing_width_height_defaults_to_zero(self):
@@ -234,7 +257,7 @@ class TestExtractImageMetadata:
         xobj["/BitsPerComponent"] = 8
         ctm = [1, 0, 0, 1, 0, 0]
         image_list = []
-        _extract_image_metadata(xobj, "/ImX", ctm, image_list, pikepdf)
+        _extract_image_metadata(xobj, "/ImX", ctm, None, image_list, pikepdf)
         assert image_list[0]["width_px"] == 0
         assert image_list[0]["height_px"] == 0
 
@@ -247,7 +270,7 @@ class TestExtractImageMetadata:
         xobj["/ColorSpace"] = pikepdf.Name("/DeviceGray")
         ctm = [1, 0, 0, 1, 0, 0]
         image_list = []
-        _extract_image_metadata(xobj, "/ImX", ctm, image_list, pikepdf)
+        _extract_image_metadata(xobj, "/ImX", ctm, None, image_list, pikepdf)
         assert image_list[0]["bits"] == 8
 
 
@@ -257,13 +280,9 @@ class TestExtractImageMetadata:
 
 
 class TestHandleDoOperator:
-    def _make_resources_with_image(self, pdf):
-        image = _make_image_stream(pdf)
-        return pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image))
-
     def test_image_xobject_appends_to_list(self):
         pdf = pikepdf.Pdf.new()
-        resources = self._make_resources_with_image(pdf)
+        resources = _make_resources_with_image(pdf)
         image_list = []
         ctm = [300, 0, 0, 150, 100, 200]
         _handle_do_operator(pikepdf.Name("/Im1"), resources, ctm, image_list, pikepdf)
@@ -285,7 +304,7 @@ class TestHandleDoOperator:
 
     def test_missing_name_in_xobjects_does_nothing(self):
         pdf = pikepdf.Pdf.new()
-        resources = self._make_resources_with_image(pdf)
+        resources = _make_resources_with_image(pdf)
         image_list = []
         _handle_do_operator(
             pikepdf.Name("/Missing"), resources, [1, 0, 0, 1, 0, 0], image_list, pikepdf
@@ -295,7 +314,7 @@ class TestHandleDoOperator:
     def test_unknown_subtype_does_nothing(self):
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
-        xobj["/Subtype"] = pikepdf.Name("/PS")  # obscure, not Image or Form
+        xobj["/Subtype"] = pikepdf.Name("/PS")
         resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=xobj))
         image_list = []
         _handle_do_operator(
@@ -328,17 +347,14 @@ class TestProcessFormXobject:
     def test_applies_form_matrix(self):
         pdf = pikepdf.Pdf.new()
         inner_image = _make_image_stream(pdf)
-        # Form places image at identity; form matrix translates by (50, 60)
         inner_content = b"q 100 0 0 100 0 0 cm /Im1 Do Q"
         form = pikepdf.Stream(pdf, inner_content)
         form["/Subtype"] = pikepdf.Name("/Form")
         form["/Matrix"] = pikepdf.Array([1, 0, 0, 1, 50, 60])
         form["/Resources"] = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=inner_image))
         image_list = []
-        parent_resources = pikepdf.Dictionary()
-        _process_form_xobject(form, parent_resources, [1, 0, 0, 1, 0, 0], image_list)
+        _process_form_xobject(form, pikepdf.Dictionary(), [1, 0, 0, 1, 0, 0], image_list)
         assert len(image_list) == 1
-        # bbox x should reflect the 50pt translation
         assert image_list[0]["bbox"][0] == pytest.approx(50.0)
 
     def test_identity_matrix_when_no_matrix_key(self):
@@ -354,7 +370,6 @@ class TestProcessFormXobject:
         assert image_list[0]["bbox"] == [10.0, 20.0, 110.0, 120.0]
 
     def test_falls_back_to_parent_resources(self):
-        """When Form has no /Resources, parent_resources should be used."""
         pdf = pikepdf.Pdf.new()
         inner_image = _make_image_stream(pdf)
         inner_content = b"q 50 0 0 50 5 5 cm /Im1 Do Q"
@@ -382,10 +397,8 @@ class TestParseStream:
         assert image_list[0]["bbox"] == [100.0, 200.0, 400.0, 350.0]
 
     def test_ctm_stack_push_pop(self):
-        """q/Q should save and restore CTM correctly."""
         pdf = pikepdf.Pdf.new()
         image = _make_image_stream(pdf)
-        # Push state, apply transform, draw, pop — image should be at inner transform
         content = b"q 200 0 0 100 50 50 cm /Im1 Do Q"
         page_obj = pikepdf.Dictionary(
             Type=pikepdf.Name("/Page"),
@@ -417,9 +430,8 @@ class TestParseStream:
         assert len(image_list) == 2
 
     def test_empty_ctm_stack_Q_is_safe(self):
-        """Q with empty stack should not raise."""
         pdf = pikepdf.Pdf.new()
-        content = b"Q"  # Q without a prior q
+        content = b"Q"
         page_obj = pikepdf.Dictionary(
             Type=pikepdf.Name("/Page"),
             MediaBox=pikepdf.Array([0, 0, 612, 792]),
@@ -433,7 +445,6 @@ class TestParseStream:
         assert image_list == []
 
     def test_parse_error_is_caught(self):
-        """A broken content stream should log a warning, not raise."""
         mock_stream = MagicMock()
         with patch(
             "pikepdf.parse_content_stream",
@@ -445,20 +456,20 @@ class TestParseStream:
 
 
 # ---------------------------------------------------------------------------
-# _extract_image_info
+# extract_pdf_images (replaces _extract_image_info)
 # ---------------------------------------------------------------------------
 
 
-class TestExtractImageInfo:
+class TestExtractPdfImages:
     def test_all_pages_processed_by_default(self):
         pdf = _make_simple_pdf()
-        result = _extract_image_info(pdf)
+        result = extract_pdf_images(pdf, [1])
         assert len(result) == 1
         assert result[0]["page"] == 1
 
     def test_page_with_no_images_excluded(self):
         pdf = pikepdf.Pdf.new()
-        content = b"q Q"  # no Do operator
+        content = b"q Q"
         page_obj = pikepdf.Dictionary(
             Type=pikepdf.Name("/Page"),
             MediaBox=pikepdf.Array([0, 0, 612, 792]),
@@ -466,13 +477,11 @@ class TestExtractImageInfo:
             Resources=pikepdf.Dictionary(),
         )
         pdf.pages.append(pikepdf.Page(page_obj))
-        result = _extract_image_info(pdf)
+        result = extract_pdf_images(pdf, [1])
         assert result == []
 
     def test_page_specs_filter_pages(self):
-        # Two-page PDF; only request page 1
         pdf = _make_simple_pdf()
-        # Add a second page with an image too
         image = _make_image_stream(pdf)
         content = b"q 50 0 0 50 5 5 cm /Im1 Do Q"
         page_obj = pikepdf.Dictionary(
@@ -482,30 +491,32 @@ class TestExtractImageInfo:
             Resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)),
         )
         pdf.pages.append(pikepdf.Page(page_obj))
-        result = _extract_image_info(pdf, specs=["1"])
+        result = extract_pdf_images(pdf, [1])
         assert len(result) == 1
         assert result[0]["page"] == 1
 
     def test_page_without_resources_is_skipped(self):
         pdf = _make_pdf_no_resources()
-        result = _extract_image_info(pdf)
+        result = extract_pdf_images(pdf, [1])
         assert result == []
 
     def test_returns_correct_structure(self):
         pdf = _make_simple_pdf()
-        result = _extract_image_info(pdf)
+        result = extract_pdf_images(pdf, [1])
         assert isinstance(result, list)
         assert len(result) == 1
         img = result[0]
         assert "page" in img
         for key in ("name", "bbox", "width_px", "height_px", "colorspace", "bits"):
             assert key in img
+        # colorspace is now a resolved dict
+        assert isinstance(img["colorspace"], dict)
+        assert "family" in img["colorspace"]
 
-    def test_empty_specs_processes_all(self):
+    def test_empty_target_pages_returns_nothing(self):
         pdf = _make_simple_pdf()
-        result_no_specs = _extract_image_info(pdf, specs=None)
-        result_empty_specs = _extract_image_info(pdf, specs=[])
-        assert result_no_specs == result_empty_specs
+        result = extract_pdf_images(pdf, [])
+        assert result == []
 
 
 # ---------------------------------------------------------------------------
@@ -583,8 +594,15 @@ class TestDumpImages:
         bbox = result.data[0]["bbox"]
         assert bbox == [100.0, 200.0, 400.0, 350.0]
 
+    def test_colorspace_is_resolved_dict(self):
+        """colorspace field is now a resolved dict, not a bare string."""
+        pdf = _make_simple_pdf()
+        result = dump_images(pdf, specs=[], output_file=None)
+        cs = result.data[0]["colorspace"]
+        assert isinstance(cs, dict)
+        assert cs["family"] == "rgb"
+
     def test_get_format_array_filter(self):
-        """Covers line 99 — /Filter is an array (multiple filters)."""
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         xobj["/Filter"] = pikepdf.Array(
@@ -599,24 +617,88 @@ class TestDumpImages:
         pdf = pikepdf.Pdf.new()
         xobj = _make_image_stream(pdf)
         with patch(
-            "pdftl.operations.dump_images._read_stream_bytes", side_effect=pikepdf.PdfError("fail")
+            "pdftl.utils.image_utils._read_stream_bytes",
+            side_effect=pikepdf.PdfError("fail"),
         ):
             image_list = []
-            _extract_image_metadata(xobj, "/Im1", [100, 0, 0, 100, 0, 0], image_list, pikepdf)
+            _extract_image_metadata(
+                xobj, "/Im1", [100, 0, 0, 100, 0, 0], None, image_list, pikepdf
+            )
             assert image_list[0]["stream_bytes"] == 0
 
+    def test_min_dpi_filters_low_resolution_images(self):
+        # Image placed at 300x150 pixels in a 300x150 point bbox = 72 PPI — below threshold
+        pdf = _make_simple_pdf(x=0, y=0, w=72, h=72)
+        result = dump_images(pdf, specs=["min_dpi=150"], output_file=None)
+        assert result.data == []
 
-def test_dump_images_output_is_json_not_pdf(run_pdftl, tmp_path):
-    """Regression: output file must contain JSON, not a PDF stream."""
-    pdf_path = tmp_path / "in.pdf"
-    output_path = tmp_path / "out.json"
-    _make_simple_pdf().save(str(pdf_path))
+    def test_min_dpi_keeps_high_resolution_images(self):
+        # 300px in a 72pt box = 300 PPI — above threshold
+        pdf = pikepdf.Pdf.new()
+        image = _make_image_stream(pdf)
+        image["/Width"] = 300
+        image["/Height"] = 300
+        content = b"q 72 0 0 72 0 0 cm /Im1 Do Q"
+        page_obj = pikepdf.Dictionary(
+            Type=pikepdf.Name("/Page"),
+            MediaBox=pikepdf.Array([0, 0, 612, 792]),
+            Contents=pikepdf.Stream(pdf, content),
+            Resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)),
+        )
+        pdf.pages.append(pikepdf.Page(page_obj))
+        result = dump_images(pdf, specs=["min_dpi=150"], output_file=None)
+        assert len(result.data) == 1
 
-    run_pdftl([str(pdf_path), "dump_images", "output", str(output_path)])
+    def test_max_dpi_excludes_high_resolution_images(self):
+        # Same 300 PPI image — should be excluded when max_dpi=150
+        pdf = pikepdf.Pdf.new()
+        image = _make_image_stream(pdf)
+        image["/Width"] = 300
+        image["/Height"] = 300
+        content = b"q 72 0 0 72 0 0 cm /Im1 Do Q"
+        page_obj = pikepdf.Dictionary(
+            Type=pikepdf.Name("/Page"),
+            MediaBox=pikepdf.Array([0, 0, 612, 792]),
+            Contents=pikepdf.Stream(pdf, content),
+            Resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)),
+        )
+        pdf.pages.append(pikepdf.Page(page_obj))
+        result = dump_images(pdf, specs=["max_dpi=150"], output_file=None)
+        assert result.data == []
 
-    content = output_path.read_bytes()
-    assert not content.startswith(b"%PDF"), (
-        "Output is a PDF stream, not JSON — skip_pipeline_save missing?"
-    )
-    parsed = json.loads(content)
-    assert "images" in parsed
+    def test_max_dpi_keeps_low_resolution_images(self):
+        # 1px in a 72pt box = 1 PPI — well under any max_dpi
+        pdf = _make_simple_pdf(x=0, y=0, w=72, h=72)
+        result = dump_images(pdf, specs=["max_dpi=150"], output_file=None)
+        assert len(result.data) == 1
+
+    def test_dump_images_output_is_json_not_pdf(self, run_pdftl, tmp_path):
+        """Regression: output file must contain JSON, not a PDF stream."""
+        pdf_path = tmp_path / "in.pdf"
+        output_path = tmp_path / "out.json"
+        _make_simple_pdf().save(str(pdf_path))
+
+        run_pdftl([str(pdf_path), "dump_images", "output", str(output_path)])
+
+        content = output_path.read_bytes()
+        assert not content.startswith(b"%PDF"), (
+            "Output is a PDF stream, not JSON — skip_pipeline_save missing?"
+        )
+        parsed = json.loads(content)
+        assert "images" in parsed
+
+    def test_page_spec_combined_with_dpi_filter(self):
+        # Two-page PDF; restrict to page 1 and apply min_dpi
+        pdf = _make_simple_pdf()
+        image = _make_image_stream(pdf)
+        content = b"q 72 0 0 72 0 0 cm /Im1 Do Q"
+        page_obj = pikepdf.Dictionary(
+            Type=pikepdf.Name("/Page"),
+            MediaBox=pikepdf.Array([0, 0, 612, 792]),
+            Contents=pikepdf.Stream(pdf, content),
+            Resources=pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image)),
+        )
+        pdf.pages.append(pikepdf.Page(page_obj))
+        result = dump_images(pdf, specs=["1", "min_dpi=0"], output_file=None)
+        assert len(result.data) == 1
+        assert result.data[0]["page"] == 1
