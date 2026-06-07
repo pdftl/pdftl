@@ -103,6 +103,7 @@ def get_pdf_path():
     Returns the absolute path to a PDF if it exists. Skips the test if missing.
     """
 
+    # codeql[py/mixed-returns]
     def _resolver(filename):
         base = Path(__file__).parent
         if not filename.endswith(".pdf"):

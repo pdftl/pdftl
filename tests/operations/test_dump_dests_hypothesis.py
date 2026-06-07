@@ -155,6 +155,7 @@ class MockPdfObject:
         global _objgen_counter
         # Create a unique object ID (objgen) for each mock
         self.objgen = (_objgen_counter, 0)
+        # codeql[py/unused-global-variable]
         _objgen_counter += 1
 
 

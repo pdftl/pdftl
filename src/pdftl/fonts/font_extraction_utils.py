@@ -178,9 +178,6 @@ def get_encoding_name(
     font_obj: Any, subtype: str = "", base_font: str = "", traits: dict[str, bool] | None = None
 ) -> str:
     """Extracts a clean serialization string representation matching pdffonts encoding logic."""
-    if traits is None:
-        traits = {}
-
     if "/Encoding" not in font_obj:
         return _get_fallback_encoding(subtype, base_font)
 

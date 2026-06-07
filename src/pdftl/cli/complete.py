@@ -89,6 +89,7 @@ HARDCODED_KEYWORDS = {
     "encrypt_40bit",
     "encrypt_aes128",
     "encrypt_aes256",
+    "fast",
     "flatten",
     "keep_final_id",
     "keep_first_id",
