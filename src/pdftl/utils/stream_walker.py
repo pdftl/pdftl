@@ -138,21 +138,24 @@ def _execute_pattern_walk(
             seen_stream_ids.discard(obj_id)
 
 
+def _extract_pattern_obj(pattern_name: str, resources):
+    if resources is None:
+        return None
+    try:
+        patterns = resources.get("/Pattern")
+        if patterns is None:
+            return None
+        return patterns.get(pattern_name)
+    except (AttributeError, TypeError):
+        return None
+
+
 def recurse_pattern(
     pattern_name: str, resources, pikepdf_module, detail: dict, seen_stream_ids: set, full: bool
 ):
     """Secure recursive tracking context for Tiling Patterns triggered via scn/SCN."""
-    if resources is None:
-        return
-
-    try:
-        patterns = resources.get("/Pattern")
-        if patterns is None:
-            return
-        pattern_obj = patterns.get(pattern_name)
-        if pattern_obj is None:
-            return
-    except (AttributeError, TypeError):
+    pattern_obj = _extract_pattern_obj(pattern_name, resources)
+    if pattern_obj is None:
         return
 
     try:
@@ -211,9 +214,6 @@ def process_color_val_op(
         cs["operands"] = _safe_operands(operands)
 
         # SCN/scn interpretation depends on current graphics state color space.
-        # Only when the active color space is Pattern do we treat the final operand
-        # as a pattern name; otherwise this behaves like SC/sc (normal color set).
-        # This code follows spec-compliant behavior (no heuristic recovery).
         if op in ("scn", "SCN") and cs.get("family") == "pattern":
             pattern_name = str(operands[-1])
             if not pattern_name.startswith("/"):
@@ -350,6 +350,22 @@ def _process_shading_op(operands, resources, pikepdf_module, detail, op_idx, str
         logger.debug("Failed to resolve shading operator target: %s", err)
 
 
+def _dispatch_graphics_state_op(op: str, operands, gs: dict, gs_stack: list):
+    """Helper to dispatch core graphics state save/restore and explicit parameters."""
+    if op == "q":
+        gs_stack.append(copy.deepcopy(gs))
+    elif op == "Q" and gs_stack:
+        new_gs = gs_stack.pop()
+        gs.clear()
+        gs.update(new_gs)
+    elif op == "ri" and operands:
+        gs["rendering_intent"] = str(operands[0]).lstrip("/")
+    elif op == "op" and operands:  # lowercase: fill overprint
+        gs["overprint_fill"] = bool(operands[0])
+    elif op == "OP" and operands:  # uppercase: stroke overprint
+        gs["overprint_stroke"] = bool(operands[0])
+
+
 def process_operator(
     op: str,
     operands,
@@ -365,13 +381,9 @@ def process_operator(
     stream_id: str,
 ) -> dict:
     """Dispatch a single content stream operator to the appropriate handler."""
-    if op == "q":
-        gs_stack.append(copy.deepcopy(gs))
-    elif op == "Q" and gs_stack:
-        new_gs = gs_stack.pop()
-        gs.clear()
-        gs.update(new_gs)
-    elif op in ("cs", "CS"):
+    _dispatch_graphics_state_op(op, operands, gs, gs_stack)
+
+    if op in ("cs", "CS"):
         process_cs_op(
             op, operands, resources, pikepdf_module, gs, detail, op_idx, in_text, stream_id
         )
@@ -404,14 +416,27 @@ def process_operator(
         )
     elif op == "sh" and operands:
         _process_shading_op(operands, resources, pikepdf_module, detail, op_idx, stream_id)
-    elif op == "ri" and operands:
-        gs["rendering_intent"] = str(operands[0]).lstrip("/")
-    elif op == "op" and operands:  # lowercase: fill overprint (PDF 1.2)
-        gs["overprint_fill"] = bool(operands[0])
-    elif op == "OP" and operands:  # uppercase: stroke overprint
-        gs["overprint_stroke"] = bool(operands[0])
-    elif op == "gs" and operands:  # ExtGState resource reference
+    elif op == "gs" and operands:
         _apply_ext_gstate(str(operands[0]), resources, pikepdf_module, gs)
+
+
+def _parse_overprint_rules(gstate: dict, gs: dict):
+    """Helper mapping PDF overprint fallback specifications into active state."""
+    # Per spec: OP sets both stroke and fill overprint, UNLESS op is also
+    # present in the same dictionary, in which case OP sets stroke only.
+    op_entry = gstate.get("/op")  # fill overprint (PDF 1.3+)
+    OP_entry = gstate.get("/OP")  # stroke overprint (and fill if op absent)
+
+    if OP_entry is not None:
+        gs["overprint_stroke"] = bool(OP_entry)
+        if op_entry is None:
+            gs["overprint_fill"] = bool(OP_entry)
+
+    if op_entry is not None:
+        gs["overprint_fill"] = bool(op_entry)
+
+    if (opm := gstate.get("/OPM")) is not None:
+        gs["overprint_mode"] = int(opm)
 
 
 def _apply_ext_gstate(name: str, resources, pikepdf_module, gs: dict):
@@ -427,21 +452,7 @@ def _apply_ext_gstate(name: str, resources, pikepdf_module, gs: dict):
         if (ri := gstate.get("/RI")) is not None:
             gs["rendering_intent"] = str(ri).lstrip("/")
 
-        # Per spec: OP sets both stroke and fill overprint, UNLESS op is also
-        # present in the same dictionary, in which case OP sets stroke only.
-        op_entry = gstate.get("/op")  # fill overprint (PDF 1.3+)
-        OP_entry = gstate.get("/OP")  # stroke overprint (and fill if op absent)
-
-        if OP_entry is not None:
-            gs["overprint_stroke"] = bool(OP_entry)
-            if op_entry is None:
-                gs["overprint_fill"] = bool(OP_entry)
-
-        if op_entry is not None:
-            gs["overprint_fill"] = bool(op_entry)
-
-        if (opm := gstate.get("/OPM")) is not None:
-            gs["overprint_mode"] = int(opm)
+        _parse_overprint_rules(gstate, gs)
 
         if (bm := gstate.get("/BM")) is not None:
             gs["blend_mode"] = str(bm).lstrip("/")

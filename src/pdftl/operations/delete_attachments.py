@@ -117,42 +117,52 @@ def _get_attachment_size(attachment) -> int:
     return len(attachment.get_file().read_bytes())
 
 
-def _attachment_matches(fname: str, attachment, params: dict) -> bool:
-    """Evaluates if an attachment matches the provided key=value filters."""
-    if not params:
-        return True
-
+def _matches_name_and_ext(fname: str, params: dict) -> bool:
     if "name" in params and params["name"] != fname.lower():
         return False
-
     if "namehas" in params and params["namehas"] not in fname.lower():
         return False
-
     if "ext" in params:
         ext = params["ext"]
         if not ext.startswith("."):
             ext = f".{ext}"
         if not fname.lower().endswith(ext):
             return False
+    return True
 
-    if "relation" in params:
-        rel = "unspecified"
-        if attachment.relationship:
-            rel = str(attachment.relationship).strip("/").lower()
-        if params["relation"] != rel:
-            return False
 
+def _matches_relation(attachment, params: dict) -> bool:
+    if "relation" not in params:
+        return True
+    rel = "unspecified"
+    if attachment.relationship:
+        rel = str(attachment.relationship).strip("/").lower()
+    return params["relation"] == rel
+
+
+def _matches_size(attachment, params: dict) -> bool:
     minbytes_val = params.get("minbytes")
     maxbytes_val = params.get("maxbytes")
+    if minbytes_val is None and maxbytes_val is None:
+        return True
 
-    if minbytes_val is not None or maxbytes_val is not None:
-        size = _get_attachment_size(attachment)
-        if minbytes_val is not None and size < _parse_size_str(minbytes_val):
-            return False
-        if maxbytes_val is not None and size > _parse_size_str(maxbytes_val):
-            return False
-
+    size = _get_attachment_size(attachment)
+    if minbytes_val is not None and size < _parse_size_str(minbytes_val):
+        return False
+    if maxbytes_val is not None and size > _parse_size_str(maxbytes_val):
+        return False
     return True
+
+
+def _attachment_matches(fname: str, attachment, params: dict) -> bool:
+    """Evaluates if an attachment matches the provided key=value filters."""
+    if not params:
+        return True
+    return (
+        _matches_name_and_ext(fname, params)
+        and _matches_relation(attachment, params)
+        and _matches_size(attachment, params)
+    )
 
 
 def _evaluate_spec(pdf, spec_str: str, annot_map: dict) -> set[str]:
@@ -189,6 +199,62 @@ def _evaluate_spec(pdf, spec_str: str, annot_map: dict) -> set[str]:
     return matched_filenames
 
 
+def _extract_page_attachments(page, p_num: int, annot_map: dict) -> None:
+    if "/Annots" not in page:
+        return
+    for annot in page.Annots:
+        if annot.get("/Subtype") == "/FileAttachment":
+            fs = annot.get("/FS")
+            if fs is not None:
+                annot_map.setdefault(fs.objgen, set()).add(p_num)
+
+
+def _map_attachment_annotations(pdf) -> dict:
+    annot_map = {}
+    for p_num, page in enumerate(pdf.pages, start=1):
+        _extract_page_attachments(page, p_num, annot_map)
+    return annot_map
+
+
+def _delete_from_nametree(pdf, filenames_to_delete: set) -> set:
+    deleted_objgens = set()
+    for fname in filenames_to_delete:
+        if fname in pdf.attachments:
+            deleted_objgens.add(pdf.attachments[fname].obj.objgen)
+            del pdf.attachments[fname]
+    return deleted_objgens
+
+
+def _should_keep_annot(annot, deleted_objgens: set) -> bool:
+    if annot.get("/Subtype") != "/FileAttachment":
+        return True
+    fs = annot.get("/FS")
+    if fs is not None and fs.objgen in deleted_objgens:
+        return False
+    return True
+
+
+def _clean_single_page_annots(page, deleted_objgens: set) -> None:
+    import pikepdf
+
+    if "/Annots" not in page:
+        return
+
+    new_annots = pikepdf.Array()
+    for annot in page.Annots:
+        if _should_keep_annot(annot, deleted_objgens):
+            new_annots.append(annot)
+
+    page.Annots = new_annots
+    if len(page.Annots) == 0:
+        del page["/Annots"]
+
+
+def _scrub_page_annotations(pdf, deleted_objgens: set) -> None:
+    for page in pdf.pages:
+        _clean_single_page_annots(page, deleted_objgens)
+
+
 @register_operation(
     "delete_attachments",
     tags=["in_place", "attachments", "optimization", "delete"],
@@ -204,8 +270,6 @@ def delete_attachments(pdf, specs) -> OpResult:
     Deletes attachments matching criteria from the document NameTree
     and scrubs corresponding page annotations.
     """
-    import pikepdf
-
     if not specs:
         specs = [""]  # Empty string triggers global deletion with no filters
 
@@ -214,15 +278,7 @@ def delete_attachments(pdf, specs) -> OpResult:
         return OpResult(success=True, pdf=pdf)
 
     # 1. Map attachments to the pages they appear on
-    # objgen -> set of page numbers (1-based)
-    annot_map = {}
-    for p_num, page in enumerate(pdf.pages, start=1):
-        if "/Annots" in page:
-            for annot in page.Annots:
-                if annot.get("/Subtype") == "/FileAttachment":
-                    fs = annot.get("/FS")
-                    if fs is not None:
-                        annot_map.setdefault(fs.objgen, set()).add(p_num)
+    annot_map = _map_attachment_annotations(pdf)
 
     # 2. Evaluate all specs to build the final list of attachment filenames to delete
     filenames_to_delete = set()
@@ -234,30 +290,8 @@ def delete_attachments(pdf, specs) -> OpResult:
         return OpResult(success=True, pdf=pdf)
 
     # 3. Perform Deletions
-    deleted_objgens = set()
-
-    # Remove from document-level NameTree
-    for fname in filenames_to_delete:
-        if fname in pdf.attachments:
-            deleted_objgens.add(pdf.attachments[fname].obj.objgen)
-            del pdf.attachments[fname]
-
-    # Scrub broken annotations from pages
-    for page in pdf.pages:
-        if "/Annots" in page:
-            new_annots = pikepdf.Array()
-            for annot in page.Annots:
-                keep = True
-                if annot.get("/Subtype") == "/FileAttachment":
-                    fs = annot.get("/FS")
-                    if fs is not None and fs.objgen in deleted_objgens:
-                        keep = False
-                if keep:
-                    new_annots.append(annot)
-
-            page.Annots = new_annots
-            if len(page.Annots) == 0:
-                del page["/Annots"]
+    deleted_objgens = _delete_from_nametree(pdf, filenames_to_delete)
+    _scrub_page_annotations(pdf, deleted_objgens)
 
     logger.info("Permanently deleted %d attachment(s).", len(filenames_to_delete))
     return OpResult(success=True, pdf=pdf)

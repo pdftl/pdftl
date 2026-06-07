@@ -24,6 +24,38 @@ def attachment_compression(attachment) -> str | None:
         return None
 
 
+def _extract_stream_metadata(f_stream, meta: dict) -> None:
+    """Extract metadata available specifically on the embedded file stream dictionary."""
+    params = f_stream.get("/Params")
+    if params is not None:
+        if (val := params.get("/Size")) is not None:
+            meta["file_size"] = int(val)
+        for pdf_key, dict_key in (
+            ("/CreationDate", "created"),
+            ("/ModDate", "modified"),
+        ):
+            if (val := params.get(pdf_key)) is not None:
+                meta[dict_key] = str(val)
+
+    if (val := f_stream.get("/Length")) is not None:
+        meta["stored_size"] = int(val)
+
+    if (val := f_stream.get("/Filter")) is not None:
+        meta["compression"] = str(val)
+
+    if (val := f_stream.get("/Subtype")) is not None:
+        meta["mime_type"] = str(val)
+
+
+def _extract_filespec_metadata(attachment, meta: dict) -> None:
+    """Extract higher-level metadata from the filespec definition."""
+    if (val := attachment.description) is not None and str(val):
+        meta["description"] = str(val)
+
+    if (val := attachment.relationship) is not None:
+        meta["relationship"] = str(val).strip("/")
+
+
 def attachment_metadata(attachment) -> dict:
     """Extract all available metadata from a filespec attachment object."""
     meta = {}
@@ -32,42 +64,9 @@ def attachment_metadata(attachment) -> dict:
     except (AttributeError, KeyError):
         return meta
 
-    if f_stream is None:
-        return meta
+    if f_stream is not None:
+        _extract_stream_metadata(f_stream, meta)
 
-    # Stream-level fields
-    params = f_stream.get("/Params")
-    if params is not None:
-        val = params.get("/Size")
-        if val is not None:
-            meta["file_size"] = int(val)
-        for pdf_key, dict_key in (
-            ("/CreationDate", "created"),
-            ("/ModDate", "modified"),
-        ):
-            val = params.get(pdf_key)
-            if val is not None:
-                meta[dict_key] = str(val)
-
-    val = f_stream.get("/Length")
-    if val is not None:
-        meta["stored_size"] = int(val)
-
-    val = f_stream.get("/Filter")
-    if val is not None:
-        meta["compression"] = str(val)
-
-    val = f_stream.get("/Subtype")
-    if val is not None:
-        meta["mime_type"] = str(val)
-
-    # Filespec-level fields
-    val = attachment.description
-    if val is not None and str(val):
-        meta["description"] = str(val)
-
-    val = attachment.relationship
-    if val is not None:
-        meta["relationship"] = str(val).strip("/")
+    _extract_filespec_metadata(attachment, meta)
 
     return meta

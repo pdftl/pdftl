@@ -31,6 +31,65 @@ class GrammarBuilder:
         "all",
     ]
 
+    def _sanitize(self, name: str) -> tuple[str, str]:
+        """Returns the clean name and regex-safe variable name."""
+        clean = name.split()[0]
+        safe = re.sub(r"[^a-zA-Z0-9_]", "_", clean)
+        return clean, safe
+
+    def _build_operation_rules(self, grammar: list, ops_rules: list, source_ops_rules: list):
+        for name, op_obj in registry.operations.items():
+            clean_name, safe_name = self._sanitize(name)
+            rule_name = f"op_{safe_name}"
+            is_source = getattr(op_obj, "type", None) == "source operation"
+
+            if is_source:
+                source_ops_rules.append(rule_name)
+            else:
+                ops_rules.append(rule_name)
+
+            kw_term = f"KW_{safe_name.upper()}"
+            grammar.append(f'{kw_term}.5: "{clean_name}"')
+
+            spec = getattr(op_obj, "grammar_spec", None)
+            if spec:
+                grammar.append(f"{rule_name}: {kw_term} [{spec}]")
+            else:
+                grammar.append(f"{rule_name}: {kw_term}")
+
+    def _build_option_rules(self, grammar: list, opts_rules: list):
+        for name in registry.options:
+            clean_name, safe_name = self._sanitize(name)
+            rule_name = f"opt_{safe_name}"
+            opts_rules.append(rule_name)
+
+            kw_term = f"KW_{safe_name.upper()}"
+            grammar.append(f'{kw_term}.5: "{clean_name}"')
+
+            if "<" in name:
+                grammar.append(f"{rule_name}: {kw_term} FILE_PATH")
+            else:
+                grammar.append(f"{rule_name}: {kw_term}")
+
+    def _build_disjunctions(
+        self, grammar: list, ops_rules: list, source_ops_rules: list, opts_rules: list
+    ):
+        # DISJUNCTIONS: Use '!' to keep these rules visible to the completion engine
+        if ops_rules:
+            grammar.append(f"!operation: {' | '.join(ops_rules)}")
+        else:
+            grammar.append('!operation: "noop"')
+
+        if source_ops_rules:
+            grammar.append(f"!source_operation: {' | '.join(source_ops_rules)}")
+        else:
+            grammar.append('!source_operation: "noop"')
+
+        if opts_rules:
+            grammar.append(f"!option: {' | '.join(opts_rules)}")
+        else:
+            grammar.append('!option: "noop"')
+
     def build(self):
         initialize_registry()
         help_topics_str = " | ".join(f'"{t}"' for t in self.HELP_TOPICS)
@@ -101,60 +160,8 @@ class GrammarBuilder:
         source_ops_rules = []
         opts_rules = []
 
-        def sanitize(name):
-            clean = name.split()[0]
-            safe = re.sub(r"[^a-zA-Z0-9_]", "_", clean)
-            return clean, safe
-
-        # Operations
-        for name, op_obj in registry.operations.items():
-            clean_name, safe_name = sanitize(name)
-            rule_name = f"op_{safe_name}"
-            is_source = getattr(op_obj, "type", None) == "source operation"
-
-            if is_source:
-                source_ops_rules.append(rule_name)
-            else:
-                ops_rules.append(rule_name)
-
-            kw_term = f"KW_{safe_name.upper()}"
-            grammar.append(f'{kw_term}.5: "{clean_name}"')
-
-            spec = getattr(op_obj, "grammar_spec", None)
-            if spec:
-                # [spec] makes the operation arguments optional
-                grammar.append(f"{rule_name}: {kw_term} [{spec}]")
-            else:
-                grammar.append(f"{rule_name}: {kw_term}")
-
-        # Options
-        for name in registry.options:
-            clean_name, safe_name = sanitize(name)
-            rule_name = f"opt_{safe_name}"
-            opts_rules.append(rule_name)
-
-            kw_term = f"KW_{safe_name.upper()}"
-            grammar.append(f'{kw_term}.5: "{clean_name}"')
-
-            if "<" in name:
-                grammar.append(f"{rule_name}: {kw_term} FILE_PATH")
-            else:
-                grammar.append(f"{rule_name}: {kw_term}")
-
-        # DISJUNCTIONS: Use '!' to keep these rules visible to the completion engine
-        if ops_rules:
-            grammar.append(f"!operation: {' | '.join(ops_rules)}")
-        else:
-            grammar.append('!operation: "noop"')
-
-        if source_ops_rules:
-            grammar.append(f"!source_operation: {' | '.join(source_ops_rules)}")
-        else:
-            grammar.append('!source_operation: "noop"')
-
-        if opts_rules:
-            grammar.append(f"!option: {' | '.join(opts_rules)}")
-        else:
-            grammar.append('!option: "noop"')
+        self._build_operation_rules(grammar, ops_rules, source_ops_rules)
+        self._build_option_rules(grammar, opts_rules)
+        self._build_disjunctions(grammar, ops_rules, source_ops_rules, opts_rules)
 
         return "\n".join(grammar)

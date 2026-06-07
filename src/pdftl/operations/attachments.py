@@ -63,7 +63,6 @@ _DUMP_FILES_EXAMPLES = [
     },
 ]
 
-
 _UNPACK_FILES_LONG_DESC = """
 
 The `unpack_files` operation unpacks files attached to the input
@@ -143,6 +142,23 @@ def unpack_files_cli_hook(result: OpResult, stage, _pipeline):
         logger.debug("No attachments found")
 
 
+def _extract_page_attachments(page, p_num: int, annot_map: dict) -> None:
+    if "/Annots" not in page:
+        return
+    for annot in page.Annots:
+        if annot.get("/Subtype") == "/FileAttachment":
+            fs = annot.get("/FS")
+            if fs is not None:
+                annot_map.setdefault(fs.objgen, set()).add(p_num)
+
+
+def _map_attachment_annotations(pdf) -> dict:
+    annot_map = {}
+    for p_num, page in enumerate(pdf.pages, start=1):
+        _extract_page_attachments(page, p_num, annot_map)
+    return annot_map
+
+
 @register_operation(
     "dump_files",
     tags=["attachments", "info"],
@@ -167,17 +183,9 @@ def dump_files(input_filename, pdf, output_file=None) -> OpResult:
     if not pdf.attachments:
         return OpResult(success=True, data=[], meta=meta)
 
-    # Map attachments to the pages they appear on
-    annot_map = {}
-    for p_num, page in enumerate(pdf.pages, start=1):
-        if "/Annots" in page:
-            for annot in page.Annots:
-                if annot.get("/Subtype") == "/FileAttachment":
-                    fs = annot.get("/FS")
-                    if fs is not None:
-                        annot_map.setdefault(fs.objgen, set()).add(p_num)
-
+    annot_map = _map_attachment_annotations(pdf)
     data = []
+
     for name, attachment in pdf.attachments.items():
         objgen = attachment.obj.objgen
         record = {

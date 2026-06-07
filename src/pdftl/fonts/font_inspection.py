@@ -70,6 +70,38 @@ def _check_embedding(font_obj: Any) -> bool:
     return False
 
 
+def _process_single_font(page_idx: int, font_obj: Any, font_registry: dict[str, FontInfo]) -> None:
+    """Extracts metadata for a single font object and maps it to the page index."""
+    # Resolve structural indirect references safely
+    if not hasattr(font_obj, "get"):
+        return
+
+    base_font_raw = font_obj.get("/BaseFont")
+    if not base_font_raw:
+        return
+
+    base_font = str(base_font_raw)
+    subtype = str(font_obj.get("/Subtype", "/Unknown"))
+    is_embedded = _check_embedding(font_obj)
+
+    if base_font not in font_registry:
+        font_registry[base_font] = FontInfo(
+            base_font=base_font, subtype=subtype, is_embedded=is_embedded, pages=[page_idx]
+        )
+    elif page_idx not in font_registry[base_font].pages:
+        font_registry[base_font].pages.append(page_idx)
+
+
+def _process_page_fonts(page_idx: int, page: Any, font_registry: dict[str, FontInfo]) -> None:
+    """Iterates over the Font mappings in a specific page's Resources dictionary."""
+    resources = page.get("/Resources")
+    if not resources or "/Font" not in resources:
+        return
+
+    for _, font_obj in resources.Font.items():
+        _process_single_font(page_idx, font_obj, font_registry)
+
+
 def inspect_pdf_fonts(pdf: "pikepdf.Pdf") -> dict[str, FontInfo]:
     """
     Crawls the PDF page tree to gather unique fonts and evaluate their metrics.
@@ -80,29 +112,7 @@ def inspect_pdf_fonts(pdf: "pikepdf.Pdf") -> dict[str, FontInfo]:
     font_registry: dict[str, FontInfo] = {}
 
     for page_idx, page in enumerate(pdf.pages, start=1):
-        resources = page.get("/Resources")
-        if not resources or "/Font" not in resources:
-            continue
-
-        for _, font_obj in resources.Font.items():
-            # Resolve structural indirect references safely
-            if not hasattr(font_obj, "get"):
-                continue
-
-            base_font_raw = font_obj.get("/BaseFont")
-            if not base_font_raw:
-                continue
-
-            base_font = str(base_font_raw)
-            subtype = str(font_obj.get("/Subtype", "/Unknown"))
-            is_embedded = _check_embedding(font_obj)
-
-            if base_font not in font_registry:
-                font_registry[base_font] = FontInfo(
-                    base_font=base_font, subtype=subtype, is_embedded=is_embedded, pages=[page_idx]
-                )
-            elif page_idx not in font_registry[base_font].pages:
-                font_registry[base_font].pages.append(page_idx)
+        _process_page_fonts(page_idx, page, font_registry)
 
     return font_registry
 

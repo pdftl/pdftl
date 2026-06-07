@@ -845,3 +845,44 @@ class TestFontExtractionCoverage:
         # Page 2 /Font logs object 999 into seen_dict_ids, natively triggering the line 275 dedup skip
         result = extract_document_fonts(MockDoc())
         assert len(result) == 1
+
+    def test_crawl_fonts_with_list_font_obj(self):
+        """Test line 318: font_obj lacks .get(), causing _process_and_store_font to return early."""
+
+        class MockFontRes(dict):
+            @property
+            def Font(self):
+                # Using a list evaluates `"/Resources" in []` as safely False,
+                # passing it to _process_and_store_font which aborts because lists lack .get()
+                return {"/F1": []}
+
+        class MockPage(dict):
+            @property
+            def Resources(self):
+                return MockFontRes({"/Font": True})
+
+        class MockDoc:
+            pages = [MockPage({"/Resources": True})]
+
+        # Should silently ignore the invalid font object and return an empty list
+        assert extract_document_fonts(MockDoc()) == []
+
+    def test_crawl_annots_ap_state_without_get(self):
+        """Test line 408: ap_state lacks a .get() method, causing early return."""
+
+        class MockAnnot(dict):
+            @property
+            def AP(self):
+                # The state mapping under /N is a list, not a stream dictionary
+                return {"/N": []}
+
+        class MockPage(dict):
+            @property
+            def Annots(self):
+                return [MockAnnot({"/AP": True})]
+
+        class MockDoc:
+            pages = [MockPage({"/Annots": True})]
+
+        # Gracefully skips the annotation appearance loop
+        assert extract_document_fonts(MockDoc()) == []

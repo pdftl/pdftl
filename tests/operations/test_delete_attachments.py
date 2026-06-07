@@ -242,3 +242,25 @@ def test_delete_attachments_scrubs_annotations(mock_eval):
     # 3. Ensure page 2 had its only annotation scrubbed and the /Annots key deleted
     assert len(page2.Annots) == 0
     page2.__delitem__.assert_called_with("/Annots")
+
+
+def test_delete_attachments_no_annots_on_page():
+    """
+    Test lines 204 and 240: Gracefully skip annotation mapping and scrubbing
+    when a page lacks the /Annots dictionary entirely.
+    """
+    import pikepdf
+
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()  # A completely blank page has no /Annots dictionary
+
+    # Inject a document-level attachment so the function proceeds past the
+    # initial `if not pdf.attachments:` check at the start of the operation.
+    pdf.attachments["dummy.txt"] = b"hello world"
+
+    # Run a global deletion
+    result = delete_attachments(pdf, [""])
+
+    # Assert successful deletion and that the missing /Annots dict was handled
+    assert result.success is True
+    assert "dummy.txt" not in pdf.attachments
