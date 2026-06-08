@@ -11,6 +11,7 @@
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+from contextlib import suppress
 
 if TYPE_CHECKING:
     import pikepdf
@@ -60,12 +61,10 @@ def _check_embedding(font_obj: Any) -> bool:
 
     # Composite Type0 fonts nest their descriptor inside a descendant CIDFont
     if "/DescendantFonts" in font_obj:
-        try:
+        with suppress(AttributeError, KeyError, IndexError):
             descendants = font_obj.DescendantFonts
             if len(descendants) > 0:
                 return _check_embedding(descendants[0])
-        except (AttributeError, KeyError, IndexError):
-            pass
 
     return False
 

@@ -7,6 +7,7 @@
 """Reusable font dictionary crawling and bitmask parsing primitives"""
 
 import re
+from contextlib import suppress
 from typing import Any
 
 # Matches standard PDF subset prefixes like "AAAAAA+FontName"
@@ -49,12 +50,10 @@ def find_font_descriptor(font_obj: Any) -> Any | None:
         return font_obj.FontDescriptor
 
     if "/DescendantFonts" in font_obj:
-        try:
+        with suppress(AttributeError, KeyError, IndexError):
             descendants = font_obj.DescendantFonts
             if len(descendants) > 0:
                 return find_font_descriptor(descendants[0])
-        except (AttributeError, KeyError, IndexError):
-            pass
 
     return None
 
@@ -68,10 +67,8 @@ def _get_font_bytes(descriptor: Any) -> tuple[bool, int]:
             return True, len(descriptor[key].read_raw_bytes())
         except (AttributeError, TypeError):
             if hasattr(descriptor[key], "Length1"):
-                try:
+                with suppress(AttributeError, TypeError, ValueError):
                     return True, int(descriptor[key].Length1)
-                except (AttributeError, TypeError, ValueError):
-                    pass
         return True, 0
     return False, 0
 
@@ -93,16 +90,12 @@ def _get_font_metrics(descriptor: Any) -> dict[str, Any]:
 
     for pdf_key, json_key in metric_map.items():
         if pdf_key in descriptor:
-            try:
+            with suppress(ValueError, TypeError):
                 metrics[json_key] = float(descriptor[pdf_key])
-            except (ValueError, TypeError):
-                pass
 
     if "/FontBBox" in descriptor:
-        try:
+        with suppress(ValueError, TypeError):
             metrics["bbox"] = [float(x) for x in descriptor["/FontBBox"]]
-        except (ValueError, TypeError):
-            pass
 
     return metrics
 
@@ -190,12 +183,10 @@ def get_encoding_name(
 def _unwrap_physical_font(parent_obj: Any) -> Any:
     """Bypasses Type0 Wrapper to inspect the underlying CID physical font."""
     if parent_obj.get("/Subtype") == "/Type0" and "/DescendantFonts" in parent_obj:
-        try:
+        with suppress(AttributeError, KeyError, IndexError):
             descendants = parent_obj.DescendantFonts
             if len(descendants) > 0:
                 return descendants[0]
-        except (AttributeError, KeyError, IndexError):
-            pass
     return parent_obj
 
 
@@ -224,7 +215,7 @@ def _refine_subtype(subtype_raw: str, physical_obj: Any) -> str:
     descriptor = find_font_descriptor(physical_obj)
 
     if descriptor and "/FontFile3" in descriptor:
-        try:
+        with suppress(AttributeError, KeyError, TypeError):
             ff3 = descriptor["/FontFile3"]
             if "/Subtype" in ff3:
                 ff3_sub = str(ff3.get("/Subtype", "")).lstrip("/")
@@ -232,8 +223,6 @@ def _refine_subtype(subtype_raw: str, physical_obj: Any) -> str:
                     subtype = "Type 1C"
                 elif ff3_sub == "CIDFontType0C":
                     subtype = "CID Type 0C"
-        except (AttributeError, KeyError, TypeError):
-            pass
 
     mapping = {
         "Type1": "Type 1",
@@ -334,70 +323,58 @@ class _DocumentFontExtractor:
     def _crawl_fonts(self, resources: Any) -> None:
         if "/Font" not in resources:
             return
-        try:
+        with suppress(AttributeError, KeyError, TypeError):
             for font_key, font_obj in resources.Font.items():
                 if self._mark_dict_seen(font_obj):
                     continue
                 if "/Resources" in font_obj:
                     self.crawl_resources(font_obj.Resources)
                 self._process_and_store_font(str(font_key), font_obj)
-        except (AttributeError, KeyError, TypeError):
-            pass
 
     def _crawl_xobjects(self, resources: Any) -> None:
         if "/XObject" not in resources:
             return
-        try:
+        with suppress(AttributeError, KeyError, TypeError):
             for _, xobj in resources.XObject.items():
                 if self._mark_dict_seen(xobj):
                     continue
                 if "/Resources" in xobj:
                     self.crawl_resources(xobj.Resources)
-        except (AttributeError, KeyError, TypeError):
-            pass
 
     def _crawl_patterns(self, resources: Any) -> None:
         if "/Pattern" not in resources:
             return
-        try:
+        with suppress(AttributeError, KeyError, TypeError):
             for _, pat in resources.Pattern.items():
                 if self._mark_dict_seen(pat):
                     continue
                 if "/Resources" in pat:
                     self.crawl_resources(pat.Resources)
-        except (AttributeError, KeyError, TypeError):
-            pass
 
     def _process_single_extgstate(self, gs_key: str, gs: Any) -> None:
         if "/Font" not in gs:
             return
-        try:
+        with suppress(AttributeError, KeyError, TypeError, IndexError):
             font_arr = gs.Font
             if len(font_arr) > 0:
                 self._process_and_store_font(f"{gs_key}_ExtGState", font_arr[0])
-        except (AttributeError, KeyError, TypeError, IndexError):
-            pass
 
     def _crawl_extgstates(self, resources: Any) -> None:
         if "/ExtGState" not in resources:
             return
-        try:
+        with suppress(AttributeError, KeyError, TypeError):
             for gs_key, gs in resources.ExtGState.items():
                 if not self._mark_dict_seen(gs):
                     self._process_single_extgstate(str(gs_key), gs)
-        except (AttributeError, KeyError, TypeError):
-            pass
 
     def crawl_page(self, page: Any) -> None:
         """Entry point for a single page, processing its Resources and Annotations."""
-        try:
+        with suppress(AttributeError, TypeError):
             if "/Resources" in page:
                 self.crawl_resources(page.Resources)
 
             if "/Annots" in page:
                 self._crawl_annots(page.Annots)
-        except (AttributeError, TypeError):
-            pass
 
     def _crawl_ap_state(self, ap_state: Any) -> None:
         """Crawls an individual Annotation Appearance state mapping."""
@@ -437,10 +414,8 @@ def extract_document_fonts(
             except (IndexError, TypeError):
                 continue
     else:
-        try:
+        with suppress(AttributeError):
             pages_to_crawl = doc.pages
-        except AttributeError:
-            pass
 
     for page in pages_to_crawl:
         extractor.crawl_page(page)

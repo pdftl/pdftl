@@ -1,10 +1,8 @@
-# tests/test_grep.py
+# tests/operations/test_grep.py
 """
-100% coverage tests for src/pdftl/operations/grep.py.
+Tests for src/pdftl/operations/grep.py.
 
 All PDFium I/O and the TextProvider are mocked — no real PDF is needed.
-Run with:
-    pytest tests/test_grep.py -v --cov=pdftl.operations.grep
 """
 
 from __future__ import annotations
@@ -16,9 +14,6 @@ import pytest
 
 from pdftl.exceptions import InvalidArgumentError
 
-# ---------------------------------------------------------------------------
-# Import the pure helpers directly (no PDFium needed)
-# ---------------------------------------------------------------------------
 from pdftl.operations.grep import (
     _parse_bool,
     _parse_positive_int,
@@ -34,6 +29,9 @@ from pdftl.operations.grep import (
     _write_json_output,
     grep_cli_hook,
 )
+
+# codeql[py/import-and-import-from]
+import pdftl.operations.grep as grep_mod
 
 
 # ===========================================================================
@@ -649,8 +647,6 @@ class TestGrepOperation:
         return ctx, tp_instance
 
     def _call_grep(self, pdf, args, text_by_page):
-        import pdftl.operations.grep as grep_mod
-
         ctx, tp_instance = self._patch_tp(text_by_page)
         with (
             ctx,
@@ -686,8 +682,6 @@ class TestGrepOperation:
 
     def test_page_spec_limits_search(self):
         pdf = self._make_pdf(num_pages=3)
-        import pdftl.operations.grep as grep_mod
-
         ctx, tp = self._patch_tp({0: "match", 1: "match", 2: "match"})
 
         with (
@@ -739,8 +733,6 @@ class TestGrepOperation:
         # grep() must skip matches where _build_hit returns None (line 333).
         # Patch _build_hit to always return None so every match is discarded.
         pdf = self._make_pdf()
-        import pdftl.operations.grep as grep_mod
-
         ctx, tp_instance = self._patch_tp({0: "hello"})
         with (
             ctx,
@@ -754,8 +746,6 @@ class TestGrepOperation:
 
     def test_invalid_pattern_raises(self):
         pdf = self._make_pdf()
-        import pdftl.operations.grep as grep_mod
-
         with (
             patch.object(grep_mod, "ensure_dependencies"),
             patch("pypdfium2.PdfDocument") as mock_pdfium_doc,

@@ -1,5 +1,6 @@
 # src/pdftl/utils/image_utils.py
 
+from contextlib import suppress
 import logging
 
 logger = logging.getLogger(__name__)
@@ -137,11 +138,9 @@ def extract_pdf_images(pdf, target_pages: list[int]) -> list:
     for page_num in target_pages:
         page = pdf.pages[page_num - 1]
         images_on_page = []
-        try:
-            identity_ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        identity_ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        with suppress(AttributeError):
             _parse_stream(page, page.Resources, identity_ctm, images_on_page)
-        except AttributeError:
-            pass
 
         if images_on_page:
             for x in images_on_page:

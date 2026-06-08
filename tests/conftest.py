@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -33,12 +34,15 @@ FORM_PDF = ASSETS_DIR / "Form.pdf"
 def mock_missing_dependency():
     """Simulates a missing dependency and ensures cleanup."""
 
+    @contextmanager
     def _simulate(dependency_name, module_to_reload):
         with mock.patch.dict(sys.modules, {dependency_name: None}):
             importlib.reload(module_to_reload)
-            yield
-        # Teardown: Restore the module to working state
-        importlib.reload(module_to_reload)
+            try:
+                yield
+            finally:
+                # Teardown: Restore the module to working state
+                importlib.reload(module_to_reload)
 
     return _simulate
 
@@ -189,11 +193,10 @@ class Runner:
 
     def __init__(self, temp_dir: Path):
         self.temp_dir = temp_dir
-        self.pdftk_path = os.environ["PDFTK"] if "PDFTK" in os.environ else shutil.which("pdftk")
+        self.pdftk_path = os.environ.get("PDFTK") or shutil.which("pdftk")
         self.durations = {}
         self.stdout = None
         self.stderr = None
-        # self.pdftk_path = shutil.which("pdftk") # Find pdftk in the system's PATH
 
     def run(self, tool: str, args: list[str], check=True):
         """
@@ -204,7 +207,6 @@ class Runner:
             args: A list of command-line arguments.
             check: If True, raises an exception if the command fails.
         """
-        # py_command_head = [sys.executable, "-m", "coverage", "run", "-m", "pdftl", "-v"]
         py_command_head = [sys.executable, "-m", "pdftl"]
         if tool == "pdftl":
             command = py_command_head + args
@@ -400,10 +402,8 @@ def clean_registry():
 
     for mod_name in list(sys.modules.keys()):
         if mod_name.startswith("pdftl.operations."):
-            try:
+            with suppress(ImportError):
                 importlib.reload(sys.modules[mod_name])
-            except ImportError:
-                pass
 
     pdftl.registry_init.initialize_registry()
     return registry

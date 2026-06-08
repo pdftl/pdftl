@@ -3,6 +3,7 @@
 import logging
 from typing import Any, TYPE_CHECKING
 from collections.abc import Generator
+from contextlib import suppress
 
 if TYPE_CHECKING:
     import pikepdf
@@ -118,12 +119,10 @@ def _yield_extgstate_fonts(
             continue
         visited.add(gs.objgen)
         if "/Font" in gs:
-            try:
+            with suppress(TypeError, KeyError, IndexError, AttributeError, pikepdf.PdfError):
                 font_arr = gs.Font
                 if len(font_arr) > 0 and isinstance(font_arr[0], pikepdf.Object):
                     yield f"{str(gs_key)}_ExtGState", font_arr[0], page_num
-            except (TypeError, KeyError, IndexError, AttributeError, pikepdf.PdfError):
-                pass
 
 
 def _walk_container(

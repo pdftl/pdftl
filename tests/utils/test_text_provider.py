@@ -1,10 +1,8 @@
-# tests/test_text_provider.py
+# tests/utils/test_text_provider.py
 """
-100% coverage tests for src/pdftl/utils/text_provider.py.
+TEsts for src/pdftl/utils/text_provider.py.
 
 All PDFium I/O is mocked — no real PDF file is required.
-Run with:
-    pytest tests/test_text_provider.py -v --cov=pdftl.utils.text_provider
 """
 
 from __future__ import annotations
@@ -12,6 +10,25 @@ from __future__ import annotations
 import ctypes
 from unittest.mock import MagicMock, patch
 
+# ---------------------------------------------------------------------------
+# Module under test
+# ---------------------------------------------------------------------------
+
+from pdftl.utils.text_provider import (
+    TextProvider,
+    _sample_pdf_indices,
+    _fetch_char_size,
+    _fetch_font_name_and_flags,
+    _fetch_font_weight,
+    _detect_bold,
+    _detect_italic,
+    _normalize_tex_font_name,
+    _detect_bold_tex_font,
+    _detect_italic_tex_font,
+)
+
+# codeql[py/import-and-import-from]
+import pdftl.utils.text_provider as text_provider_mod
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests
@@ -37,24 +54,6 @@ def _make_pdf(pages: list):
     pdf.__len__ = MagicMock(return_value=len(pages))
     pdf.__getitem__ = MagicMock(side_effect=lambda i: pages[i])
     return pdf
-
-
-# ---------------------------------------------------------------------------
-# Module under test
-# ---------------------------------------------------------------------------
-
-from pdftl.utils.text_provider import (
-    TextProvider,
-    _sample_pdf_indices,
-    _fetch_char_size,
-    _fetch_font_name_and_flags,
-    _fetch_font_weight,
-    _detect_bold,
-    _detect_italic,
-    _normalize_tex_font_name,
-    _detect_bold_tex_font,
-    _detect_italic_tex_font,
-)
 
 
 # ===========================================================================
@@ -117,8 +116,6 @@ class TestFetchFontNameAndFlags:
         assert name == ""
 
     def test_returns_decoded_name(self):
-        import pdftl.utils.text_provider as mod
-
         mock_c = MagicMock()
         flags_holder = ctypes.c_int(0)
 
@@ -131,10 +128,12 @@ class TestFetchFontNameAndFlags:
         mock_c.FPDFText_GetFontInfo.side_effect = fake_font_info
 
         with (
-            patch.object(mod.ctypes, "c_int", return_value=flags_holder),
-            patch.object(mod.ctypes, "byref", return_value=None),
+            patch.object(text_provider_mod.ctypes, "c_int", return_value=flags_holder),
+            patch.object(text_provider_mod.ctypes, "byref", return_value=None),
             patch.object(
-                mod.ctypes, "create_string_buffer", side_effect=ctypes.create_string_buffer
+                text_provider_mod.ctypes,
+                "create_string_buffer",
+                side_effect=ctypes.create_string_buffer,
             ),
         ):
             name, flags = _fetch_font_name_and_flags(MagicMock(), 0, mock_c)
@@ -555,14 +554,14 @@ class TestGetFontInfo:
         textpage = _make_textpage("hello")
         tp._page_cache[0] = {"textpage": textpage, "text": "hello", "py_to_pdf": None}
 
-        import pdftl.utils.text_provider as mod
-
         flags_obj = ctypes.c_int(0)
         with (
-            patch.object(mod.ctypes, "c_int", return_value=flags_obj),
-            patch.object(mod.ctypes, "byref", return_value=None),
+            patch.object(text_provider_mod.ctypes, "c_int", return_value=flags_obj),
+            patch.object(text_provider_mod.ctypes, "byref", return_value=None),
             patch.object(
-                mod.ctypes, "create_string_buffer", side_effect=ctypes.create_string_buffer
+                text_provider_mod.ctypes,
+                "create_string_buffer",
+                side_effect=ctypes.create_string_buffer,
             ),
         ):
             result = tp.get_font_info(0, 0, 5)
@@ -586,12 +585,10 @@ class TestGetFontInfo:
         textpage = _make_textpage("hello")
         tp._page_cache[0] = {"textpage": textpage, "text": "hello", "py_to_pdf": None}
 
-        import pdftl.utils.text_provider as mod
-
         flags_obj = ctypes.c_int(0)
         with (
-            patch.object(mod.ctypes, "c_int", return_value=flags_obj),
-            patch.object(mod.ctypes, "byref", return_value=None),
+            patch.object(text_provider_mod.ctypes, "c_int", return_value=flags_obj),
+            patch.object(text_provider_mod.ctypes, "byref", return_value=None),
         ):
             result = tp.get_font_info(0, 0, 5)
 

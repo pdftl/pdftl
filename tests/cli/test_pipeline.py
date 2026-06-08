@@ -5,7 +5,7 @@ import pytest
 
 from pdftl.cli.pipeline import CliStage, PipelineManager
 from pdftl.core.registry import registry
-from pdftl.exceptions import MissingArgumentError, UserCommandLineError
+from pdftl.exceptions import MissingArgumentError, UserCommandLineError, PdftlError
 
 
 # -----------------------------
@@ -15,19 +15,41 @@ def dummy_op(*args, **kwargs):
     return "dummy_result"
 
 
-registry.operations["single_op"] = {
-    "function": dummy_op,
-    "args": ([], {}),
-    "type": "single input operation",
-    "usage": "single_op input",
-}
+@pytest.fixture(autouse=True)
+def _register_dummy_operations():
+    single_key = "single_op"
+    multi_key = "multi_op"
 
-registry.operations["multi_op"] = {
-    "function": dummy_op,
-    "args": ([], {}),
-    "type": "multi input operation",
-    "usage": "multi_op input1 input2",
-}
+    had_single = single_key in registry.operations
+    had_multi = multi_key in registry.operations
+    old_single = registry.operations.get(single_key)
+    old_multi = registry.operations.get(multi_key)
+
+    registry.operations[single_key] = {
+        "function": dummy_op,
+        "args": ([], {}),
+        "type": "single input operation",
+        "usage": "single_op input",
+    }
+
+    registry.operations[multi_key] = {
+        "function": dummy_op,
+        "args": ([], {}),
+        "type": "multi input operation",
+        "usage": "multi_op input1 input2",
+    }
+
+    yield
+
+    if had_single:
+        registry.operations[single_key] = old_single
+    else:
+        registry.operations.pop(single_key, None)
+
+    if had_multi:
+        registry.operations[multi_key] = old_multi
+    else:
+        registry.operations.pop(multi_key, None)
 
 
 # -----------------------------
@@ -117,10 +139,16 @@ def test_run_operation_missing_function_or_args():
 def test_run_operation_success(monkeypatch):
     stage = CliStage(operation="single_op", inputs=["file.pdf"])
     manager = PipelineManager(stages=[], input_context=MagicMock())
-    registry.operations["single_op"]["args"] = ([], {}, {})
-    registry.operations["single_op"]["function"] = lambda *a, **kw: "OK"
-    result = manager._run_operation(stage, [])
-    assert result == "OK"
+    original_args = registry.operations["single_op"]["args"]
+    original_function = registry.operations["single_op"]["function"]
+    try:
+        registry.operations["single_op"]["args"] = ([], {}, {})
+        registry.operations["single_op"]["function"] = lambda *a, **kw: "OK"
+        result = manager._run_operation(stage, [])
+        assert result == "OK"
+    finally:
+        registry.operations["single_op"]["args"] = original_args
+        registry.operations["single_op"]["function"] = original_function
 
 
 # -----------------------------
@@ -284,7 +312,7 @@ def test_pipeline_run_dummy_op(monkeypatch):
     monkeypatch.setattr(
         PipelineManager,
         "_run_operation",
-        lambda self, stage, opened_pdfs, effective_inputs=None, adjusted_handles=None: DummyPdf(),
+        lambda self, stage, _opened_pdfs, effective_inputs=None, adjusted_handles=None: DummyPdf(),
     )
     with patch("pdftl.cli.pipeline.save_content") as save_mock:
         manager.run()
@@ -323,7 +351,7 @@ class TestPipelineValidationCoverage:
             # If a MissingArgumentError is raised later in the function (like effective inputs),
             # we just want to ensure it wasn't the output validation error we bypassed.
             assert "requires 'output <file>'" not in str(e)
-        except Exception:
+        except PdftlError:
             pass  # We don't care about other downstream validation exceptions here
 
 

@@ -6,6 +6,7 @@
 
 """Delete attachments from a PDF based on specific filters."""
 
+from contextlib import suppress
 import logging
 
 import pdftl.core.constants as c
@@ -106,12 +107,10 @@ def _get_params(params_str: str) -> dict:
 
 def _get_attachment_size(attachment) -> int:
     """Attempts to read size from metadata first to save memory, falls back to bytes."""
-    try:
+    with suppress(AttributeError, ValueError, KeyError):
         size = int(attachment.obj.get("/EF", {}).get("/F", {}).get("/Length", -1))
         if size > -1:
             return size
-    except (AttributeError, ValueError, KeyError):
-        pass
 
     # Fallback to reading the file stream into memory
     return len(attachment.get_file().read_bytes())
