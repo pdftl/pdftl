@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/cli/pipeline.py
 
 """Manage a pipeline of operations"""
@@ -152,6 +156,7 @@ class PipelineManager:
                 #
                 skip_pipeline_save = op_entry.get("skip_pipeline_save", False)
                 if stage_output and self.pipeline_pdf and not skip_pipeline_save:
+                    logger.info("Persisting stage output path -> %s", stage_output)
                     self.save_pdf_file(self.pipeline_pdf, stage_output, stage)
                 else:
                     logger.debug(
@@ -183,17 +188,69 @@ class PipelineManager:
         return {c.OPTIONS: final_options, "set_pdf_id": self.kept_id}
 
     def _validate_and_execute_numbered_stage(self, i, stage):
-        if not stage.operation and i == len(self.stages) - 1:
-            logger.debug("Final stage is empty, proceeding to save.")
-            return
-
         is_first = i == 0 and not self.is_each
         is_last = i == len(self.stages) - 1
+
+        if not stage.operation and is_last:
+            stage_output = stage.options.get(c.OUTPUT)
+            if stage_output:
+                logger.info("--- Finalizing Pipeline Execution ---")
+                logger.info("Operation: Saving final pipeline asset context")
+                logger.info("Target File: %s", stage_output)
+            else:
+                logger.debug("Final stage is empty, proceeding to save.")
+            return
+
+        self._validate_stage_args(stage, is_first, is_last)
+
+        # Build clean verbose mapping details
+        pipeline_context = (
+            "Inline Sub-Pipeline "
+            if self.is_inline
+            else "Each Sub-Pipeline "
+            if self.is_each
+            else ""
+        )
+        logger.info("--- %sStage %d ---", pipeline_context, i + 1)
+
+        operation_name = stage.operation or "filter"
+        op_data = registry.operations.get(stage.operation, {})
+        op_desc = op_data.get("desc", "Apply filters or configuration pass-through settings.")
+        logger.info("Operation to execute: %s (%s)", operation_name, op_desc)
+
+        if stage.inputs:
+            logger.info("Input Targets:")
+            for idx, inp in enumerate(stage.inputs):
+                has_pw = (
+                    stage.input_passwords
+                    and idx < len(stage.input_passwords)
+                    and stage.input_passwords[idx]
+                )
+                pw_status = " [encrypted payload secured]" if has_pw else ""
+
+                if isinstance(inp, str):
+                    logger.info("   %s%s", inp, pw_status)
+                else:
+                    logger.info("   %s", repr(inp))
+        elif not is_first:
+            logger.info(
+                "Input Targets: Implicit pipeline stream '_' (reusing preceding stage output)"
+            )
+
+        if stage.operation_args:
+            logger.info("Arguments: %s", ", ".join(map(str, stage.operation_args)))
+
+        stage_output = stage.options.get(c.OUTPUT)
+        if stage_output:
+            logger.info("Output Destination: %s", stage_output)
+
+        local_settings = {k: v for k, v in stage.options.items() if k != c.OUTPUT}
+        if local_settings:
+            logger.info("Localized Settings: %s", local_settings)
 
         logger.debug("--- PIPELINE: STAGE %d ---", i + 1)
         logger.debug("Parsed stage: %s", stage)
         # fixme: resolve - here for stdin! or fix validation
-        self._validate_stage_args(stage, is_first, is_last)
         self._execute_stage(stage, is_first)
 
     def _execute_stage(self, stage, is_first):

@@ -199,7 +199,7 @@ def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
     level = logging.DEBUG if debug else logging.INFO if verbose else logging.WARN
 
     # Use a simpler format for info, detailed format for debug
-    if verbose:
+    if debug:
         log_format = "[%(levelname)s]%(filename)s:%(funcName)s:%(lineno)d: %(message)s"
     else:
         log_format = f"[{WHOAMI}] %(message)s"

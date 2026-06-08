@@ -6,6 +6,7 @@ from unittest.mock import ANY, MagicMock, call, patch
 import pikepdf
 import pytest
 
+import pdftl.core.constants as c
 from pdftl.cli.pipeline import (
     CliStage,
     InlineSubPipeline,
@@ -958,3 +959,60 @@ def test_validate_unknown_operation(mock_context, mock_registry):
     """
     manager = PipelineManager(stages=[], input_context=mock_context)
     manager._validate_number_of_effective_inputs("ghost_op", 1)
+
+
+@pytest.fixture
+def mock_input_context2():
+    """Provides a basic mock for the pipeline input context."""
+    context = MagicMock()
+    context.get_input = MagicMock(return_value="resolved_prompt.pdf")
+    context.is_api = False
+    return context
+
+
+@pytest.fixture
+def mock_pdf_asset():
+    """Provides a mock pikepdf object structure."""
+    pdf = MagicMock()
+    pdf.trailer = MagicMock()
+    pdf.trailer.ID = [b"mock_id_1", b"mock_id_2"]
+    return pdf
+
+
+def test_final_empty_stage_with_output(caplog):
+    stage = CliStage(
+        operation=None,
+        options={c.OUTPUT: "out.pdf"},
+    )
+
+    pm = PipelineManager([stage], mock_input_context2)
+
+    with caplog.at_level(logging.INFO):
+        pm._validate_and_execute_numbered_stage(0, stage)
+
+    assert "Finalizing Pipeline Execution" in caplog.text
+    assert "Target File: out.pdf" in caplog.text
+
+
+def test_stage_logging_branches(caplog, monkeypatch):
+    pm = PipelineManager([], mock_input_context2)
+
+    monkeypatch.setattr(pm, "_execute_stage", lambda *a, **k: None)
+    monkeypatch.setattr(pm, "_validate_stage_args", lambda *a, **k: None)
+
+    stage = CliStage(
+        operation="dummy",
+        inputs=[],
+        operation_args=["foo"],
+        options={
+            c.OUTPUT: "out.pdf",
+            "setting": True,
+        },
+    )
+
+    with caplog.at_level(logging.INFO):
+        pm._validate_and_execute_numbered_stage(1, stage)
+
+    assert "Implicit pipeline stream" in caplog.text
+    assert "Arguments: foo" in caplog.text
+    assert "Localized Settings" in caplog.text

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_annots` now properly passing the PDF down the pipeline
 
+### Changed
+
+- pipeline info added to `verbose` mode
+
 ## [0.20.0] - 2026-06-07
 
 ### Added
