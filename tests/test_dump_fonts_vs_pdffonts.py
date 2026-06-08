@@ -1,6 +1,7 @@
 import subprocess
-import pytest
+
 import pikepdf
+import pytest
 
 # Adjust this import based on your actual project structure
 from pdftl.operations.dump_fonts import dump_fonts

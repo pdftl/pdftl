@@ -10,25 +10,25 @@ from __future__ import annotations
 import ctypes
 from unittest.mock import MagicMock, patch
 
+# codeql[py/import-and-import-from]
+import pdftl.utils.text_provider as text_provider_mod
+from pdftl.utils.text_provider import (
+    TextProvider,
+    _detect_bold,
+    _detect_bold_tex_font,
+    _detect_italic,
+    _detect_italic_tex_font,
+    _fetch_char_size,
+    _fetch_font_name_and_flags,
+    _fetch_font_weight,
+    _normalize_tex_font_name,
+    _sample_pdf_indices,
+)
+
 # ---------------------------------------------------------------------------
 # Module under test
 # ---------------------------------------------------------------------------
 
-from pdftl.utils.text_provider import (
-    TextProvider,
-    _sample_pdf_indices,
-    _fetch_char_size,
-    _fetch_font_name_and_flags,
-    _fetch_font_weight,
-    _detect_bold,
-    _detect_italic,
-    _normalize_tex_font_name,
-    _detect_bold_tex_font,
-    _detect_italic_tex_font,
-)
-
-# codeql[py/import-and-import-from]
-import pdftl.utils.text_provider as text_provider_mod
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests

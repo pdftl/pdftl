@@ -7,7 +7,6 @@ from pdftl.utils.icc_profiles import (
     extract_icc_profile_name,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers to build minimal valid ICC byte structures
 # ---------------------------------------------------------------------------

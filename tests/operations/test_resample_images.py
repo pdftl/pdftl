@@ -2,7 +2,7 @@
 
 import io
 import zlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
@@ -11,18 +11,17 @@ from PIL import Image
 from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.resample_images import (
-    _resample_single_image,
-    _get_resample_dims,
+    _apply_metadata_updates,
     _get_orig_stream_size,
+    _get_resample_dims,
+    _get_resized_pil_image,
     _parse_args,
+    _resample_single_image,
+    _resize_soft_mask,
     _validate_dpi,
     _validate_quality,
-    _get_resized_pil_image,
-    _resize_soft_mask,
-    _apply_metadata_updates,
     resample_images,
 )
-
 
 # --- Argument Validation Tests ---
 

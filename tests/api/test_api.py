@@ -117,9 +117,9 @@ class TestIntrospection:
         keys = dir(api)
         assert "call" in keys
         # Ensure it contains dynamic operations from the registry
-        from pdftl.core.executor import registry
+        from pdftl.core.registry import registry as reg
 
-        for op_name in registry.operations.keys():
+        for op_name in reg.operations.keys():
             assert op_name in keys
 
     def test_docstring_fallback(self):
@@ -181,3 +181,37 @@ def test_api_metadata():
     """
     assert pdftl.api.__doc__ is not None
     assert "API layer" in pdftl.api.__doc__
+
+
+# --- merged from test_api_coverage.py ---
+
+# ==================================================================
+# === Input Normalization Tests (Lines 32-83)
+# ==================================================================
+
+
+# ==================================================================
+# === Call & Return Logic Tests (Lines 86-142)
+# ==================================================================
+
+
+# ==================================================================
+# === Dynamic Attributes & Introspection (Lines 180-215)
+# ==================================================================
+
+
+# --- merged from test_api_coverage.py ---
+
+# ==================================================================
+# === Input Normalization Tests (Lines 32-83)
+# ==================================================================
+
+
+# ==================================================================
+# === Call & Return Logic Tests (Lines 86-142)
+# ==================================================================
+
+
+# ==================================================================
+# === Dynamic Attributes & Introspection (Lines 180-215)
+# ==================================================================

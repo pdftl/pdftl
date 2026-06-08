@@ -5,11 +5,11 @@
 # tests/operations/test_delete_bookmarks.py
 
 import logging
+
 import pikepdf
 
 from pdftl.operations.delete_bookmarks import delete_bookmarks
 from pdftl.utils.destinations import get_named_destinations, get_page_map, resolve_dest_to_page_num
-
 
 # ---------------------------------------------------------------------------
 # Test Helpers

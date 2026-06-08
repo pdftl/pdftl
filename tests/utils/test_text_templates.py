@@ -1,5 +1,6 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from pdftl.utils.text_templates import (
@@ -280,6 +281,7 @@ def _raise_exception():
 def test_build_static_context_type_error_metadata():
     """Cover lines 493-494: Catch TypeError when docinfo items conversion fails."""
     from unittest.mock import MagicMock
+
     from pdftl.utils.text_templates import build_static_context
 
     mock_pdf = MagicMock()

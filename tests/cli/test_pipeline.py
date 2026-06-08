@@ -1,11 +1,20 @@
-from unittest.mock import MagicMock, patch
+import io
+import logging
+from types import SimpleNamespace
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pikepdf
 import pytest
 
-from pdftl.cli.pipeline import CliStage, PipelineManager
+from pdftl.cli.pipeline import (
+    CliStage,
+    InlineSubPipeline,
+    PipelineManager,
+)
+from pdftl.core.core_types import OpResult
 from pdftl.core.registry import registry
-from pdftl.exceptions import MissingArgumentError, UserCommandLineError, PdftlError
+from pdftl.exceptions import MissingArgumentError, PdftlError, UserCommandLineError
+from pdftl.utils.user_input import UserInputContext
 
 
 # -----------------------------
@@ -377,3 +386,575 @@ class TestPipelineSourceOpValidation:
         assert "mock_source_op" in error_msg
         assert "creates a new PDF from scratch" in error_msg
         assert "received 1 input" in error_msg
+
+
+# --- merged from test_pipeline_coverage.py ---
+
+# --- Mock Classes and Setup ---
+
+
+class MockPdf(MagicMock):
+    """A mock pikepdf.Pdf object that tracks its own closing and provides a trailer ID."""
+
+    def __init__(self, name="default", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.closed = False
+        # Mock trailer.ID for keeping PDF ID features
+        self.trailer = SimpleNamespace(ID=[name.encode("utf-8") * 2, b"1" * 32])
+        self.name = name
+
+    def close(self):
+        self.closed = True
+
+    def __eq__(self, other):
+        # Allow equality comparison by name for testing
+        # NOTE: This comparison is based on the object's identity in the test setup.
+        if isinstance(other, MockPdf):
+            return self.name == other.name
+        return NotImplemented
+
+
+# Mock the registry for operations
+MOCK_REGISTRY_OPERATIONS = {
+    "basic_op": {
+        "function": MagicMock(return_value=MockPdf(name="default_result")),
+        "args": (["input_pdf"], {}),
+        "usage": "basic_op <input>",
+    },
+    "error_op": {
+        # This operation's args will cause an error in _make_op_args
+        # by requiring a non-existent context variable
+        "function": MagicMock(),
+        "args": (["non_existent_context_key"], {}),
+        "usage": "error_op <input>",
+    },
+    "no_type_op": {
+        # No type defined, to test line 177
+        "function": MagicMock(),
+        "args": ([], {}),
+    },
+}
+
+# SIMPLIFIED: Using SimpleNamespace now that production code uses attribute access
+MOCK_REGISTRY = SimpleNamespace(operations=MOCK_REGISTRY_OPERATIONS)
+
+
+# --- Fixtures ---
+
+
+@pytest.fixture
+def mock_context():
+    """Returns a mock input context."""
+    return SimpleNamespace(
+        get_input=MagicMock(side_effect=lambda prompt, completer=None: "prompted_file.pdf")
+    )
+
+
+@pytest.fixture
+def mock_save_content():
+    """Mock the save_content function."""
+    with patch("pdftl.cli.pipeline.save_content") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_registry():
+    """Mock the global registry."""
+    # reset to prevent state pollution
+    for op in MOCK_REGISTRY.operations.values():
+        if "function" in op:
+            op["function"].side_effect = None
+            op["function"].reset_mock()
+
+    # Patch with the SimpleNamespace object
+    with patch("pdftl.cli.pipeline.registry", MOCK_REGISTRY):
+        with patch("pdftl.core.executor.registry", MOCK_REGISTRY):
+            yield MOCK_REGISTRY
+
+
+@pytest.fixture
+def mock_pikepdf():
+    """Mock pikepdf.open and Pdf class for instance checking."""
+    with patch("pikepdf.open", autospec=True) as mock_open_pdf:
+        # We need a different mock object for each open call
+        pdf_a = MockPdf("A")
+        pdf_b = MockPdf("B")
+
+        # Note: The side_effect here is only kept for backwards compatibility with other tests.
+        # The failing tests will now locally override this side_effect to ensure isolation.
+        mock_open_pdf.side_effect = [
+            pdf_a,
+            pdf_b,
+            pdf_a,
+            pdf_b,
+        ]  # Cycle through A, B, A, B...
+
+        with patch("pikepdf.Pdf", MockPdf) as mock_pdf_class:
+            yield mock_open_pdf, mock_pdf_class, pdf_a, pdf_b
+
+
+@pytest.fixture
+def mock_logger(monkeypatch):
+    """Fixture to mock the logging module for catching warnings."""
+    mock_log = MagicMock()
+    monkeypatch.setattr(logging, "error", mock_log)
+    return mock_log
+
+
+@pytest.fixture
+def mock_sys_stdin():
+    """Fixture to mock sys.stdin and sys.stdin.buffer."""
+
+    class MockStdin:
+        def __init__(self):
+            self.isatty_value = True
+            self.buffer = SimpleNamespace(read=MagicMock(return_value=b"pdf data from stdin"))
+
+        def isatty(self):
+            return self.isatty_value
+
+    mock_stdin = MockStdin()
+    with patch("pdftl.cli.pipeline.sys.stdin", mock_stdin):
+        yield mock_stdin
+
+
+class TestPipelineManagerCoverage:
+    def test_cli_stage_resolve_io_prompts_stage_num_gt_one(self, mock_context):
+        """Covers line 62: Prompt text includes stage number when stage_num > 1."""
+        # FIX: Added matching input_passwords list
+        stage = CliStage(
+            inputs=["PROMPT", "PROMPT"],
+            input_passwords=[None, None],
+            handles={"main": 0},
+        )
+
+        # Test with stage_num = 2
+        stage.resolve_stage_io_prompts(mock_context.get_input, stage_num=2)
+
+        # Check the calls to get_input
+        # The first call should contain "pipeline stage 2"
+        mock_context.get_input.assert_has_calls(
+            [
+                call(
+                    "Enter a filename for an input PDF (pipeline stage 2, input #1 with handle main): ",
+                    completer=ANY,
+                ),
+                call(
+                    "Enter a filename for an input PDF (pipeline stage 2, input #2): ",
+                    completer=ANY,
+                ),
+            ]
+        )
+
+    def test_run_final_pipeline_pdf_close(
+        self, mock_context, mock_pikepdf, mock_save_content, mock_registry
+    ):
+        """Covers line 100: self.pipeline_pdf.close() in the finally block."""
+        # FIX: Added matching input_passwords list
+        stage = CliStage(operation="basic_op", inputs=["file1.pdf"], input_passwords=[None])
+        manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+        # Access the operation dictionary via the SimpleNamespace object
+        # Note: The 'basic_op' mock returns a static object (default_result) for the op result.
+        # The pikepdf.open mock returns pdf_a for the input.
+
+        manager.run()
+
+        # The PipelineManager sets pipeline_pdf to the result of the op, which is a static mock object.
+        # This static result object (from MOCK_REGISTRY) should be closed.
+        result_pdf = MOCK_REGISTRY.operations["basic_op"]["function"].return_value
+
+        # Check that the final PDF was closed (line 100)
+        assert result_pdf.closed
+
+    def test_execute_stage_close_previous_pdf(self, mock_context, mock_pikepdf, mock_registry):
+        """Covers line 124: Closing self.pipeline_pdf before running operation if not reused."""
+
+        pdf_open_mock = mock_pikepdf[0]
+        _, _, pdf_a_ref, pdf_b_ref = mock_pikepdf
+
+        # --- ISOLATION: 1. Isolate pikepdf.open calls ---
+        # Stage 1 will consume pdf_a_ref, Stage 2 will consume pdf_b_ref.
+        pdf_open_mock.side_effect = [pdf_a_ref, pdf_b_ref]
+
+        # --- ISOLATION: 2. Isolate basic_op returns (A then B) ---
+        # The operation should return its input for in-place modification simulation.
+        stage1_input_pdf = pdf_a_ref  # Expected input PDF object for Stage 1
+        stage2_input_pdf = pdf_b_ref  # Expected input PDF object for Stage 2
+
+        # Set the operation's side_effect to return the sequence of expected results (A, then B).
+        op_func_mock = MOCK_REGISTRY.operations["basic_op"]["function"]
+        op_func_mock.side_effect = [
+            stage1_input_pdf,
+            stage2_input_pdf,
+        ]  # Return A on first call, B on second call
+        op_func_mock.reset_mock()  # Reset call count for the test
+
+        stage1 = CliStage(operation="basic_op", inputs=["file1.pdf"], input_passwords=[None])
+        stage2 = CliStage(operation="basic_op", inputs=["file2.pdf"], input_passwords=[None])
+
+        manager = PipelineManager(stages=[stage1, stage2], input_context=mock_context)
+
+        # Manually run stage 1 to set pipeline_pdf
+        # Stage 1 opens A, op returns A. manager.pipeline_pdf = A.
+        manager._validate_and_execute_numbered_stage(0, stage1)
+
+        # Assertion now passes because manager.pipeline_pdf is A and stage1_input_pdf is A
+        assert manager.pipeline_pdf == stage1_input_pdf
+        assert not stage1_input_pdf.closed  # pdf_a_ref should be open after stage 1
+
+        # Run stage 2
+        # Before this executes, pdf_a_ref (previous manager.pipeline_pdf) should be closed (line 124)
+        # Stage 2 opens B, op returns B. manager.pipeline_pdf = B.
+        manager._validate_and_execute_numbered_stage(1, stage2)
+
+        # Assert previous pipeline PDF (pdf_a_ref) was closed
+        assert stage1_input_pdf.closed
+
+        # Assert the new pipeline PDF is pdf_b_ref (B) and is still open
+        assert manager.pipeline_pdf == stage2_input_pdf
+        assert not stage2_input_pdf.closed
+
+    def test_validate_effective_inputs_no_type_returns(self, mock_context, mock_registry):
+        """Covers line 177: return if op_data doesn't have a 'type' key."""
+        # FIX: Added matching input_passwords list
+        stage = CliStage(operation="no_type_op", inputs=["file.pdf"], input_passwords=[None])
+        manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+        # The function should return without raising an error
+        # effective_inputs will be 1 (is_first=True)
+        try:
+            manager._validate_stage_args(stage, is_first=True, is_last=True)
+        except Exception as e:
+            pytest.fail(f"_validate_stage_args raised unexpected exception: {e}")
+
+    def test_run_operation_make_op_args_internal_error(
+        self, mock_context, mock_pikepdf, mock_registry, caplog
+    ):
+        """Covers lines 218-223: Catching, logging, and re-raising internal error in _make_op_args."""
+        pdf_open_mock, _, pdf_a_ref, _ = mock_pikepdf
+
+        # ISOLATION: Ensure this test's one call to open returns pdf_a_ref
+        pdf_open_mock.side_effect = [pdf_a_ref]
+
+        # We need to ensure a PDF is opened first to test the exception handling post-opening.
+
+        # FIX: Added matching input_passwords list
+        stage = CliStage(operation="error_op", inputs=["file.pdf"], input_passwords=[None])
+        manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+        # _open_input_pdfs will open one file: (pdf_a_ref)
+        opened_pdfs = manager._open_input_pdfs(stage, is_first=True)
+
+        # Running the op will cause a KeyError because 'non_existent_context_key'
+        # is requested in the MOCK_REGISTRY for 'error_op'
+        with caplog.at_level("ERROR", logger="pdftl.core.executor"):
+            caplog.clear()
+            with pytest.raises(KeyError, match="'non_existent_context_key'"):
+                manager._run_operation(stage, opened_pdfs)
+
+        assert len(caplog.records) == 0
+        # record = caplog.records[0]
+
+        # assert record.levelname == "ERROR"
+        # assert "Internal error assigning arguments for operation" in record.message
+
+        # The re-raise of the original exception (KeyError) covers line 223.
+
+    def test_open_pdf_from_special_input_stdin(self, mock_context, mock_pikepdf, mock_sys_stdin):
+        """Covers lines 245-246: Reading from stdin buffer for the first stage."""
+        pdf_open_mock, _, pdf_a_ref, _ = mock_pikepdf
+
+        # ISOLATION: Ensure this test's one call to open returns pdf_a_ref
+        pdf_open_mock.side_effect = [pdf_a_ref]
+
+        # FIX: Added matching input_passwords list
+        stage = CliStage(inputs=["-"], input_passwords=[None])
+        manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+        # Make stdin non-tty to simulate piped input
+        mock_sys_stdin.isatty_value = False
+
+        pdf = manager._open_pdf_from_special_input(password=None, is_first=True)
+
+        # Check line 245: sys.stdin.buffer.read() was called
+        mock_sys_stdin.buffer.read.assert_called_once()
+
+        # Check line 246: pikepdf.open was called with a BytesIO object
+        pdf_open_mock.assert_called_once()
+        assert isinstance(pdf_open_mock.call_args[0][0], io.BytesIO)
+
+        # The returned object should be the mocked PDF (now reliably pdf_a_ref)
+        assert pdf == pdf_a_ref
+
+    def test_open_pdf_from_special_input_pipeline_pdf(self, mock_context):
+        """Covers line 253: Returning pipeline_pdf for input '_' in non-first stage."""
+        manager = PipelineManager(stages=[], input_context=mock_context)
+
+        # Manually set the pipeline PDF (simulating output from a previous stage)
+        expected_pdf = MockPdf("pipeline_result")
+        manager.pipeline_pdf = expected_pdf
+
+        # Call for a non-first stage
+        result_pdf = manager._open_pdf_from_special_input(password=None, is_first=False)
+
+        # Check line 253: The function returned the pre-existing pipeline PDF
+        assert result_pdf is expected_pdf
+
+
+# tests/cli/test_pipeline.py
+
+
+@pytest.fixture
+def mock_input_context(mocker):
+    return mocker.Mock(spec=UserInputContext)
+
+
+def test_open_pdf_from_stdin_password_error(mocker, mock_input_context):
+    """
+    Covers Lines 312-319: Exception handling when stdin input is encrypted
+    but no password is provided.
+    """
+
+    # Setup PipelineManager
+    manager = PipelineManager([], mock_input_context)
+
+    # Mock smart_pikepdf_open to raise PasswordError
+    # We patch it where it is imported in pipeline.py
+    mocker.patch(
+        "pdftl.cli.pipeline.smart_pikepdf_open", side_effect=pikepdf.PasswordError("Encrypted")
+    )
+
+    # We need to simulate isatty returning False (meaning data is piped in)
+    mocker.patch("sys.stdin.isatty", return_value=False)
+
+    # Call the method expecting the custom UserCommandLineError
+    with pytest.raises(UserCommandLineError) as excinfo:
+        # is_first=True forces it to try reading from stdin
+        manager._open_pdf_from_special_input(password=None, is_first=True)
+
+    # Verify the error message contains the helpful hint defined in lines 316-317
+    assert "data on stdin is encrypted and requires a password" in str(excinfo.value)
+
+
+def test_open_input_pdfs_dispatches_special_inputs(mocker, mock_input_context):
+    """
+    Covers Line 359: if filename in ["-", "_"]: ...
+
+    This verifies that the loop correctly identifies '-' or '_'
+    and routes them to _open_pdf_from_special_input.
+    """
+    # Setup a stage with a special input char "-" (stdin) and a normal file
+    stage = CliStage(inputs=["-", "normal.pdf"], input_passwords=[None, None])
+
+    manager = PipelineManager([stage], mock_input_context)
+
+    # Mock the two internal opening methods
+    mock_special = mocker.patch.object(
+        manager, "_open_pdf_from_special_input", return_value="PDF_SPECIAL"
+    )
+    mock_file = mocker.patch.object(manager, "_open_pdf_from_file", return_value="PDF_FILE")
+
+    # Execute
+    results, _, _handles = manager._open_input_pdfs(stage, is_first=True)
+
+    # Assertions
+    assert results == ["PDF_SPECIAL", "PDF_FILE"]
+
+    # Verify line 359 logic: The special handler was called for the first input
+    mock_special.assert_called_once_with(None, True)
+
+    # Verify the normal handler was called for the second
+    mock_file.assert_called_once_with("normal.pdf", None)
+
+
+def test_process_result_implicit_passthrough():
+    """
+    Test covering line 199 in pipeline.py:
+    Ensures that if an operation returns no PDF (result.pdf is None),
+    the pipeline defaults to passing the first input PDF forward.
+    """
+    # 1. Setup minimal PipelineManager
+    # We set is_api=True to skip CLI hook lookup logic for simplicity
+    input_context = MagicMock()
+    input_context.is_api = True
+
+    stage = CliStage(operation="mock_read_only_op")
+    pipeline = PipelineManager(stages=[stage], input_context=input_context)
+
+    # 2. Prepare the specific conditions for line 199
+    # Condition A: opened_pdfs is not empty
+    mock_input_pdf = MagicMock(name="InputPDF")
+    opened_pdfs = [mock_input_pdf]
+
+    # Condition B: Result has NO pdf (simulating dump_text/dump_data)
+    op_result = OpResult(success=True, pdf=None, data="some text output")
+
+    # 3. Execution
+    pipeline._process_result(op_result, stage, opened_pdfs)
+
+    # 4. Assertion
+    # Verify that pipeline_pdf was set to the input PDF (pass-through)
+    assert pipeline.pipeline_pdf == mock_input_pdf
+
+    # Verify we didn't accidentally close the input PDF inside _process_result
+    # (The cleanup logic only closes inputs that *aren't* the result)
+    mock_input_pdf.close.assert_not_called()
+
+
+def test_pipeline_missing_output_error():
+    """Hit Line 261: Validation error for operations requiring output."""
+    # Mock registry to say 'filter' requires output
+    with patch("pdftl.core.registry.registry.operations", {"filter": {"usage": "output"}}):
+        stage = CliStage(operation="filter", inputs=["in.pdf"], options={})
+        mgr = PipelineManager(stages=[stage], input_context=MagicMock(), is_inline=False)
+        with pytest.raises(MissingArgumentError, match="requires 'output <file>'"):
+            mgr._validate_stage_args(stage, is_first=True, is_last=True)
+
+
+def test_sibling_handle_reference():
+    """Hit Line 433: Using A=file.pdf then referring to A in same stage."""
+    mock_pdf = MagicMock()
+    # Ensure input_passwords length matches inputs length
+    stage = CliStage(
+        operation="cat", inputs=["a.pdf", "A"], input_passwords=[None, None], handles={"A": 0}
+    )
+
+    mgr = PipelineManager(stages=[stage], input_context=MagicMock())
+    with patch.object(mgr, "_open_pdf_from_file", return_value=mock_pdf):
+        opened, _, _handles = mgr._open_input_pdfs(stage, is_first=True)
+        # The first was opened from file, the second was copied from the sibling list
+        assert len(opened) == 2
+        assert opened[1] is mock_pdf
+
+
+def test_inline_pipeline_no_output_error():
+    """Hit Line 423: Inline JOB...DONE returns nothing."""
+    sub_pipe = InlineSubPipeline(stages=[CliStage(operation="dump_text")])
+    # Again, match passwords length to inputs length
+    stage = CliStage(operation="cat", inputs=[sub_pipe], input_passwords=[None])
+
+    mgr = PipelineManager(stages=[stage], input_context=MagicMock())
+
+    # We patch the class's 'run' so it does nothing,
+    # then we'll use a side_effect to ensure the sub-manager's
+    # pipeline_pdf is None when it finishes.
+    with patch("pdftl.cli.pipeline.PipelineManager.run"):
+        # We need to simulate the sub_manager that is created INSIDE _open_input_pdfs
+        # To hit line 423, the sub_manager.pipeline_pdf must be None.
+        with pytest.raises(UserCommandLineError, match="Inline pipeline returned no output PDF"):
+            mgr._open_input_pdfs(stage, is_first=True)
+
+
+# This test is safe because it only uses the public API logic
+def test_pipeline_repr_coverage():
+    # Fixes Line 43
+    sub_pipe = InlineSubPipeline(stages=[], original_text="TEST_REPR")
+    assert repr(sub_pipe) == "TEST_REPR"
+
+
+# This test uses a context manager to ensure the registry is never permanently altered
+def test_pipeline_config_error_coverage(mocker):
+    # Fixes Line 292
+    # mocker.patch.dict ensures 'broken_op' disappears after this function returns
+    mocker.patch.dict(registry.operations, {"broken_op": {"type": "single input operation"}})
+
+    stage = CliStage(operation="broken_op", inputs=["test.pdf"])
+    # Mock the input context so we don't trigger real IO
+    mock_context = mocker.Mock()
+    manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+    with pytest.raises(ValueError, match="is not fully configured"):
+        manager._run_operation(stage, opened_pdfs=[mocker.Mock()])
+
+
+# Check after the test to prove no pollution occurred
+def test_verify_no_pollution():
+    assert "broken_op" not in registry.operations
+
+
+def test_pipeline_missing_op_config(mocker):
+    from pdftl.cli.pipeline import CliStage, PipelineManager
+    from pdftl.core.registry import registry
+
+    # Ensure 'ghost_op' is definitely not in the registry
+    mocker.patch.dict(registry.operations, {}, clear=False)
+
+    stage = CliStage(operation="ghost_op", inputs=["in.pdf"])
+    manager = PipelineManager(stages=[stage], input_context=mocker.Mock())
+
+    # This hits Line 292 because op_data will be None
+    with pytest.raises(ValueError, match="Operation 'ghost_op' is not fully configured"):
+        manager._run_operation(stage, opened_pdfs=[mocker.Mock()])
+
+
+# --- merged from test_pipeline_extra.py ---
+
+# --- Reuse Mock Infrastructure ---
+
+
+# --- Tests ---
+
+
+def test_pipeline_op_result_hook_and_discard(mock_context, mock_registry, mock_save_content):
+    """
+    Covers:
+    - Lines 150-156: Handling OpResult, setting discardable, calling cli_hook.
+    - Lines 111-114: Skipping save when result is discardable and no output file.
+    """
+    # 1. Setup Data: Use a REAL in-memory PDF
+    # This ensures isinstance(obj, pikepdf.Pdf) returns True naturally.
+    real_pdf = pikepdf.new()
+
+    # Create an OpResult marked as discardable
+    op_result = OpResult(pdf=real_pdf, is_discardable=True)
+
+    mock_hook = MagicMock()
+
+    # 2. Configure Registry
+    mock_registry.operations["hook_op"] = {
+        "function": MagicMock(),
+        "args": ([], {}),
+        "cli_hook": mock_hook,
+    }
+
+    # 3. Setup Pipeline
+    stage = CliStage(operation="hook_op", inputs=["in.pdf"], input_passwords=[None])
+    manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+    # 4. Run with mocks
+    # Spy on the real_pdf.close method so we can assert it was called
+    # without relying on side effects (exceptions) which vary by PDF type (memory vs file).
+    with patch.object(real_pdf, "close", side_effect=real_pdf.close) as mock_pdf_close:
+        # Pass the REAL pdf through the mock of _open_input_pdfs
+        with patch.object(manager, "_open_input_pdfs", return_value=([real_pdf], ["in.pdf"], {})):
+            with patch("pdftl.cli.pipeline.run_operation", return_value=op_result):
+                manager.run()
+
+        # --- Assertions ---
+
+        # Cover Lines 154-155: Verify Hook was called
+        mock_hook.assert_called_once()
+        args, _ = mock_hook.call_args
+        assert args[0] == op_result
+        assert args[1] == stage
+
+        # Cover Lines 150-151, 156: Verify OpResult unpacking
+        assert manager.results[0] == op_result
+        assert manager.result_discardable is True
+        assert manager.pipeline_pdf == real_pdf
+
+        # Cover Lines 111-114: Verify Save Skipped
+        mock_save_content.assert_not_called()
+
+        # Cleanup verification (Line 119)
+        mock_pdf_close.assert_called_once()
+
+
+def test_validate_unknown_operation(mock_context, mock_registry):
+    """
+    Covers:
+    - Line 207: Early return when validating effective inputs for unknown operation.
+    """
+    manager = PipelineManager(stages=[], input_context=mock_context)
+    manager._validate_number_of_effective_inputs("ghost_op", 1)

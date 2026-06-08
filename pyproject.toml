@@ -88,6 +88,10 @@ dev = [
     "pytest-xdist",
     "pytest-mock",
     "pytest-cov",
+    "pytest-randomly",   # randomise test order to catch ordering-sensitive bugs
+    "pytest-repeat",     # run tests N times via --count
+    "pytest-bisect-tests",  # bisect flaky failures
+    "filelock",          # used by conftest.py to synchronise xdist workers
     "black",
     "isort",
     "ruff",

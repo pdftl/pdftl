@@ -1,12 +1,13 @@
 """Tests for pdftl.utils.pdf_resources"""
 
 import logging
+
 import pikepdf
 
 from pdftl.utils.pdf_resources import (
+    _next_xobject_match,
     find_resource_recursive,
     get_all_fonts_recursive,
-    _next_xobject_match,
 )
 
 

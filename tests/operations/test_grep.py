@@ -12,27 +12,24 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# codeql[py/import-and-import-from]
+import pdftl.operations.grep as grep_mod
 from pdftl.exceptions import InvalidArgumentError
-
 from pdftl.operations.grep import (
-    _parse_bool,
-    _parse_positive_int,
-    _parse_non_negative_int,
-    _parse_args,
-    _compile_regex,
-    _build_line_map,
-    _passes_font_filters,
-    _evaluate_fonts,
-    _get_line_bounds,
-    _extract_captures,
     _build_hit,
+    _build_line_map,
+    _compile_regex,
+    _evaluate_fonts,
+    _extract_captures,
+    _get_line_bounds,
+    _parse_args,
+    _parse_bool,
+    _parse_non_negative_int,
+    _parse_positive_int,
+    _passes_font_filters,
     _write_json_output,
     grep_cli_hook,
 )
-
-# codeql[py/import-and-import-from]
-import pdftl.operations.grep as grep_mod
-
 
 # ===========================================================================
 # _parse_bool
@@ -592,8 +589,8 @@ class TestGrepCliHook:
     @patch("pdftl.operations.grep._write_json_output")
     @patch("pdftl.operations.grep.dump")
     def test_calls_write_json_output(self, mock_dump, mock_write):
-        from pdftl.core.core_types import OpResult
         import pdftl.core.constants as c
+        from pdftl.core.core_types import OpResult
 
         result = OpResult(success=True, data={"hits": []}, meta={c.META_OUTPUT_FILE: "out.json"})
         stage = MagicMock()

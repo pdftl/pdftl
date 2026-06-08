@@ -95,3 +95,9 @@ def test_create_signature_exception_fallback():
             sig = api._create_signature(op_name)
             # Should return signature with empty return annotation
             assert sig.return_annotation is inspect.Signature.empty
+
+
+# --- merged from test_api_logic_coverage.py ---
+
+
+# --- merged from test_api_logic_coverage.py ---

@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, mock_open, patch
 
-from pdftl.core.core_types import OpResult
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
 from pdftl.operations.dump_colorspaces import (
     _collect_icc_profiles,
     _extract_colorspace_info,

@@ -1,15 +1,15 @@
 # tests/operations/test_create.py
 
-import pytest
 from unittest.mock import MagicMock
-from pdftl.exceptions import UserCommandLineError
 
+import pytest
+
+from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.parsers.create_parser import parse_create_args
 
 # ---------------------------------------------------------------------------
 # parse_create_args
 # ---------------------------------------------------------------------------
-
-from pdftl.operations.parsers.create_parser import parse_create_args
 
 
 class TestParseCreateArgs:

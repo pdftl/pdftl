@@ -1,6 +1,7 @@
 # tests/operations/test_unpause.py
 
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -8,10 +9,10 @@ from PIL import Image
 from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.unpause import (
+    _find_pages_to_keep,
+    _is_consecutive,
     _otsu_threshold,
     _parse_unpause_args,
-    _is_consecutive,
-    _find_pages_to_keep,
     unpause_pdf,
 )
 

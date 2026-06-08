@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pdftl.core.registry import registry
+
 from .create_pdf import create_custom_pdf
 
 TESTS_DIR = Path(__file__).parent

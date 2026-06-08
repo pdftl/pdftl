@@ -590,8 +590,9 @@ def test_process_annotation_non_link_with_action():
 def test_rebuild_links_skips_pages_without_annotations():
     """Ensure rebuild_links gracefully continues when a source page has no annotations."""
     from unittest.mock import MagicMock
-    from pdftl.pages.links import rebuild_links
+
     from pdftl.pages.link_remapper import LinkRemapper
+    from pdftl.pages.links import rebuild_links
 
     # 1. Setup destination PDF with a blank target page
     mock_target_page = MagicMock()

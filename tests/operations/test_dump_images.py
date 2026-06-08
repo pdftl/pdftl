@@ -12,6 +12,10 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
+from pdftl.operations.dump_images import (
+    dump_images,
+    dump_images_cli_hook,
+)
 from pdftl.utils.image_utils import (
     _calculate_bbox,
     _extract_image_metadata,
@@ -21,10 +25,6 @@ from pdftl.utils.image_utils import (
     _parse_stream,
     _process_form_xobject,
     extract_pdf_images,
-)
-from pdftl.operations.dump_images import (
-    dump_images,
-    dump_images_cli_hook,
 )
 
 # ---------------------------------------------------------------------------

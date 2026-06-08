@@ -7,8 +7,8 @@ from pikepdf import Dictionary, Name, Pdf
 # --- Import module and functions to test ---
 from pdftl.pages.add_pages import (
     _apply_rotation,
-    _stash_page_source_data,
     _compute_source_page_meta,
+    _stash_page_source_data,
     add_pages,
     process_source_pages,
 )

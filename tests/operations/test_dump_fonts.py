@@ -1,11 +1,10 @@
-from unittest.mock import MagicMock, patch
-from io import StringIO
 import json
+from io import StringIO
+from unittest.mock import MagicMock, patch
 
-
-from pdftl.operations.dump_fonts import _extract_font_info, dump_fonts_cli_hook
-from pdftl.core.core_types import OpResult
 import pdftl.core.constants as c
+from pdftl.core.core_types import OpResult
+from pdftl.operations.dump_fonts import _extract_font_info, dump_fonts_cli_hook
 
 
 def make_font(resource_name, base_font, obj_id):

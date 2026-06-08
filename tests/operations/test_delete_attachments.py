@@ -1,16 +1,16 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.delete_attachments import (
-    _parse_size_str,
-    _get_params,
-    _get_attachment_size,
     _attachment_matches,
     _evaluate_spec,
+    _get_attachment_size,
+    _get_params,
+    _parse_size_str,
     delete_attachments,
 )
-
 
 # --- Tests for _parse_size_str ---
 

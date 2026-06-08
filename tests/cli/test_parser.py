@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # --- Import module and functions to test ---
+from pdftl.cli import parser
 from pdftl.cli import parser as parser_module
 from pdftl.cli.parser import (
     _assign_passwords,
@@ -16,6 +17,7 @@ from pdftl.cli.parser import (
     _parse_pre_operation_args,
     _parse_value_keyword,
     _raise_unknown_arg_error,
+    _recursive_group_pipelines,
     _separate_file_and_pw_args,
     parse_cli_stage,
     parse_options_and_specs,
@@ -25,7 +27,7 @@ from pdftl.cli.pipeline import CliStage
 from pdftl.core import constants as constants_module
 
 # --- Import Exceptions ---
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
 # --- Mocks for Dependencies ---
 
@@ -469,3 +471,143 @@ class TestParserIntegration:
             match="Maybe you wanted to give an additional 'allow' permission",
         ):
             parse_cli_stage(args, is_first_stage=True)
+
+
+# --- merged from test_parser_coverage_2.py ---
+
+
+def test_missing_multiple_arguments_error():
+    """Hits line 62: Missing value for multiple-value option."""
+    with pytest.raises(MissingArgumentError, match="Missing value for option 'attach_files'"):
+        parser._parse_multiple_arguments("attach_files", ["attach_files"], 0, lambda x: True)
+
+
+def test_missing_output_value_error():
+    """Hits line 149: Missing value for 'output' keyword."""
+    with pytest.raises(MissingArgumentError, match="Missing value for keyword: output"):
+        parser.parse_options_and_specs(["output"])
+
+
+def test_unknown_arg_error_with_allow_hint():
+    """Hits line 79-83: Unknown argument error with the 'allow' hint."""
+    # To hit line 79, we need _parse_allow_permissions to SUCCEED,
+    # setting just_slurped_allow_index, and then have the NEXT arg be unknown.
+    # Note: 'Printing' is valid, 'UnknownThing' is not.
+    # We use parse_options_and_specs directly.
+
+    with patch("pdftl.core.registry.registry.options", {}):
+        # Ensure FLAG_KEYWORDS/VALUE_KEYWORDS are empty so everything is 'unknown'
+        parser.FLAG_KEYWORDS = set()
+        parser.VALUE_KEYWORDS = set()
+
+        args = ["allow", "Printing", "UnknownThing"]
+
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            parser.parse_options_and_specs(args)
+
+        assert "Maybe you wanted to give an additional 'allow' permission?" in str(excinfo.value)
+
+
+def test_handle_pipeline_input_injection():
+    """Hits lines 196-198: Injecting '_' for non-first stages."""
+    inputs = ["file.pdf"]
+    handles = {"A": 0}
+    new_inputs, new_handles = parser._handle_pipeline_input(inputs, handles, is_first_stage=False)
+
+    assert new_inputs[0] == "_"
+    assert new_handles["A"] == 1
+    assert new_handles["_"] == 0
+
+
+def test_assign_passwords_stop_iteration():
+    """Hits line 231: Break when passwords_by_order is exhausted."""
+    passwords = parser._assign_passwords(
+        num_inputs=3, handles={}, passwords_by_handle={}, passwords_by_order=["pass1"]
+    )
+    assert passwords == ["pass1", None, None]
+
+
+def test_parse_multiple_args_allow_no_args():
+    """Hits cli/parser.py line 67 by ending the command with 'allow'."""
+    # Line 149 in parser.py calls _parse_allow_permissions
+    # which calls _parse_multiple_arguments with allow_no_args=True.
+    # By putting 'allow' at the end of the list, i + 1 >= len(args) becomes True.
+
+    args = ["input.pdf", "allow"]
+    specs, options = parse_options_and_specs(args)
+
+    assert specs == ["input.pdf"]
+    assert "allow" in options
+    assert options["allow"] == set()  # Should be an empty set
+
+
+def test_duplicate_argument_raises_error():
+    """
+    Test that providing the same keyword argument twice throws a DuplicateArgumentError.
+
+    We use 'owner_pw' (Owner Password) here because it is a value-taking option.
+    Flags (like 'compress') do not currently trigger this error if repeated.
+    """
+    args = [
+        "output",
+        "out.pdf",
+        "owner_pw",
+        "secret123",
+        "allow",
+        "owner_pw",
+        "overwrite_attempt",
+    ]
+
+    with pytest.raises(DuplicateArgumentError) as excinfo:
+        _specs, _options = parse_options_and_specs(args)
+
+    # Verify the error message mentions the correct keyword
+    assert "Duplicate keyword: owner_pw" in str(excinfo.value)
+
+
+def test_duplicate_flags_are_accepted_and_deduplicated():
+    """
+    Verify that flags (which take no value) can be repeated without error,
+    or mixed with standard options.
+    """
+    # 'compress' and 'flatten' are flags. We pass 'flatten' twice.
+    # We also use 'owner_pw' to ensure mixing flags and value-options works.
+    args = [
+        "output",
+        "out.pdf",
+        "compress",
+        "flatten",
+        "owner_pw",
+        "my_password",
+        "flatten",  # Duplicate flag should be harmless/ignored
+    ]
+
+    _, options = parse_options_and_specs(args)
+    # Check flags are set
+    assert options["compress"] is True
+    assert options["flatten"] is True
+
+    # Check value option is captured
+    assert options["owner_pw"] == "my_password"
+
+
+def test_parser_coverage_gaps():
+    # Line 321: Unclosed sub-pipeline
+    # Reaches 'StopIteration' while depth > 0
+    with pytest.raises(InvalidArgumentError, match="Unclosed sub-pipeline"):
+        list(_recursive_group_pipelines(iter(["JOB", "filter"])))
+
+    # Line 354: Unexpected SUB_END (DONE)
+    # Finds DONE when depth is 0
+    with pytest.raises(InvalidArgumentError, match="Unexpected 'DONE' found"):
+        split_args_by_separator(["filter", "DONE"])
+
+
+def test_parser_implicit_cat_coverage():
+    from pdftl.cli.parser import parse_cli_stage
+
+    # Line 286-287: Provide > 1 input with no operation keyword
+    # is_first_stage=True prevents it from trying to prepending '_'
+    stage = parse_cli_stage(["file1.pdf", "file2.pdf"], is_first_stage=True)
+
+    assert stage.operation == "cat"

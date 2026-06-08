@@ -1,8 +1,9 @@
 import io
 import os
-import pytest
 import sys
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
 
 from pdftl.cli.completion_setup import completion_setup
 

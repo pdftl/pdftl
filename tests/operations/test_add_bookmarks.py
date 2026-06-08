@@ -4,13 +4,12 @@
 
 # tests/operations/test_add_bookmarks.py
 
-import pytest
 import pikepdf
+import pytest
 
 from pdftl.core.core_types import OpResult
-from pdftl.operations.add_bookmarks import add_bookmarks, _parse_spec
+from pdftl.operations.add_bookmarks import _parse_spec, add_bookmarks
 from pdftl.utils.destinations import get_named_destinations, get_page_map, resolve_dest_to_page_num
-
 
 # ---------------------------------------------------------------------------
 # Test helpers

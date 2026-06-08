@@ -1,6 +1,11 @@
 import pytest
 
 import pdftl.operations.parsers.rebox_parser as cp
+from pdftl.operations.parsers.rebox_parser import (
+    parse_rebox_content,
+    parse_smart_rebox_spec,
+    specs_to_page_rules,
+)
 
 # We now expect the parser to fail correctly, so we don't need this
 # from pdftl.exceptions import InvalidArgumentError
@@ -124,3 +129,59 @@ def test_specs_to_page_rules_invalid_spec():
     # It will fail until the regex bug in rebox_parser.py is fixed.
     with pytest.raises(ValueError, match="Invalid dummy_op specification format"):
         cp.specs_to_page_rules(specs, total_pages=3, operation="dummy_op")
+
+
+# --- merged from test_rebox_parser_coverage.py ---
+
+
+class TestCropParserCoverage:
+    # --- Covers lines 41-42 ---
+    def test_specs_to_page_rules_validation_error(self):
+        """
+        Triggers the try/except block inside specs_to_page_rules (lines 39-44).
+        We pass a syntactically valid outer spec '1(...)',
+        but the inner content 'bad%' causes parse_rebox_content to fail.
+        """
+        specs = ["1(bad%)"]
+
+        # Verify it raises the specific ValueError wrapping the underlying exception
+        with pytest.raises(ValueError, match="Error parsing dummy_op content 'bad%'"):
+            specs_to_page_rules(specs, total_pages=10, operation="dummy_op")
+
+    # --- Covers line 67 ---
+    def test_parse_rebox_content_returns_smart_crop(self):
+        """
+        Verifies line 67: if smart_crop is found, return it immediately.
+        """
+        result = parse_rebox_content("fit", 100, 100, "dummy_op")
+        assert result["type"] == "fit"
+        assert result["mode"] == "fit"
+
+    # --- Covers lines 91-117 (Smart Crop Logic) ---
+    def test_parse_smart_rebox_spec_details(self):
+        # 1. Basic 'fit' (Lines 91, 101 checks)
+        res = parse_smart_rebox_spec("fit", 100, 100, "dummy_op")
+        assert res["mode"] == "fit"
+        assert res["source"] is None
+        # Lines 110-112: Default padding
+        assert res["padding"] == (0.0, 0.0, 0.0, 0.0)
+
+        # 2. 'fit-group' with source (Lines 95-100)
+        res = parse_smart_rebox_spec("fit-group=1-5", 100, 100, "dummy_op")
+        assert res["mode"] == "fit-group"
+        assert res["source"] == "1-5"
+
+        # 3. 'fit-group' without source (Lines 95-96, skip 97)
+        res = parse_smart_rebox_spec("fit-group", 100, 100, "dummy_op")
+        assert res["mode"] == "fit-group"
+        assert res["source"] is None
+
+        # 4. Partial match that should fail (Lines 101-104)
+        # "fitting" starts with "fit" but != "fit" and doesn't start with "fit-group"
+        res = parse_smart_rebox_spec("fitting", 100, 100, "dummy_op")
+        assert res is None
+
+        # 5. Padding Logic (Lines 106-108, 113-115)
+        # "fit, 10pt" -> splits into ["fit", "10pt"] -> padding_str="10pt"
+        res = parse_smart_rebox_spec("fit, 10pt", 100, 100, "dummy_op")
+        assert res["padding"] == (10.0, 10.0, 10.0, 10.0)

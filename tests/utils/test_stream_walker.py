@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from pdftl.utils.stream_walker import (
     DEFAULT_GS,
@@ -820,10 +821,10 @@ def test_walk_page_none_guard():
 def test_pdf_error_explicit_coverage_paths(pikepdf_mock):
     """Explicitly satisfies all residual pikepdf_module.PdfError catch blocks."""
     from pdftl.utils.stream_walker import (
-        process_cs_op,
-        recurse_pattern,
         _handle_image_subtype,
         _process_shading_op,
+        process_cs_op,
+        recurse_pattern,
         walk_stream,
     )
 
