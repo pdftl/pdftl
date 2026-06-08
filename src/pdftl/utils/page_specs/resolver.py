@@ -125,6 +125,9 @@ def _new_tuples_from_spec_str(
         pdf,  # <-- Pass pdf here
     )
 
+    if page_spec.rep > 1:
+        final_page_numbers = [p for p in final_page_numbers for _ in range(page_spec.rep)]
+
     new_tuples = _create_page_tuples_from_numbers(
         final_page_numbers, pdf, page_spec.rotate, page_spec.scale, spec_str
     )

@@ -22,6 +22,7 @@ class PageSpec:
     start: int
     end: int
     step: int
+    rep: int
     rotate: tuple[int, bool]
     scale: float
     qualifiers: set[str]
@@ -32,6 +33,7 @@ class PageSpec:
             self.start,
             self.end,
             self.step,
+            self.rep,
             self.rotate,
             self.scale,
             self.qualifiers,

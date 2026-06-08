@@ -64,6 +64,7 @@ class SpecParser:
         # Note: Order matters. We consume parts of the string.
         qualifiers, modifier_str = self._parse_qualifiers(modifier_str.lower())
         step, modifier_str = self._parse_step(modifier_str)
+        rep, modifier_str = self._parse_rep(modifier_str)
         rotate, modifier_str = self._parse_rotation(modifier_str)
         scale, modifier_str = self._parse_scaling(modifier_str)
 
@@ -72,7 +73,7 @@ class SpecParser:
             raise InvalidArgumentError(
                 f"Invalid page spec modifier '{modifier_str}' in '{spec_str}'. "
                 f"Did you mean one of: even, odd, north, east, south, west, left, right, down, "
-                f"stepN, xN, zN, or ~N for omissions?"
+                f"stepN, repN, xN, zN, or ~N for omissions?"
             )
 
         omissions, modifier_str = self._parse_omissions(modifier_str)
@@ -81,6 +82,7 @@ class SpecParser:
             start=start,
             end=end,
             step=step,
+            rep=rep,
             rotate=rotate,
             scale=scale,
             qualifiers=qualifiers,
@@ -159,6 +161,20 @@ class SpecParser:
         modifier_str = step_re.sub("", modifier_str, 1)
 
         return step_val, modifier_str
+
+    def _parse_rep(self, modifier_str):
+        rep_re = re.compile(r"(rep *(\d+))")
+        rep_match = rep_re.search(modifier_str)
+        if not rep_match:
+            return 1, modifier_str
+
+        rep_val = int(rep_match.group(2))
+
+        if rep_val < 1:
+            raise InvalidArgumentError(f"Invalid rep value {rep_val}. Should be at least 1.")
+
+        modifier_str = rep_re.sub("", modifier_str, 1)
+        return rep_val, modifier_str
 
     def _parse_rotation(self, modifier_str):
         for key, value in ROTATION_MAP.items():

@@ -51,7 +51,7 @@ def _help_topic_page_specs():
     number is higher than the end page number (e.g., `5-1`), then the
     pages are treated in reverse order.
 
-    ### 2. Page qualifiers, step and omissions
+    ### 2. Page qualifiers, step, repetitions and omissions
 
     #### Parity qualifiers
 
@@ -94,6 +94,21 @@ def _help_topic_page_specs():
     * `5-14step3even` selects pages 8, 11
 
     You can also use `by` or `every` as alternatives to `step`.
+
+    #### Repetitions
+
+    The `rep` modifier repeats each selected page a specified number
+    of times in succession. The repetition factor must be an integer,
+    and at least 1. Repetition is always applied after all other filters
+    and step sizes have been evaluated, regardless of the order they
+    are typed.
+
+    Examples
+
+    * `1-3rep2` outputs pages 1, 1, 2, 2, 3, 3.
+
+    * `1-5step2rep3` (or equivalently `1-5rep3step2`) outputs pages
+      1, 1, 1, 3, 3, 3, 5, 5, 5.
 
     #### Omissions
 

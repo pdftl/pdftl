@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - pipeline info added to `verbose` mode
 
+### Added
+
+- repetitions in page specs via`rep<N>` 
+
 ## [0.20.0] - 2026-06-07
 
 ### Added
