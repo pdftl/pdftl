@@ -13,21 +13,23 @@ from pdftl.operations.dump_bookmarks import dump_toc, dump_toc_cli_hook
 from pdftl.operations.update_bookmarks import update_toc
 
 
-def test_dump_bookmarks_json_flag():
+def test_dump_bookmarks_json_flag(tmp_path):
     """Tests the dump_bookmarks operation structure and flag detection."""
     pdf = pikepdf.Pdf.new()
     pdf.add_blank_page()
     with pdf.open_outline() as outline:
         outline.root.append(pikepdf.OutlineItem("Operation Test", 0))
 
+    output_file = tmp_path / "dummy.json"
+
     # Act
-    res = dump_toc("dump_bookmarks", pdf, ["json"], output_file="/tmp/dummy.json")
+    res = dump_toc("dump_bookmarks", pdf, ["json"], output_file=str(output_file))
 
     # Assert OpResult structure
     assert res.success is True
     assert res.is_discardable is True
     assert res.meta["json_output"] is True
-    assert res.meta["output_file"] == "/tmp/dummy.json"
+    assert res.meta["output_file"] == str(output_file)
 
     # Assert data payload
     assert len(res.data) == 1
@@ -187,7 +189,8 @@ def test_update_bookmarks_yaml_decode_error(tmp_path, six_page_pdf):
     bad_yaml.write_text("- title: broken\n\tbad_indent: true")
 
     with pytest.raises(OperationError, match="Failed to parse YAML file"):
-        update_toc(pikepdf.open(six_page_pdf), [str(bad_yaml)])
+        with pikepdf.open(six_page_pdf) as pdf:
+            update_toc(pdf, [str(bad_yaml)])
 
 
 # --- toc.py Coverage ---
@@ -199,7 +202,8 @@ def test_toc_filter_not_dict_and_missing_title(tmp_path, six_page_pdf, caplog):
     # 1st item is a string, 2nd item is a dict but has no 'title'
     test_file.write_text("- Just a string\n- page: 1\n")
 
-    update_toc(pikepdf.open(six_page_pdf), [str(test_file)])
+    with pikepdf.open(six_page_pdf) as pdf:
+        update_toc(pdf, [str(test_file)])
 
     assert "not a dictionary" in caplog.text
     assert "missing 'title'" in caplog.text
@@ -210,10 +214,11 @@ def test_toc_filter_unrecognized_keys(tmp_path, six_page_pdf):
     test_file = tmp_path / "test.yaml"
     test_file.write_text("- title: Valid Title\n  pagee: 5\n")  # Typo in 'page'
 
-    with pytest.raises(
-        OperationError, match="Invalid keys found in bookmark 'Valid Title': pagee"
-    ):
-        update_toc(pikepdf.open(six_page_pdf), [str(test_file)])
+    with pikepdf.open(six_page_pdf) as pdf:
+        with pytest.raises(
+            OperationError, match="Invalid keys found in bookmark 'Valid Title': pagee"
+        ):
+            update_toc(pdf, [str(test_file)])
 
 
 def test_toc_filter_invalid_children(tmp_path, six_page_pdf, caplog):
@@ -221,7 +226,8 @@ def test_toc_filter_invalid_children(tmp_path, six_page_pdf, caplog):
     test_file = tmp_path / "test.yaml"
     test_file.write_text("- title: Parent\n  children: Just a string instead of a list\n")
 
-    update_toc(pikepdf.open(six_page_pdf), [str(test_file)])
+    with pikepdf.open(six_page_pdf) as pdf:
+        update_toc(pdf, [str(test_file)])
 
     assert "Ignoring invalid 'children' (must be a list)" in caplog.text
 
@@ -230,8 +236,6 @@ def test_update_bookmarks_no_args():
     """
     Covers lines 74-75: Error when no file argument is provided.
     """
-    from pdftl.exceptions import MissingArgumentError
-
     pdf = pikepdf.Pdf.new()
 
     with pytest.raises(MissingArgumentError, match="requires a <bookmarks_file> argument"):
@@ -242,8 +246,6 @@ def test_update_bookmarks_invalid_root_type(tmp_path):
     """
     Covers lines 103-107: Error when JSON/YAML is not a list.
     """
-    from pdftl.exceptions import OperationError
-
     pdf = pikepdf.Pdf.new()
     json_file = tmp_path / "invalid.json"
     json_file.write_text(json.dumps({"not_a": "list"}))
@@ -279,3 +281,68 @@ def test_update_bookmarks_from_stdin(tmp_path):
         root_items = list(outline.root)
         assert len(root_items) == 1
         assert root_items[0].title == "Chapter 1"
+
+
+# --- Additional Coverage for Edge Cases and Stdin Pipelines ---
+
+
+def test_update_bookmarks_stdin_malformed_json_with_yaml(tmp_path):
+    """Hits lines 85, 141, 153, 166, 172, 188-191.
+
+    Pipes bad JSON through stdin while YAML is installed. It must attempt
+    both parsers, log both failures, and raise a combined error report.
+    """
+    pdf = pikepdf.Pdf.new()
+    bad_stream_content = '{"title": "Unclosed Object'
+
+    with patch("sys.stdin", io.StringIO(bad_stream_content)):
+        with pytest.raises(
+            OperationError, match="Could not parse bookmarks input. Parsers tried:"
+        ):
+            update_toc(pdf, ["-"])
+
+
+def test_update_bookmarks_stdin_malformed_json_no_yaml():
+    """Hits lines 124, 180-184.
+
+    Pipes bad JSON through stdin when pyyaml is missing. It identifies
+    the structural JSON intent ('{') and extracts a helpful JSON-specific error message.
+    """
+    pdf = pikepdf.Pdf.new()
+    bad_stream_content = '{"missing_bracket": '
+
+    with patch.dict("sys.modules", {"yaml": None}):
+        with patch("sys.stdin", io.StringIO(bad_stream_content)):
+            with pytest.raises(OperationError, match="Invalid JSON data provided on stdin:"):
+                update_toc(pdf, ["-"])
+
+
+def test_update_bookmarks_stdin_raw_text_no_yaml():
+    """Hits line 186.
+
+    Pipes flat, ambiguous text through stdin with pyyaml missing. Since it doesn't
+    look like JSON, it safely assumes YAML intent and suggests installing pyyaml.
+    """
+    pdf = pikepdf.Pdf.new()
+    ambiguous_content = "ch1: page 1\n  ch2: page 2"
+
+    with patch.dict("sys.modules", {"yaml": None}):
+        with patch("sys.stdin", io.StringIO(ambiguous_content)):
+            # extra_tag="yaml" triggers InvalidArgumentError in pdftl dependency helper
+            with pytest.raises(InvalidArgumentError):
+                update_toc(pdf, ["-"])
+
+
+def test_try_parse_yaml_direct_error_handling():
+    """Ensures that unexpected third-party syntax failures are caught
+    and returned cleanly rather than causing an unhandled crash.
+    """
+    from pdftl.operations.update_bookmarks import _try_parse_yaml
+    import yaml
+
+    # Passing raw text with forbidden tab characters forces a YAMLError variant
+    content = "-\tbad_tab_indentation"
+    result, error = _try_parse_yaml(content, is_yaml_ext=False, yaml_module=yaml)
+
+    assert result is None
+    assert error is not None

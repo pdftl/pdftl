@@ -3,6 +3,7 @@ import logging
 
 import pdftl.core.constants as c
 from pdftl.core.registry import registry
+from pdftl.exceptions import PdftlError
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def run_operation(operation_name, call_context):
         return op_function(*pos_args, **kw_args)
     except Exception as e:
         # Only log unexpected internal errors, don't re-wrap custom pdftl exceptions
-        if not hasattr(e, "__module__") or "pdftl.exceptions" not in e.__module__:
+        if not isinstance(e, PdftlError):
             logger.error("Internal error in operation '%s': %s", operation_name, e)
         raise
 

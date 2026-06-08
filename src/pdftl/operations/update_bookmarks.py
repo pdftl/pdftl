@@ -71,46 +71,127 @@ _UPDATE_TOC_EXAMPLES = [
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
 def update_toc(pdf, op_args) -> OpResult:
+    file_path, is_yaml, is_json = _get_file_traits(op_args)
+    yaml_module = _try_import_yaml(is_yaml)
+
+    with smart_open(file_path, mode="r") as f:
+        content = f.read()
+
+    toc_items, parsers_tried, errors = _parse_content(content, is_json, is_yaml, yaml_module)
+
+    if toc_items is None:
+        _handle_parse_failure(content, file_path, yaml_module, errors, parsers_tried)
+
+    _validate_toc_structure(toc_items)
+    logger.debug("Got %s items for the new toc tree", len(toc_items))
+
+    _apply_toc_tree(pdf, toc_items)
+    return OpResult(success=True, pdf=pdf)
+
+
+def _get_file_traits(op_args):
+    """Validate operational arguments and discover file type intentions."""
     if not op_args:
         raise MissingArgumentError("update_bookmarks requires a <bookmarks_file> argument")
 
     file_path = op_args[0]
     if file_path == "-":
         file_path = None
-    with smart_open(file_path, mode="r") as f:
-        try:
-            if file_path and file_path.lower().endswith(".json"):
-                toc_items = json.load(f)
-            else:
-                ensure_dependencies(
-                    feature_name="YAML bookmarks loading",
-                    dependencies={"yaml": "pyyaml"},
-                    extra_tag="yaml",
-                )
-                import yaml
 
-                toc_items = yaml.safe_load(f)
+    is_yaml = file_path is not None and file_path.lower().endswith((".yaml", ".yml"))
+    is_json = file_path is not None and file_path.lower().endswith(".json")
+    return file_path, is_yaml, is_json
 
-        except json.JSONDecodeError as exc:
+
+def _try_import_yaml(is_yaml_ext: bool):
+    """Attempt parsing library extraction, ensuring explicit path rules are hit."""
+    try:
+        import yaml
+
+        return yaml
+    except ImportError:
+        logger.debug("No YAML support")
+        if is_yaml_ext:
+            _ensure_yaml_or_raise()
+        return None
+
+
+def _ensure_yaml_or_raise():
+    ensure_dependencies(
+        feature_name="YAML bookmarks loading",
+        dependencies={"yaml": "pyyaml"},
+        extra_tag="yaml",
+    )
+
+
+def _try_parse_json(content: str, is_json_ext: bool):
+    """Isolated handling of standard JSON library conversions."""
+    try:
+        return json.loads(content), None
+    except json.JSONDecodeError as exc:
+        if is_json_ext:
             raise OperationError(f"Failed to parse JSON file: {exc}") from exc
-        except Exception as exc:
-            # Catching generic Exception here because we only conditionally import yaml
-            # and yaml.YAMLError won't be available in scope if pyyaml isn't installed.
-            if type(exc).__name__ in ("YAMLError", "ScannerError", "ParserError"):
-                raise OperationError(f"Failed to parse YAML file: {exc}") from exc
-            raise
+        return None, exc
 
+
+def _try_parse_yaml(content: str, is_yaml_ext: bool, yaml_module):
+    """Isolated handling of third-party YAML library conversions."""
+    try:
+        return yaml_module.safe_load(content), None
+    except yaml_module.YAMLError as exc:
+        if is_yaml_ext:
+            raise OperationError(f"Failed to parse YAML file: {exc}") from exc
+        return None, exc
+
+
+def _parse_content(content: str, is_json: bool, is_yaml: bool, yaml_module):
+    """Determine runtime parser order sequences and catch execution exceptions."""
+    toc_items = None
+    parsers_tried = []
+    errors = {}
+
+    if not is_yaml:
+        parsers_tried.append("json")
+        toc_items, json_exc = _try_parse_json(content, is_json)
+        if json_exc:
+            errors["json"] = json_exc
+
+    if toc_items is None and yaml_module is not None:
+        parsers_tried.append("yaml")
+        toc_items, yaml_exc = _try_parse_yaml(content, is_yaml, yaml_module)
+        if yaml_exc:
+            errors["yaml"] = yaml_exc
+
+    return toc_items, parsers_tried, errors
+
+
+def _handle_parse_failure(content: str, file_path, yaml_module, errors, parsers_tried):
+    """Process contextual edge cases for stream failures and invalid strings."""
+    if file_path is None and yaml_module is None:
+        if content.strip().startswith(("[", "{")):
+            json_err = errors.get("json", "Unknown JSON error")
+            raise OperationError(f"Invalid JSON data provided on stdin: {json_err}")
+
+        _ensure_yaml_or_raise()
+
+    error_msgs = ", ".join([f"{k}: {v}" for k, v in errors.items()])
+    raise OperationError(
+        f"Could not parse bookmarks input. Parsers tried: {parsers_tried}. Details: {error_msgs}"
+    )
+
+
+def _validate_toc_structure(toc_items):
+    """Ensure the underlying structure matches our required target types."""
     if not isinstance(toc_items, list):
         raise OperationError(
             "Invalid bookmarks format: Root element must be a list of items."
             " To delete all bookmarks, use []."
         )
 
-    logger.debug("Got %s items for the new toc tree", len(toc_items))
 
+def _apply_toc_tree(pdf, toc_items):
+    """Final structural interface to apply the TOC items onto our PDF asset."""
     try:
         build_toc_tree(pdf, toc_items)
     except ValueError as exc:
         raise OperationError(exc) from exc
-
-    return OpResult(success=True, pdf=pdf)

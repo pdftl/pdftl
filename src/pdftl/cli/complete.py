@@ -7,6 +7,7 @@
 import marshal  # built in, no import cost
 import os
 import sys
+import pickle
 
 # CONFIGURATION
 PICKLER = "cloudpickle"
@@ -253,13 +254,11 @@ def get_parser():
         try:
             import cloudpickle as pickler
 
-            # We must verify we can load it.
-            # If the pickle is stale/corrupt, we fall back to rebuild.
             with open(cache_file, "rb") as f:
                 return pickler.load(f)
-
-        except Exception:  # noqa: BLE001 (performance)
-            pass  # Fall through to rebuild
+        except (ImportError, pickle.UnpicklingError, OSError, AttributeError, EOFError):
+            # Fall back to rebuild (slow)
+            pass
 
     return rebuild_cache()
 
