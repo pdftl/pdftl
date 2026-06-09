@@ -19,7 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- repetitions in page specs via`rep<N>` 
+- repetitions in page specs via`rep<N>`
+
+- `barcode` operation
 
 ## [0.20.0] - 2026-06-07
 
@@ -183,9 +185,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `montage` and `booklet` bug handling pages with negative rotation fixed
 
-- `place` and `add_text` rotation bugs fixed and visual tests added 
+- `place` and `add_text` rotation bugs fixed and visual tests added
 
-- `crop` rotation bugs fixed and visual tests added 
+- `crop` rotation bugs fixed and visual tests added
 
 ## [0.13.0] - 2026-04-15
 

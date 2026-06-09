@@ -43,6 +43,7 @@ pdftl = "pdftl.cli.main:main"
 [project.optional-dependencies]
 # Feature-specific dependencies
 add-text = ["reportlab"]
+barcode = ["pypdfium2", "zxing-cpp"]
 crop-visible = ["pypdfium2"]
 delete-blank = ["numpy"]
 dump-text = ["pypdfium2"]
@@ -57,6 +58,7 @@ yaml-bookmarks = ["pyyaml"]
 # All optional CLI dependencies
 extras = [
     "pdftl[add-text]",
+    "pdftl[barcode]",
     "pdftl[crop-visible]",
     "pdftl[delete-blank]",
     "pdftl[dump-text]",
