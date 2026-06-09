@@ -16,7 +16,7 @@ from pdftl.operations.dump_images import (
     dump_images,
     dump_images_cli_hook,
 )
-from pdftl.utils.image_utils import (
+from pdftl.utils.images.finders import (
     _calculate_bbox,
     _extract_image_metadata,
     _get_format,
@@ -26,6 +26,7 @@ from pdftl.utils.image_utils import (
     _process_form_xobject,
     extract_pdf_images,
 )
+from pdftl.utils.colorspaces import image_colorspace
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -168,8 +169,6 @@ class TestImageColorspace:
     """image_colorspace() returns a resolved dict, not a bare string."""
 
     def test_device_rgb(self):
-        from pdftl.utils.colorspaces import image_colorspace
-
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         xobj["/ColorSpace"] = pikepdf.Name("/DeviceRGB")
@@ -177,8 +176,6 @@ class TestImageColorspace:
         assert result["family"] == "rgb"
 
     def test_device_cmyk(self):
-        from pdftl.utils.colorspaces import image_colorspace
-
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         xobj["/ColorSpace"] = pikepdf.Name("/DeviceCMYK")
@@ -186,8 +183,6 @@ class TestImageColorspace:
         assert result["family"] == "cmyk"
 
     def test_iccbased_array_reports_icc_family(self):
-        from pdftl.utils.colorspaces import image_colorspace
-
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         icc_stream = pikepdf.Stream(pdf, b"\x00" * 10)
@@ -199,8 +194,6 @@ class TestImageColorspace:
         assert result["components"] == 3
 
     def test_indexed_array(self):
-        from pdftl.utils.colorspaces import image_colorspace
-
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         xobj["/ColorSpace"] = pikepdf.Array(
@@ -216,8 +209,6 @@ class TestImageColorspace:
         assert result["base_family"] == "rgb"
 
     def test_missing_colorspace_returns_unknown(self):
-        from pdftl.utils.colorspaces import image_colorspace
-
         pdf = pikepdf.Pdf.new()
         xobj = pikepdf.Stream(pdf, b"")
         result = image_colorspace(xobj, None, pikepdf)
@@ -238,7 +229,7 @@ class TestExtractImageMetadata:
         ctm = [300, 0, 0, 150, 100, 200]
         resources = _make_resources_with_image(pdf)
         image_list = []
-        _extract_image_metadata(xobj, "/Im1", ctm, resources, image_list, pikepdf)
+        _extract_image_metadata(xobj, "/Im1", ctm, resources, image_list)
         assert len(image_list) == 1
         img = image_list[0]
         assert img["name"] == "/Im1"
@@ -257,7 +248,7 @@ class TestExtractImageMetadata:
         xobj["/BitsPerComponent"] = 8
         ctm = [1, 0, 0, 1, 0, 0]
         image_list = []
-        _extract_image_metadata(xobj, "/ImX", ctm, None, image_list, pikepdf)
+        _extract_image_metadata(xobj, "/ImX", ctm, None, image_list)
         assert image_list[0]["width_px"] == 0
         assert image_list[0]["height_px"] == 0
 
@@ -270,7 +261,7 @@ class TestExtractImageMetadata:
         xobj["/ColorSpace"] = pikepdf.Name("/DeviceGray")
         ctm = [1, 0, 0, 1, 0, 0]
         image_list = []
-        _extract_image_metadata(xobj, "/ImX", ctm, None, image_list, pikepdf)
+        _extract_image_metadata(xobj, "/ImX", ctm, None, image_list)
         assert image_list[0]["bits"] == 8
 
 
@@ -285,30 +276,26 @@ class TestHandleDoOperator:
         resources = _make_resources_with_image(pdf)
         image_list = []
         ctm = [300, 0, 0, 150, 100, 200]
-        _handle_do_operator(pikepdf.Name("/Im1"), resources, ctm, image_list, pikepdf)
+        _handle_do_operator(pikepdf.Name("/Im1"), resources, ctm, image_list)
         assert len(image_list) == 1
         assert image_list[0]["name"] == "/Im1"
 
     def test_no_xobject_dict_does_nothing(self):
         resources = pikepdf.Dictionary()
         image_list = []
-        _handle_do_operator(
-            pikepdf.Name("/Im1"), resources, [1, 0, 0, 1, 0, 0], image_list, pikepdf
-        )
+        _handle_do_operator(pikepdf.Name("/Im1"), resources, [1, 0, 0, 1, 0, 0], image_list)
         assert image_list == []
 
     def test_none_resources_does_nothing(self):
         image_list = []
-        _handle_do_operator(pikepdf.Name("/Im1"), None, [1, 0, 0, 1, 0, 0], image_list, pikepdf)
+        _handle_do_operator(pikepdf.Name("/Im1"), None, [1, 0, 0, 1, 0, 0], image_list)
         assert image_list == []
 
     def test_missing_name_in_xobjects_does_nothing(self):
         pdf = pikepdf.Pdf.new()
         resources = _make_resources_with_image(pdf)
         image_list = []
-        _handle_do_operator(
-            pikepdf.Name("/Missing"), resources, [1, 0, 0, 1, 0, 0], image_list, pikepdf
-        )
+        _handle_do_operator(pikepdf.Name("/Missing"), resources, [1, 0, 0, 1, 0, 0], image_list)
         assert image_list == []
 
     def test_unknown_subtype_does_nothing(self):
@@ -317,9 +304,7 @@ class TestHandleDoOperator:
         xobj["/Subtype"] = pikepdf.Name("/PS")
         resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=xobj))
         image_list = []
-        _handle_do_operator(
-            pikepdf.Name("/Im1"), resources, [1, 0, 0, 1, 0, 0], image_list, pikepdf
-        )
+        _handle_do_operator(pikepdf.Name("/Im1"), resources, [1, 0, 0, 1, 0, 0], image_list)
         assert image_list == []
 
     def test_form_xobject_recurses(self):
@@ -332,9 +317,7 @@ class TestHandleDoOperator:
         form["/Resources"] = pikepdf.Dictionary(XObject=pikepdf.Dictionary(InnerIm=inner_image))
         resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(MyForm=form))
         image_list = []
-        _handle_do_operator(
-            pikepdf.Name("/MyForm"), resources, [1, 0, 0, 1, 0, 0], image_list, pikepdf
-        )
+        _handle_do_operator(pikepdf.Name("/MyForm"), resources, [1, 0, 0, 1, 0, 0], image_list)
         assert len(image_list) == 1
 
 
@@ -611,19 +594,17 @@ class TestDumpImages:
                 pikepdf.Name("/DCTDecode"),
             ]
         )
-        assert _get_format(xobj, pikepdf) == "flatedecode"
+        assert _get_format(xobj) == "flatedecode"
 
     def test_extract_image_metadata_read_raw_bytes_fails(self):
         pdf = pikepdf.Pdf.new()
         xobj = _make_image_stream(pdf)
         with patch(
-            "pdftl.utils.image_utils._read_stream_bytes",
+            "pdftl.utils.images.finders._read_stream_bytes",
             side_effect=pikepdf.PdfError("fail"),
         ):
             image_list = []
-            _extract_image_metadata(
-                xobj, "/Im1", [100, 0, 0, 100, 0, 0], None, image_list, pikepdf
-            )
+            _extract_image_metadata(xobj, "/Im1", [100, 0, 0, 100, 0, 0], None, image_list)
             assert image_list[0]["stream_bytes"] == 0
 
     def test_min_dpi_filters_low_resolution_images(self):

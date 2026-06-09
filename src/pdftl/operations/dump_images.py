@@ -17,7 +17,7 @@ from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.string_utils import compact_json_string
-from pdftl.utils.image_utils import extract_pdf_images
+from pdftl.utils.images import extract_pdf_images
 
 if TYPE_CHECKING:
     pass

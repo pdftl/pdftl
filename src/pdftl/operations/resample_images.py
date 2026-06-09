@@ -17,7 +17,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.image_utils import extract_pdf_images
+from pdftl.utils.images import extract_pdf_images
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 

@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `barcode` operation
 
+- `recolor_images` operation
+
+- `recolor_vectors` operation
+
 ## [0.20.0] - 2026-06-07
 
 ### Added

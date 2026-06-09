@@ -8,10 +8,11 @@
 
 import io
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-import pikepdf
-from PIL import Image
+if TYPE_CHECKING:
+    import pikepdf
+    from PIL import Image
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
@@ -91,6 +92,8 @@ def _stamp_image_on_page(
     ocg: Any = None,
 ) -> None:
     """Encodes a PIL image to a temporary PDF and stamps it onto the target page."""
+    import pikepdf
+
     pdf_buffer = io.BytesIO()
 
     if pil_image.mode not in ("1", "L", "RGB", "CMYK"):
@@ -183,6 +186,9 @@ def _process_single_rule(
     ocg: Any,
 ) -> None:
     """Runs a single rule operation inside isolated execution boundaries."""
+    import pikepdf
+    from PIL import Image
+
     x0, y0, w_phys, h_phys = raw_dims
 
     # 1. Update transient sequence counters
