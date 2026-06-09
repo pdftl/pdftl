@@ -187,37 +187,7 @@ class PipelineManager:
         # Return the kwargs expected by save_pdf
         return {c.OPTIONS: final_options, "set_pdf_id": self.kept_id}
 
-    def _validate_and_execute_numbered_stage(self, i, stage):
-        is_first = i == 0 and not self.is_each
-        is_last = i == len(self.stages) - 1
-
-        if not stage.operation and is_last:
-            stage_output = stage.options.get(c.OUTPUT)
-            if stage_output:
-                logger.info("--- Finalizing Pipeline Execution ---")
-                logger.info("Operation: Saving final pipeline asset context")
-                logger.info("Target File: %s", stage_output)
-            else:
-                logger.debug("Final stage is empty, proceeding to save.")
-            return
-
-        self._validate_stage_args(stage, is_first, is_last)
-
-        # Build clean verbose mapping details
-        pipeline_context = (
-            "Inline Sub-Pipeline "
-            if self.is_inline
-            else "Each Sub-Pipeline "
-            if self.is_each
-            else ""
-        )
-        logger.info("--- %sStage %d ---", pipeline_context, i + 1)
-
-        operation_name = stage.operation or "filter"
-        op_data = registry.operations.get(stage.operation, {})
-        op_desc = op_data.get("desc", "Apply filters or configuration pass-through settings.")
-        logger.info("Operation to execute: %s (%s)", operation_name, op_desc)
-
+    def _output_targets_info(self, stage, is_first):
         if stage.inputs:
             logger.info("Input Targets:")
             for idx, inp in enumerate(stage.inputs):
@@ -237,6 +207,7 @@ class PipelineManager:
                 "Input Targets: Implicit pipeline stream '_' (reusing preceding stage output)"
             )
 
+    def _output_other_info(self, i, stage):
         if stage.operation_args:
             logger.info("Arguments: %s", ", ".join(map(str, stage.operation_args)))
 
@@ -251,6 +222,44 @@ class PipelineManager:
         logger.debug("--- PIPELINE: STAGE %d ---", i + 1)
         logger.debug("Parsed stage: %s", stage)
         # fixme: resolve - here for stdin! or fix validation
+
+    def _output_stage_header_info(self, i, stage):
+        # Build clean verbose mapping details
+        pipeline_context = (
+            "Inline Sub-Pipeline "
+            if self.is_inline
+            else "Each Sub-Pipeline "
+            if self.is_each
+            else ""
+        )
+        logger.info("--- %sStage %d ---", pipeline_context, i + 1)
+
+    def _output_operation_info(self, stage):
+        operation_name = stage.operation or "filter"
+        op_data = registry.operations.get(stage.operation, {})
+        op_desc = op_data.get("desc", "Apply filters or configuration pass-through settings.")
+        logger.info("Operation to execute: %s (%s)", operation_name, op_desc)
+
+    def _output_info(self, i, stage, is_first):
+        self._output_stage_header_info(i, stage)
+        self._output_operation_info(stage)
+        self._output_targets_info(stage, is_first)
+        self._output_other_info(i, stage)
+
+    def _validate_and_execute_numbered_stage(self, i, stage):
+        is_first = i == 0 and not self.is_each
+        is_last = i == len(self.stages) - 1
+        if not stage.operation and is_last:
+            stage_output = stage.options.get(c.OUTPUT)
+            if stage_output:
+                logger.info("--- Finalizing Pipeline Execution ---")
+                logger.info("Operation: Saving final pipeline asset context")
+                logger.info("Target File: %s", stage_output)
+            else:
+                logger.debug("Final stage is empty, proceeding to save.")
+            return
+        self._validate_stage_args(stage, is_first, is_last)
+        self._output_info(i, stage, is_first)
         self._execute_stage(stage, is_first)
 
     def _execute_stage(self, stage, is_first):
