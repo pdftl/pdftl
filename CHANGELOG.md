@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `recolor_vectors` operation
 
+- `style_text` operation
+
 ## [0.20.0] - 2026-06-07
 
 ### Added
