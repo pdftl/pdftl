@@ -36,6 +36,9 @@ The syntax is `[selector](Key=Value, ...)`, where:
   - `selector` is an optional page range (`1-5`, `odd`, `-`). If omitted, acts globally.
   - `Key=Value` pairs define the filter criteria an image must meet to be deleted.
 
+If you only have one such selector block, you can replace it with separate arguments
+without parentheses or commas, as a convenient shorthand.
+
 ### Filter Parameters
 
 | Parameter | Description | Example |
@@ -54,18 +57,22 @@ _DELETE_IMAGES_KEYS = ["minbytes", "maxbytes", "minpixels", "maxpixels", "format
 
 _DELETE_IMAGES_EXAMPLES = [
     {
-        "cmd": "in.pdf delete_images '(minbytes=500k)' output out.pdf",
+        "cmd": "in.pdf delete_images minbytes=500k output out.pdf",
         "desc": "Globally scan and destroy any image larger than 500KB anywhere in the document.",
     },
     {
-        "cmd": "in.pdf delete_images '1-10even(minbytes=100k,minpixels=20x400)' output out.pdf",
+        "cmd": "in.pdf delete_images 1-10even minbytes=100k minpixels=20x400 output out.pdf",
         "desc": (
             "On even pages from 1 to 10, destroy images > 100KB "
             "with a minimum dimension of 20x400."
         ),
     },
     {
-        "cmd": "in.pdf delete_images '(format=dct)' output out.pdf",
+        "cmd": "in.pdf delete_images '1-3(minbytes=100k)' 4-end output out.pdf",
+        "desc": ("On pages 1 to 3, delete images > 100KB, and all images on remaining pages"),
+    },
+    {
+        "cmd": "in.pdf delete_images format=dct output out.pdf",
         "desc": "Globally destroy all JPEG (DCTDecode) images.",
     },
 ]
@@ -199,7 +206,7 @@ def _process_resources(resources, params, modified_objects) -> None:
     long_desc=_DELETE_IMAGES_LONG_DESC,
     usage="<input> delete_images [[spec](params)...] output <output>",
     examples=_DELETE_IMAGES_EXAMPLES,
-    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS_EXPANDED], {}),
 )
 def delete_images(pdf, specs) -> OpResult:
     """
@@ -208,6 +215,7 @@ def delete_images(pdf, specs) -> OpResult:
     """
     import pikepdf
 
+    logger.debug("specs=%s", specs)
     if not specs:
         specs = [""]  # Empty string will trigger global mode with no params
 

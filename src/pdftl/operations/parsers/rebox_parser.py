@@ -36,21 +36,21 @@ def specs_to_page_rules(specs, total_pages, operation):
         logger.debug("page_range_str=%s, content_str=%s", page_range_str, content_str)
 
         # --- VALIDATION STEP ---
-        # We try to parse the content string immediately to catch typos like 'fit-groupp'.
-        # We pass (0, 0) as dimensions because we don't care about the numeric result
-        # of percentages here, only the structural validity.
         try:
-            parse_rebox_content(content_str, 1000, 1000, operation)
+            parsed = parse_rebox_content(content_str, 1000, 1000, operation)
         except (ValueError, TypeError, AttributeError, InvalidArgumentError) as e:
             raise ValueError(
                 f"Error parsing {operation} content '{content_str}' in spec '{spec}': {e}"
             ) from e
         # -----------------------
 
+        # A local 'preview' keyword inside the parentheses marks just these pages.
+        if parsed.get("preview"):
+            preview = True
+
         page_numbers = page_numbers_matching_page_spec(page_range_str, total_pages)
         for page_num in page_numbers:
-            # Page numbers from the parser are 1-based; list indices are 0-based
-            page_rules[page_num - 1] = content_str
+            page_rules[page_num - 1] = _strip_preview_keyword(content_str)[0]
     return page_rules, preview
 
 
@@ -59,30 +59,51 @@ def parse_rebox_content(content_str, page_width, page_height, operation):
     Master parser for the content string inside the parentheses.
     Dispatches to Smart rebox, Paper Size, or Margin parsers in order.
 
-    Returns a dict with a 'type' key:
-      - {'type': 'fit', 'mode': 'fit'|'fit-group', 'source': str|None, 'padding': (l,t,r,b)}
-      - {'type': 'paper', 'size': (w, h)}
-      - {'type': 'margin', 'values': (l, t, r, b)}
-      - {'type': 'abs', 'values': (x0, y0, x1, y1)}
+    Accepts an optional trailing ',preview' keyword in content_str.
+
+    Returns a dict with a 'type' key and an optional 'preview' bool:
+      - {'type': 'fit', 'mode': 'fit'|'fit-group', 'source': str|None,
+         'padding': (l,t,r,b), 'preview': bool}
+      - {'type': 'paper', 'size': (w, h), 'preview': bool}
+      - {'type': 'margin', 'values': (l, t, r, b), 'preview': bool}
+      - {'type': 'abs', 'values': (x0, y0, x1, y1), 'preview': bool}
     """
+    content_str, local_preview = _strip_preview_keyword(content_str)
+
     # 1. Try fit/fit-group
     smart_rebox = parse_smart_rebox_spec(content_str, page_width, page_height, operation)
     if smart_rebox:
+        smart_rebox["preview"] = local_preview
         return smart_rebox
 
     # 2. Try Paper Size (e.g. "a4", "a4_l")
     paper_size = parse_paper_spec(content_str)
     if paper_size:
-        return {"type": "paper", "size": paper_size}
+        return {"type": "paper", "size": paper_size, "preview": local_preview}
 
     # 3. Try absolute box
     abs_box = parse_abs_box(content_str, page_width, page_height)
     if abs_box:
-        return {"type": "abs", "values": abs_box}
+        return {"type": "abs", "values": abs_box, "preview": local_preview}
 
     # 4. Default: Margins (e.g. "10pt, 20pt")
     margins = parse_rebox_margins(content_str, page_width, page_height, operation)
-    return {"type": "margin", "values": margins}
+    return {"type": "margin", "values": margins, "preview": local_preview}
+
+
+def _strip_preview_keyword(content_str):
+    """
+    Remove a trailing ',preview' token from a content string (case-insensitive).
+
+    Returns (cleaned_content_str, found_preview_bool).
+
+    Only strips 'preview' when it appears as the final comma-separated token so
+    that it can never be confused with a dimension value or paper-size name.
+    """
+    parts = [p.strip() for p in content_str.split(",")]
+    if parts and parts[-1].lower() == "preview":
+        return ",".join(parts[:-1]), True
+    return content_str, False
 
 
 def parse_abs_box(spec_str, page_width, page_height):

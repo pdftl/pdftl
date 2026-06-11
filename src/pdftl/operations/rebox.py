@@ -70,6 +70,25 @@ corner of the page (this depends on the page MediaBox, as shown by
 If the `preview` keyword is given, a rectangle will be drawn instead
 of {verbing}.
 
+**Shorthand input format**
+
+A single argument of the form
+```
+[page-range](foo=bar,baz,...)
+```
+
+can be replaced with the simpler form
+```
+[page-range] foo=bar baz ...
+```
+as separate arguments. So, instead of `1-3(A4)` you can type `1-3 A4`,
+and instead of `(A4)` you can type just `A4`.
+See examples below.
+This syntax is more convenient but slightly less expressive; for example, it cannot be used
+to replace compound arguments like
+``
+1-3(fit) 4-6(1cm)
+``
 """
 
 
@@ -98,17 +117,23 @@ various other ways.
 
 _CROP_EXAMPLES = [
     {
-        "cmd": "in.pdf crop '1-end(1cm,2cm)' output out.pdf",
+        "cmd": "in.pdf crop 1cm,2cm output out.pdf",
         "desc": (
             "Remove a 1cm margin from the sides\nand 2cm from the top and bottom of all pages:"
         ),
     },
     {
-        "cmd": "in.pdf crop '1-end(fit,10pt)' output clean.pdf",
+        "cmd": "in.pdf crop fit 10pt output clean.pdf",
         "desc": "Crop every page to its visible content plus 10pt padding.",
     },
     {
         "cmd": "in.pdf crop '2-8even(a5)' preview output out.pdf",
+        "desc": (
+            "Preview effect of cropping the even-numbered pages\nbetween pages 2 and 8 to A5"
+        ),
+    },
+    {
+        "cmd": "in.pdf crop 2-8even a5 preview output out.pdf",
         "desc": (
             "Preview effect of cropping the even-numbered pages\nbetween pages 2 and 8 to A5"
         ),
@@ -150,7 +175,7 @@ _CLIP_EXAMPLES = [
     long_desc=_CROP_LONG_DESC,
     usage="<input> crop <specs>... [preview] output <file> [<option...>]",
     examples=_CROP_EXAMPLES,
-    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}, {c.OPERATION_NAME: "crop"}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS_EXPANDED], {}, {c.OPERATION_NAME: "crop"}),
 )
 def crop_or_clip_pages(pdf: "Pdf", specs: list, operation="crop") -> OpResult:
     """

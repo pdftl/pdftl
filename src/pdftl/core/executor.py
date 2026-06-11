@@ -53,6 +53,7 @@ def _resolve_arguments(arg_style, context):
         c.ALIASES: {},
         c.OPTIONS: {},
         c.OPERATION_ARGS: [],
+        c.OPERATION_ARGS_EXPANDED: [],
         c.INPUTS: [],
         c.OPENED_PDFS: [],
         c.INPUT_FILENAME: None,

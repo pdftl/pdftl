@@ -23,6 +23,7 @@ from pdftl.core.executor import run_operation
 from pdftl.core.registry import register_help_topic, registry
 from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_content
+from pdftl.utils.arg_helpers import expand_shorthand_args
 from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.user_input import pdf_filename_completer
 
@@ -403,6 +404,7 @@ class PipelineManager:
             c.INPUT_PASSWORD: _first_or_none(stage.input_passwords),
             c.INPUT_PDF: _first_or_none(opened_pdfs),
             c.OPERATION_ARGS: stage.operation_args,
+            c.OPERATION_ARGS_EXPANDED: expand_shorthand_args(stage.operation_args),
             c.ALIASES: stage.handles if adjusted_handles is None else adjusted_handles,
             c.OVERLAY_PDF: _first_or_none(stage.operation_args),
             c.OUTPUT: stage.options.get(c.OUTPUT, None),

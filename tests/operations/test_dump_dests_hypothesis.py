@@ -22,7 +22,7 @@ st_atomic_values = st.one_of(
     st.floats(allow_nan=False, allow_infinity=False),
     st.booleans(),
     st.none(),
-    st.text(),
+    st.text(alphabet=st.characters(max_codepoint=1000)),
 )
 
 

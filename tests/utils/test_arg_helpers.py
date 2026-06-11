@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from pdftl.utils.arg_helpers import _load_spec_from_file, resolve_operation_spec
+from pdftl.utils.arg_helpers import (
+    _load_spec_from_file,
+    resolve_operation_spec,
+    expand_shorthand_args,
+)
 
 # --- Fixtures & Mocks ---
 
@@ -266,3 +270,135 @@ def test_load_spec_type_error(tmp_path):
     # Expect the wrapper TypeError
     with pytest.raises(TypeError, match="Failed to instantiate StrictModel"):
         _load_spec_from_file(str(f), StrictModel)
+
+
+######################################################################
+## Unit tests for expand_shorthand_args in pdftl.utils.arg_helpers
+######################################################################
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# A stub is_selector_func that treats tokens starting with a digit or known
+# keywords as valid page selectors, mirroring what is_valid_page_spec does
+# for the cases we care about.
+_PAGE_SELECTORS = {"odd", "even", "end", "1", "2", "1-5", "1-end", "2-8even"}
+
+
+def is_sel(token: str) -> bool:
+    return token in _PAGE_SELECTORS
+
+
+# ---------------------------------------------------------------------------
+# Guardrail: already-parenthesized args are returned unchanged
+# ---------------------------------------------------------------------------
+
+
+def test_passthrough_when_single_arg_has_parens():
+    args = ["1-5(fit,10pt)"]
+    assert expand_shorthand_args(args, is_sel) == args
+
+
+def test_passthrough_when_one_of_many_args_has_parens():
+    args = ["1-3(fit)", "4-end(1cm)"]
+    assert expand_shorthand_args(args, is_sel) == args
+
+
+def test_passthrough_when_non_selector_arg_has_parens():
+    # Even if the first token looks like a selector, a later paren means hands off
+    args = ["1-5", "fit(something)"]
+    assert expand_shorthand_args(args, is_sel) == args
+
+
+# ---------------------------------------------------------------------------
+# Guardrail: empty input
+# ---------------------------------------------------------------------------
+
+
+def test_empty_args_returned_unchanged():
+    assert expand_shorthand_args([], is_sel) == []
+
+
+# ---------------------------------------------------------------------------
+# Options-only (no selector): wraps everything in bare parens
+# ---------------------------------------------------------------------------
+
+
+def test_options_only_single():
+    assert expand_shorthand_args(["fit"], is_sel) == ["(fit)"]
+
+
+def test_options_only_multiple():
+    assert expand_shorthand_args(["fit", "10pt"], is_sel) == ["(fit,10pt)"]
+
+
+def test_options_only_key_value():
+    assert expand_shorthand_args(["threshold=0.01", "dpi=72"], is_sel) == [
+        "(threshold=0.01,dpi=72)"
+    ]
+
+
+def test_options_only_single_key_value():
+    assert expand_shorthand_args(["threshold=0"], is_sel) == ["(threshold=0)"]
+
+
+# ---------------------------------------------------------------------------
+# Selector + options: wraps options inside selector(...)
+# ---------------------------------------------------------------------------
+
+
+def test_selector_with_single_option():
+    assert expand_shorthand_args(["1-5", "fit"], is_sel) == ["1-5(fit)"]
+
+
+def test_selector_with_multiple_options():
+    assert expand_shorthand_args(["2-8even", "a5", "preview"], is_sel) == ["2-8even(a5,preview)"]
+
+
+def test_selector_with_key_value_options():
+    assert expand_shorthand_args(["even", "threshold=0.01", "dpi=72"], is_sel) == [
+        "even(threshold=0.01,dpi=72)"
+    ]
+
+
+def test_selector_only_no_options():
+    # Selector with nothing after it produces selector()
+    # This is the edge case flagged in review — tests document current behaviour.
+    assert expand_shorthand_args(["1-5"], is_sel) == ["1-5()"]
+
+
+# ---------------------------------------------------------------------------
+# is_selector_func injection
+# ---------------------------------------------------------------------------
+
+
+def test_custom_selector_func_never_matches():
+    """With a selector func that always returns False, first token becomes an option."""
+    args = ["1-5", "fit"]
+    result = expand_shorthand_args(args, is_selector_func=lambda _: False)
+    assert result == ["(1-5,fit)"]
+
+
+def test_custom_selector_func_always_matches():
+    """With a selector func that always returns True, first token is always the selector."""
+    args = ["anything", "opt1", "opt2"]
+    result = expand_shorthand_args(args, is_selector_func=lambda _: True)
+    assert result == ["anything(opt1,opt2)"]
+
+
+# ---------------------------------------------------------------------------
+# Output is always a list of exactly one string
+# ---------------------------------------------------------------------------
+
+
+def test_output_is_single_element_list_options_only():
+    result = expand_shorthand_args(["a4"], is_sel)
+    assert isinstance(result, list)
+    assert len(result) == 1
+
+
+def test_output_is_single_element_list_with_selector():
+    result = expand_shorthand_args(["1", "a4"], is_sel)
+    assert isinstance(result, list)
+    assert len(result) == 1

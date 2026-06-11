@@ -37,6 +37,7 @@ from .resolver import (  # Internals exposed for tests
     _resolve_alias_and_spec,
 )
 from .spec_types import PageSpec, PageTransform
+from pdftl.exceptions import InvalidArgumentError
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +188,18 @@ def _parse_omissions(modifier_str, total_pages):
     return SpecParser(total_pages, spec_regex=SPEC_REGEX)._parse_omissions(modifier_str)
 
 
+def is_valid_page_spec(spec):
+    BIG_NUM = 999_999_999
+    try:
+        specs = parse_compound_page_spec(spec)
+        for s in specs:
+            parse_sub_page_spec(s, BIG_NUM)
+    except InvalidArgumentError as exc:
+        logger.debug("%s is not a valid spec, got %s", spec, exc)
+        return False
+    return True
+
+
 __all__ = [
     "PageTransform",
     "PageSpec",
@@ -213,4 +226,5 @@ __all__ = [
     "_parse_scaling",
     "_parse_omissions",
     "SPEC_REGEX",
+    "is_valid_page_spec",
 ]

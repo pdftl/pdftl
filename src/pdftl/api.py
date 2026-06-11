@@ -23,6 +23,7 @@ from pdftl.cli.pipeline import PipelineManager
 from pdftl.core import executor
 from pdftl.exceptions import MissingArgumentError, OperationError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
+from pdftl.utils.arg_helpers import expand_shorthand_args
 
 if TYPE_CHECKING:
     import pikepdf
@@ -163,6 +164,7 @@ def _prepare_operation_context(operation_name: str, args: tuple, kwargs: dict) -
     context = {
         "operation": operation_name,
         c.OPERATION_ARGS: op_args,
+        c.OPERATION_ARGS_EXPANDED: expand_shorthand_args(op_args),
         c.OPTIONS: kwargs.copy(),
         c.INPUTS: final_inputs,
         c.OPENED_PDFS: final_opened,

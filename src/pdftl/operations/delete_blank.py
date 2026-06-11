@@ -67,6 +67,9 @@ An optional page selector (e.g. `1-5`, `odd`) restricts which pages are
 
 The syntax is `[selector](Key=Value, ...)`, where all parameters are optional.
 
+If you only have one such selector block, you can replace it with separate arguments
+without parentheses or commas, as a convenient shorthand.
+
 ### Parameters
 
 | Parameter   | Description                                             | Default | Example      |
@@ -86,16 +89,20 @@ _DELETE_BLANK_EXAMPLES = [
         "desc": "Delete blank pages using default threshold and stddev detection.",
     },
     {
-        "cmd": "in.pdf delete_blank '(threshold=0)' output out.pdf",
+        "cmd": "in.pdf delete_blank threshold=0 output out.pdf",
         "desc": "Delete only perfectly white pages (zero ink coverage).",
     },
     {
-        "cmd": "in.pdf delete_blank '(stddev=3,mode=rgb)' output out.pdf",
+        "cmd": "in.pdf delete_blank stddev=3 mode=rgb output out.pdf",
         "desc": "Delete pages that are visually uniform in any colour, using RGB analysis.",
     },
     {
-        "cmd": "in.pdf delete_blank 'even(threshold=0.01,dpi=72)' output out.pdf",
+        "cmd": "in.pdf delete_blank even threshold=0.01 dpi=72 output out.pdf",
         "desc": "On even pages only, delete near-blank pages rendered at 72 dpi.",
+    },
+    {
+        "cmd": "in.pdf delete_blank '1-3(threshold=0.01)' '4-end(threshold=0.02)'  output out.pdf",
+        "desc": "Delete near-blank pages, with different thresholds on different pages.",
     },
 ]
 
@@ -281,7 +288,7 @@ def _find_blank_pages_for_spec(pdf, spec: _BlankSpec) -> set[int]:
     long_desc=_DELETE_BLANK_LONG_DESC,
     usage="<input> delete_blank '[spec](params)' output <output>",
     examples=_DELETE_BLANK_EXAMPLES,
-    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS_EXPANDED], {}),
 )
 def delete_blank(pdf, specs) -> OpResult:
     """

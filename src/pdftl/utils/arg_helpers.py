@@ -11,6 +11,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
+from pdftl.utils.page_specs import is_valid_page_spec
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -115,3 +117,32 @@ def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T
         return model_class(**data)
     except TypeError as e:
         raise TypeError(f"Failed to instantiate {model_class.__name__}: {e}") from e
+
+
+def expand_shorthand_args(args: list[str], is_selector_func=is_valid_page_spec) -> list[str]:
+    """
+    A universal framework-level shorthand expander for parenthesized syntax.
+    """
+    # Guardrail: If the user already used parenthesized syntax, touch nothing.
+    if not args or any("(" in arg for arg in args):
+        logger.debug("Returning unchanged")
+        return args
+
+    # Step 1: Classify the first token using your core validation function
+    first_token = args[0]
+    if is_selector_func(first_token):
+        logger.debug("%s is selector", first_token)
+        selector = first_token
+        options = args[1:]
+    else:
+        logger.debug("%s is NOT selector", first_token)
+        selector = ""
+        options = args
+
+    # Step 2: Pack all sequential options cleanly into commas
+    opts_str = ",".join(options)
+
+    if selector:
+        return [f"{selector}({opts_str})"]
+    else:
+        return [f"({opts_str})"]

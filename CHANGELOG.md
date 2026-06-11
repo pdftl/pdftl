@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - pipeline info added to `verbose` mode
 
+- make parentheses optional for `crop`, `clip`, `delete_blank` and `delete_images`, in many cases
+
 ### Added
 
 - repetitions in page specs via`rep<N>`

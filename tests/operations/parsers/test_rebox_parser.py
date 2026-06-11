@@ -104,6 +104,43 @@ def test_specs_to_page_rules_with_preview(mocker):
     assert page_rules == {0: "a4"}
 
 
+def test_specs_to_page_rules_with_local_preview(mocker):
+    mock_page_spec = mocker.patch(
+        "pdftl.operations.parsers.rebox_parser.page_numbers_matching_page_spec"
+    )
+    mock_page_spec.return_value = [1]
+    specs = ["1(a4,preview)"]
+    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+    mock_page_spec.assert_called_with("1", 1)
+    assert preview is True
+    assert page_rules == {0: "a4"}
+
+
+def test_specs_to_page_rules_abs(mocker):
+    mock_page_spec = mocker.patch(
+        "pdftl.operations.parsers.rebox_parser.page_numbers_matching_page_spec"
+    )
+    mock_page_spec.return_value = [2]
+    specs = ["2(abs,100,150,400,500)"]
+    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+    mock_page_spec.assert_called_with("2", 1)
+    assert preview is False
+    assert page_rules == {1: "abs,100,150,400,500"}
+
+
+def test_specs_to_page_rules_abs_invalid(mocker):
+    mock_page_spec = mocker.patch(
+        "pdftl.operations.parsers.rebox_parser.page_numbers_matching_page_spec"
+    )
+    mock_page_spec.return_value = [2]
+    specs = ["2(abs,100,150,400)"]
+    with pytest.raises(ValueError, match="4 comma-separated values"):
+        cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+    specs = ["2(abs,100,150,400,500,12)"]
+    with pytest.raises(ValueError, match="4 comma-separated values"):
+        cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+
+
 def test_specs_to_page_rules_multiple_and_default_range(mocker):
     mock_page_spec = mocker.patch(
         "pdftl.operations.parsers.rebox_parser.page_numbers_matching_page_spec"

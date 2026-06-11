@@ -257,6 +257,7 @@ PAGE_LABEL_STYLE_MAP = {
 INPUTS = "inputs"
 OPENED_PDFS = "opened_pdfs"
 OPERATION_ARGS = "operation_args"
+OPERATION_ARGS_EXPANDED = "operation_args_expanded"
 ALIASES = "aliases"
 OPTIONS = "options"
 OPERATION_NAME = "operation"
@@ -299,6 +300,7 @@ __all__ = [
     "INPUTS",
     "OPENED_PDFS",
     "OPERATION_ARGS",
+    "OPERATION_ARGS_EXPANDED",
     "ALIASES",
     "OPERATION_NAME",
     "OPTIONS",

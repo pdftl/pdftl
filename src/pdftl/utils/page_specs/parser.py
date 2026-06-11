@@ -54,7 +54,10 @@ class SpecParser:
         self.spec_regex = spec_regex or SPEC_REGEX
 
     def parse(self, spec_str: str) -> PageSpec:
-        """Parses a single atomic spec string into a PageSpec object."""
+        """Parses a single atomic spec string into a PageSpec object.
+
+        Raises pdftl.exceptions.InvalidArgumentError on failure.
+        """
         logger.debug("spec=%s, total_pages=%s", spec_str, self.total_pages)
 
         # 1. Parse the primary page range
