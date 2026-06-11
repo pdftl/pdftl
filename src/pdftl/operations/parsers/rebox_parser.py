@@ -167,7 +167,7 @@ def parse_smart_rebox_spec(spec_str, page_width, page_height, operation):
 def parse_rebox_margins(spec_str, page_width, page_height, operation):
     """
     Parses a comma-separated rebox spec string into four point values
-    for left, top, right, and bottom margins.
+    following the LTRB (Left, Top, Right, Bottom) convention.
     """
     parts = [p.strip() for p in spec_str.split(",")]
     num_parts = len(parts)
@@ -178,18 +178,19 @@ def parse_rebox_margins(spec_str, page_width, page_height, operation):
             f"but found {num_parts}."
         )
 
-    # The logic cascades based on the number of parts provided.
-    left = dim_str_to_pts(parts[0], page_width)
+    # 1. Map string specs using LTRB pair fallbacks
+    # 1 part:  [L]       -> L=L, T=L, R=L, B=L
+    # 2 parts: [L, T]    -> L=L, T=T, R=L, B=T
+    # 3 parts: [L, T, R] -> L=L, T=T, R=R, B=T
+    left_str = parts[0]
+    top_str = parts[1] if num_parts >= 2 else parts[0]
+    right_str = parts[2] if num_parts >= 3 else parts[0]
+    bottom_str = parts[3] if num_parts >= 4 else (parts[1] if num_parts >= 2 else parts[0])
 
-    top = dim_str_to_pts(parts[1], page_width) if num_parts >= 2 else left
-
-    right = dim_str_to_pts(parts[2], page_width) if num_parts >= 3 else left
-
-    # Bottom defaults to top's value but uses page_height for its own calculation
-    # only when a fourth value is explicitly provided.
-    if num_parts >= 4:
-        bottom = dim_str_to_pts(parts[3], page_height)
-    else:
-        bottom = top
+    # 2. Convert to points safely using the correct page dimension for each axis
+    left = dim_str_to_pts(left_str, page_width)
+    top = dim_str_to_pts(top_str, page_height)
+    right = dim_str_to_pts(right_str, page_width)
+    bottom = dim_str_to_pts(bottom_str, page_height)
 
     return left, top, right, bottom

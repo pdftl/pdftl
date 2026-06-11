@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_annots` now properly passing the PDF down the pipeline
 
+- Top margin percentage bug fixed in `clip` and `crop`
+
 ### Changed
 
 - pipeline info added to `verbose` mode

@@ -94,12 +94,13 @@ def test_parse_rebox_margins_shorthand_property(parts):
 
     if len(parts) == 1:
         # 1 value: [all sides]
-        expected = dim_str_to_pts(parts[0], page_width)
-        assert (left, top, right, bottom) == (expected, expected, expected, expected)
+        expected_lr = dim_str_to_pts(parts[0], page_width)
+        expected_tb = dim_str_to_pts(parts[0], page_height)
+        assert (left, top, right, bottom) == (expected_lr, expected_tb, expected_lr, expected_tb)
     elif len(parts) == 2:
         # 2 values: [left] [top] (right=left, bottom=top)
         expected_left = dim_str_to_pts(parts[0], page_width)
-        expected_top = dim_str_to_pts(parts[1], page_width)
+        expected_top = dim_str_to_pts(parts[1], page_height)
         assert (left, top, right, bottom) == (
             expected_left,
             expected_top,
@@ -109,7 +110,7 @@ def test_parse_rebox_margins_shorthand_property(parts):
     elif len(parts) == 3:
         # 3 values: [left] [top] [right] (bottom=top)
         expected_left = dim_str_to_pts(parts[0], page_width)
-        expected_top = dim_str_to_pts(parts[1], page_width)
+        expected_top = dim_str_to_pts(parts[1], page_height)
         expected_right = dim_str_to_pts(parts[2], page_width)
         assert (left, top, right, bottom) == (
             expected_left,
@@ -119,9 +120,8 @@ def test_parse_rebox_margins_shorthand_property(parts):
         )
     elif len(parts) == 4:
         # 4 values: [left] [top] [right] [bottom]
-        # Note: 'bottom' (parts[3]) uses page_height!
         expected_left = dim_str_to_pts(parts[0], page_width)
-        expected_top = dim_str_to_pts(parts[1], page_width)
+        expected_top = dim_str_to_pts(parts[1], page_height)
         expected_right = dim_str_to_pts(parts[2], page_width)
         expected_bottom = dim_str_to_pts(parts[3], page_height)  # Uses page_height
         assert (left, top, right, bottom) == (

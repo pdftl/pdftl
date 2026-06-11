@@ -65,7 +65,7 @@ def test_parse_rebox_margins_shorthand():
     assert margins == (10.0, 20.0, 30.0, 40.0)
     # Test 4 values with percentages
     margins = cp.parse_rebox_margins("10%, 5%, 10%, 5%", page_width, page_height, "dummy_op")
-    assert margins == (60.0, 30.0, 60.0, 40.0)
+    assert margins == (60.0, 40.0, 60.0, 40.0)
 
 
 def test_parse_rebox_margins_invalid():
