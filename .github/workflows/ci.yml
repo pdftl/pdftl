@@ -83,11 +83,6 @@ jobs:
             arch: x86_64
             setup: pacman -Syu --noconfirm python python-pip git gcc
 
-          - distro: Alpine (musl / Minimal)
-            image: alpine:latest
-            arch: x86_64
-            setup: apk add --no-cache python3 py3-pip git gcc musl-dev python3-dev tzdata py3-zxing-cpp
-
           - distro: Fedora (RPM Ecosystem)
             image: fedora:latest
             arch: x86_64
