@@ -9,8 +9,8 @@ def test_visual_style_text_stroke_and_fill(six_page_rotated_pdf, assert_pdf_matc
     op_args = [
         "1-3",
         "stroke=2.0",
-        "stroke_color=1,0,0",  # Red outline
-        "fill_color=0,0,1",  # Blue fill
+        "stroke_color=1 0 0",  # Red outline
+        "fill_color=0 0 1",  # Blue fill
     ]
     result = pdftl.api.style_text(pdf=six_page_rotated_pdf, operation_args=op_args)
     assert_pdf_match(result)
@@ -35,13 +35,13 @@ def test_visual_style_text_percentage_and_render_modes(six_page_rotated_pdf, ass
     op_args = [
         "1-3",
         "stroke=3%",
-        "stroke_color=0,1,0",  # Green outline
+        "stroke_color=0 1 0",  # Green outline
     ]
     result1 = pdftl.api.style_text(pdf=pdf, operation_args=op_args)
     op_args2 = [
         "4-6",
         "stroke=3",  # Absolute
-        "stroke_color=0,1,1",  # Cyan outline
+        "stroke_color=0 1 1",  # Cyan outline
     ]
     result2 = pdftl.api.style_text(pdf=result1, operation_args=op_args2)
     assert_pdf_match(result2, suffix="after")

@@ -97,7 +97,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 * **Content stream replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of raw content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, and [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
+* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html) and [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
@@ -204,6 +204,7 @@ See the **[API Tutorial][4]** for more details.
 | [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages                    |
 | [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |
+| [`barcode`](https://pdftl.readthedocs.io/en/latest/operations/barcode.html)                             | Generate and add a barcode to pages                             |
 | [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html)                             | Impose pages into printable booklet signatures                  |
 | [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html)                                 | Split a single PDF into multiple files                          |
 | [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF                |
@@ -214,8 +215,8 @@ See the **[API Tutorial][4]** for more details.
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
 | [`delete_attachments`](https://pdftl.readthedocs.io/en/latest/operations/delete_attachments.html)       | Delete file attachments based on criteria                       |
-| [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
+| [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
 | [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html)               | Extract PDF bookmarks into YAML or JSON                         |
@@ -250,13 +251,16 @@ See the **[API Tutorial][4]** for more details.
 | [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html)                         | Reformat page content streams                                   |
 | [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html)             | Optimize images                                                 |
 | [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                             |
-| [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams                       |
 | [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                                      |
+| [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html)                             | Convert images to grayscale                       |
+| [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html)                             | Make non-image page content gray                |
+| [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams                       |
 | [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html)             | Resample images                                                 |
 | [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
 | [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html)                                     | Set document properties, viewer preferences, and page labels    |
 | [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |
 | [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |
+| [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html)                       | Change appearance of text                                       |
 | [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                                         |
 | [`unpause`](https://pdftl.readthedocs.io/en/latest/operations/unpause.html)                             | Remove 'pause' frames from a slide deck                         |
 | [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html)           | Replace PDF bookmarks from a YAML or JSON file                  |

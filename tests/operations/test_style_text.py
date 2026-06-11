@@ -8,137 +8,216 @@ from pdftl.core.core_types import OpResult
 from pdftl.operations.style_text import (
     style_text_in_content_streams,
     _get_color_or_raise,
-    _apply_style_text_spec_in_content_streams,
+    _parse_style_text_args,
+    _build_replacer,
+    _apply_to_pages,
     TextStrokeReplaceContentStream,
 )
 
 
 # ==============================================================================
-# 1. Tests for Argument Parsing & Main Entry Point
+# 1. Tests for _parse_style_text_args
 # ==============================================================================
 
 
-def test_style_text_in_content_streams_defaults():
-    """Verify default behavior when no explicit options or pages are provided."""
+def test_parse_style_text_args_empty():
+    """No args → apply defaults to all pages."""
+    result = _parse_style_text_args([])
+    assert result == [("-", {})]
+
+
+def test_parse_style_text_args_options_only():
+    """Bare-paren form (no selector) → all-pages spec with parsed kwargs."""
+    result = _parse_style_text_args(["(stroke=0.5,color=0 0 0)"])
+    assert len(result) == 1
+    page_spec, kwargs = result[0]
+    assert page_spec == "-"
+    assert kwargs["stroke"] == "0.5"
+    assert kwargs["color"] == "0 0 0"
+
+
+def test_parse_style_text_args_with_selector():
+    """Selector(opts) form → correct page spec and kwargs."""
+    result = _parse_style_text_args(["1-3(stroke=1.5,stroke_color=1 0 0)"])
+    assert len(result) == 1
+    page_spec, kwargs = result[0]
+    assert page_spec == "1-3"
+    assert kwargs["stroke"] == "1.5"
+    assert kwargs["stroke_color"] == "1 0 0"
+
+
+def test_parse_style_text_args_multiple_specs():
+    """Multiple spec blocks produce multiple (page_spec, kwargs) pairs."""
+    result = _parse_style_text_args(["1-3(stroke=0.5)", "4-end(stroke=2%)"])
+    assert len(result) == 2
+    assert result[0] == ("1-3", {"stroke": "0.5"})
+    assert result[1] == ("4-end", {"stroke": "2%"})
+
+
+def test_parse_style_text_args_no_parens_fallback():
+    """A plain token with no parens (shouldn't occur after framework expansion, but
+    handled gracefully) → treated as page spec with empty kwargs."""
+    result = _parse_style_text_args(["odd"])
+    assert result == [("odd", {})]
+
+
+def test_parse_style_text_args_empty_parens():
+    """Empty parens () → all-pages spec with empty kwargs."""
+    result = _parse_style_text_args(["()"])
+    page_spec, kwargs = result[0]
+    assert page_spec == "-"
+    assert kwargs == {}
+
+
+# ==============================================================================
+# 2. Tests for _build_replacer
+# ==============================================================================
+
+
+def test_build_replacer_returns_none_when_nothing_set():
+    """No meaningful options → returns None (nothing to apply)."""
+    mock_pdf = MagicMock()
+    assert _build_replacer(mock_pdf, {}) is None
+
+
+def test_build_replacer_absolute_stroke():
+    r = _build_replacer(MagicMock(), {"stroke": "1.5"})
+    assert r is not None
+    assert r.stroke_width == 1.5
+    assert r.stroke_width_type == "absolute"
+    assert r.tr_mode == 2
+
+
+def test_build_replacer_percentage_stroke():
+    r = _build_replacer(MagicMock(), {"stroke": "2%"})
+    assert r is not None
+    assert r.stroke_width == 2.0
+    assert r.stroke_width_type == "percentage"
+    assert r.tr_mode == 2
+
+
+def test_build_replacer_stroke_color_defaults_stroke_width():
+    """stroke_color without explicit stroke → stroke defaults to 0.5."""
+    r = _build_replacer(MagicMock(), {"stroke_color": "1 0 0"})
+    assert r is not None
+    assert r.stroke_width == 0.5
+    assert r.stroke_color == [1.0, 0.0, 0.0]
+    assert r.tr_mode == 2
+
+
+def test_build_replacer_color_sets_fill_and_stroke():
+    r = _build_replacer(MagicMock(), {"stroke": "0.5", "color": "0 0 1"})
+    assert r.fill_color == [0.0, 0.0, 1.0]
+    assert r.stroke_color == [0.0, 0.0, 1.0]
+
+
+def test_build_replacer_fill_and_stroke_separate():
+    r = _build_replacer(
+        MagicMock(), {"stroke": "0.5", "fill_color": "1 0 0", "stroke_color": "0 1 0"}
+    )
+    assert r.fill_color == [1.0, 0.0, 0.0]
+    assert r.stroke_color == [0.0, 1.0, 0.0]
+
+
+def test_build_replacer_invalid_stroke_raises():
+    with pytest.raises(InvalidArgumentError, match="Invalid stroke width"):
+        _build_replacer(MagicMock(), {"stroke": "not_a_number"})
+
+
+def test_build_replacer_negative_stroke_raises():
+    with pytest.raises(InvalidArgumentError):
+        _build_replacer(MagicMock(), {"stroke": "-1.5"})
+
+
+# ==============================================================================
+# 3. Tests for Main Entry Point
+# ==============================================================================
+
+
+def test_style_text_in_content_streams_no_args():
+    """No args → succeeds, calls _apply_to_pages with all-pages spec."""
     mock_pdf = MagicMock()
     mock_pdf.pages = [MagicMock(), MagicMock()]
 
-    with (
-        patch("pdftl.operations.style_text.parse_keyval_list") as mock_parse,
-        patch(
-            "pdftl.operations.style_text._apply_style_text_spec_in_content_streams"
-        ) as mock_apply,
-    ):
-        mock_parse.return_value = {}
-
-        result = style_text_in_content_streams(mock_pdf, None)
-
+    with patch("pdftl.operations.style_text._apply_to_pages") as mock_apply:
+        result = style_text_in_content_streams(mock_pdf, [])
         assert isinstance(result, OpResult)
         assert result.success is True
-        assert result.pdf == mock_pdf
-        mock_apply.assert_called_once_with(mock_pdf, "-", None, "absolute", None, None, None)
+        # No-op: _build_replacer({}) returns None, so _apply_to_pages not called
+        mock_apply.assert_not_called()
 
 
-def test_style_text_in_content_streams_with_valid_args():
-    """Verify absolute and percentage stroke parsing along with colors."""
+def test_style_text_in_content_streams_with_expanded_args():
+    """OPERATION_ARGS_EXPANDED form: selector(opts) → correct page spec applied."""
     mock_pdf = MagicMock()
     mock_pdf.pages = [MagicMock()]
 
-    with (
-        patch("pdftl.operations.style_text.parse_keyval_list") as mock_parse,
-        patch(
-            "pdftl.operations.style_text._apply_style_text_spec_in_content_streams"
-        ) as mock_apply,
-    ):
-        mock_parse.side_effect = lambda args, **kwargs: (
-            kwargs["bare_tokens"].append("1-2"),
-            {"stroke": "1.5", "color": "0,0,1"},
-        )[1]
-
-        style_text_in_content_streams(mock_pdf, ["1-2", "stroke=1.5", "color=0,0,1"])
-        mock_apply.assert_called_once_with(
-            mock_pdf, "1-2", 1.5, "absolute", [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], 2
-        )
+    with patch("pdftl.operations.style_text._apply_to_pages") as mock_apply:
+        style_text_in_content_streams(mock_pdf, ["1-2(stroke=1.5,color=0 0 1)"])
+        assert mock_apply.call_count == 1
+        page_spec = mock_apply.call_args[0][1]
+        replacer = mock_apply.call_args[0][2]
+        assert page_spec == "1-2"
+        assert replacer.stroke_width == 1.5
+        assert replacer.fill_color == [0.0, 0.0, 1.0]
+        assert replacer.tr_mode == 2
 
 
-def test_style_text_in_content_streams_with_valid_percentage_args():
-    """Verify absolute and percentage stroke parsing along with colors."""
+def test_style_text_in_content_streams_multiple_specs():
+    """Multiple spec blocks → _apply_to_pages called once per spec."""
     mock_pdf = MagicMock()
     mock_pdf.pages = [MagicMock()]
 
-    with (
-        patch("pdftl.operations.style_text.parse_keyval_list") as mock_parse,
-        patch(
-            "pdftl.operations.style_text._apply_style_text_spec_in_content_streams"
-        ) as mock_apply,
-    ):
-        mock_parse.side_effect = lambda args, **kwargs: (
-            kwargs["bare_tokens"].append("1-2"),
-            {"stroke": "1.5%", "stroke_color": "1,0.5,0.01"},
-        )[1]
-
-        style_text_in_content_streams(mock_pdf, ["1-2", "stroke=1.5%", "stroke_color=1,0.5,0.01"])
-        mock_apply.assert_called_once_with(
-            mock_pdf, "1-2", 1.5, "percentage", [1.0, 0.5, 0.01], None, 2
-        )
+    with patch("pdftl.operations.style_text._apply_to_pages") as mock_apply:
+        style_text_in_content_streams(mock_pdf, ["1-3(stroke=0.5)", "4-end(stroke=2%)"])
+        assert mock_apply.call_count == 2
+        assert mock_apply.call_args_list[0][0][1] == "1-3"
+        assert mock_apply.call_args_list[1][0][1] == "4-end"
 
 
-def test_style_text_stroke_color_defaults_stroke_width():
-    """Verify stroke defaults to 0.5 if stroke_color is set without width."""
+def test_style_text_in_content_streams_returns_pdf():
     mock_pdf = MagicMock()
-    mock_pdf.pages = [MagicMock()]
-
-    with (
-        patch("pdftl.operations.style_text.parse_keyval_list") as mock_parse,
-        patch(
-            "pdftl.operations.style_text._apply_style_text_spec_in_content_streams"
-        ) as mock_apply,
-    ):
-        mock_parse.return_value = {"stroke_color": "1,0,0"}
-        style_text_in_content_streams(mock_pdf, ["stroke_color=1,0,0"])
-
-        mock_apply.assert_called_once_with(
-            mock_pdf, "-", 0.5, "absolute", [1.0, 0.0, 0.0], None, 2
-        )
-
-
-def test_style_text_invalid_stroke_raises_error():
-    """Verify that a poorly formatted stroke value yields an InvalidArgumentError."""
-    mock_pdf = MagicMock()
-    with patch("pdftl.operations.style_text.parse_keyval_list") as mock_parse:
-        mock_parse.return_value = {"stroke": "invalid_stroke_val"}
-
-        with pytest.raises(InvalidArgumentError) as exc_info:
-            style_text_in_content_streams(mock_pdf, ["stroke=invalid_stroke_val"])
-        assert "Invalid stroke width provided" in str(exc_info.value)
-
-
-def test_style_text_negative_stroke_raises_error():
-    """Verify that negative numerical stroke values raise an error."""
-    mock_pdf = MagicMock()
-    with patch("pdftl.operations.style_text.parse_keyval_list") as mock_parse:
-        mock_parse.return_value = {"stroke": "-1.5"}
-
-        with pytest.raises(InvalidArgumentError):
-            style_text_in_content_streams(mock_pdf, ["stroke=-1.5"])
+    mock_pdf.pages = []
+    result = style_text_in_content_streams(mock_pdf, [])
+    assert result.pdf is mock_pdf
 
 
 # ==============================================================================
-# 2. Tests for Color Helper Function
+# 4. Tests for _apply_to_pages
+# ==============================================================================
+
+
+def test_apply_to_pages_calls_replacer_for_matching_pages():
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [MagicMock(), MagicMock(), MagicMock()]
+    mock_replacer = MagicMock()
+
+    with patch(
+        "pdftl.operations.style_text.page_numbers_matching_page_spec",
+        return_value=[1, 3],
+    ) as mock_matching:
+        _apply_to_pages(mock_pdf, "1,3", mock_replacer)
+        mock_matching.assert_called_once_with("1,3", 3)
+        assert mock_replacer.apply.call_count == 2
+        mock_replacer.apply.assert_has_calls([call(1), call(3)])
+
+
+# ==============================================================================
+# 5. Tests for Color Helper Function
 # ==============================================================================
 
 
 @pytest.mark.parametrize(
     "data, key, expected",
     [
-        ({"color": "0,0,0"}, "color", [0.0, 0.0, 0.0]),
-        ({"fill_color": "0.5,0.2,0.1,0.0"}, "fill_color", [0.5, 0.2, 0.1, 0.0]),
+        ({"color": "0 0 0"}, "color", [0.0, 0.0, 0.0]),
+        ({"fill_color": "0.5 0.2 0.1 0.0"}, "fill_color", [0.5, 0.2, 0.1, 0.0]),
         ({"stroke_color": "1"}, "stroke_color", [1.0]),
         ({}, "missing_key", None),
     ],
 )
 def test_get_color_or_raise_success(data, key, expected):
-    """Ensure valid colors maps to flat float lists and missing keys return None."""
+    """Ensure valid colors map to flat float lists and missing keys return None."""
     assert _get_color_or_raise(data, key) == expected
 
 
@@ -158,40 +237,7 @@ def test_get_color_or_raise_failure(data, key):
 
 
 # ==============================================================================
-# 3. Tests for Spec Pipeline Processing
-# ==============================================================================
-
-
-def test_apply_style_text_spec_empty():
-    """Verify early return when spec string evaluates to empty/falsy."""
-    mock_pdf = MagicMock()
-    _apply_style_text_spec_in_content_streams(mock_pdf, "", 0.5, "absolute", None, None, 2)
-    mock_pdf.pages.assert_not_called()
-
-
-def test_apply_style_text_spec_in_content_streams():
-    """Verify page loop logic and TextStrokeReplaceContentStream integration."""
-    mock_pdf = MagicMock()
-    mock_pdf.pages = [MagicMock(), MagicMock(), MagicMock()]
-
-    with (
-        patch("pdftl.operations.style_text.page_numbers_matching_page_spec") as mock_matching,
-        patch("pdftl.operations.style_text.TextStrokeReplaceContentStream") as mock_replacer_cls,
-    ):
-        mock_matching.return_value = [1, 3]
-        mock_replacer = MagicMock()
-        mock_replacer_cls.return_value = mock_replacer
-
-        _apply_style_text_spec_in_content_streams(
-            mock_pdf, "1,3", 0.5, "absolute", [0, 0, 0], [1, 1, 1], 2
-        )
-
-        assert mock_replacer.apply.call_count == 2
-        mock_replacer.apply.assert_has_calls([call(1), call(3)])
-
-
-# ==============================================================================
-# 4. Tests for TextStrokeReplaceContentStream Mechanics
+# 6. Tests for TextStrokeReplaceContentStream Mechanics
 # ==============================================================================
 
 
@@ -239,7 +285,7 @@ def test_colors_to_list_empty_operands(base_replacer):
 
 
 def test_get_absolute_stroke_width(base_replacer):
-    """Verify stroke calculation under both absolute and percentage bounds."""
+    """Verify stroke calculation under both absolute and percentage modes."""
     state = {"font_size": 10.0}
 
     base_replacer.stroke_width_type = "absolute"
@@ -260,7 +306,6 @@ def test_state_matches_desired_granularity():
         pdf=MagicMock(), stroke_width=1.0, stroke_color=[1, 1, 1], fill_color=[0, 0, 0], tr_mode=2
     )
 
-    # Line 288 mismatch: render mode mismatch
     assert (
         replacer._state_matches_desired(
             {
@@ -271,9 +316,8 @@ def test_state_matches_desired_granularity():
             }
         )
         is False
-    )
+    ), "render_mode mismatch should return False"
 
-    # Line 292 mismatch: stroke width mismatch
     assert (
         replacer._state_matches_desired(
             {
@@ -284,9 +328,8 @@ def test_state_matches_desired_granularity():
             }
         )
         is False
-    )
+    ), "stroke_width mismatch should return False"
 
-    # Line 294 mismatch: stroke color mismatch
     assert (
         replacer._state_matches_desired(
             {
@@ -297,9 +340,8 @@ def test_state_matches_desired_granularity():
             }
         )
         is False
-    )
+    ), "stroke_color mismatch should return False"
 
-    # Line 296 mismatch: fill color mismatch
     assert (
         replacer._state_matches_desired(
             {
@@ -310,9 +352,8 @@ def test_state_matches_desired_granularity():
             }
         )
         is False
-    )
+    ), "fill_color mismatch should return False"
 
-    # Line 297 match: All match perfectly
     assert (
         replacer._state_matches_desired(
             {
@@ -323,11 +364,11 @@ def test_state_matches_desired_granularity():
             }
         )
         is True
-    )
+    ), "all matching should return True"
 
 
 def test_force_style_state_injection(base_replacer):
-    """Verify correct operator combinations are appended when the state is out of sync."""
+    """Verify correct operator combinations are appended when state is out of sync."""
     current_state = {
         "render_mode": 0,
         "stroke_width": 0.0,
@@ -344,12 +385,12 @@ def test_force_style_state_injection(base_replacer):
 
 
 # ==============================================================================
-# 5. Tests for State Management Engine & Instruction Processing
+# 7. Tests for State Management Engine & Instruction Processing
 # ==============================================================================
 
 
 def test_process_instructions_stack_and_operators(base_replacer):
-    """Test graphics state push/pop tracking loops and operator intercept updates."""
+    """Test graphics state push/pop tracking and operator intercept updates."""
     instructions = [
         ([], "q"),
         (["/F1", 12], "Tf"),
@@ -363,8 +404,6 @@ def test_process_instructions_stack_and_operators(base_replacer):
     new_insts_bytes = base_replacer._process_instructions(instructions)
     assert isinstance(new_insts_bytes, bytes)
 
-    # Parse back the returned bytes to ensure standard operator count maps perfectly.
-    # pikepdf.parse_content_stream requires a Stream object, so we wrap the raw bytes.
     with pikepdf.new() as pdf:
         dummy_stream = pikepdf.Stream(pdf, new_insts_bytes)
         parsed_insts = list(pikepdf.parse_content_stream(dummy_stream))
@@ -377,19 +416,15 @@ def test_process_op_color_spaces(base_replacer):
     """Exercise alternate color space operator processing blocks."""
     state = {}
 
-    # Line 351: CMYK fill ('k')
     base_replacer._process_op("k", [0.1, 0.2, 0.3, 0.4], state, [], [])
     assert state["fill_color"] == [0.1, 0.2, 0.3, 0.4]
 
-    # Line 353: Gray stroke ('G')
     base_replacer._process_op("G", [0.7], state, [], [])
     assert state["stroke_color"] == [0.7]
 
-    # Line 355: Gray fill ('g')
     base_replacer._process_op("g", [0.2], state, [], [])
     assert state["fill_color"] == [0.2]
 
-    # Line 357: RGB stroke ('RG')
     base_replacer._process_op("RG", [1.0, 0.5, 0.0], state, [], [])
     assert state["stroke_color"] == [1.0, 0.5, 0.0]
 
@@ -409,7 +444,7 @@ def test_update_state_full_coverage():
 
 
 def test_process_op_text_triggering(base_replacer):
-    """Verify styling elements are injected right before text draw triggers."""
+    """Verify styling elements are injected right before text draw operators."""
     state = {
         "font": "/F1",
         "font_size": 12.0,
@@ -432,12 +467,12 @@ def test_process_op_text_triggering(base_replacer):
 
 
 # ==============================================================================
-# 6. Real pikepdf Stream Processing & Form XObject Recursion Tests
+# 8. Real pikepdf Stream Processing & Form XObject Recursion Tests
 # ==============================================================================
 
 
 def test_apply_page_with_no_contents(base_replacer):
-    """Ensure safe completion when processing a page containing no contents."""
+    """Ensure safe completion when processing a page with no contents."""
     mock_page = MagicMock()
     mock_page.get.return_value = None
     base_replacer.pdf.pages = [mock_page]
@@ -446,7 +481,7 @@ def test_apply_page_with_no_contents(base_replacer):
 
 
 def test_apply_single_stream_and_processed_filtering_real_objects():
-    """Test processing unique streams, skipping visited streams, and resource mapping using real pikepdf structures."""
+    """Test processing unique streams, skipping visited ones, using real pikepdf structures."""
     with pikepdf.new() as pdf:
         page = pdf.add_blank_page()
 
@@ -483,7 +518,7 @@ def test_apply_single_stream_and_processed_filtering_real_objects():
 
 
 def test_apply_page_with_multiple_streams_real_objects():
-    """Verify that multiple content streams inside a pikepdf.Array are individually processed."""
+    """Verify multiple content streams inside a pikepdf.Array are individually processed."""
     with pikepdf.new() as pdf:
         page = pdf.add_blank_page()
 
@@ -527,7 +562,7 @@ def test_process_resources_already_processed_xobject_real_objects():
 
 
 def test_process_resources_recurs_into_form_xobjects_real_objects(base_replacer):
-    """Verify recursive lookups step into nested Form XObjects using real Dictionary/Stream wrappers."""
+    """Verify recursive lookups step into nested Form XObjects."""
     with pikepdf.new() as pdf:
         nested_form = pikepdf.Stream(pdf, b"(Nested content) Tj")
         nested_form["/Subtype"] = pikepdf.Name("/Form")
@@ -541,7 +576,6 @@ def test_process_resources_recurs_into_form_xobjects_real_objects(base_replacer)
                 base_replacer, "_process_resources", wraps=base_replacer._process_resources
             ) as spy_res,
         ):
-            # Fix: The method requires a real `bytes` object to write back to the stream
             mock_proc.return_value = b"Mocked Bytes Injection"
 
             base_replacer._process_resources(resources)

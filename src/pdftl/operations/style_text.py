@@ -36,9 +36,29 @@ The default page range is all pages.
 * `stroke=<float|percent>`  The width of the text outline. May be an absolute value (e.g. 0.5)
 or a percentage of the current font size (e.g. 2%). Defaults to 0.5
 if stroke_color is set, otherwise text outlines are not altered.
-* `color=<r,g,b>` Set both fill and stroke colour (comma-separated floats, 0.0–1.0).
-* `fill_color=<r,g,b>` Set fill colour only.
-* `stroke_color=<r,g,b>`    Set stroke colour only.
+* `color=<r g b>` Set both fill and stroke colour (floats 0.0–1.0 separated by spaces).
+* `fill_color=<r g b>` Set fill colour only.
+* `stroke_color=<r g b>` Set stroke colour only.
+
+**Input format**
+
+Arguments may be given as a parenthesized spec block:
+
+```
+[page-range](key=val, ...)
+```
+
+or as the equivalent shorthand (separate arguments, no parentheses):
+
+```
+[page-range] key=val ...
+```
+
+Multiple spec blocks may be used to apply different styles to different page ranges:
+
+```
+in.pdf style_text '1-3(stroke=0.5)' '4-end(stroke=2%)' output out.pdf
+```
 """
 
 _STYLE_TEXT_EXAMPLES = [
@@ -47,14 +67,23 @@ _STYLE_TEXT_EXAMPLES = [
         "desc": "Add a 0.5pt text stroke to pages 1-3",
     },
     {
-        "cmd": "in.pdf style_text stroke=2% color=0,0,0 output out.pdf",
+        "cmd": "in.pdf style_text stroke=2% 'color=0 0 0' output out.pdf",
         "desc": "Add a 2% font-size text stroke and change all text to black",
     },
     {
-        "cmd": "in.pdf style_text stroke=0.2 stroke_color=1,0,0 output out.pdf",
+        "cmd": "in.pdf style_text stroke=0.2 'stroke_color=1 0 0' output out.pdf",
         "desc": "Add a red 0.2pt text stroke without changing fill colour",
     },
+    {
+        "cmd": (
+            "in.pdf style_text "
+            "'1-3(stroke=0.5,stroke_color=0.2 0.4 0)' '4-end(stroke=2%)' output out.pdf"
+        ),
+        "desc": "Different stroke styles on different page ranges",
+    },
 ]
+
+_ALLOWED_KEYS = ["stroke", "color", "fill_color", "stroke_color"]
 
 
 @register_operation(
@@ -65,7 +94,7 @@ _STYLE_TEXT_EXAMPLES = [
     long_desc=_STYLE_TEXT_LONG_DESC,
     usage="<input> style_text [<pages>...] [key=val...] output <output>",
     examples=_STYLE_TEXT_EXAMPLES,
-    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
+    args=([c.INPUT_PDF, c.OPERATION_ARGS_EXPANDED], {}),
 )
 def style_text_in_content_streams(pdf, args) -> OpResult:
     """
@@ -74,16 +103,55 @@ def style_text_in_content_streams(pdf, args) -> OpResult:
     if not args:
         args = []
 
-    bare_tokens = []
-    parsed_kwargs = parse_keyval_list(
-        args,
-        bare_tokens=bare_tokens,
-        allowed_keys=["stroke", "color", "fill_color", "stroke_color"],
-        context="style_text",
-    )
+    specs = _parse_style_text_args(args)
 
-    specs = bare_tokens if bare_tokens else ["-"]
+    for page_spec, style_params in specs:
+        replacer = _build_replacer(pdf, style_params)
+        if replacer is not None:
+            _apply_to_pages(pdf, page_spec, replacer)
 
+    return OpResult(success=True, pdf=pdf)
+
+
+def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
+    """
+    Parse args into a list of (page_spec, style_kwargs) pairs.
+
+    Accepts two forms:
+      - Parenthesized:  ``['1-3(stroke=0.5,color=0,0,0)', '4-end(stroke=2%)']``
+        (produced by OPERATION_ARGS_EXPANDED from explicit spec(args) input)
+      - Plain shorthand already expanded by the framework:
+        ``['(stroke=0.5,color=0,0,0)']`` or ``['1-3(stroke=0.5)']``
+    """
+    if not args:
+        # No args at all: apply defaults to all pages
+        return [("-", {})]
+
+    results = []
+    for arg in args:
+        if "(" in arg:
+            page_spec, _, rest = arg.partition("(")
+            content = rest.rstrip(")")
+            # content is a comma-separated key=val string; feed as a list of tokens
+            tokens = [t.strip() for t in content.split(",") if t.strip()]
+            kwargs = parse_keyval_list(
+                tokens,
+                allowed_keys=_ALLOWED_KEYS,
+                context="style_text",
+            )
+        else:
+            # Shouldn't normally reach here after OPERATION_ARGS_EXPANDED, but
+            # handle gracefully: treat the whole token as a page spec with no opts.
+            page_spec = arg
+            kwargs = {}
+
+        page_spec = page_spec or "-"
+        results.append((page_spec, kwargs))
+
+    return results
+
+
+def _build_replacer(pdf, parsed_kwargs: dict) -> "TextStrokeReplaceContentStream | None":
     stroke_width = None
     stroke_width_type = "absolute"
     try:
@@ -115,56 +183,9 @@ def style_text_in_content_streams(pdf, args) -> OpResult:
     if stroke_width is not None:
         tr_mode = 2
 
-    for spec in specs:
-        _apply_style_text_spec_in_content_streams(
-            pdf, spec, stroke_width, stroke_width_type, stroke_color, fill_color, tr_mode
-        )
-
-    return OpResult(success=True, pdf=pdf)
-
-
-def _get_color_or_raise(data, key):
-    val = data.get(key, None)
-    if val is None:
+    if all(v is None for v in (stroke_width, fill_color, stroke_color, tr_mode)):
         return None
-    try:
-        return [float(x) for x in val.split(",")]
-    except (ValueError, AttributeError) as exc:
-        raise InvalidArgumentError(
-            f"Invalid color provided for '{key}': '{val}'. "
-            "Must be a comma-separated list of numbers."
-        ) from exc
 
-
-def _apply_style_text_spec_in_content_streams(
-    pdf,
-    spec,
-    stroke_width: float | None,
-    stroke_width_type: str,
-    stroke_color: list | None,
-    fill_color: list | None,
-    tr_mode: int | None,
-):
-    if not spec:
-        return
-    num_pages = len(pdf.pages)
-    page_spec, replacer = _parse_style_spec(
-        pdf, spec, stroke_width, stroke_width_type, stroke_color, fill_color, tr_mode
-    )
-    for page_num in page_numbers_matching_page_spec(page_spec, num_pages):
-        logger.debug("page: %s", page_num)
-        replacer.apply(page_num)
-
-
-def _parse_style_spec(
-    pdf,
-    spec,
-    stroke_width: float | None,
-    stroke_width_type,
-    stroke_color: list | None,
-    fill_color: list | None,
-    tr_mode: int | None,
-):
     replacer_args = {"stroke_width_type": stroke_width_type}
     if stroke_width is not None:
         replacer_args["stroke_width"] = stroke_width
@@ -174,9 +195,29 @@ def _parse_style_spec(
         replacer_args["fill_color"] = fill_color
     if tr_mode is not None:
         replacer_args["tr_mode"] = tr_mode
-    logger.debug("%s", replacer_args)
-    replacer = TextStrokeReplaceContentStream(pdf, **replacer_args)
-    return (spec, replacer)
+
+    logger.debug("replacer_args=%s", replacer_args)
+    return TextStrokeReplaceContentStream(pdf, **replacer_args)
+
+
+def _apply_to_pages(pdf, spec: str, replacer: "TextStrokeReplaceContentStream"):
+    num_pages = len(pdf.pages)
+    for page_num in page_numbers_matching_page_spec(spec, num_pages):
+        logger.debug("page: %s", page_num)
+        replacer.apply(page_num)
+
+
+def _get_color_or_raise(data, key):
+    val = data.get(key, None)
+    if val is None:
+        return None
+    try:
+        return [float(x) for x in val.split(" ") if len(x) > 0]
+    except (ValueError, AttributeError) as exc:
+        raise InvalidArgumentError(
+            f"Invalid color provided for '{key}': '{val}'. "
+            "Must be a space-separated list of numbers."
+        ) from exc
 
 
 @dataclass
