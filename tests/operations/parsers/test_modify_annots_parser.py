@@ -241,7 +241,7 @@ def test_split_spec_hypothesis_unclosed_paren(prefix, suffix):
 
 @given(
     spec=st.text(
-        alphabet=st.characters(blacklist_characters="("),
+        alphabet=st.characters(blacklist_characters="(", blacklist_categories=("Cs",)),
         min_size=1,
     ).filter(str.strip)
 )
