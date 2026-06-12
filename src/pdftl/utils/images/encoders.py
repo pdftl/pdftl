@@ -16,7 +16,10 @@ def serialize_grayscale_stream(
     import pikepdf
 
     if pil_img is None:
-        logger.debug("pil_img is None")
+        logger.debug(
+            "PIL image is None; "
+            "pixel data cannot be decoded, enforcing grayscale metadata conversion only."
+        )
         # We cannot decode pixels, but we still enforce grayscale metadata conversion
         try:
             xobj[pikepdf.Name("/ColorSpace")] = pikepdf.Name("/DeviceGray")

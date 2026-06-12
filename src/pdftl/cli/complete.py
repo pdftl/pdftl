@@ -227,12 +227,11 @@ def is_package_newer_than_cache(cache_path):
         cache_mtime = os.path.getmtime(cache_path)
         cli_dir = os.path.dirname(os.path.abspath(__file__))
         package_root = os.path.dirname(cli_dir)
-        custom_op_dir = os.path.join(
-            os.environ.get("APPDATA" if os.name == "nt" else "XDG_CONFIG_HOME")
-            or os.path.expanduser("~\\AppData\\Roaming" if os.name == "nt" else "~/.config"),
-            "pdftl",
-            "operations",
-        )
+        if os.name == "nt":
+            config_home = os.environ.get("APPDATA", os.path.expanduser("~\\AppData\\Roaming"))
+        else:
+            config_home = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+        custom_op_dir = os.path.join(config_home, "pdftl", "operations")
         critical_paths = [
             package_root,
             os.path.join(package_root, "operations"),

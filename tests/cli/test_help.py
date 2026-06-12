@@ -14,11 +14,6 @@ from rich.console import Console
 import pdftl.cli.console as console_mod
 import pdftl.cli.help as helpmod
 import pdftl.cli.help_version as helpvermod
-from pdftl.cli.help import (
-    _print_topic_help,
-    find_special_topic_command,
-    print_help,
-)
 from pdftl.cli.help_render import format_examples_block
 from pdftl.core.core_types import HelpExample
 
@@ -403,12 +398,12 @@ class TestHelpLogicEdgeCases(unittest.TestCase):
         """Covers line 166: Printing the 'Source: ...' line."""
         mock_hprint = MagicMock()
         topic_data = {"desc": "Test desc", "caller": "my_plugin_module"}
-        _print_topic_help(mock_hprint, topic_data, "test_topic")
+        helpmod._print_topic_help(mock_hprint, topic_data, "test_topic")
         mock_hprint.assert_any_call("\n*Source: my_plugin_module*")
 
     def test_find_special_topic_none(self):
         """Covers line 372: Early exit when topic is None."""
-        self.assertIsNone(find_special_topic_command(None))
+        self.assertIsNone(helpmod.find_special_topic_command(None))
 
 
 class TestHelpRichRendering(unittest.TestCase):
@@ -422,7 +417,7 @@ class TestHelpRichRendering(unittest.TestCase):
         """
         buffer = io.StringIO()
         # This will now pass if you applied the 'from rich.console import Console' fix
-        print_help(command=None, dest=buffer, raw=False)
+        helpmod.print_help(command=None, dest=buffer, raw=False)
 
         output = buffer.getvalue()
         self.assertIn("PDF tackle", output)
@@ -437,7 +432,7 @@ class TestHelpRichRendering(unittest.TestCase):
         mock_console_instance = MagicMock()
         mock_get_console.return_value = mock_console_instance
 
-        print_help(command=None, dest=None, raw=False)
+        helpmod.print_help(command=None, dest=None, raw=False)
 
         # Inspect the first call to print()
         first_call_args = mock_console_instance.print.call_args_list[0]
@@ -448,5 +443,5 @@ class TestHelpRichRendering(unittest.TestCase):
 
     def test_raw_mode_bypass(self):
         buffer = io.StringIO()
-        print_help(command=None, dest=buffer, raw=True)
+        helpmod.print_help(command=None, dest=buffer, raw=True)
         self.assertNotIn("┏", buffer.getvalue())
