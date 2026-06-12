@@ -20,8 +20,6 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pikepdf import Array, Dictionary, Name, Pdf
 
-# We must import the module to test, aliased as 'ma'
-import pdftl.operations.modify_annots as ma
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.modify_annots import (
     _apply_mods_to_annot,
@@ -94,7 +92,7 @@ def test_modify_annots_integration_remove_link_border(mock_pdf):
     original_highlight_c = pdf.pages[1].Annots[0].C
 
     specs = ["/Link(Border=[0 0 0])"]
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
 
     # --- Assert ---
     # We fetch the objects *from the PDF* to check their final state.
@@ -116,7 +114,7 @@ def test_modify_annots_integration_page_selector(mock_pdf):
     """
     pdf = mock_pdf
     specs = ["1(MyKey=MyValue)"]  # Target *all* annots on page 1
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
 
     # --- Assert ---
     annot1 = pdf.pages[0].Annots[0]
@@ -139,7 +137,7 @@ def test_modify_annots_integration_combined_selector(mock_pdf):
 
     # Target /Highlight annots on page 2
     specs = ["2/Highlight(C=[1 0 0])"]
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
 
     # --- Assert ---
     annot2_highlight = pdf.pages[1].Annots[0]
@@ -158,7 +156,7 @@ def test_modify_annots_page_selector_range(mock_pdf):
     """
     pdf = mock_pdf
     specs = ["1-2(Key=RangeTest)"]
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
 
     # --- Assert ---
     # Page 1 (in range) should be modified
@@ -179,7 +177,7 @@ def test_modify_annots_page_selector_even(mock_pdf):
     """
     pdf = mock_pdf
     specs = ["even(Key=EvenTest)"]
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
 
     # --- Assert ---
     # Page 1 (odd) should NOT be modified
@@ -218,7 +216,7 @@ def test_modify_annots_page_selector_out_of_bounds(mock_specs_parser, mock_pdf, 
     with caplog.at_level(logging.WARNING):
         # This will now call the function, but our mock will run
         # instead of the real specs_to_modification_rules
-        ma.modify_annots(pdf, specs)
+        modify_annots(pdf, specs)
 
     # --- Assert ---
     # Check that our bounds check in modify_annots caught the bad page
@@ -242,7 +240,7 @@ def test_modify_annots_integration_delete_key(mock_pdf):
     assert pikepdf.Name.T in annot3_link  # Pre-condition
 
     specs = ["/Link(T=null)"]
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
 
     # --- Assert ---
     # We must re-fetch the object in case it was modified
@@ -258,7 +256,7 @@ def test_modify_annots_no_specs(mock_pdf):
     pdf = mock_pdf
     original_border = pdf.pages[0].Annots[0].Border
 
-    ma.modify_annots(pdf, [])  # Empty specs list
+    modify_annots(pdf, [])  # Empty specs list
 
     assert pdf.pages[0].Annots[0].Border == original_border
 
@@ -272,7 +270,7 @@ def test_modify_annots_no_annots_on_page(mock_pdf):
     specs = ["3(Key=Value)"]
 
     # This should run without raising an AttributeError
-    ma.modify_annots(pdf, specs)
+    modify_annots(pdf, specs)
     # No assertion needed, we just test that it didn't crash
 
 
@@ -286,7 +284,7 @@ def test_modify_annots_malformed_spec(mock_pdf):
     specs = ["/Link(Border=null"]
 
     with pytest.raises(InvalidArgumentError, match="Failed to parse"):
-        ma.modify_annots(pdf, specs)
+        modify_annots(pdf, specs)
 
 
 def test_modify_annots_malformed_value_bug(mock_pdf, caplog):
@@ -301,7 +299,7 @@ def test_modify_annots_malformed_value_bug(mock_pdf, caplog):
     specs = ["/Highlight(C=[]])"]  # Malformed array
 
     with caplog.at_level(logging.WARNING):
-        ma.modify_annots(pdf, specs)
+        modify_annots(pdf, specs)
 
     # --- Assert ---
     # Check that the malformed value was skipped
@@ -321,7 +319,7 @@ def test_modify_annots_malformed_string_value_bug(mock_pdf, caplog):
     specs = ["/Link(T=(Mismatched)"]  # Malformed string
 
     with caplog.at_level(logging.WARNING):
-        ma.modify_annots(pdf, specs)
+        modify_annots(pdf, specs)
 
     # --- Assert ---
     # Check that the malformed value was skipped
@@ -375,7 +373,7 @@ def test_modify_annots_hypothesis_fuzz_full_spec(spec):
         specs = [spec]
 
         try:
-            ma.modify_annots(pdf, specs)
+            modify_annots(pdf, specs)
         except InvalidArgumentError:
             # This is an acceptable failure (parser rejected the spec)
             pass

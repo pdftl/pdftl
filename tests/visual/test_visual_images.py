@@ -6,6 +6,9 @@ from PIL import Image, ImageDraw
 from pdftl.utils.images import convert_image_dict_to_grayscale
 
 
+JPEG_QUALITY = 75
+
+
 def test_visual_grayscale_image_conversion(assert_pdf_match):
     """
     Verifies that a standard color image is correctly neutralized to grayscale.
@@ -45,7 +48,7 @@ def test_visual_grayscale_image_conversion(assert_pdf_match):
 
     # --- 4. Run the target conversion logic ---
     img_meta = {"xobj": img_xobj, "format": "dctdecode"}
-    success = convert_image_dict_to_grayscale(img_meta, 75)
+    success = convert_image_dict_to_grayscale(img_meta, JPEG_QUALITY)
     assert success is True, "Image conversion failed unexpectedly."
 
     # --- 5. Snapshot the AFTER state ---
@@ -95,7 +98,7 @@ def test_visual_grayscale_multi_color_grid(assert_pdf_match):
 
     # --- 4. Run the target conversion logic ---
     img_meta = {"xobj": img_xobj, "format": "dctdecode"}
-    success = convert_image_dict_to_grayscale(img_meta, 75)
+    success = convert_image_dict_to_grayscale(img_meta, JPEG_QUALITY)
     assert success is True, "Image conversion failed unexpectedly."
 
     # --- 5. Snapshot the AFTER state (4 distinct shades of gray) ---

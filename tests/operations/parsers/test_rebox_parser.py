@@ -1,10 +1,11 @@
 import pytest
 
-import pdftl.operations.parsers.rebox_parser as cp
 from pdftl.operations.parsers.rebox_parser import (
     parse_rebox_content,
     parse_smart_rebox_spec,
     specs_to_page_rules,
+    parse_paper_spec,
+    parse_rebox_margins,
 )
 
 # We now expect the parser to fail correctly, so we don't need this
@@ -33,7 +34,7 @@ from pdftl.operations.parsers.rebox_parser import (
     ],
 )
 def test_parse_paper_spec(spec_str, expected_dims):
-    result = cp.parse_paper_spec(spec_str)
+    result = parse_paper_spec(spec_str)
     if expected_dims is None:
         assert result is None
     else:
@@ -51,28 +52,28 @@ def test_parse_paper_spec(spec_str, expected_dims):
 def test_parse_rebox_margins_shorthand():
     page_width, page_height = 600, 800
     # Test 1 value
-    margins = cp.parse_rebox_margins("10pt", page_width, page_height, "dummy_op")
+    margins = parse_rebox_margins("10pt", page_width, page_height, "dummy_op")
     assert margins == (10.0, 10.0, 10.0, 10.0)
     # Test 2 values
-    margins = cp.parse_rebox_margins("1cm, 2cm", page_width, page_height, "dummy_op")
+    margins = parse_rebox_margins("1cm, 2cm", page_width, page_height, "dummy_op")
     cm_pt = 28.34645669
     assert pytest.approx(margins) == (cm_pt, cm_pt * 2, cm_pt, cm_pt * 2)
     # Test 3 values
-    margins = cp.parse_rebox_margins("10, 20, 30", page_width, page_height, "dummy_op")
+    margins = parse_rebox_margins("10, 20, 30", page_width, page_height, "dummy_op")
     assert margins == (10.0, 20.0, 30.0, 20.0)
     # Test 4 values
-    margins = cp.parse_rebox_margins("10, 20, 30, 40", page_width, page_height, "dummy_op")
+    margins = parse_rebox_margins("10, 20, 30, 40", page_width, page_height, "dummy_op")
     assert margins == (10.0, 20.0, 30.0, 40.0)
     # Test 4 values with percentages
-    margins = cp.parse_rebox_margins("10%, 5%, 10%, 5%", page_width, page_height, "dummy_op")
+    margins = parse_rebox_margins("10%, 5%, 10%, 5%", page_width, page_height, "dummy_op")
     assert margins == (60.0, 40.0, 60.0, 40.0)
 
 
 def test_parse_rebox_margins_invalid():
-    margins = cp.parse_rebox_margins("", 600, 800, "dummy_op")
+    margins = parse_rebox_margins("", 600, 800, "dummy_op")
     assert margins == (0.0, 0.0, 0.0, 0.0)
     with pytest.raises(ValueError, match="must have between 1 and 4"):
-        cp.parse_rebox_margins("1, 2, 3, 4, 5", 600, 800, "dummy_op")
+        parse_rebox_margins("1, 2, 3, 4, 5", 600, 800, "dummy_op")
 
 
 # ---------------------------
@@ -86,7 +87,7 @@ def test_specs_to_page_rules_simple(mocker):
     )
     mock_page_spec.return_value = [1, 2, 3]
     specs = ["1-3(10pt)"]
-    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=3, operation="dummy_op")
+    page_rules, preview = specs_to_page_rules(specs, total_pages=3, operation="dummy_op")
     mock_page_spec.assert_called_with("1-3", 3)
     assert preview is False
     assert page_rules == {0: "10pt", 1: "10pt", 2: "10pt"}
@@ -98,7 +99,7 @@ def test_specs_to_page_rules_with_preview(mocker):
     )
     mock_page_spec.return_value = [1]
     specs = ["1(a4)", "preview"]
-    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+    page_rules, preview = specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
     mock_page_spec.assert_called_with("1", 1)
     assert preview is True
     assert page_rules == {0: "a4"}
@@ -110,7 +111,7 @@ def test_specs_to_page_rules_with_local_preview(mocker):
     )
     mock_page_spec.return_value = [1]
     specs = ["1(a4,preview)"]
-    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+    page_rules, preview = specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
     mock_page_spec.assert_called_with("1", 1)
     assert preview is True
     assert page_rules == {0: "a4"}
@@ -122,7 +123,7 @@ def test_specs_to_page_rules_abs(mocker):
     )
     mock_page_spec.return_value = [2]
     specs = ["2(abs,100,150,400,500)"]
-    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+    page_rules, preview = specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
     mock_page_spec.assert_called_with("2", 1)
     assert preview is False
     assert page_rules == {1: "abs,100,150,400,500"}
@@ -135,10 +136,10 @@ def test_specs_to_page_rules_abs_invalid(mocker):
     mock_page_spec.return_value = [2]
     specs = ["2(abs,100,150,400)"]
     with pytest.raises(ValueError, match="4 comma-separated values"):
-        cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+        specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
     specs = ["2(abs,100,150,400,500,12)"]
     with pytest.raises(ValueError, match="4 comma-separated values"):
-        cp.specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
+        specs_to_page_rules(specs, total_pages=1, operation="dummy_op")
 
 
 def test_specs_to_page_rules_multiple_and_default_range(mocker):
@@ -147,7 +148,7 @@ def test_specs_to_page_rules_multiple_and_default_range(mocker):
     )
     mock_page_spec.side_effect = [[2], [1, 2]]
     specs = ["2(a5)", "(10pt)"]
-    page_rules, preview = cp.specs_to_page_rules(specs, total_pages=2, operation="dummy_op")
+    page_rules, preview = specs_to_page_rules(specs, total_pages=2, operation="dummy_op")
     assert preview is False
     assert page_rules == {1: "10pt", 0: "10pt"}
     mock_page_spec.assert_any_call("2", 2)
@@ -165,7 +166,7 @@ def test_specs_to_page_rules_invalid_spec():
     # REVERTED: This is the original, correct assertion.
     # It will fail until the regex bug in rebox_parser.py is fixed.
     with pytest.raises(ValueError, match="Invalid dummy_op specification format"):
-        cp.specs_to_page_rules(specs, total_pages=3, operation="dummy_op")
+        specs_to_page_rules(specs, total_pages=3, operation="dummy_op")
 
 
 # --- merged from test_rebox_parser_coverage.py ---

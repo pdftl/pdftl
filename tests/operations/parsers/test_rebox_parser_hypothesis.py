@@ -132,10 +132,31 @@ def test_parse_rebox_margins_shorthand_property(parts):
         )
 
 
+# Strategy for margin shorthand specs (1-4 comma-separated values)
+st_margin_shorthand_spec = st.lists(st_margin_value_str, min_size=1, max_size=4).map(",".join)
+
+
 @pytest.mark.slow
 @given(
-    page_range=st.one_of(st.just(""), st.just("1-3"), st.just("even"), st.just("2-8odd")),
-    margin_spec=st.one_of(st.just("10pt,20pt"), st_paper_sizes),
+    page_range=st.one_of(
+        st.just(""),
+        st.sampled_from(["odd", "even"]),
+        st.integers(min_value=1, max_value=50).map(str),
+        st.tuples(
+            st.integers(min_value=1, max_value=50),
+            st.integers(min_value=1, max_value=50),
+        )
+        .map(lambda t: (min(t[0], t[1]), max(t[0], t[1])))
+        .map(lambda t: f"{t[0]}-{t[1]}"),
+        st.tuples(
+            st.integers(min_value=1, max_value=50),
+            st.integers(min_value=1, max_value=50),
+            st.sampled_from(["odd", "even"]),
+        )
+        .map(lambda t: (min(t[0], t[1]), max(t[0], t[1]), t[2]))
+        .map(lambda t: f"{t[0]}-{t[1]}{t[2]}"),
+    ),
+    margin_spec=st.one_of(st_margin_shorthand_spec, st_paper_sizes),
     has_preview=st.booleans(),
     total_pages=st.integers(min_value=1, max_value=50),
 )

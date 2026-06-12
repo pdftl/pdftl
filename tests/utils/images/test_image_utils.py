@@ -9,6 +9,7 @@ from pdftl.utils.images import (
     extract_pdf_images,
     convert_image_dict_to_grayscale,
 )
+from pdftl.utils.images.finders import _get_format, _extract_image_metadata
 
 
 # ==============================================================================
@@ -445,15 +446,12 @@ def test_get_format_unknown_filter(empty_pdf):
     if "/Filter" in img_xobj:
         del img_xobj["/Filter"]
 
-    from pdftl.utils.images.finders import _get_format
-
     # Removed the second positional argument
     assert _get_format(img_xobj) == "unknown"
 
 
 def test_extract_image_metadata_stream_bytes_exception(empty_pdf, monkeypatch):
     """Covers line: read_raw_bytes raising an exception sets stream_bytes to 0."""
-    import pdftl.utils.images.finders as finders
 
     # Pure Python substitute that mimics a pikepdf Stream object without C++ bindings
     class MockXObj:
@@ -469,7 +467,7 @@ def test_extract_image_metadata_stream_bytes_exception(empty_pdf, monkeypatch):
 
     image_list = []
     # Test the metadata extraction step directly with our mock object
-    finders._extract_image_metadata(MockXObj(), "Im1", [1, 0, 0, 1, 0, 0], None, image_list)
+    _extract_image_metadata(MockXObj(), "Im1", [1, 0, 0, 1, 0, 0], None, image_list)
 
     assert image_list[0]["stream_bytes"] == 0
 
@@ -594,7 +592,6 @@ def test_encode_grayscale_payload_oserror_catch(empty_pdf, monkeypatch):
 
 
 def test_encode_grayscale_payload_exceptions(empty_pdf, monkeypatch):
-    import pdftl.utils.images as iu
     from PIL import Image
 
     img_xobj = create_real_image_stream(empty_pdf, fmt="JPEG")
@@ -606,7 +603,7 @@ def test_encode_grayscale_payload_exceptions(empty_pdf, monkeypatch):
 
     monkeypatch.setattr(Image.Image, "tobytes", broken_tobytes)
 
-    assert iu.convert_image_dict_to_grayscale(img_meta, 75) is False
+    assert convert_image_dict_to_grayscale(img_meta, 75) is False
 
 
 def test_neutralize_print_colorspace_edge_case1(empty_pdf):

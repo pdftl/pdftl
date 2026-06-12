@@ -204,7 +204,7 @@ def update_simple_cache(context_key, candidates, cache=None):
 
     if cache is None:
         cache = load_simple_cache()
-    cache[context_key] = list(candidates)  # Ensure it's a list for JSON
+    cache[context_key] = list(candidates)  # Ensure it's a list for serialization
 
     path = get_simple_cache_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)

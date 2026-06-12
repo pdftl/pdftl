@@ -286,7 +286,7 @@ def barcode_pdf(input_pdf: "pikepdf.Pdf", operation_args: list[str]) -> OpResult
 
         # Pull raw bounding coordinates without native rotation applied, we will apply it
         dims = get_visible_page_dimensions(page, box="cropbox", apply_rotate=False)
-        raw_dims = dims if dims is not None else (0.0, 0.0, 612.0, 792.0)
+        raw_dims = dims if dims is not None else (0.0, 0.0, *c.PAPERSIZES["letter"])
         rotation = int(page.get("/Rotate", 0)) % 360
 
         page_context = build_page_context(static_context, page, page_idx + 1)

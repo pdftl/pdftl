@@ -67,9 +67,9 @@ def resolve_operation_spec(
 
     # Count how many parameters the function accepts
     if len(sig.parameters) >= 2:
-        return parser_func(args_or_spec, safe_data)
+        return parser_func(args_or_spec, safe_data)  # codeql[py/call/wrong-arguments]
 
-    return parser_func(args_or_spec)
+    return parser_func(args_or_spec)  # codeql[py/call/wrong-arguments]
 
 
 def _load_spec_from_file(path_str: str, model_class: type[T] | None = None) -> T:

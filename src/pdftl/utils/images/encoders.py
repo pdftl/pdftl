@@ -9,7 +9,9 @@ if TYPE_CHECKING:
     from PIL import Image
 
 
-def serialize_grayscale_stream(xobj, pil_img: "Image.Image", fmt: str, quality: int) -> bool:
+def serialize_grayscale_stream(
+    xobj, pil_img: "Image.Image", fmt: str, quality: int, zlib_compression_level=6
+) -> bool:
     """Downsamples a PIL layout to monochrome and writes it back into the stream."""
     import pikepdf
 
@@ -44,7 +46,7 @@ def serialize_grayscale_stream(xobj, pil_img: "Image.Image", fmt: str, quality: 
     logger.debug("Final compression stream commit, fmt=%s", fmt)
     try:
         if fmt in ("flatedecode", "png"):
-            compressed_bytes = zlib.compress(gray_pil.tobytes())
+            compressed_bytes = zlib.compress(gray_pil.tobytes(), level=zlib_compression_level)
             xobj.write(compressed_bytes, filter=pikepdf.Name("/FlateDecode"))
             xobj.ColorSpace = pikepdf.Name("/DeviceGray")
         else:
