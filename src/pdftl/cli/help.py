@@ -29,6 +29,7 @@ from pdftl.utils.string_utils import before_space
 logger = logging.getLogger(__name__)
 
 TAG_PREFIX = "tag:"
+_HELP_RECURSION_DEPTH = 0
 
 
 def get_synopsis():
@@ -90,7 +91,8 @@ def _print_topic_help(hprint, topic_data, topic_name):
 def _get_rtd_url(topic_name, topic_type, topic_data, caller) -> None | str:
     """Dynamically build the docs URL based on the caller namespace.
 
-    e.g., "pdftl.operations.cat" -> category becomes \"operations\" """
+    e.g., "pdftl.operations.cat" -> category becomes \"operations\"
+    """
     if not caller:
         return None
 
@@ -131,8 +133,8 @@ def _get_rtd_url(topic_name, topic_type, topic_data, caller) -> None | str:
 
 
 def print_main_help(dest=None, raw=False):
-    """
-    Prints the main help screen using either the Fast Path (Rich)
+    """Prints the main help screen using either the Fast Path (Rich)
+
     or the Doc Path (Raw Markdown).
     """
     if raw:
@@ -291,34 +293,57 @@ def _print_help_dispatch_table():
     dispatch_table.update(
         {
             topic: (lambda hprint, t_data=data: _print_topic_help(hprint, t_data, t_data["title"]))
-            for topic, data in itertools.chain(
-                registry.help_topics.items(),
-            )
+            for topic, data in registry.help_topics.items()
         }
     )
-    dispatch_table["output_options"] = lambda hprint, op_info=None, op_name=None: (
-        _print_output_options_help(hprint)
-    )
-    dispatch_table["examples"] = lambda hprint, op_info=None, op_name=None: _print_examples_help(
-        hprint
-    )
+    dispatch_table["output_options"] = lambda hprint, *_: _print_output_options_help(hprint)
+    dispatch_table["examples"] = lambda hprint, *_: _print_examples_help(hprint)
     return dispatch_table
 
 
 def print_help(command=None, dest=None, raw=False):
-    """
-    Displays help information for the tool, a specific command, or a topic.
+    """Displays help information for the tool, a specific command, or a topic.
 
     Args:
         command (str, optional): The command or topic to get help for.
-                                 If None, the main help screen is shown.
-        dest (file object, optional): The destination to write help text to.
-                                      Defaults to sys.stdout.
+        dest (file-like object, optional): The destination to print to.
+                                           Defaults to sys.stdout.
         raw (bool, optional): If True, output raw markdown/text instead of rendered Rich output.
     """
+    global _HELP_RECURSION_DEPTH
+    use_rich_console = not raw and (dest is None or dest is sys.stdout or dest is sys.stderr)
 
+    # Check if we are printing to an interactive terminal, not a pipe or file
+    is_tty = sys.stdout.isatty() if dest is None else (hasattr(dest, "isatty") and dest.isatty())
+
+    # Disable auto-paging for defaults, version flags, or non-interactive pipes
+    safe_command = str(command).lower() if command else None
+    should_page = (
+        command is not None and safe_command not in ("version", "--version", "-v") and is_tty
+    )
+
+    # Wrap only the outer-most call invocation inside the capture layout, if paging is allowed
+    if use_rich_console and _HELP_RECURSION_DEPTH == 0 and should_page:
+        _HELP_RECURSION_DEPTH += 1
+        try:
+            from pdftl.cli.help_render import page_captured_output
+
+            with page_captured_output():
+                _print_help_core(command, dest, raw)
+        finally:
+            _HELP_RECURSION_DEPTH = 0
+    else:
+        _HELP_RECURSION_DEPTH += 1
+        try:
+            _print_help_core(command, dest, raw)
+        finally:
+            if _HELP_RECURSION_DEPTH > 0:
+                _HELP_RECURSION_DEPTH -= 1
+
+
+def _print_help_core(command=None, dest=None, raw=False):
+    """Internal core rendering routine logic."""
     hprint = load_hprint(dest, raw)
-
     safe_command = command.lower() if command else None
 
     if safe_command is None:
@@ -362,7 +387,7 @@ def _print_multiple_topics(topics, hprint, dest, raw):
     for i, topic in enumerate(topics):
         if i > 0:
             hprint("\n---\n")
-        print_help(topic, dest=dest, raw=raw)
+        _print_help_core(topic, dest=dest, raw=raw)
 
 
 def find_special_topic_command(topic):
@@ -407,6 +432,7 @@ def find_option_topic_command(help_topics):
 )
 def _help_help_topic():
     """If a `help` argument is given, the remaining arguments are
+
     scanned for a keyword. This can be `tag:<tagname>`, or one of the
     operation names, or an option name, or a special help topic, or an
     alias. If a match is found, the help is printed. Tags are printed
@@ -419,5 +445,5 @@ def _help_help_topic():
     cases.
 
     The special help topic `all` is particularly interesting.
-
     """
+    pass

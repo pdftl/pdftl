@@ -55,18 +55,38 @@ def test_print_help_formatted_to_file():
     # but ensuring it ran without error and produced output covers the execution path).
 
 
-def test_print_help_formatted_to_stdout(monkeypatch):
+def test_print_help_formatted_to_stdout_piped(monkeypatch, mock_notty):
+    """
+    Covers the piped/redirected path.
+    Because mock_notty is injected, this ALWAYS evaluates isatty() as False
+    and skips the page_captured_output block entirely.
+    """
+    mock_console = MagicMock()
+    # Height is not strictly required here since paging is bypassed,
+    # but mocking the console is still needed for the raw rendering.
+    monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
+
+    # dest=None, raw=False -> piped rendering
+    print_help("help", dest=None, raw=False)
+    assert mock_console.print.called
+    # Verify it passed a HelpMarkdown object
+    args = mock_console.print.call_args[0]
+    # The class name is dynamic, so we check the type name string
+    assert type(args[0]).__name__ == "HelpMarkdown"
+
+
+def test_print_help_formatted_to_stdout_interactive(monkeypatch, mock_tty):
     """
     Covers line 447:
     Printing to stdout (dest=None) WITHOUT raw mode.
     This triggers the use of the global get_console().
     """
     mock_console = MagicMock()
+    mock_console.height = 24
     monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
 
     # dest=None, raw=False -> goes to line 446/447
     print_help("help", dest=None, raw=False)
-
     assert mock_console.print.called
     # Verify it passed a HelpMarkdown object
     args = mock_console.print.call_args[0]
@@ -112,3 +132,43 @@ def test_load_hprint_file_no_console():
     with patch("pdftl.cli.help_render.get_console", return_value=None):
         with pytest.raises(RuntimeError, match="Rich console is not available"):
             hprint("some markdown")
+
+
+from pdftl.cli.help_render import page_captured_output
+
+
+def test_page_captured_output_success(monkeypatch):
+    """Tests that the stream is successfully hijacked and restored."""
+    mock_console = MagicMock()
+    mock_console.height = 24
+    original_file = MagicMock()
+    mock_console.file = original_file
+    monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
+
+    with page_captured_output() as console:
+        assert console is mock_console
+        # Verify the file target was temporarily swapped to our PagerStream
+        assert type(console.file).__name__ == "ThresholdPagerStream"
+
+    # Verify the original file target was safely restored after yielding
+    assert console.file is original_file
+
+
+def test_page_captured_output_broken_pipe(monkeypatch):
+    """Tests that BrokenPipeError is silently swallowed to abort rendering."""
+    mock_console = MagicMock()
+    mock_console.height = 24
+    monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
+
+    with page_captured_output():
+        raise BrokenPipeError("User quit the pager")
+    # If the test passes without raising, the error was successfully swallowed
+
+
+def test_page_captured_output_no_console(monkeypatch):
+    """Tests safety check when rich console is entirely unavailable."""
+    monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: None)
+
+    with pytest.raises(RuntimeError, match="Rich console is not available"):
+        with page_captured_output():
+            pass

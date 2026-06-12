@@ -488,3 +488,15 @@ def run_pdftl():
                     raise RuntimeError(f"pdftl failed with exit code {e.code}")
 
     return _run
+
+
+@pytest.fixture
+def mock_tty(monkeypatch):
+    """Simulates an interactive terminal environment (triggers paging)."""
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+
+@pytest.fixture
+def mock_notty(monkeypatch):
+    """Simulates a piped/non-interactive environment (bypasses paging)."""
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)

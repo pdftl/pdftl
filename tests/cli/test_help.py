@@ -445,3 +445,34 @@ class TestHelpRichRendering(unittest.TestCase):
         buffer = io.StringIO()
         helpmod.print_help(command=None, dest=buffer, raw=True)
         self.assertNotIn("┏", buffer.getvalue())
+
+
+import pdftl.cli.help as help_module
+
+
+def test_print_help_recursion_depth(monkeypatch, mock_tty):
+    """
+    Covers the 'else' block in print_help where _HELP_RECURSION_DEPTH > 0.
+    Ensures that nested calls do not trigger multiple pagers.
+    """
+    mock_console = MagicMock()
+    monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
+
+    # Artificially simulate that we are already inside a print_help call
+    help_module._HELP_RECURSION_DEPTH = 1
+
+    try:
+        # dest=None, raw=False, mock_tty ensures paging *would* be evaluated
+        help_module.print_help("help", dest=None, raw=False)
+
+        # Verify it incremented and decremented correctly without crashing
+        assert help_module._HELP_RECURSION_DEPTH == 1
+    finally:
+        # Clean up global state for other tests
+        help_module._HELP_RECURSION_DEPTH = 0
+
+
+def test_help_help_topic_execution():
+    """Covers the pass statement in the dummy docstring function."""
+    # It does nothing, but calling it hits line 449
+    help_module._help_help_topic()

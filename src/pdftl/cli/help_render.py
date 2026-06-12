@@ -6,11 +6,13 @@
 
 """Help rendering methods"""
 
+import contextlib
 import logging
 import sys
 
 from pdftl.cli.console import get_console
 from pdftl.cli.whoami import WHOAMI
+from pdftl.utils.pager import ThresholdPagerStream
 
 logger = logging.getLogger(__name__)
 
@@ -55,23 +57,52 @@ def _load_help_markdown():
     return HelpMarkdown
 
 
+@contextlib.contextmanager
+def page_captured_output():
+    """Smart-pages console output via real-time stream interception."""
+    console = get_console()
+    if console is None:
+        raise RuntimeError("Rich console is not available")
+
+    # Set threshold with a 4-line safety margin for the shell prompt
+    threshold = max(1, console.height - 4)
+    stream = ThresholdPagerStream(threshold)
+
+    # Temporarily hijack the console's output target
+    original_file = console.file
+    console.file = stream
+
+    try:
+        yield console
+    except BrokenPipeError:
+        # The user quit the pager or a downstream pipe was closed.
+        # We can safely abort the rest of the output generation.
+        pass
+    finally:
+        # Guarantee cleanup and reset the console
+        console.file = original_file
+        stream.close()
+
+
 def load_hprint(dest, raw):
     def hprint(x):
         HelpMarkdown = _load_help_markdown()
         use_rich_console = not raw and (dest is None or dest is sys.stdout or dest is sys.stderr)
+
         if use_rich_console:
             console = get_console()
             if console is None:
                 raise RuntimeError("Rich console is not available")
             console.print(HelpMarkdown(x))
+
         elif not raw:
             from rich.console import Console
 
-            # Rendered output for files/pipes (fixes missing table format in files)
             console = get_console()
             if console is None:
                 raise RuntimeError("Rich console is not available")
             width = console.width if console.width else 80
+            # Rendered output for files/pipes (fixes missing table format in files)
             file_console = Console(file=dest, width=width, force_terminal=False)
             file_console.print(HelpMarkdown(x))
         else:
@@ -83,8 +114,8 @@ def load_hprint(dest, raw):
 
 
 def format_examples_block(examples, show_topics=False):
-    """
-    Formats the examples into a rich-ready Markdown block.
+    """Formats the examples into a rich-ready Markdown block.
+
     We convert the structured data into a Markdown code/list structure.
     """
     output = "## Examples\n\n"
