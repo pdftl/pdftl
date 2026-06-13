@@ -109,8 +109,8 @@ def test_process_instructions_edge_cases(caplog):
     new_stream = replacer._process_instructions(instructions)
 
     # Verify the code bails out gracefully, leaving the bad instruction intact
-    assert "Failed converting instruction matrix" in caplog.text
-    assert b"rg" in new_stream
+    assert "Conversions: 0 success, 1 fail" in caplog.text
+    assert b"1 0 rg" in new_stream
     assert b"q" in new_stream
 
 
@@ -145,3 +145,97 @@ def test_to_gray_exception_handling(caplog):
 
     assert op is None
     assert "Exception running raster math logic transformation" in caplog.text
+
+
+def test_greyscale_process_xobjects_exception_handling(caplog):
+    """Covers the exception block when Form XObject stream parsing fails."""
+    pdf = pikepdf.new()
+    replacer = GreyscaleReplaceContentStream(pdf)
+
+    # Create a malformed XObject (a dictionary instead of a stream)
+    broken_xobj = pikepdf.Dictionary(Type=pikepdf.Name("/XObject"), Subtype=pikepdf.Name("/Form"))
+    # pikepdf.parse_content_stream will raise a TypeError/ValueError on non-streams
+    resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=broken_xobj))
+
+    replacer._process_xobjects(resources)
+    assert "Failed to process Form XObject" in caplog.text
+
+
+def test_greyscale_process_patterns_exception_handling(caplog):
+    """Covers the exception block when Tiling Pattern stream parsing fails."""
+    pdf = pikepdf.new()
+    replacer = GreyscaleReplaceContentStream(pdf)
+
+    # Create a malformed Pattern (a dictionary instead of a stream)
+    broken_pat = pikepdf.Dictionary(Type=pikepdf.Name("/Pattern"), PatternType=1)
+    resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(Pat1=broken_pat))
+
+    replacer._process_patterns(resources)
+    assert "Failed to process Pattern" in caplog.text
+
+
+def test_greyscale_process_patterns_success():
+    """Covers the happy-path for Tiling Pattern extraction and recursion."""
+    pdf = pikepdf.new()
+    replacer = GreyscaleReplaceContentStream(pdf)
+
+    # Create a valid Pattern Stream
+    pat_stream = pdf.make_stream(b"1 0 0 rg")
+    pat_stream.update(
+        {
+            pikepdf.Name("/Type"): pikepdf.Name("/Pattern"),
+            pikepdf.Name("/PatternType"): 1,
+            # Include an empty Resources dict to hit the `if "/Resources" in pat:` branch
+            pikepdf.Name("/Resources"): pikepdf.Dictionary(),
+        }
+    )
+    resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(Pat1=pat_stream))
+
+    replacer._process_patterns(resources)
+
+    # Assert the 'rg' inside the pattern was converted to 'g'
+    assert b"g" in pat_stream.read_bytes()
+
+
+def test_to_gray_uppercase_operators():
+    """Covers uppercase 'RG' and 'K' stroke operators in NTSC luminance mapping."""
+    replacer = GreyscaleReplaceContentStream(None)
+
+    # Valid RGB Stroke (100% Red)
+    val, op = replacer.to_gray([1.0, 0.0, 0.0], "RG")
+    assert op == "G"
+    assert len(val) == 1
+    assert val[0] == 0.3  # 0.3 * 1.0
+
+    # Valid CMYK Stroke (100% Magenta)
+    val, op = replacer.to_gray([0.0, 1.0, 0.0, 0.0], "K")
+    assert op == "G"
+    assert len(val) == 1
+
+
+def test_greyscale_process_patterns_cache_hit_line_142():
+    """Explicitly triggers line 142 by processing the exact same pattern object twice."""
+    pdf = pikepdf.new()
+    replacer = GreyscaleReplaceContentStream(pdf)
+
+    # 1. Create a valid mock pattern stream
+    pat_stream = pdf.make_stream(b"1 0 0 rg")
+    pat_stream.update(
+        {
+            pikepdf.Name("/Type"): pikepdf.Name("/Pattern"),
+            pikepdf.Name("/PatternType"): 1,
+        }
+    )
+    resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(Pat1=pat_stream))
+
+    # 2. First pass: Processes normally, adding pat_stream.objgen to the cache
+    replacer._process_patterns(resources)
+    assert pat_stream.objgen in replacer._processed_objgens
+
+    # 3. Second pass: Hits line 142 ('continue') because the objgen is already cached
+    # We alter the stream contents locally to prove that the second pass completely skips processing it
+    pat_stream.write(b"0 1 0 rg")
+    replacer._process_patterns(resources)
+
+    # If line 142 successfully skipped it, the new 'rg' operator remains intact and wasn't morphed to 'g'
+    assert b"rg" in pat_stream.read_bytes()

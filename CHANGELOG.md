@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Top margin percentage bug fixed in `clip` and `crop`
 
+- add pattern support to `recolor_vectors`
+
 ### Changed
 
 - pipeline info added to `verbose` mode
