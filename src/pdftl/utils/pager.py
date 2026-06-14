@@ -88,6 +88,7 @@ class ThresholdPagerStream:
             try:
                 self.pager_proc.stdin.flush()
             except OSError:
+                # Pipe already closed (user quit pager); nothing to flush.
                 pass
 
     def close(self):
@@ -95,6 +96,7 @@ class ThresholdPagerStream:
             try:
                 self.pager_proc.stdin.close()
             except OSError:
+                # Pipe already closed; proceed to wait() regardless.
                 pass
             self.pager_proc.wait()  # Wait for the user to close less
         elif not self.pager_failed:

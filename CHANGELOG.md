@@ -6,11 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.21.1] - 2026-06-14
+
+### Fixed
+
+- fix `style_text` bugs: (1) coalesce content streams (2) handle `SC` etc
+
+- add pattern support to `recolor_vectors`
 
 ### Added
 
-- auto-paged help output
+- auto-paged help output on linux/mac
 
 ## [0.21.0] - 2026-06-12
 
@@ -21,8 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dump_annots` now properly passing the PDF down the pipeline
 
 - Top margin percentage bug fixed in `clip` and `crop`
-
-- add pattern support to `recolor_vectors`
 
 ### Changed
 

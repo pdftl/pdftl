@@ -514,11 +514,13 @@ def test_apply_single_stream_and_processed_filtering_real_objects():
         ):
             replacer.apply(1)
             mock_parse.assert_not_called()
-            mock_res.assert_called_once()
+            # Second call is skipped entirely once stream is in _processed —
+            # _process_resources is not called either.
+            mock_res.assert_not_called()
 
 
 def test_apply_page_with_multiple_streams_real_objects():
-    """Verify multiple content streams inside a pikepdf.Array are individually processed."""
+    """Verify multiple content streams are coalesced and the result is processed."""
     with pikepdf.new() as pdf:
         page = pdf.add_blank_page()
 
@@ -541,8 +543,21 @@ def test_apply_page_with_multiple_streams_real_objects():
 
         replacer.apply(1)
 
-        assert stream1.objgen in replacer._processed
-        assert stream2.objgen in replacer._processed
+        # After coalescing, /Contents is a single new stream — not an array.
+        new_contents = page.get("/Contents")
+        assert new_contents is not None
+        assert not isinstance(new_contents, pikepdf.Array), (
+            "contents_coalesce() should have replaced the array with a single stream"
+        )
+
+        # The coalesced stream's objgen is tracked so a second apply() call
+        # on the same page is skipped correctly.
+        assert new_contents.objgen in replacer._processed
+
+        # Verify skipping works on second call.
+        with patch("pikepdf.parse_content_stream") as mock_parse:
+            replacer.apply(1)
+            mock_parse.assert_not_called()
 
 
 def test_process_resources_already_processed_xobject_real_objects():
@@ -583,3 +598,64 @@ def test_process_resources_recurs_into_form_xobjects_real_objects(base_replacer)
             mock_proc.assert_called_once()
             assert nested_form.objgen in base_replacer._processed
             assert spy_res.call_count == 2
+
+
+def test_process_op_named_colorspace_marks_fill_unknown(base_replacer):
+    """cs/scn/sc operators mark fill_color as None (unknown) so the next
+    text operator forces re-injection even if fill was previously matching."""
+    state = {"fill_color": [0.0, 0.0, 0.0], "stroke_color": [0.0, 0.0, 0.0]}
+
+    base_replacer._process_op("cs", [], state, [], [])
+    assert state["fill_color"] is None, "cs should mark fill_color unknown"
+
+    state["fill_color"] = [1.0, 0.0, 0.0]
+    base_replacer._process_op("scn", [], state, [], [])
+    assert state["fill_color"] is None, "scn should mark fill_color unknown"
+
+    state["fill_color"] = [0.5, 0.5, 0.5]
+    base_replacer._process_op("sc", [], state, [], [])
+    assert state["fill_color"] is None, "sc should mark fill_color unknown"
+
+
+def test_process_op_named_colorspace_marks_stroke_unknown(base_replacer):
+    """CS/SCN/SC operators mark stroke_color as None (unknown)."""
+    state = {"fill_color": [0.0, 0.0, 0.0], "stroke_color": [0.0, 0.0, 0.0]}
+
+    base_replacer._process_op("CS", [], state, [], [])
+    assert state["stroke_color"] is None, "CS should mark stroke_color unknown"
+
+    state["stroke_color"] = [1.0, 0.0, 0.0]
+    base_replacer._process_op("SCN", [], state, [], [])
+    assert state["stroke_color"] is None, "SCN should mark stroke_color unknown"
+
+    state["stroke_color"] = [0.5, 0.5, 0.5]
+    base_replacer._process_op("SC", [], state, [], [])
+    assert state["stroke_color"] is None, "SC should mark stroke_color unknown"
+
+
+def test_process_op_named_colorspace_forces_injection_before_text(base_replacer):
+    """After cs/scn, _state_matches_desired returns False even if the desired
+    fill_color matches the PDF default, because state fill_color is now None.
+    This ensures text following a named colorspace gets the fill override injected."""
+    # base_replacer has fill_color=[0.1, 0.2, 0.3] so None != that → injection fires.
+    # Use a replacer whose fill matches the PDF default to confirm None still triggers.
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        fill_color=[0.0, 0.0, 0.0],  # matches PDF default
+    )
+    state = {
+        "font": "/F1",
+        "font_size": 12.0,
+        "render_mode": 0,
+        "stroke_color": [0.0, 0.0, 0.0],
+        "stroke_width": 0.0,
+        "fill_color": [0.0, 0.0, 0.0],  # currently matches desired
+    }
+
+    # Before cs: state matches desired, no injection
+    assert replacer._state_matches_desired(state) is True
+
+    # After cs: fill_color becomes None → no longer matches → injection fires
+    replacer._process_op("cs", [], state, [], [])
+    assert state["fill_color"] is None
+    assert replacer._state_matches_desired(state) is False

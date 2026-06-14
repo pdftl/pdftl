@@ -1,3 +1,4 @@
+import sys
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -98,10 +99,6 @@ def test_pager_flush_states():
     with patch("sys.stdout.flush") as mock_stdout_flush:
         stream.flush()
         mock_stdout_flush.assert_called_once()
-
-
-import sys
-from unittest.mock import patch
 
 
 def test_write_fallback_oserror(monkeypatch):

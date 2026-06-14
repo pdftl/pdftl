@@ -152,36 +152,17 @@ def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
 
 
 def _build_replacer(pdf, parsed_kwargs: dict) -> "TextStrokeReplaceContentStream | None":
-    stroke_width = None
-    stroke_width_type = "absolute"
-    try:
-        sw = parsed_kwargs.get("stroke", None)
-        if sw is not None:
-            sw = sw.rstrip(" ")
-            if sw.endswith("%"):
-                stroke_width_type = "percentage"
-                sw = sw.rstrip("%")
-            stroke_width = float(sw)
-    except ValueError as exc:
-        raise InvalidArgumentError(
-            f"Invalid stroke width provided: '{sw}'. "
-            "Must be a non-negative number or a percentage."
-        ) from exc
-    if stroke_width is not None and stroke_width < 0:
-        raise InvalidArgumentError(
-            f"Invalid negative stroke width provided: '{sw}'. "
-            "Must be a non-negative number or a percentage."
-        )
+    stroke_width, stroke_width_type = _parse_stroke_width(parsed_kwargs)
 
+    # Extract colors directly from user input
     color = _get_color_or_raise(parsed_kwargs, "color")
-    fill_color = _get_color_or_raise(parsed_kwargs, "fill_color") or color
-    stroke_color = _get_color_or_raise(parsed_kwargs, "stroke_color") or color
+    fill_color = _get_color_or_raise(parsed_kwargs, "fill_color")
+    stroke_color = _get_color_or_raise(parsed_kwargs, "stroke_color")
 
-    tr_mode = None
-    if stroke_color is not None and stroke_width is None:
-        stroke_width = 0.5
-    if stroke_width is not None:
-        tr_mode = 2
+    # Resolve the natural logic for text rendering mode and defaults
+    tr_mode, fill_color, stroke_color, stroke_width = _resolve_text_style_intent(
+        parsed_kwargs, stroke_width, color, fill_color, stroke_color
+    )
 
     if all(v is None for v in (stroke_width, fill_color, stroke_color, tr_mode)):
         return None
@@ -200,6 +181,60 @@ def _build_replacer(pdf, parsed_kwargs: dict) -> "TextStrokeReplaceContentStream
     return TextStrokeReplaceContentStream(pdf, **replacer_args)
 
 
+def _resolve_text_style_intent(parsed_kwargs, stroke_width, color, fill_color, stroke_color):
+    """
+    Determines the target Tr mode and applies smart defaults based on user intent.
+    Ensures 'color=' doesn't accidentally force a stroke outline, and color shifts
+    do not alter existing strokes or hit 1-px rendering bugs with stroke_width=0.
+    """
+    has_explicit_stroke = parsed_kwargs.get("stroke") is not None
+    has_explicit_stroke_color = stroke_color is not None
+
+    # Apply 'color' shorthand safely
+    if color is not None:
+        if fill_color is None:
+            fill_color = color
+        if stroke_color is None and (has_explicit_stroke or has_explicit_stroke_color):
+            stroke_color = color
+
+    # Evaluate rendering mode intent: Only force Tr 2 if they asked for an outline.
+    if has_explicit_stroke or has_explicit_stroke_color:
+        tr_mode = 2  # Fill and stroke text
+        if stroke_width is None:
+            stroke_width = 0.5
+        if stroke_color is None:
+            stroke_color = fill_color or color or [0.0, 0.0, 0.0]
+    else:
+        # Keep tr_mode None to preserve the stream's existing rendering mode (e.g. Tr 0)
+        tr_mode = None
+
+    return tr_mode, fill_color, stroke_color, stroke_width
+
+
+def _parse_stroke_width(parsed_kwargs: dict) -> tuple[float | None, str]:
+    """Helper to cleanly parse the stroke string and type."""
+    stroke_width = None
+    stroke_width_type = "absolute"
+    sw = parsed_kwargs.get("stroke", None)
+    if sw is None:
+        return None, stroke_width_type
+
+    sw_hint = "Must be a non-negative number or percentage."
+    try:
+        sw = sw.strip()
+        if sw.endswith("%"):
+            stroke_width_type = "percentage"
+            sw = sw.removesuffix("%")
+        stroke_width = float(sw)
+    except ValueError as exc:
+        raise InvalidArgumentError(f"Invalid stroke width provided: '{sw}'. " + sw_hint) from exc
+
+    if stroke_width < 0:
+        raise InvalidArgumentError(f"Invalid negative stroke width provided: '{sw}'. " + sw_hint)
+
+    return stroke_width, stroke_width_type
+
+
 def _apply_to_pages(pdf, spec: str, replacer: "TextStrokeReplaceContentStream"):
     num_pages = len(pdf.pages)
     for page_num in page_numbers_matching_page_spec(spec, num_pages):
@@ -212,7 +247,7 @@ def _get_color_or_raise(data, key):
     if val is None:
         return None
     try:
-        return [float(x) for x in val.split(" ") if len(x) > 0]
+        return [float(x) for x in val.split()]
     except (ValueError, AttributeError) as exc:
         raise InvalidArgumentError(
             f"Invalid color provided for '{key}': '{val}'. "
@@ -251,18 +286,23 @@ class TextStrokeReplaceContentStream:
         contents = page.get("/Contents")
         if contents is None:
             return
-        elif isinstance(contents, self.pikepdf.Array):
-            streams = list(contents)
-        else:
-            streams = [contents]
 
-        for stream in streams:
-            if stream.objgen in self._processed:
-                continue
-            instructions = self.pikepdf.parse_content_stream(stream)
-            new_content = self._process_instructions(instructions)
-            stream.write(new_content)
-            self._processed.add(stream.objgen)
+        # Coalesce array of streams into one before parsing — the PDF spec requires
+        # readers to concatenate Contents arrays before parsing, but pikepdf's
+        # parse_content_stream operates per-stream and silently drops operands at
+        # stream boundaries (e.g. a [ ... ] array whose TJ operator is in the next
+        # stream), causing data loss in the output.
+        pikepdf_page = self.pikepdf.Page(page)
+        pikepdf_page.contents_coalesce()
+
+        stream = page["/Contents"]
+        if stream.objgen in self._processed:
+            return
+
+        instructions = self.pikepdf.parse_content_stream(stream)
+        new_content = self._process_instructions(instructions)
+        stream.write(new_content)
+        self._processed.add(stream.objgen)
 
         if "/Resources" in page:
             self._process_resources(page.Resources)
@@ -333,9 +373,8 @@ class TextStrokeReplaceContentStream:
         """Return True if all non-None desired values are already in current state."""
         if self.tr_mode is not None and state["render_mode"] != self.tr_mode:
             return False
-        if self.stroke_width is not None and state[
-            "stroke_width"
-        ] != self._get_absolute_stroke_width(state):
+        current_stroke_width = state["stroke_width"]
+        if self.stroke_width is not None and current_stroke_width != self._get_absolute_stroke_width(state):
             return False
         if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
             return False
@@ -404,6 +443,13 @@ class TextStrokeReplaceContentStream:
             state["stroke_color"] = self._colors_to_list(operands, 3)
         elif op_str == "rg":
             state["fill_color"] = self._colors_to_list(operands, 3)
+        elif op_str in ("cs", "scn", "sc"):
+            # Named or pattern colorspace — we can't track the value, but we know
+            # the fill color is no longer the default. Mark as unknown so
+            # _state_matches_desired will force re-injection before the next Tj/TJ.
+            state["fill_color"] = None
+        elif op_str in ("CS", "SCN", "SC"):
+            state["stroke_color"] = None
         elif op_str in ("Tj", "TJ", "'", '"') and not self._state_matches_desired(state):
             self._force_style_state(new_instructions, state)
             self._update_state(state)
