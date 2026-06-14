@@ -186,3 +186,21 @@ def test_write_fallback_success(monkeypatch):
 
     # Verify the write actually happened
     mock_stdout.write.assert_called_once_with("fallback text")
+
+
+def test_pager_stdin_property_no_proc():
+    """Covers line 82: pager_stdin raises OSError when pager_proc is None."""
+    stream = ThresholdPagerStream(threshold=2)
+    assert stream.pager_proc is None
+    with pytest.raises(OSError, match="Pager stdin is unavailable"):
+        _ = stream.pager_stdin
+
+
+def test_pager_stdin_property_stdin_none():
+    """Covers line 86: pager_stdin raises OSError when proc.stdin is None."""
+    stream = ThresholdPagerStream(threshold=2)
+    mock_proc = MagicMock()
+    mock_proc.stdin = None
+    stream.pager_proc = mock_proc
+    with pytest.raises(OSError, match="Pager stdin is unavailable"):
+        _ = stream.pager_stdin

@@ -30,18 +30,18 @@ class ThresholdPagerStream:
         if self.pager_failed:
             try:
                 sys.stdout.write(text)
-            except OSError:
-                raise BrokenPipeError()
+            except OSError as e:
+                raise BrokenPipeError() from e
             return
 
         if self.pager_proc:
             # We are already paging, stream directly to less
             try:
-                self.pager_proc.stdin.write(text)
-            except OSError:
+                self.pager_stdin.write(text)
+            except OSError as e:
                 # The user hit 'q' and closed the pager.
                 # Raise to instantly stop Rich from rendering the rest of the document.
-                raise BrokenPipeError()
+                raise BrokenPipeError() from e
             return
 
         self.buffer.append(text)
@@ -70,11 +70,21 @@ class ThresholdPagerStream:
                 [pager_cmd], stdin=subprocess.PIPE, env=env, text=True
             )
             # Flush the spooled history into the pager
-            self.pager_proc.stdin.write("".join(self.buffer))
+            self.pager_stdin.write("".join(self.buffer))
             self.buffer.clear()
         except OSError as e:
             logger.warning("Failed to start streaming pager: %s", e)
             self._fallback()
+
+    @property
+    def pager_stdin(self):
+        if self.pager_proc is None:
+            pager_stdin = None
+        else:
+            pager_stdin = getattr(self.pager_proc, "stdin", None)
+        if pager_stdin is None:
+            raise OSError("Pager stdin is unavailable")
+        return pager_stdin
 
     def _fallback(self):
         self.pager_failed = True
@@ -86,7 +96,7 @@ class ThresholdPagerStream:
             sys.stdout.flush()
         elif self.pager_proc:
             try:
-                self.pager_proc.stdin.flush()
+                self.pager_stdin.flush()
             except OSError:
                 # Pipe already closed (user quit pager); nothing to flush.
                 pass
@@ -94,7 +104,7 @@ class ThresholdPagerStream:
     def close(self):
         if self.pager_proc:
             try:
-                self.pager_proc.stdin.close()
+                self.pager_stdin.close()
             except OSError:
                 # Pipe already closed; proceed to wait() regardless.
                 pass
