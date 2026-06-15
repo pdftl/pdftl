@@ -374,7 +374,10 @@ class TextStrokeReplaceContentStream:
         if self.tr_mode is not None and state["render_mode"] != self.tr_mode:
             return False
         current_stroke_width = state["stroke_width"]
-        if self.stroke_width is not None and current_stroke_width != self._get_absolute_stroke_width(state):
+        if (
+            self.stroke_width is not None
+            and current_stroke_width != self._get_absolute_stroke_width(state)
+        ):
             return False
         if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
             return False

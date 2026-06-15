@@ -46,6 +46,7 @@ add-text = ["reportlab"]
 barcode = ["pypdfium2", "zxing-cpp>=3.0,<4.0"]
 crop-visible = ["pypdfium2"]
 delete-blank = ["numpy"]
+dump-tables = ["tablers"]
 dump-text = ["pypdfium2"]
 flatten = ["pypdfium2"]
 highlight = ["pypdfium2"]
@@ -61,6 +62,7 @@ extras = [
     "pdftl[barcode]",
     "pdftl[crop-visible]",
     "pdftl[delete-blank]",
+    "pdftl[dump-tables]",
     "pdftl[dump-text]",
     "pdftl[flatten]",
     "pdftl[highlight]",

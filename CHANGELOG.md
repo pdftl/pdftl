@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `dump_tables` operation
+
 ### Fixed
 
 - Preserve outline state (open/closed, formatting) when copying outlines

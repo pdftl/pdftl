@@ -52,6 +52,7 @@ HARDCODED_KEYWORDS = {
     "dump_images",
     "dump_layers",
     "dump_signatures",
+    "dump_tables",
     "dump_text",
     "fill_form",
     "filter",
