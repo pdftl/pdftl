@@ -422,6 +422,12 @@ class TextStrokeReplaceContentStream:
         return self.pikepdf.unparse_content_stream(new_instructions)
 
     def _process_op(self, op_str, operands, state, stack, new_instructions):
+        _FILL_COLOR_OPS = {"k": 4, "g": 1, "rg": 3}
+        _STROKE_COLOR_OPS = {"K": 4, "G": 1, "RG": 3}
+        _UNKNOWN_FILL_OPS = {"cs", "scn", "sc"}
+        _UNKNOWN_STROKE_OPS = {"CS", "SCN", "SC"}
+        _TEXT_OPS = {"Tj", "TJ", "'", '"'}
+
         if op_str == "q":
             stack.append(copy.deepcopy(state))
         elif op_str == "Q" and stack:
@@ -434,26 +440,15 @@ class TextStrokeReplaceContentStream:
             state["render_mode"] = int(operands[0])
         elif op_str == "w":
             state["stroke_width"] = float(operands[0])
-        elif op_str == "K":
-            state["stroke_color"] = self._colors_to_list(operands, 4)
-        elif op_str == "k":
-            state["fill_color"] = self._colors_to_list(operands, 4)
-        elif op_str == "G":
-            state["stroke_color"] = self._colors_to_list(operands, 1)
-        elif op_str == "g":
-            state["fill_color"] = self._colors_to_list(operands, 1)
-        elif op_str == "RG":
-            state["stroke_color"] = self._colors_to_list(operands, 3)
-        elif op_str == "rg":
-            state["fill_color"] = self._colors_to_list(operands, 3)
-        elif op_str in ("cs", "scn", "sc"):
-            # Named or pattern colorspace — we can't track the value, but we know
-            # the fill color is no longer the default. Mark as unknown so
-            # _state_matches_desired will force re-injection before the next Tj/TJ.
+        elif op_str in _FILL_COLOR_OPS:
+            state["fill_color"] = self._colors_to_list(operands, _FILL_COLOR_OPS[op_str])
+        elif op_str in _STROKE_COLOR_OPS:
+            state["stroke_color"] = self._colors_to_list(operands, _STROKE_COLOR_OPS[op_str])
+        elif op_str in _UNKNOWN_FILL_OPS:
             state["fill_color"] = None
-        elif op_str in ("CS", "SCN", "SC"):
+        elif op_str in _UNKNOWN_STROKE_OPS:
             state["stroke_color"] = None
-        elif op_str in ("Tj", "TJ", "'", '"') and not self._state_matches_desired(state):
+        elif op_str in _TEXT_OPS and not self._state_matches_desired(state):
             self._force_style_state(new_instructions, state)
             self._update_state(state)
 
