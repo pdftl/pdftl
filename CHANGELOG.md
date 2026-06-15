@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Fixed
+
+- Preserve outline state (open/closed, formatting) when copying outlines
+
 ## [0.21.1] - 2026-06-14
 
 ### Fixed

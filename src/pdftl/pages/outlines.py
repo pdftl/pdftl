@@ -60,7 +60,7 @@ class OutlineCopier:
         This function uses the LinkRemapper to handle all destination
         types (explicit, named, action) and coordinate transformations.
         """
-        from pikepdf import OutlineItem
+        from pikepdf import OutlineItem, Name
 
         # --- 1. Get/Create a GoTo Action Dictionary ---
         source_action = _get_source_action(source_item)
@@ -88,8 +88,16 @@ class OutlineCopier:
                 is_valid_destination = True
                 final_destination = new_action.D
 
-        # --- 3. Create the new item ---
-        new_item = OutlineItem(title=source_item.title, destination=final_destination)
+        # --- 3. Create the new item, copying the source obj to preserve
+        #        formatting (/F bold/italic flags, /C colour) and open/closed state.
+        new_item = OutlineItem(
+            title=source_item.title,
+            destination=final_destination,
+            obj=self.remapper.pdf.copy_foreign(
+                self.remapper.source_pdf.make_indirect(source_item.obj)
+            ),
+        )
+        new_item.is_closed = source_item.is_closed or Name.Count not in source_item.obj
 
         # --- 4. Recurse on children ---
         for source_child in source_item.children:
