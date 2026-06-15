@@ -14,9 +14,11 @@ error on instantiation. This isolates the optional dependency.
 
 import io
 import logging
+import os
 from collections import namedtuple
 from typing import Any
 
+from pdftl.fonts.file_locator import resolve_system_font_path
 from pdftl.utils.dependencies import ensure_dependencies
 
 logger = logging.getLogger(__name__)
@@ -88,7 +90,8 @@ def _get_base_coordinates(rule: dict, page_box: _PageBox) -> tuple[float, float]
     return _get_absolute_coordinates(rule, page_box)
 
 
-# Define constants
+# --- Constants ---
+
 _STANDARD_T1_FONTS = {
     "Courier",
     "Courier-Bold",
@@ -132,8 +135,27 @@ class TextDrawer:
         )
         self.font_cache: dict[str, str] = {}
 
+    def _register_external_font(self, font_name: str, target_path: str) -> str:
+        """Helper to register an absolute TTF path into ReportLab."""
+        internal_name = os.path.splitext(os.path.basename(target_path))[0]
+        try:
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont, TTFError
+
+            pdfmetrics.registerFont(TTFont(internal_name, target_path))
+            self.font_cache[font_name] = internal_name
+            return internal_name
+        except (OSError, ValueError, RuntimeError, TypeError, TTFError) as e:
+            logger.warning(
+                "Failed to register resolved font '%s': %s. Falling back to default font",
+                target_path,
+                e,
+            )
+            self.font_cache[font_name] = DEFAULT_FONT_NAME
+            return DEFAULT_FONT_NAME
+
     def get_font_name(self, font_name: str) -> str:
-        """Validates a font name against reportlab's registry."""
+        """Validates a font name or file path against reportlab's registry."""
         if not font_name:
             return DEFAULT_FONT_NAME
 
@@ -145,6 +167,16 @@ class TextDrawer:
             self.font_cache[font_name] = _FONT_NAME_MAP[lower_name]
             return self.font_cache[font_name]
 
+        # Check if the string is a literal file path
+        if font_name.lower().endswith((".ttf", ".otf")) and os.path.isfile(font_name):
+            return self._register_external_font(font_name, font_name)
+
+        # Attempt OS-level system resolution
+        target_path = resolve_system_font_path(font_name)
+        if target_path:
+            return self._register_external_font(font_name, target_path)
+
+        # Fallback to pure ReportLab lookup
         from reportlab.pdfbase.pdfmetrics import FontError, FontNotFoundError, getFont
 
         try:
@@ -153,88 +185,103 @@ class TextDrawer:
             return font_name
         except (FontError, FontNotFoundError, KeyError, AttributeError):
             logger.warning(
-                "Could not find or register font '%s'. Falling back to %s.",
-                font_name,
-                DEFAULT_FONT_NAME,
+                "Could not resolve font '%s'. Falling back to %s.", font_name, DEFAULT_FONT_NAME
             )
             self.font_cache[font_name] = DEFAULT_FONT_NAME
             return DEFAULT_FONT_NAME
+
+    def _draw_background(
+        self,
+        rule: dict,
+        draw_x: float,
+        draw_y: float,
+        text_width: float,
+        font_name: str,
+        font_size: float,
+    ):
+        """Calculates and draws the background rectangle for text if required."""
+        bgcolor = rule.get("bgcolor")
+        if not bgcolor and "padding" not in rule:
+            return
+
+        if bgcolor is None:
+            bgcolor = [1, 1, 1]
+
+        padding = _resolve_dimension(rule.get("padding", 0), self.page_box.width)
+        from reportlab.pdfbase.pdfmetrics import getAscentDescent
+
+        try:
+            ascent, descent = getAscentDescent(font_name, font_size)
+        except KeyError:
+            ascent, descent = font_size, 0.0
+
+        bg_x = draw_x - padding
+        bg_y = draw_y + descent - padding
+        bg_w = text_width + (padding * 2)
+        bg_h = (ascent - descent) + (padding * 2)
+
+        try:
+            self.canvas.setFillColorRGB(*bgcolor[:3])
+            if len(bgcolor) == 4:
+                self.canvas.setFillAlpha(float(bgcolor[3]))
+            self.canvas.rect(bg_x, bg_y, bg_w, bg_h, fill=1, stroke=0)
+            self.canvas.setFillAlpha(1.0)
+        except (TypeError, ValueError, IndexError) as e:
+            logger.warning("Failed to draw background color due to invalid format: %s", e)
 
     def draw_rule(self, rule: dict, context: dict):
         """Draws a single text rule onto the internal canvas."""
         try:
             runs = rule["text"](context)
-            if not runs:
-                return
+        except (TypeError, KeyError, ValueError) as e:
+            logger.warning("Skipping one text rule due to parsing error: %s", e)
+            return
 
-            font_name = self.get_font_name(rule.get("font", DEFAULT_FONT_NAME))
-            font_size = rule.get("size", DEFAULT_FONT_SIZE)
-            color = rule.get("color", DEFAULT_COLOR_TUPLE)
-            link_color = rule.get("linkcolor", color)
-            bgcolor = rule.get("bgcolor")
+        if not runs:
+            return
 
-            # Resolve padding (defaulting to 0 if not provided)
-            padding = _resolve_dimension(rule.get("padding", 0), self.page_box.width)
-            rotate = rule.get("rotate", 0)
+        font_name = self.get_font_name(rule.get("font", DEFAULT_FONT_NAME))
+        font_size = float(rule.get("size", DEFAULT_FONT_SIZE))
+        color = rule.get("color", DEFAULT_COLOR_TUPLE)
+        link_color = rule.get("linkcolor", color)
+        rotate = float(rule.get("rotate", 0))
 
-            full_text = "".join(text for text, _ in runs)
+        full_text = "".join(str(text) for text, _ in runs)
+        try:
             text_width = self.canvas.stringWidth(full_text, font_name, font_size)
-            pos = rule.get("position", "")
-            draw_x, draw_y = self._get_draw_position(rule.get("align"), pos, text_width, font_size)
+        except (KeyError, TypeError, ValueError) as e:
+            logger.warning("Failed to calculate text width for rule: %s", e)
+            return
 
-            anchor_x, anchor_y = _get_base_coordinates(rule, self.page_box)
-            offset_x = _resolve_dimension(rule.get("offset-x"), self.page_box.width)
-            offset_y = _resolve_dimension(rule.get("offset-y"), self.page_box.height)
+        pos = rule.get("position", "")
+        draw_x, draw_y = self._get_draw_position(rule.get("align"), pos, text_width, font_size)
 
-            self.canvas.saveState()
-            self.canvas.setFont(font_name, font_size)
-            self.canvas.translate(anchor_x + offset_x, anchor_y + offset_y)
-            self.canvas.rotate(rotate)
+        anchor_x, anchor_y = _get_base_coordinates(rule, self.page_box)
+        offset_x = _resolve_dimension(rule.get("offset-x"), self.page_box.width)
+        offset_y = _resolve_dimension(rule.get("offset-y"), self.page_box.height)
 
-            # --- Draw Background Rectangle if specified ---
-            if bgcolor or "padding" in rule:
-                if bgcolor is None:
-                    bgcolor = [1, 1, 1]
-                from reportlab.pdfbase.pdfmetrics import getAscentDescent
+        self.canvas.saveState()
+        self.canvas.setFont(font_name, font_size)
+        self.canvas.translate(anchor_x + offset_x, anchor_y + offset_y)
+        self.canvas.rotate(rotate)
 
-                ascent, descent = getAscentDescent(font_name, font_size)
+        self._draw_background(rule, draw_x, draw_y, text_width, font_name, font_size)
 
-                # Calculate bounding box with padding
-                bg_x = draw_x - padding
-                bg_y = draw_y + descent - padding
-                bg_w = text_width + (padding * 2)
-                bg_h = (ascent - descent) + (padding * 2)
+        cursor_x = draw_x
+        for text, url in runs:
+            cursor_x += _draw_run(
+                self.canvas,
+                str(text),
+                url,
+                cursor_x,
+                draw_y,
+                font_name,
+                font_size,
+                color,
+                link_color,
+            )
 
-                self.canvas.setFillColorRGB(*bgcolor[:3])
-                if len(bgcolor) == 4:
-                    self.canvas.setFillAlpha(bgcolor[3])
-
-                # fill=1 draws the rect, stroke=0 ensures no border line
-                self.canvas.rect(bg_x, bg_y, bg_w, bg_h, fill=1, stroke=0)
-
-                # Reset alpha for the upcoming text drawing
-                self.canvas.setFillAlpha(1.0)
-
-            # --- Draw Text Runs ---
-            cursor_x = draw_x
-            for text, url in runs:
-                cursor_x += _draw_run(
-                    self.canvas,
-                    text,
-                    url,
-                    cursor_x,
-                    draw_y,
-                    font_name,
-                    font_size,
-                    color,
-                    link_color,
-                )
-
-            self.canvas.restoreState()
-
-        except (ValueError, TypeError, KeyError, AttributeError) as e:
-            logger.warning("Skipping one text rule due to invalid data: %s", e)
-            logger.debug("Detailed traceback:", exc_info=True)
+        self.canvas.restoreState()
 
     def _get_draw_position(self, align, pos, text_width, font_size):
         if align is None:
@@ -265,6 +312,9 @@ class TextDrawer:
         return self.packet.read()
 
 
+# --- Drawing Helpers ---
+
+
 def _transform_rect(canvas, x1, y1, x2, y2):
     corners = [
         canvas.absolutePosition(x1, y1),
@@ -281,21 +331,29 @@ def _draw_run(canvas, text, url, x, y, font_name, font_size, color, link_color):
     """Draws a single text run and optionally adds a URI annotation."""
     run_color = link_color if url else color
 
-    # Set RGB color
-    canvas.setFillColorRGB(*run_color[:3])
-
-    # Handle alpha channel if present (the 4th float)
-    if len(run_color) == 4:
-        canvas.setFillAlpha(run_color[3])
-    else:
-        canvas.setFillAlpha(1.0)
+    try:
+        canvas.setFillColorRGB(*run_color[:3])
+        if len(run_color) == 4:
+            canvas.setFillAlpha(float(run_color[3]))
+        else:
+            canvas.setFillAlpha(1.0)
+    except (TypeError, ValueError, IndexError) as e:
+        logger.warning("Invalid text color format: %s", e)
 
     canvas.drawString(x, y, text)
+
     if url:
         from reportlab.pdfbase.pdfmetrics import getAscentDescent
 
-        w = canvas.stringWidth(text, font_name, font_size)
-        ascent, descent = getAscentDescent(font_name, font_size)
-        rect = _transform_rect(canvas, x, y + descent, x + w, y + ascent)
-        canvas.linkURL(url, rect, relative=0, thickness=0)
-    return canvas.stringWidth(text, font_name, font_size)
+        try:
+            w = canvas.stringWidth(text, font_name, font_size)
+            ascent, descent = getAscentDescent(font_name, font_size)
+            rect = _transform_rect(canvas, x, y + descent, x + w, y + ascent)
+            canvas.linkURL(url, rect, relative=0, thickness=0)
+        except (KeyError, ValueError, TypeError) as e:
+            logger.warning("Failed to render URL annotation: %s", e)
+
+    try:
+        return canvas.stringWidth(text, font_name, font_size)
+    except (KeyError, ValueError, TypeError):
+        return 0.0

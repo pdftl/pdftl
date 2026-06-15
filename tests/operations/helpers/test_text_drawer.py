@@ -83,21 +83,36 @@ def test_get_base_coordinates(rule, expected, page_box):
 
 # --- TextDrawer tests ---
 
+import pdftl.operations.helpers.text_drawer as td  # need this for fast test apparently
+import pdftl.fonts.file_locator as fl  # and this
+
 
 def test_get_font_name_logic(drawer, monkeypatch, caplog):
     inst, _ = drawer
+    inst.font_cache = {}
+
+    # Hammer down EVERY possible namespace reference to the system resolver
+    # to guarantee it NEVER touches the disk scan loop.
+    monkeypatch.setattr(fl, "resolve_system_font_path", lambda _: None)
+    monkeypatch.setattr(td, "resolve_system_font_path", lambda _: None)
+
     assert inst.get_font_name("Helvetica") == "Helvetica"
     assert inst.get_font_name("times-bold") == "Times-Bold"
 
     from reportlab.pdfbase.pdfmetrics import FontNotFoundError
 
+    # Target the absolute module level properties directly
+    import reportlab.pdfbase.pdfmetrics as pdfm
+
     mock_get = MagicMock(side_effect=FontNotFoundError("Missing"))
+
+    monkeypatch.setattr(pdfm, "getFont", mock_get)
     monkeypatch.setattr("reportlab.pdfbase.pdfmetrics.getFont", mock_get)
 
     with caplog.at_level("WARNING"):
         caplog.clear()
         name = inst.get_font_name("FakeFont")
-        assert name == text_drawer.DEFAULT_FONT_NAME
+        assert name == td.DEFAULT_FONT_NAME
         assert "FakeFont" in caplog.text
 
 
@@ -404,19 +419,19 @@ def test_draw_rule_invalid_data_warning(caplog):
     assert "Skipping one text rule" in caplog.text
 
 
-def test_get_font_name_external_registry():
-    """Covers lines 152-153: Font not in standard list but in ReportLab."""
-    drawer = TextDrawer(MagicMock(width=500, height=800))
+def test_get_font_name_external_registry(monkeypatch):
+    drawer = TextDrawer.__new__(TextDrawer)
+    drawer.font_cache = {}
 
-    # 'Vera' is a common font name that ReportLab logic might encounter.
-    # We mock getFont to succeed for this specific name.
+    monkeypatch.setattr(
+        text_drawer,
+        "resolve_system_font_path",
+        lambda _: None,
+    )
+
     with patch("reportlab.pdfbase.pdfmetrics.getFont") as mock_get_font:
         mock_get_font.return_value = True
-        # "MyCustomFont" is not in _STANDARD_T1_FONTS
-        result = drawer.get_font_name("MyCustomFont")
-
-        assert result == "MyCustomFont"
-        assert drawer.font_cache["MyCustomFont"] == "MyCustomFont"
+        assert drawer.get_font_name("MyCustomFont") == "MyCustomFont"
 
 
 def test_draw_rule_default_left_align():
@@ -451,3 +466,147 @@ def test_text_drawer_save():
 
     assert isinstance(content, bytes)
     assert content.startswith(b"%PDF")  # ReportLab output is a PDF snippet
+
+
+# Append to tests/operations/helpers/test_text_drawer.py
+
+# --- Targeted additions to push coverage to 100% ---
+
+
+@patch("reportlab.pdfbase.pdfmetrics.registerFont")
+def test_register_external_font_success(mock_register, mock_drawer):
+    """Covers line 147: Checks caching flows when external font registrations execute smoothly."""
+    mock_drawer.font_cache.clear()
+    with patch("reportlab.pdfbase.ttfonts.TTFont", return_value=MagicMock()):
+        res = mock_drawer._register_external_font("CustomOSFont", "/dir/CustomOSFont.ttf")
+        assert res == "CustomOSFont"
+        assert mock_drawer.font_cache["CustomOSFont"] == "CustomOSFont"
+
+
+def test_register_external_font_exception_fallback(mock_drawer, caplog):
+    """Covers lines 148-155: Catches registration errors, logging an error and choosing Helvetica."""
+    mock_drawer.font_cache.clear()
+    with patch(
+        "reportlab.pdfbase.pdfmetrics.registerFont", side_effect=ValueError("Bad structural units")
+    ):
+        with caplog.at_level("WARNING"):
+            res = mock_drawer._register_external_font("BrokenFont", "/dir/broken.ttf")
+            assert res == "Helvetica"
+            assert mock_drawer.font_cache["BrokenFont"] == "Helvetica"
+            assert "Failed to register resolved font" in caplog.text
+
+
+def test_get_font_name_as_literal_file_path(mock_drawer):
+    """Covers line 172: Directly intercepts strings that point straight to a local font file."""
+    mock_drawer.font_cache.clear()
+    with (
+        patch("os.path.isfile", return_value=True),
+        patch.object(
+            mock_drawer, "_register_external_font", return_value="RegisteredLiteral"
+        ) as mock_reg,
+    ):
+        res = mock_drawer.get_font_name("/assets/fonts/MyFont.ttf")
+        assert res == "RegisteredLiteral"
+        mock_reg.assert_called_once_with("/assets/fonts/MyFont.ttf", "/assets/fonts/MyFont.ttf")
+
+
+@patch("reportlab.pdfbase.pdfmetrics.getAscentDescent", side_effect=KeyError)
+def test_draw_background_metrics_lookup_fallback(mock_metrics, mock_drawer):
+    """Covers line 215-216: Falls back to font_size as ascent and 0.0 as descent upon missing metrics."""
+    # Providing padding ensures background rectangle code is processed
+    rule = {
+        "text": lambda ctx: [("Hello Fallback", None)],
+        "padding": 5.0,
+        "bgcolor": (1, 1, 1),
+    }
+    mock_drawer.canvas.stringWidth.return_value = 40.0
+
+    # We trace calls to rect() to confirm if fallback coordinates used math matching (ascent=fontSize)
+    # bg_h = (font_size - 0.0) + (padding * 2) = 12.0 + 10.0 = 22.0
+    mock_drawer.draw_rule(rule, {})
+    mock_drawer.canvas.rect.assert_called_with(-5.0, -5.0, 50.0, 22.0, fill=1, stroke=0)
+
+
+@patch(
+    "reportlab.pdfbase.pdfmetrics.getFont",
+    side_effect=TypeError("String Width computation failure"),
+)
+def test_draw_rule_string_width_calculation_error(mock_get_font, mock_drawer, caplog):
+    """Covers lines 252-254: Catches stringWidth computation evaluation errors and safely skips processing."""
+    rule = {
+        "text": lambda ctx: [("Crash width calculation", None)],
+    }
+    # Forcing stringWidth to crash out
+    mock_drawer.canvas.stringWidth.side_effect = TypeError("invalid format inputs")
+    with caplog.at_level("WARNING"):
+        mock_drawer.draw_rule(rule, {})
+        assert "Failed to calculate text width for rule" in caplog.text
+
+
+def test_draw_run_invalid_color_format_warning(mock_drawer, caplog):
+    """Covers lines 340-341: Intercepts formatting errors inside individual text run coloring assignments."""
+    rule = {
+        "text": lambda ctx: [("Bad color run", None)],
+        "color": 42,  # Integer is not unpackable with *operator
+    }
+    mock_drawer.canvas.stringWidth.return_value = 10.0
+    with caplog.at_level("WARNING"):
+        mock_drawer.draw_rule(rule, {})
+        assert "Invalid text color format" in caplog.text
+
+
+def test_draw_run_url_annotation_exception(mock_drawer, caplog):
+    """Covers lines 353-354: Protects rendering loop if URL linkURL annotations trigger runtime errors."""
+    rule = {
+        "text": lambda ctx: [("Crash annotation link", "http://crash.me")],
+    }
+    mock_drawer.canvas.stringWidth.return_value = 10.0
+    # Force linkURL call to raise an entry error
+    mock_drawer.canvas.linkURL.side_effect = ValueError("Corrupt link mapping context")
+    with caplog.at_level("WARNING"):
+        mock_drawer.draw_rule(rule, {})
+        assert "Failed to render URL annotation" in caplog.text
+
+
+def test_draw_run_final_string_width_exception(mock_drawer):
+    """Covers lines 358-359: Validates fallback return width of 0.0 if stringWidth throws an exception at end of run."""
+    rule = {
+        "text": lambda ctx: [("Crash ending width call", None)],
+    }
+    # First call in draw_rule succeeds to evaluate geometric boundaries, second inside loop breaks
+    mock_drawer.canvas.stringWidth.side_effect = [50.0, TypeError("Forced error down low")]
+
+    # Executing must not raise an error up the stack
+    mock_drawer.draw_rule(rule, {})
+
+
+def test_draw_background_invalid_format_exception(mock_drawer, caplog):
+    """Covers lines 229-230: Captures packing errors if bgcolor contains un-unpackable structures."""
+    rule = {
+        "text": lambda ctx: [("Hello Exception", None)],
+        "padding": 2.0,
+        "bgcolor": 12345,  # Numeric scalars completely break unpacking sequences, forcing the exception
+    }
+    mock_drawer.canvas.stringWidth.return_value = 50.0
+    with caplog.at_level("WARNING"):
+        mock_drawer.draw_rule(rule, {})
+        assert "Failed to draw background color due to invalid format" in caplog.text
+
+
+def test_get_font_name_resolves_system_font(monkeypatch):
+    drawer = TextDrawer.__new__(TextDrawer)
+    drawer.font_cache = {}
+
+    monkeypatch.setattr(
+        text_drawer,
+        "resolve_system_font_path",
+        lambda _: "/fake/fonts/MyFont.ttf",
+    )
+
+    monkeypatch.setattr(
+        TextDrawer,
+        "_register_external_font",
+        lambda self, font_name, path: "RegisteredFont",
+    )
+
+    assert drawer.get_font_name("MyFont") == "RegisteredFont"

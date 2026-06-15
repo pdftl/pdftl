@@ -402,7 +402,7 @@ def clean_registry():
         pdftl.registry_init._initialized = False
 
     for mod_name in list(sys.modules.keys()):
-        if mod_name.startswith("pdftl.operations."):
+        if mod_name.startswith(("pdftl.operations.", "pdftl.fonts.", "pdftl.utils.")):
             with suppress(ImportError):
                 importlib.reload(sys.modules[mod_name])
 
