@@ -396,6 +396,11 @@ class PipelineManager:
         # Determine output pattern from local stage options or default
         output_pattern = stage.options.get(c.OUTPUT, "pg_%04d.pdf")
 
+        try:
+            args_expanded = expand_shorthand_args(stage.operation_args)
+        except TypeError as exc:
+            raise UserCommandLineError(exc)
+
         call_context = {
             c.OPERATION_NAME: operation,
             c.INPUTS: stage.inputs if effective_inputs is None else effective_inputs,
@@ -404,7 +409,7 @@ class PipelineManager:
             c.INPUT_PASSWORD: _first_or_none(stage.input_passwords),
             c.INPUT_PDF: _first_or_none(opened_pdfs),
             c.OPERATION_ARGS: stage.operation_args,
-            c.OPERATION_ARGS_EXPANDED: expand_shorthand_args(stage.operation_args),
+            c.OPERATION_ARGS_EXPANDED: args_expanded,
             c.ALIASES: stage.handles if adjusted_handles is None else adjusted_handles,
             c.OVERLAY_PDF: _first_or_none(stage.operation_args),
             c.OUTPUT: stage.options.get(c.OUTPUT, None),

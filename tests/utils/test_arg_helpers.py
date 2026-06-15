@@ -402,3 +402,78 @@ def test_output_is_single_element_list_with_selector():
     result = expand_shorthand_args(["1", "a4"], is_sel)
     assert isinstance(result, list)
     assert len(result) == 1
+
+
+def test_resolve_spec_from_json_file_with_factory(monkeypatch):
+    """
+    Covers Line 80: Verifies that resolve_operation_spec calls the custom
+    `from_dict` factory method on the spec class if it exists.
+    """
+    mock_json_data = {"source": "json_file_source", "target": "json_file_target"}
+
+    # Mock file reading and existence checks
+    mock_file = mock_open(read_data=json.dumps(mock_json_data))
+    monkeypatch.setattr("builtins.open", mock_file)
+    monkeypatch.setattr("pathlib.Path.exists", lambda self: True)
+
+    # Passing an argument starting with '@' triggers file loading logic
+    result = resolve_operation_spec(["@config.json"], mock_manual_parser, MockSpec)
+
+    # MockSpec.from_dict appends "_from_dict" to the source attribute
+    assert result == MockSpec(source="json_file_source_from_dict", target="json_file_target")
+
+
+def test_resolve_spec_from_json_file_standard_init(monkeypatch):
+    """
+    Covers Line 83: Verifies that resolve_operation_spec falls back to standard
+    instantiation if the target class lacks a `from_dict` method.
+    """
+    mock_json_data = {"source": "json_file_source", "target": "json_file_target"}
+
+    mock_file = mock_open(read_data=json.dumps(mock_json_data))
+    monkeypatch.setattr("builtins.open", mock_file)
+    monkeypatch.setattr("pathlib.Path.exists", lambda self: True)
+
+    # SimpleSpec does NOT have a from_dict classmethod
+    result = resolve_operation_spec(["@config.json"], mock_manual_parser, SimpleSpec)
+
+    assert result == SimpleSpec(source="json_file_source", target="json_file_target")
+
+
+# Create dummy classes to mock the expected type names.
+# This avoids needing to import the actual pipeline classes if they are in a different module.
+class InlineSubPipeline:
+    pass
+
+
+class EachSubPipeline:
+    pass
+
+
+def test_expand_shorthand_args_invalid_types():
+    """Covers lines 128-137: Type checking and custom error hints for pipeline objects."""
+
+    # 1. Test InlineSubPipeline hint (Lines 130-134)
+    with pytest.raises(TypeError) as exc_info:
+        expand_shorthand_args(["valid_string", InlineSubPipeline()])
+
+    error_msg = str(exc_info.value)
+    assert "Unexpected object of type 'InlineSubPipeline'" in error_msg
+    assert "Maybe you forgot to assign your inline pipeline to an input handle?" in error_msg
+
+    # 2. Test EachSubPipeline hint (Lines 135-136)
+    with pytest.raises(TypeError) as exc_info:
+        expand_shorthand_args([EachSubPipeline()])
+
+    error_msg = str(exc_info.value)
+    assert "Unexpected object of type 'EachSubPipeline'" in error_msg
+    assert "Using EACH in that position does not seem to make sense." in error_msg
+
+    # 3. Test generic fallback for other non-string types (Line 128, 137-139)
+    with pytest.raises(TypeError) as exc_info:
+        expand_shorthand_args([123, 456])
+
+    error_msg = str(exc_info.value)
+    assert "Unexpected object of type 'int'" in error_msg
+    assert "Maybe you forgot" not in error_msg
+    assert "Using EACH" not in error_msg

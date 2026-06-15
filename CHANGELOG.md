@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preserve outline state (open/closed, formatting) when copying outlines
 
+- Fix a crash when a subpipeline is passed as an operation argument
+
 ## [0.21.1] - 2026-06-14
 
 ### Fixed

@@ -1,16 +1,23 @@
+from pdftl.cli.pipeline import InlineSubPipeline
+
+import pytest
+from unittest.mock import MagicMock, patch
+from pdftl.cli.pipeline import EachSubPipeline
+import pdftl.cli.pipeline as pipeline_mod
+
+
+from pdftl.cli.pipeline import PipelineManager
+
 import io
 import logging
 from types import SimpleNamespace
-from unittest.mock import ANY, MagicMock, call, patch
+from unittest.mock import ANY, call, Mock
 
 import pikepdf
-import pytest
 
 import pdftl.core.constants as c
 from pdftl.cli.pipeline import (
     CliStage,
-    InlineSubPipeline,
-    PipelineManager,
 )
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import registry
@@ -464,9 +471,11 @@ def mock_registry():
     # reset to prevent state pollution
     for op in MOCK_REGISTRY.operations.values():
         if "function" in op:
-            op["function"].side_effect = None
-            op["function"].reset_mock()
-
+            func = op["function"]
+            # Check if it's a Mock/MagicMock object before trying to reset it
+            if isinstance(func, Mock):
+                func.side_effect = None
+                func.reset_mock()
     # Patch with the SimpleNamespace object
     with patch("pdftl.cli.pipeline.registry", MOCK_REGISTRY):
         with patch("pdftl.core.executor.registry", MOCK_REGISTRY):
@@ -847,13 +856,6 @@ def test_inline_pipeline_no_output_error():
             mgr._open_input_pdfs(stage, is_first=True)
 
 
-# This test is safe because it only uses the public API logic
-def test_pipeline_repr_coverage():
-    # Fixes Line 43
-    sub_pipe = InlineSubPipeline(stages=[], original_text="TEST_REPR")
-    assert repr(sub_pipe) == "TEST_REPR"
-
-
 # This test uses a context manager to ensure the registry is never permanently altered
 def test_pipeline_config_error_coverage(mocker):
     # Fixes Line 292
@@ -1016,3 +1018,192 @@ def test_stage_logging_branches(caplog, monkeypatch):
     assert "Implicit pipeline stream" in caplog.text
     assert "Arguments: foo" in caplog.text
     assert "Localized Settings" in caplog.text
+
+
+def test_run_operation_expand_shorthand_type_error(mock_context, mock_registry, monkeypatch):
+    """Covers lines 401-402: Catches TypeError from expand_shorthand_args and raises UserCommandLineError."""
+
+    # Force expand_shorthand_args to raise a TypeError when executed
+    def mock_expand(args):
+        raise TypeError("Simulated shorthand expansion layout error")
+
+    monkeypatch.setattr(pipeline_mod, "expand_shorthand_args", mock_expand)
+
+    # Configure registry so validation passes lines 393-394
+    mock_registry.operations["dummy_op"] = {"function": lambda x: x, "args": ([], {})}
+
+    stage = CliStage(operation="dummy_op", operation_args=["malformed_shorthand"])
+    manager = PipelineManager(stages=[stage], input_context=mock_context)
+
+    # Verify that the TypeError is successfully intercepted and wrapped
+    with pytest.raises(UserCommandLineError, match="Simulated shorthand expansion layout error"):
+        manager._run_operation(stage, opened_pdfs=[])
+
+
+# =====================================================================
+# 4. Context Extraction and Shared Handles (Line 541, 578-581, 591-593)
+# =====================================================================
+
+
+# =====================================================================
+# 1. Simple Utility & Logging Evaluation (Lines 60, 205)
+# =====================================================================
+
+
+def test_each_sub_pipeline_repr():
+    """Covers Line 60: __repr__ mapping context."""
+    pipeline = EachSubPipeline(stages=[], original_text="<each_sub_pipeline_test>")
+    assert repr(pipeline) == "<each_sub_pipeline_test>"
+
+
+def test_output_targets_info_non_string_input(caplog):
+    """Covers Line 205: Logging fallback for non-string stage inputs."""
+    non_str_input = EachSubPipeline(stages=[], original_text="<mock_sub_pipeline>")
+    stage = CliStage(operation="filter", inputs=[non_str_input], input_passwords=[None])
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
+
+    with caplog.at_level(logging.INFO):
+        manager._output_targets_info(stage, is_first=True)
+
+    assert "<mock_sub_pipeline>" in caplog.text
+
+
+# =====================================================================
+# 2. File and Resource Exception Handling (Lines 482-489)
+# =====================================================================
+
+
+@patch("pdftl.cli.pipeline.smart_pikepdf_open")
+def test_open_pdf_from_file_os_errors(mock_open):
+    """Covers Lines 482-489: EMFILE and generic OSError responses."""
+    manager = PipelineManager(stages=[], input_context=MagicMock())
+
+    # Test EMFILE error wrapper logic (Errno 24)
+    emfile_error = OSError()
+    emfile_error.errno = 24
+    mock_open.side_effect = emfile_error
+
+    with pytest.raises(UserCommandLineError) as exc_info:
+        manager._open_pdf_from_file("test.pdf", password=None)
+    assert "Too many input files" in str(exc_info.value)
+
+    # Test Generic fallback OSError wrapper
+    mock_open.side_effect = OSError(13, "Permission denied")
+    with pytest.raises(UserCommandLineError) as exc_info:
+        manager._open_pdf_from_file("test.pdf", password=None)
+    assert "Permission denied" in str(exc_info.value)
+
+
+# =====================================================================
+# 3. Iterative Pipeline Blocks Loop Logic (Lines 502-504, 521-529, 558-571)
+# =====================================================================
+
+
+def test_expand_each_in_place_empty_guard():
+    """Covers Line 522: Validates guard error when EACH blocks have no prior files."""
+    stage = CliStage(operation="cat", inputs=[EachSubPipeline(stages=[])], input_passwords=[None])
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
+
+    with pytest.raises(UserCommandLineError, match="EACH requires at least one input before it"):
+        manager._open_input_pdfs(stage, is_first=True)
+
+
+def test_each_sub_pipeline_execution_flows(monkeypatch):
+    """Covers Lines 502-504, 523-529, 558-571: Successful and unreturned pipeline blocks."""
+    mock_pdf_input = MagicMock()
+    mock_pdf_output = MagicMock()
+
+    stage = CliStage(
+        operation="cat",
+        inputs=["input.pdf", EachSubPipeline(stages=[])],
+        input_passwords=[None, None],
+    )
+    manager = PipelineManager(stages=[stage], input_context=MagicMock())
+
+    # Mock file retrieval to skip hitting local disk assets
+    manager._open_pdf_from_file = MagicMock(return_value=mock_pdf_input)
+
+    # Scenario A: Successful pipeline returns valid sub-PDF sequence assets
+    def simulate_successful_run(self_instance):
+        self_instance.pipeline_pdf = mock_pdf_output
+
+    monkeypatch.setattr(PipelineManager, "run", simulate_successful_run)
+    opened, effective, _ = manager._open_input_pdfs(stage, is_first=True)
+
+    assert opened == [mock_pdf_output]
+    assert effective == ["input.pdf"]
+
+    # Scenario B: Pipeline sub-manager run fails to yield any active payload structures
+    def simulate_empty_run(self_instance):
+        self_instance.pipeline_pdf = None
+
+    monkeypatch.setattr(PipelineManager, "run", simulate_empty_run)
+    with pytest.raises(UserCommandLineError, match="EACH sub-pipeline returned no output PDF"):
+        manager._open_input_pdfs(stage, is_first=True)
+
+
+# =====================================================================
+# 4. Context Extraction and Shared Handles (Line 541, 578-581, 591-593)
+# =====================================================================
+
+
+def test_resolve_input_item_from_global_handles():
+    """Covers Line 541: Resolving input item directly from instance handles context."""
+    mock_handled_pdf = MagicMock()
+    stage = CliStage()
+    manager = PipelineManager(
+        stages=[stage], input_context=MagicMock(), handles={"SHARED_ASSET": mock_handled_pdf}
+    )
+
+    result = manager._resolve_input_item(
+        item="SHARED_ASSET", i=0, stage=stage, opened_pdfs=[], password=None, is_first=True
+    )
+    assert result == mock_handled_pdf
+
+
+def test_get_subpipeline_output_pdf_flows(monkeypatch):
+    """Covers Lines 578-581 & 591-593: Child context scoping and clean validation returns."""
+    parent_pdf = MagicMock()
+    child_output_pdf = MagicMock()
+
+    # Outer stage defines handle 'A' matching open item at input index 0
+    parent_stage = CliStage(handles={"A": 0})
+    inline_item = InlineSubPipeline(stages=[])
+    manager = PipelineManager(stages=[parent_stage], input_context=MagicMock())
+
+    # Target condition tracking assertion: pass historical handles down clean to kids
+    def simulate_inline_run(self_instance):
+        assert "A" in self_instance.handles
+        assert self_instance.handles["A"] == parent_pdf
+        self_instance.pipeline_pdf = child_output_pdf
+
+    monkeypatch.setattr(PipelineManager, "run", simulate_inline_run)
+
+    res = manager._get_subpipeline_output_pdf(
+        stage=parent_stage,
+        item_idx=1,
+        item=inline_item,
+        opened_pdfs=[parent_pdf],
+        adjusted_handles={"A": 0},
+    )
+    assert res == child_output_pdf
+
+    # Validates inline execution bounds checking error states
+    def simulate_failed_inline_run(self_instance):
+        self_instance.pipeline_pdf = None
+
+    monkeypatch.setattr(PipelineManager, "run", simulate_failed_inline_run)
+    with pytest.raises(UserCommandLineError, match="Inline pipeline returned no output PDF"):
+        manager._get_subpipeline_output_pdf(
+            stage=parent_stage,
+            item_idx=1,
+            item=inline_item,
+            opened_pdfs=[parent_pdf],
+            adjusted_handles={"A": 0},
+        )
+
+
+def test_inline_sub_pipeline_repr():
+    """Covers Line 49: __repr__ mapping context for InlineSubPipeline."""
+    pipeline = InlineSubPipeline(stages=[], original_text="<test_inline_sub_pipeline>")
+    assert repr(pipeline) == "<test_inline_sub_pipeline>"

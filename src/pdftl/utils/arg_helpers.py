@@ -123,6 +123,20 @@ def expand_shorthand_args(args: list[str], is_selector_func=is_valid_page_spec) 
     """
     A universal framework-level shorthand expander for parenthesized syntax.
     """
+    for arg in args:
+        if not isinstance(arg, str):
+            bad_type = type(arg).__name__
+            hint = ""
+            if bad_type == "InlineSubPipeline":
+                hint = (
+                    " Maybe you forgot to assign your inline pipeline to an input handle? "
+                    "(e.g., B=JOB ... DONE)"
+                )
+            elif bad_type == "EachSubPipeline":
+                hint = " Using EACH in that position does not seem to make sense."
+            raise TypeError(
+                f"Unexpected object of type '{bad_type}' found in operation arguments." + hint
+            )
     # Guardrail: If the user already used parenthesized syntax, touch nothing.
     if not args or any("(" in arg for arg in args):
         logger.debug("Returning unchanged")

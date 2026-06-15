@@ -60,7 +60,7 @@ pipx install pdftl[full]
 
 A simple `pip install pdftl[full]` install is also supported.
 
-**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction, search and robust flattening, and [`pyHanko`][6] for cryptographic signature functionality. Omit `[full]` to omit those features and dependencies.
+**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction, search and flattening, and [`pyHanko`][6] for cryptographic signature functionality. Omit `[full]` to omit those features and dependencies.
 
 ## Key features
 
@@ -179,7 +179,7 @@ pdftl in.pdf replace '/0 0 0 (RG|rg)/1 0 0 \1/' output redder.pdf
 
 ## Python API
 
-While `pdftl` is primarily a CLI tool, it also exposes a robust Python API for integrating PDF workflows into your scripts.
+While `pdftl` is primarily a CLI tool, it also exposes a Python API for integrating PDF workflows into your scripts.
  It supports both a Functional interface (similar to the CLI) and a Fluent interface (for method chaining).
 
 ```python
