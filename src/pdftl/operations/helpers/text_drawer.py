@@ -125,15 +125,27 @@ class TextDrawer:
             feature_name="add-text", dependencies={"reportlab": "reportlab"}, extra_tag="add-text"
         )
 
-        # Local imports to avoid top-level failures
-        from reportlab.pdfgen import canvas as reportlab_canvas
-
         self.page_box = _PageBox(width=page_box.width, height=page_box.height)
         self.packet = io.BytesIO()
-        self.canvas = reportlab_canvas.Canvas(
-            self.packet, pagesize=(self.page_box.width, self.page_box.height)
-        )
+        self.canvas = None
         self.font_cache: dict[str, str] = {}
+        self._has_content = False
+
+    def reset_page_box(self, new_box: Any) -> None:
+        """Dynamically transitions the target layout viewport tracking geometries."""
+        from reportlab.pdfgen import canvas as reportlab_canvas
+
+        self.page_box = _PageBox(width=new_box.width, height=new_box.height)
+
+        if self.canvas is None:
+            self.canvas = reportlab_canvas.Canvas(
+                self.packet, pagesize=(self.page_box.width, self.page_box.height)
+            )
+        else:
+            if self._has_content:
+                self.canvas.showPage()
+                self._has_content = False
+            self.canvas.setPageSize((self.page_box.width, self.page_box.height))
 
     def _register_external_font(self, font_name: str, target_path: str) -> str:
         """Helper to register an absolute TTF path into ReportLab."""
@@ -141,6 +153,10 @@ class TextDrawer:
         try:
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont, TTFError
+
+            # Use the lazy initialization safeguard to avoid crashing on check calls
+            if self.canvas is None:
+                self.reset_page_box(self.page_box)
 
             pdfmetrics.registerFont(TTFont(internal_name, target_path))
             self.font_cache[font_name] = internal_name
@@ -240,6 +256,11 @@ class TextDrawer:
         if not runs:
             return
 
+        if self.canvas is None:
+            self.reset_page_box(self.page_box)
+
+        self._has_content = True
+
         font_name = self.get_font_name(rule.get("font", DEFAULT_FONT_NAME))
         font_size = float(rule.get("size", DEFAULT_FONT_SIZE))
         color = rule.get("color", DEFAULT_COLOR_TUPLE)
@@ -307,6 +328,8 @@ class TextDrawer:
         return draw_x, draw_y
 
     def save(self) -> bytes:
+        if self.canvas is None:
+            return b""
         self.canvas.save()
         self.packet.seek(0)
         return self.packet.read()

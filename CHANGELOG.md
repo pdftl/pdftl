@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_tables` operation
 
+- System font name and file path resolution for `add_text`
+
 ### Fixed
 
 - Preserve outline state (open/closed, formatting) when copying outlines

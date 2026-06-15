@@ -16,7 +16,7 @@ from pdftl.exceptions import InvalidArgumentError
 
 # --- Local Imports ---
 # We import the module to reload it during cleanup
-from pdftl.operations.add_text import _process_page, add_text_pdf
+from pdftl.operations.add_text import add_text_pdf
 from pdftl.operations.parsers.add_text_parser import parse_add_text_specs_to_rules
 from pdftl.utils.text_templates import build_static_context
 
@@ -165,10 +165,33 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
     def setUp(self):
         super().setUp()
+
         self.mock_parser = MagicMock()
         self.patcher_drawer = patch("pdftl.operations.helpers.text_drawer.TextDrawer")
         self.mock_TextDrawer_cls = self.patcher_drawer.start()
-        self.mock_drawer_instance = self.mock_TextDrawer_cls.return_value
+
+        self.created_instances = []
+
+        def text_drawer_factory(*args, **kwargs):
+            instance = MagicMock()
+
+            def mock_save_valid_pdf(*args, **kwargs):
+                buffer = io.BytesIO()
+                with pikepdf.Pdf.new() as empty_pdf:
+                    empty_pdf.add_blank_page(page_size=(100, 100))
+                    empty_pdf.save(buffer)
+                return buffer.getvalue()
+
+            instance.save.side_effect = mock_save_valid_pdf
+
+            if "page_box" in kwargs:
+                instance.page_box = kwargs["page_box"]
+
+            self.created_instances.append(instance)
+            return instance
+
+        self.mock_TextDrawer_cls.side_effect = text_drawer_factory
+
         self.parser_patcher = patch(
             "pdftl.operations.parsers.add_text_parser.parse_add_text_specs_to_rules",
             self.mock_parser,
@@ -177,62 +200,6 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
         self.pdf = Pdf.new()
         self.mock_rule = {"text": lambda c: [("Test", None)], "font": "Arial", "size": 10}
-
-    def test_add_text_pdf_orchestration(self):
-        """Standard happy path."""
-        self.pdf.add_blank_page(page_size=(500, 800))
-        self.mock_parser.return_value = {0: [self.mock_rule]}
-
-        # This calls add_text_pdf, which runs:
-        # "from pdftl.operations.helpers.text_drawer import TextDrawer"
-        # Since we patched that source path in setUp, it imports our Mock.
-        result = add_text_pdf(self.pdf, ["spec"]).pdf
-
-        self.assertIs(result, self.pdf)
-
-        # Verify call count:
-        # 1. Initial Check (instantiated to check deps)
-        # 2. Page 0 Processing
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
-
-        # Verify Dependency Check Arg
-        init_kwargs = self.mock_TextDrawer_cls.call_args_list[0][1]
-        self.assertIsInstance(init_kwargs["page_box"], Rectangle)
-
-        # Verify Page Processing Arg
-        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
-        self.assertEqual(page_kwargs["page_box"].width, 500)
-        self.assertEqual(page_kwargs["page_box"].height, 800)
-
-        self.mock_drawer_instance.draw_rule.assert_called()
-        self.mock_drawer_instance.save.assert_called()
-
-    def test_add_text_pdf_with_array_mediabox(self):
-        """Tests handling of raw Array MediaBox."""
-        self.pdf.add_blank_page()
-        self.pdf.pages[0].obj[Name.MediaBox] = Array([0, 0, 612, 792])
-        self.mock_parser.return_value = {0: [self.mock_rule]}
-
-        add_text_pdf(self.pdf, ["spec"])
-
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
-        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
-        # Should be converted to Rectangle
-        self.assertIsInstance(page_kwargs["page_box"], Rectangle)
-        self.assertEqual(page_kwargs["page_box"].width, 612)
-
-    def test_add_text_pdf_with_array_trimbox(self):
-        """Tests handling of raw Array TrimBox."""
-        self.pdf.add_blank_page(page_size=(1000, 1000))
-        self.pdf.pages[0].obj[Name.TrimBox] = Array([10, 10, 510, 510])
-        self.mock_parser.return_value = {0: [self.mock_rule]}
-
-        add_text_pdf(self.pdf, ["spec"])
-
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
-        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
-        # Should be converted to Rectangle (510 - 10)
-        self.assertEqual(page_kwargs["page_box"].width, 500)
 
     def test_page_with_no_rules_is_skipped(self):
         # Line 283: _process_page returns early when no rules match the page
@@ -246,8 +213,53 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
         # TextDrawer instantiated once for dep check + once for page 0 only
         self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
 
+    def test_add_text_pdf_orchestration(self):
+        self.pdf.add_blank_page(page_size=(500, 800))
+        self.mock_parser.return_value = {0: [self.mock_rule]}
+
+        result = add_text_pdf(self.pdf, ["spec"]).pdf
+
+        self.assertIs(result, self.pdf)
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+
+        init_kwargs = self.mock_TextDrawer_cls.call_args_list[0][1]
+        self.assertIsInstance(init_kwargs["page_box"], Rectangle)
+
+        shared_drawer = self.created_instances[1]
+        shared_drawer.reset_page_box.assert_called_once()
+        reset_box = shared_drawer.reset_page_box.call_args[0][0]
+        self.assertEqual(reset_box.width, 500)
+        self.assertEqual(reset_box.height, 800)
+
+        shared_drawer.draw_rule.assert_called()
+        shared_drawer.save.assert_called()
+
+    def test_add_text_pdf_with_array_mediabox(self):
+        self.pdf.add_blank_page()
+        self.pdf.pages[0].obj[Name.MediaBox] = Array([0, 0, 612, 792])
+        self.mock_parser.return_value = {0: [self.mock_rule]}
+
+        add_text_pdf(self.pdf, ["spec"])
+
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+        shared_drawer = self.created_instances[1]
+        reset_box = shared_drawer.reset_page_box.call_args[0][0]
+        self.assertIsInstance(reset_box, Rectangle)
+        self.assertEqual(reset_box.width, 612)
+
+    def test_add_text_pdf_with_array_trimbox(self):
+        self.pdf.add_blank_page(page_size=(1000, 1000))
+        self.pdf.pages[0].obj[Name.TrimBox] = Array([10, 10, 510, 510])
+        self.mock_parser.return_value = {0: [self.mock_rule]}
+
+        add_text_pdf(self.pdf, ["spec"])
+
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+        shared_drawer = self.created_instances[1]
+        reset_box = shared_drawer.reset_page_box.call_args[0][0]
+        self.assertEqual(reset_box.width, 500)
+
     def test_rotation_90_visual_dimensions_swapped(self):
-        # Lines 297-298: for 90/270 rotation, visual w/h are swapped
         from pikepdf import Name
 
         self.pdf.add_blank_page(page_size=(500, 800))
@@ -256,10 +268,10 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
         add_text_pdf(self.pdf, ["spec"])
 
-        # With 90-degree rotation: visual width=800, visual height=500
-        page_kwargs = self.mock_TextDrawer_cls.call_args_list[1][1]
-        self.assertEqual(page_kwargs["page_box"].width, 800)
-        self.assertEqual(page_kwargs["page_box"].height, 500)
+        shared_drawer = self.created_instances[1]
+        reset_box = shared_drawer.reset_page_box.call_args[0][0]
+        self.assertEqual(reset_box.width, 800)
+        self.assertEqual(reset_box.height, 500)
 
 
 class TestAddTextMissingDependency(unittest.TestCase):
@@ -403,6 +415,9 @@ class TestAddTextCoverage(ModuleSandboxMixin):
 
         spec = "1/Hello/"
         with patch.object(pdftl.operations.helpers.text_drawer, "TextDrawer") as MockDrawer:
+            instance = MockDrawer.return_value
+            instance.save.return_value = b"%PDF-1.0 dummy stream"
+
             from pdftl.operations.add_text import add_text_pdf
 
             add_text_pdf(pdf, [spec])
@@ -428,47 +443,43 @@ class TestAddTextCoverage(ModuleSandboxMixin):
 
                 add_text_pdf(pdf, [spec])
 
-        assert "Failed to apply overlay" in caplog.text
+        assert "Failed to apply global resource overlay map" in caplog.text
 
 
-def test_process_page_empty_overlay_log():
-    """Triggers line 340: Overlay PDF exists but has no pages."""
-    mock_page = MagicMock()
-    mock_page.trimbox = [0, 0, 100, 100]
+def test_source_meta_passed_to_draw_rule():
+    """Source pipeline metadata stashed on a page is surfaced in the draw_rule context."""
+    import pikepdf
+    from pikepdf import Dictionary
 
-    mock_drawer_instance = MagicMock()
-    # Provide a valid-looking PDF header but no actual page objects
-    mock_drawer_instance.save.return_value = b"%PDF-1.7\n%%EOF"
-    mock_drawer_class = MagicMock(return_value=mock_drawer_instance)
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
 
-    with patch("pikepdf.Pdf.open") as mock_pdf_open:
-        # Mock a PDF object that has 0 pages
-        mock_pdf_open.return_value.__enter__.return_value.pages = []
-
-        _process_page(0, mock_page, {0: [MagicMock()]}, {}, mock_drawer_class, MagicMock())
-        # Line 340 is now hit (logger.debug for empty overlay)
-
-
-def test_process_page_with_source_meta():
-    mock_page = MagicMock()
-    mock_page.trimbox = [0, 0, 100, 100]
-
-    # Ensure the attribute name matches exactly what the code looks for
-    source_data = {"/source_filename": "old.pdf", "/source_page": 5}
-    setattr(mock_page, c.PDFTL_SOURCE_INFO_KEY, source_data)
-
-    mock_drawer_instance = MagicMock()
-    mock_drawer_instance.save.return_value = b"some_pdf_bytes"
-    mock_drawer_class = MagicMock(return_value=mock_drawer_instance)
-
-    mock_rule = MagicMock()
-    # Pass a dummy static_context to avoid fallthrough issues
-    _process_page(
-        0, mock_page, {0: [mock_rule]}, {"filename": "new.pdf"}, mock_drawer_class, MagicMock()
+    # Stash pipeline source metadata exactly as add_pages does
+    pdf.pages[0][f"/{c.PDFTL_SOURCE_INFO_KEY}"] = Dictionary(
+        {
+            "/source_filename": "old.pdf",
+            "/source_page": 5,
+        }
     )
 
-    args, _ = mock_drawer_instance.draw_rule.call_args
-    assert args[1]["source_filename"] == "old.pdf"
+    captured_contexts = []
+
+    def capturing_spec(ctx):
+        captured_contexts.append(dict(ctx))
+        return [("X", None)]
+
+    mock_rule = {"text": capturing_spec, "font": "Helvetica", "size": 10}
+
+    with patch(
+        "pdftl.operations.parsers.add_text_parser.parse_add_text_specs_to_rules",
+        return_value={0: [mock_rule]},
+    ):
+        add_text_pdf(pdf, ["dummy"])
+
+    assert captured_contexts, "draw_rule was never called"
+    ctx = captured_contexts[0]
+    assert ctx["source_filename"] == "old.pdf"
+    assert ctx["source_page"] == 5
 
 
 def test_process_page_uses_trimbox(tmp_path):

@@ -252,44 +252,63 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
     apply text overlays to the input PDF.
     """
     from pikepdf import Rectangle
-
     from pdftl.operations.helpers.text_drawer import TextDrawer
     from pdftl.operations.parsers.add_text_parser import parse_add_text_specs_to_rules
 
-    total_pages = len(pdf.pages)
-
-    # --- 1. Build static context ---
     static_context = build_static_context(pdf)
 
-    # --- 2. Parse all specs ---
     try:
-        page_rules = parse_add_text_specs_to_rules(specs, total_pages)
+        page_rules = parse_add_text_specs_to_rules(specs, len(pdf.pages))
         logger.debug("page_rules=%s", page_rules)
     except ValueError as exc:
         raise InvalidArgumentError(f"Error in add_text spec: {exc}") from exc
 
     if not page_rules:
-        return OpResult(success=True, pdf=pdf)  # No rules, return the original PDF
+        return OpResult(success=True, pdf=pdf)
 
-    # --- 3. Check for TextDrawer dependency ---
-    # We must instantiate the TextDrawer *once* to check for the
-    # import error. If it passes, we can proceed.
-    # We pass a dummy page_box just for the init check.
     _ = TextDrawer(page_box=Rectangle(0, 0, 1, 1))
+    drawer = TextDrawer(page_box=Rectangle(0, 0, 1, 1))
+    overlay_page_indices = _build_overlay_index(pdf, page_rules, static_context, drawer)
+    overlay_bytes = drawer.save()
 
-    # --- 4. Process all pages in-place ---
-    for i, page in enumerate(pdf.pages):
-        _process_page(i, page, page_rules, static_context, TextDrawer, pdf)
+    if overlay_bytes:
+        _apply_overlays(pdf, overlay_bytes, overlay_page_indices)
 
     return OpResult(success=True, pdf=pdf)
 
 
-def _process_page(i, page, page_rules, static_context, drawer_class, pdf):
-    from pikepdf import Rectangle
+def _build_overlay_index(pdf, page_rules, static_context, drawer):
+    """Populate the shared drawer canvas and return a mapping of original→overlay page indices."""
+    overlay_page_indices = {}
+    for i, page in enumerate(pdf.pages):
+        rules_for_page = page_rules.get(i)
+        if not rules_for_page:
+            continue
+        _generate_page_overlay(i, page, rules_for_page, static_context, drawer)
+        overlay_page_indices[i] = len(overlay_page_indices)
+    return overlay_page_indices
 
-    rules_for_page = page_rules.get(i)
-    if not rules_for_page:
-        return
+
+def _apply_overlays(pdf, overlay_bytes, overlay_page_indices):
+    """Merge the unified overlay PDF back onto the original pages."""
+    import io
+    from pikepdf import Pdf as PikePdf
+    from pikepdf.exceptions import PdfError
+
+    try:
+        with PikePdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
+            for original_idx, generated_idx in overlay_page_indices.items():
+                if generated_idx < len(overlay_pdf.pages):
+                    target_page = pdf.pages[original_idx]
+                    overlay_page = overlay_pdf.pages[generated_idx]
+                    target_page.add_overlay(overlay_page)
+                    _copy_annotations(target_page, overlay_page, pdf)
+    except (PdfError, TypeError) as e:
+        logger.warning("Failed to apply global resource overlay map: %s", e)
+
+
+def _generate_page_overlay(i, page, rules_for_page, static_context, drawer):
+    from pikepdf import Rectangle
 
     # Use TrimBox if available, fallback to CropBox/MediaBox.
     page_box = Rectangle(*page.trimbox)
@@ -312,39 +331,13 @@ def _process_page(i, page, page_rules, static_context, drawer_class, pdf):
     # --- Build Page Context ---
     page_context = build_page_context(static_context, page, i + 1)
 
-    # --- 5. Delegate drawing to drawer ---
-    # Create a new Rectangle using the VISUAL dimensions.
-    # This ensures ReportLab generates an overlay with the correct aspect ratio,
-    # preventing `add_overlay` from horizontally/vertically shifting the text to center it.
+    # --- Update single drawer configuration safely ---
     visual_page_box = Rectangle(0, 0, visual_width, visual_height)
-    drawer = drawer_class(page_box=visual_page_box)
+    drawer.reset_page_box(visual_page_box)
 
     for rule in rules_for_page:
         page_context["n"] = rule.get("n", 1)
         drawer.draw_rule(rule, page_context)
-
-    # Get the completed overlay PDF bytes
-    overlay_bytes = drawer.save()
-
-    # --- 6. Apply the overlay ---
-    if overlay_bytes:
-        import io
-
-        from pikepdf import Pdf
-        from pikepdf.exceptions import PdfError
-
-        try:
-            with Pdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
-                if not overlay_pdf.pages:
-                    logger.debug(
-                        "Overlay PDF was empty (likely due to skipped rules) for page %d", i + 1
-                    )
-                    return
-                # This mutates the page object *in-place*
-                page.add_overlay(overlay_pdf.pages[0])
-                _copy_annotations(page, overlay_pdf.pages[0], pdf)
-        except (PdfError, TypeError) as e:
-            logger.warning("Failed to apply overlay to page %d: %s", i + 1, e)
 
 
 def _get_page_origin(page):

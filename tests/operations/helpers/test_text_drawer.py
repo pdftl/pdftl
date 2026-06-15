@@ -438,7 +438,6 @@ def test_draw_rule_default_left_align():
     """Covers line 200: Default to 'left' if no align and no position keywords."""
     drawer = TextDrawer(MagicMock(width=500, height=800))
 
-    # Position 'top' contains neither 'right' nor 'center'
     rule = {
         "text": lambda ctx: [("hello", None)],
         "position": "top",
@@ -446,10 +445,12 @@ def test_draw_rule_default_left_align():
         "size": 12,
     }
 
-    # We spy on drawString to see if draw_x remained 0.0 (left aligned)
+    # Force canvas initialization with a harmless draw first
+    drawer.draw_rule({"text": lambda ctx: [("init", None)]}, {})
+
+    # Now canvas exists and we can patch drawString on it
     with patch.object(drawer.canvas, "drawString") as mock_draw:
         drawer.draw_rule(rule, {})
-        # drawString(x, y, text) -> x should be 0.0
         args, _ = mock_draw.call_args
         assert args[0] == 0.0
 
@@ -610,3 +611,45 @@ def test_get_font_name_resolves_system_font(monkeypatch):
     )
 
     assert drawer.get_font_name("MyFont") == "RegisteredFont"
+
+
+def test_reset_page_box_with_existing_canvas_and_content():
+    """Covers lines 145-148: showPage is called when canvas exists and has content."""
+    drawer = TextDrawer(MagicMock(width=500, height=800))
+    # Force canvas into existence with content
+    drawer.draw_rule({"text": lambda ctx: [("hello", None)]}, {})
+    assert drawer.canvas is not None
+    assert drawer._has_content is True
+
+    with (
+        patch.object(drawer.canvas, "showPage") as mock_show_page,
+        patch.object(drawer.canvas, "setPageSize") as mock_set_size,
+    ):
+        from pikepdf import Rectangle
+
+        drawer.reset_page_box(Rectangle(0, 0, 300, 400))
+        mock_show_page.assert_called_once()
+        mock_set_size.assert_called_once_with((300.0, 400.0))
+        assert drawer._has_content is False
+
+
+def test_register_external_font_initializes_canvas_if_none():
+    """Covers line 159: canvas is initialized inside _register_external_font if None."""
+    drawer = TextDrawer(MagicMock(width=500, height=800))
+    assert drawer.canvas is None
+
+    with (
+        patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+        patch("reportlab.pdfbase.ttfonts.TTFont", return_value=MagicMock()),
+    ):
+        drawer._register_external_font("TestFont", "/fake/TestFont.ttf")
+
+    assert drawer.canvas is not None
+
+
+def test_save_returns_empty_bytes_when_canvas_is_none():
+    """Covers line 332: save() returns b'' when nothing has been drawn."""
+    drawer = TextDrawer(MagicMock(width=500, height=800))
+    assert drawer.canvas is None
+    result = drawer.save()
+    assert result == b""
