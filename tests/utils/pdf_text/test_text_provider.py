@@ -1,6 +1,6 @@
 # tests/utils/test_text_provider.py
 """
-TEsts for src/pdftl/utils/text_provider.py.
+Tests for src/pdftl/utils/pdf_text/text_provider.py.
 
 All PDFium I/O is mocked — no real PDF file is required.
 """
@@ -11,8 +11,8 @@ import ctypes
 from unittest.mock import MagicMock, patch
 
 # codeql[py/import-and-import-from]
-import pdftl.utils.text_provider as text_provider_mod
-from pdftl.utils.text_provider import (
+import pdftl.utils.pdf_text.text_provider as text_provider_mod
+from pdftl.utils.pdf_text.text_provider import (
     TextProvider,
     _detect_bold,
     _detect_bold_tex_font,

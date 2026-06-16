@@ -37,6 +37,7 @@ HARDCODED_KEYWORDS = {
     "delete_bookmarks",
     "delete_blank",
     "delete_images",
+    "diff_text",
     "dump_annots",
     "dump_bookmarks",
     "dump_colorspaces",

@@ -84,9 +84,10 @@ A simple `pip install pdftl[full]` install is also supported.
 
 ### 📝 Text, Forms & annotations
 
-* **Text search:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) for pattern matching to extract text with visual bounding box coordinates, and [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html) for plain text extraction.
+* **Text search/comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html) for pattern matching and comparison, with visual bounding box coordinates.
+* **Text extraction:** [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html) for plain text extraction, and [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html) to extract tables.
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
-* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html) by full-text regular expression search.
+* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)  text matching a regular expression.
 
 ### 🔐 Security
 * **Decryption:** using [`input_pw`](https://pdftl.readthedocs.io/en/latest/general/input.html).
@@ -218,6 +219,7 @@ See the **[API Tutorial][4]** for more details.
 | [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
 | [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
+| [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html)                         | Diff the text content of two PDFs and output bounding boxes     |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
 | [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html)               | Extract PDF bookmarks into YAML or JSON                         |
 | [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html)           | Report color spaces used                                        |

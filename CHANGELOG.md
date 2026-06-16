@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `diff_text` operation
+
 - `dump_tables` operation
 
 - System font name and file path resolution for `add_text`

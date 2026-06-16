@@ -374,7 +374,7 @@ def _write_json_output(output_data, output_file):
 def grep(pdf, operation_args: list, output_file=None) -> OpResult:
     ensure_dependencies(feature_name="grep", dependencies=["pypdfium2"], extra_tag="grep")
     import pypdfium2 as pdfium
-    from pdftl.utils.text_provider import TextProvider
+    from pdftl.utils.pdf_text.text_provider import TextProvider
 
     (
         pattern,

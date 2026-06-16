@@ -638,9 +638,9 @@ class TestGrepOperation:
         }
 
         # TextProvider is imported inside grep() as:
-        #   from pdftl.utils.text_provider import TextProvider
+        #   from pdftl.utils.pdf_text.text_provider import TextProvider
         # so we patch it at the source, not on the grep module.
-        ctx = patch("pdftl.utils.text_provider.TextProvider", return_value=tp_instance)
+        ctx = patch("pdftl.utils.pdf_text.text_provider.TextProvider", return_value=tp_instance)
         return ctx, tp_instance
 
     def _call_grep(self, pdf, args, text_by_page):

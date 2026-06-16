@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# src/pdftl/utils/text_provider.py
+# src/pdftl/utils/pdf_text/text_provider.py
 
 
 """
