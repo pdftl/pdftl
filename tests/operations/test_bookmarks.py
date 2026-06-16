@@ -6,11 +6,43 @@ from unittest.mock import patch
 
 import pikepdf
 import pytest
+from pdftl.exceptions import OperationError
 
 from pdftl.core.core_types import OpResult
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError, OperationError
+from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.operations.dump_bookmarks import dump_toc, dump_toc_cli_hook
 from pdftl.operations.update_bookmarks import update_toc
+
+
+@pytest.fixture
+def bookmarked_pdf(tmp_path, six_page_pdf):
+    """Generates a test PDF with a complex, nested bookmark hierarchy."""
+    bookmarked_path = tmp_path / "bookmarked_6_page.pdf"
+
+    # A complex structure testing nesting, standard pages, and URIs
+    initial_structure = """
+    - title: Chapter 1
+      page: 1
+      children:
+        - title: Section 1.1
+          page: 2
+        - title: Section 1.2
+          page: 3
+    - title: External Reference
+      uri: https://example.com
+    """
+    yaml_path = tmp_path / "initial_bookmarks.yaml"
+    yaml_path.write_text(initial_structure)
+
+    # Use our working function to build the test asset
+    from pdftl.operations.update_bookmarks import update_toc
+    import pikepdf
+
+    with pikepdf.open(six_page_pdf) as pdf:
+        update_toc(pdf, [str(yaml_path)])
+        pdf.save(str(bookmarked_path))
+
+    return bookmarked_path
 
 
 def test_dump_bookmarks_json_flag(tmp_path):
@@ -196,17 +228,15 @@ def test_update_bookmarks_yaml_decode_error(tmp_path, six_page_pdf):
 # --- toc.py Coverage ---
 
 
-def test_toc_filter_not_dict_and_missing_title(tmp_path, six_page_pdf, caplog):
-    """Hits toc.py lines 135-136 (not a dict) and 139-140 (missing title)."""
+def test_toc_filter_not_dict_and_missing_title(tmp_path, six_page_pdf):
+    """Ensures that passing a non-dictionary item raises a strict validation error."""
     test_file = tmp_path / "test.yaml"
     # 1st item is a string, 2nd item is a dict but has no 'title'
     test_file.write_text("- Just a string\n- page: 1\n")
 
     with pikepdf.open(six_page_pdf) as pdf:
-        update_toc(pdf, [str(test_file)])
-
-    assert "not a dictionary" in caplog.text
-    assert "missing 'title'" in caplog.text
+        with pytest.raises(OperationError, match="Expected a dictionary for bookmark, got: str"):
+            update_toc(pdf, [str(test_file)])
 
 
 def test_toc_filter_unrecognized_keys(tmp_path, six_page_pdf):
@@ -221,15 +251,14 @@ def test_toc_filter_unrecognized_keys(tmp_path, six_page_pdf):
             update_toc(pdf, [str(test_file)])
 
 
-def test_toc_filter_invalid_children(tmp_path, six_page_pdf, caplog):
-    """Hits toc.py lines 158-159 (children must be a list)."""
+def test_toc_filter_invalid_children(tmp_path, six_page_pdf):
+    """Ensures that invalid children types raise a strict validation error."""
     test_file = tmp_path / "test.yaml"
     test_file.write_text("- title: Parent\n  children: Just a string instead of a list\n")
 
     with pikepdf.open(six_page_pdf) as pdf:
-        update_toc(pdf, [str(test_file)])
-
-    assert "Ignoring invalid 'children' (must be a list)" in caplog.text
+        with pytest.raises(OperationError, match="'children' must be a list"):
+            update_toc(pdf, [str(test_file)])
 
 
 def test_update_bookmarks_no_args():
@@ -346,3 +375,328 @@ def test_try_parse_yaml_direct_error_handling():
 
     assert result is None
     assert error is not None
+
+
+# --- New Coverage for Precedence Logic (update_bookmarks.py 110-124, 127) ---
+
+
+def test_enforce_precedence_and_warn(caplog):
+    """Covers Precedence resolution, recursive traversal, and singular warnings."""
+    from pdftl.operations.update_bookmarks import _enforce_precedence_and_warn
+    import logging
+
+    nodes = [
+        {
+            "title": "Root",
+            "dest": "chapter1",
+            "page": 1,
+            "view": ["FitH", 800],
+            "children": [{"title": "Child", "dest": "section1", "page": 2, "view": ["XYZ"]}],
+        },
+        {"title": "Sibling", "dest": "chapter2", "page": 3},
+    ]
+
+    with caplog.at_level(logging.DEBUG):
+        _enforce_precedence_and_warn(nodes, {"emitted": False})
+
+    # Assert derived keys were stripped completely to protect the backend
+    assert "page" not in nodes[0]
+    assert "view" not in nodes[0]
+    assert "page" not in nodes[0]["children"][0]
+    assert "view" not in nodes[0]["children"][0]
+    assert "page" not in nodes[1]
+
+    # Assert warning emitted ONLY once, despite 3 violations
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "The 'dest' key takes precedence" in warnings[0]
+
+    # Assert debug log emitted for EVERY violation
+    debugs = [
+        r.message
+        for r in caplog.records
+        if r.levelname == "DEBUG" and "Precedence enforced" in r.message
+    ]
+    assert len(debugs) == 3
+
+
+# --- New Coverage for Resolution Logic (dump_bookmarks.py 106-126, 137-139) ---
+
+
+def test_dump_bookmarks_resolve_dest_success():
+    """Covers Successful resolution mapping, data cleaning, and tree traversal child-popping."""
+    from pdftl.operations.dump_bookmarks import _resolve_bookmarks_tree
+
+    class MockResolved:
+        def __init__(self, page_num, dest_type, args):
+            self.page_num = page_num
+            self.dest_type = dest_type
+            self.args = args
+
+    nodes = [
+        {
+            "title": "Root",
+            "dest": "target_root",
+            "children": [{"title": "Child", "dest": "target_child"}],
+        }
+    ]
+
+    with patch("pdftl.operations.dump_bookmarks.resolve_dest_to_page_num") as mock_resolve:
+        mock_resolve.side_effect = [
+            MockResolved(1, "XYZ", [0.0, 700.5, 0]),
+            MockResolved(2, "FitH", [500]),
+        ]
+
+        _resolve_bookmarks_tree(nodes, {}, {})
+
+    # Root Node Checks
+    assert nodes[0]["page"] == 1
+    assert nodes[0]["view"] == ["XYZ", 0.0, 700.5, 0.0]  # Ints with __float__ become floats
+
+    # Children Checks (verifies lines 137-139 popped and restored them cleanly)
+    assert "children" in nodes[0]
+    assert nodes[0]["children"][0]["page"] == 2
+    assert nodes[0]["children"][0]["view"] == ["FitH", 500.0]
+
+
+def test_dump_bookmarks_resolve_dest_failure_and_none(caplog):
+    """Covers missing resolution mappings and unexpected internal errors."""
+    from pdftl.operations.dump_bookmarks import _resolve_single_node_dest
+
+    # 1. Test None return (line 108-109)
+    node_none = {"title": "None Dest", "dest": "missing1"}
+    with patch("pdftl.operations.dump_bookmarks.resolve_dest_to_page_num", return_value=None):
+        _resolve_single_node_dest(node_none, {}, {})
+    assert "page" not in node_none
+
+    # 2. Test Exception block (line 125-126)
+    node_err = {"title": "Err Dest", "dest": "missing2"}
+    with patch(
+        "pdftl.operations.dump_bookmarks.resolve_dest_to_page_num", side_effect=KeyError("Broken")
+    ):
+        _resolve_single_node_dest(node_err, {}, {})
+
+    assert "page" not in node_err
+    assert "Failed to resolve destination 'missing2'" in caplog.text
+
+
+# --- Strict Structure Validation Tests (0-Indexing & Collisions) ---
+
+
+def test_update_bookmarks_validation_uri_collision(tmp_path, six_page_pdf):
+    """Ensures that passing conflicting routing keys (uri vs page) raises an OperationError."""
+    test_file = tmp_path / "test.yaml"
+    # A bookmark cannot jump to a page AND open a web link simultaneously
+    test_file.write_text("- title: Collision\n  page: 1\n  uri: https://example.com\n")
+
+    with pikepdf.open(six_page_pdf) as pdf:
+        with pytest.raises(OperationError):
+            update_toc(pdf, [str(test_file)])
+
+
+def test_update_bookmarks_validation_zero_indexing(tmp_path, six_page_pdf):
+    """Ensures that page: 0 traps are caught since PDF pages are strictly 1-indexed."""
+    test_file = tmp_path / "test.yaml"
+    test_file.write_text("- title: Zero Index Trap\n  page: 0\n")
+
+    with pikepdf.open(six_page_pdf) as pdf:
+        with pytest.raises(OperationError):
+            update_toc(pdf, [str(test_file)])
+
+
+@pytest.mark.parametrize(
+    "yaml_content, expected_error",
+    [
+        # Missing title entirely
+        ("- page: 1\n", "Missing required 'title'"),
+        # Invalid title type (int instead of string)
+        ("- title: 123\n  page: 1\n", "'title' must be a string"),
+        # Invalid page type (string instead of int)
+        ("- title: Intro\n  page: one\n", "'page' must be an integer"),
+        # Invalid color (not enough items)
+        ("- title: Intro\n  color: [1.0, 0.0]\n", "'color' must be a list of 3"),
+        # Invalid color (wrong type in array)
+        ("- title: Intro\n  color: [1, 2, red]\n", "'color' must be a list of 3"),
+        # Invalid view type (string instead of list)
+        ("- title: Intro\n  page: 1\n  view: FitH\n", "'view' must be a list"),
+        # View without page
+        ("- title: Intro\n  view: ['FitH', 800]\n", "requires a target 'page'"),
+        # Routing Collision (URI + Page)
+        (
+            "- title: Intro\n  page: 1\n  uri: https://example.com\n",
+            "Cannot contain both a web link",
+        ),
+        # Children type mismatch (string instead of list)
+        ("- title: Intro\n  children: chapter 1\n", "'children' must be a list"),
+        # Nested child validation failure (page is string instead of int)
+        (
+            "- title: Parent\n  children:\n    - title: Child\n      page: two\n",
+            "'page' must be an integer",
+        ),
+        # Root is not a list (it's a dict)
+        ("title: Intro\npage: 1\n", "Root element must be a list"),
+    ],
+    ids=[
+        "missing_title",
+        "invalid_title_type",
+        "invalid_page_type",
+        "color_array_too_short",
+        "color_array_invalid_type",
+        "invalid_view_type",
+        "view_without_page",
+        "uri_page_collision",
+        "invalid_children_type",
+        "nested_invalid_child",
+        "root_not_list",
+    ],
+)
+def test_update_bookmarks_schema_validation(tmp_path, six_page_pdf, yaml_content, expected_error):
+    """Systematically tests all schema edge cases and routing logic."""
+    test_file = tmp_path / "test.yaml"
+    test_file.write_text(yaml_content)
+
+    with pikepdf.open(six_page_pdf) as pdf:
+        with pytest.raises(OperationError, match=expected_error):
+            # Replace 'update_bookmarks' with whatever your entrypoint function is
+            update_toc(pdf, [str(test_file)])
+
+
+def test_bookmarks_round_trip_integration(tmp_path, bookmarked_pdf):
+    """Verifies the end-to-end dump -> edit -> update workflow with nested data."""
+    import pdftl
+
+    bookmarks = pdftl.api.dump_bookmarks(bookmarked_pdf)
+    assert bookmarks[0]["children"][0]["title"] == "Section 1.1"
+
+    bookmarks[0]["title"] = "Chapter 1 (Edited)"
+    bookmarks.append({"title": "Chapter 2", "page": 4})
+    edited_pdf = pdftl.api.update_bookmarks(bookmarked_pdf, bookmarks=bookmarks)
+    final_bookmarks = pdftl.api.dump_bookmarks(edited_pdf)
+
+    # Assertions
+    assert final_bookmarks[0]["title"] == "Chapter 1 (Edited)"  # Edit survived
+    assert (
+        final_bookmarks[0]["children"][1]["title"] == "Section 1.2"
+    )  # Unedited siblings survived
+    assert final_bookmarks[-1]["title"] == "Chapter 2"  # New addition survived
+    assert final_bookmarks[-1]["page"] == 4
+
+
+def test_bookmarks_named_dests_integration(tmp_path, get_pdf_path):
+    """Verifies round-trip integration for bookmarks utilizing named destinations."""
+    import pdftl
+
+    test_filename = "issue123.pdf"
+    bookmarked_pdf = get_pdf_path(test_filename)
+    bookmarks = pdftl.api.dump_bookmarks(bookmarked_pdf)
+
+    # Helper function to find and modify the first named destination
+    def find_and_edit_dest(nodes, new_title="Edited Named Dest Title"):
+        for node in nodes:
+            if "dest" in node:
+                original_dest = node["dest"]
+                node["title"] = new_title
+                return original_dest
+            if "children" in node and isinstance(node["children"], list):
+                found = find_and_edit_dest(node["children"], new_title)
+                if found:
+                    return found
+        return None
+
+    # 2. EDIT: Locate the named dest and change its title
+    original_dest_value = find_and_edit_dest(bookmarks)
+    if not original_dest_value:
+        pytest.fail(f"{test_filename} does not contain any named destinations ('dest') to test.")
+
+    edited_pdf = pdftl.api.update_bookmarks(bookmarked_pdf, bookmarks=bookmarks)
+    final_bookmarks = pdftl.api.dump_bookmarks(edited_pdf)
+
+    # Re-run our search on the final data to ensure the edit and the target persisted
+    def find_dest_by_title(nodes, target_title):
+        for node in nodes:
+            if node.get("title") == target_title:
+                return node
+            if "children" in node and isinstance(node["children"], list):
+                found = find_dest_by_title(node["children"], target_title)
+                if found:
+                    return found
+        return None
+
+    verified_node = find_dest_by_title(final_bookmarks, "Edited Named Dest Title")
+
+    # Assertions
+    assert verified_node is not None, "The edited bookmark was lost during the update."
+    assert verified_node.get("dest") == original_dest_value, (
+        "The named destination string was corrupted or dropped."
+    )
+
+
+def test_round_trip_uri_survives(tmp_path, bookmarked_pdf):
+    """Verifies that URI bookmarks survive the dump -> update round trip."""
+    import pdftl
+
+    bookmarks = pdftl.api.dump_bookmarks(bookmarked_pdf)
+
+    edited_pdf = pdftl.api.update_bookmarks(bookmarked_pdf, bookmarks=bookmarks)
+    final_bookmarks = pdftl.api.dump_bookmarks(edited_pdf)
+
+    uri_nodes = [b for b in final_bookmarks if "uri" in b]
+    assert len(uri_nodes) == 1
+    assert uri_nodes[0]["title"] == "External Reference"
+    assert uri_nodes[0]["uri"] == "https://example.com"
+
+
+def test_dump_bookmarks_no_resolve_preserves_dest(get_pdf_path):
+    """Verifies that no_resolve keeps dest intact and suppresses page/view injection."""
+    import pdftl
+
+    bookmarked_pdf = get_pdf_path("issue123.pdf")
+    bookmarks = pdftl.api.dump_bookmarks(bookmarked_pdf, operation_args=["no_resolve"])
+
+    def find_dest_node(nodes):
+        for node in nodes:
+            if "dest" in node:
+                return node
+            if "children" in node:
+                found = find_dest_node(node["children"])
+                if found:
+                    return found
+        return None
+
+    dest_node = find_dest_node(bookmarks)
+    assert dest_node is not None, "issue123.pdf should contain at least one named destination"
+    assert "dest" in dest_node
+    assert "page" not in dest_node
+    assert "view" not in dest_node
+
+
+def test_update_bookmarks_zero_page_rejected(tmp_path, six_page_pdf):
+    """Verifies that page: 0 is caught by build_toc_tree boundary checking, not schema validation."""
+    import pdftl
+    import pikepdf
+
+    with pikepdf.open(six_page_pdf) as pdf:
+        with pytest.raises(Exception, match="(?i)page|bound|invalid"):
+            pdftl.api.update_bookmarks(pdf, bookmarks=[{"title": "Zero", "page": 0}])
+
+
+def test_update_bookmarks_stdin_yaml(tmp_path):
+    """Verifies YAML data piped through stdin is correctly applied."""
+    import io
+    from unittest.mock import patch
+    import pdftl
+    import pikepdf
+
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+    pdf.add_blank_page()
+
+    yaml_content = "- title: Stdin YAML Chapter\n  page: 1\n- title: Chapter 2\n  page: 2\n"
+
+    with patch("sys.stdin", io.StringIO(yaml_content)):
+        result_pdf = pdftl.api.update_bookmarks(pdf, operation_args=["-"])
+
+    final_bookmarks = pdftl.api.dump_bookmarks(result_pdf)
+    assert len(final_bookmarks) == 2
+    assert final_bookmarks[0]["title"] == "Stdin YAML Chapter"
+    assert final_bookmarks[1]["title"] == "Chapter 2"

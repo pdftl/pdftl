@@ -110,7 +110,7 @@ def get_pdf_path():
 
     # codeql[py/mixed-returns]
     def _resolver(filename):
-        base = Path(__file__).parent
+        base = TESTS_DIR
         if not filename.endswith(".pdf"):
             filename += ".pdf"
 
@@ -118,6 +118,11 @@ def get_pdf_path():
             path = base / "files" / folder / filename
             if path.exists():
                 return path
+
+        pdftk_java_files_path = TESTS_DIR.parent / "vendor_tests" / "pdftk-java" / "files"
+        pdftk_java_path = pdftk_java_files_path / filename
+        if pdftk_java_path.exists():
+            return pdftk_java_path
 
         pytest.skip(f"Test file '{filename}' not found. Skipping.")
 

@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - System font name and file path resolution for `add_text`
 
+## Changed
+
+- `dump_bookmarks`: named destinations now resolved to `page`/`view` by default; pass `no_resolve`
+  to skip
+
+- `update_bookmarks`: strict schema validation; accepts structured data directly via API
+  (`bookmarks=` kwarg)
+
 ### Fixed
 
 - Preserve outline state (open/closed, formatting) when copying outlines
