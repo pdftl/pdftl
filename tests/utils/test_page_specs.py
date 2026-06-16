@@ -204,37 +204,263 @@ def test_parse_omissions_invalid_token():
     "spec, total_pages, expected_spec",
     [
         # Simple ranges
-        ("1-5", 10, PageSpec(1, 5, 1, 1, (0, False), 1.0, set(), [])),
-        ("1", 10, PageSpec(1, 1, 1, 1, (0, False), 1.0, set(), [])),
-        ("end", 10, PageSpec(10, 10, 1, 1, (0, False), 1.0, set(), [])),
+        (
+            "1-5",
+            10,
+            PageSpec(
+                start=1,
+                end=5,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
+        (
+            "1",
+            10,
+            PageSpec(
+                start=1,
+                end=1,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
+        (
+            "end",
+            10,
+            PageSpec(
+                start=10,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
         (
             "",
             10,
-            PageSpec(1, 10, 1, 1, (0, False), 1.0, set(), []),
+            PageSpec(
+                start=1,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
         ),  # Empty spec means all pages
         # Reverse ranges
-        ("r1", 10, PageSpec(10, 10, 1, 1, (0, False), 1.0, set(), [])),  # r1 = page 10
-        ("r5", 10, PageSpec(6, 6, 1, 1, (0, False), 1.0, set(), [])),  # r5 = 10 - 5 + 1 = 6
-        ("r1-r5", 10, PageSpec(10, 6, 1, 1, (0, False), 1.0, set(), [])),  # 10 down to 6
-        ("5-1", 10, PageSpec(5, 1, 1, 1, (0, False), 1.0, set(), [])),  # 5 down to 1
-        ("rend-r1", 10, PageSpec(1, 10, 1, 1, (0, False), 1.0, set(), [])),  # 1 to 10
+        (
+            "r1",
+            10,
+            PageSpec(
+                start=10,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),  # r1 = page 10
+        (
+            "r5",
+            10,
+            PageSpec(
+                start=6,
+                end=6,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),  # r5 = 10 - 5 + 1 = 6
+        (
+            "r1-r5",
+            10,
+            PageSpec(
+                start=10,
+                end=6,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),  # 10 down to 6
+        (
+            "5-1",
+            10,
+            PageSpec(
+                start=5,
+                end=1,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),  # 5 down to 1
+        (
+            "rend-r1",
+            10,
+            PageSpec(
+                start=1,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),  # 1 to 10
         (
             "r0",
             10,
-            PageSpec(11, 11, 1, 1, (0, False), 1.0, set(), []),
+            PageSpec(
+                start=11,
+                end=11,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
         ),  # r0 = 10 - 0 + 1 = 11
         # Modifiers
-        ("1-5even", 10, PageSpec(1, 5, 1, 1, (0, False), 1.0, {"even"}, [])),
-        ("odd", 10, PageSpec(1, 10, 1, 1, (0, False), 1.0, {"odd"}, [])),
-        ("1-endright", 10, PageSpec(1, 10, 1, 1, (90, True), 1.0, set(), [])),
-        ("1-10x2.0", 10, PageSpec(1, 10, 1, 1, (0, False), 2.0, set(), [])),
-        ("z-1", 10, PageSpec(1, 10, 1, 1, (0, False), 1 / math.sqrt(2), set(), [])),
-        ("1-3rep4", 10, PageSpec(1, 3, 1, 4, (0, False), 1.0, set(), [])),
+        (
+            "1-5even",
+            10,
+            PageSpec(
+                start=1,
+                end=5,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers={"even"},
+                omissions=[],
+            ),
+        ),
+        (
+            "odd",
+            10,
+            PageSpec(
+                start=1,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers={"odd"},
+                omissions=[],
+            ),
+        ),
+        (
+            "1-endright",
+            10,
+            PageSpec(
+                start=1,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(90, True),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
+        (
+            "1-10x2.0",
+            10,
+            PageSpec(
+                start=1,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=2.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
+        (
+            "z-1",
+            10,
+            PageSpec(
+                start=1,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=1,
+                rotate=(0, False),
+                scale=1 / math.sqrt(2),
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
+        (
+            "1-3rep4",
+            10,
+            PageSpec(
+                start=1,
+                end=3,
+                step=1,
+                block_rep=1,
+                rep=4,
+                rotate=(0, False),
+                scale=1.0,
+                qualifiers=set(),
+                omissions=[],
+            ),
+        ),
         # Complex combination
         (
             "r5-r1oddleftx1.5rep2~2-3",
             10,
-            PageSpec(6, 10, 1, 2, (-90, True), 1.5, {"odd"}, [(2, 3)]),
+            PageSpec(
+                start=6,
+                end=10,
+                step=1,
+                block_rep=1,
+                rep=2,
+                rotate=(-90, True),
+                scale=1.5,
+                qualifiers={"odd"},
+                omissions=[(2, 3)],
+            ),
         ),
     ],
 )
@@ -254,6 +480,7 @@ def test_parse_sub_page_spec_valid(spec, total_pages, expected_spec):
         assert result.start == expected_spec.start
         assert result.end == expected_spec.end
         assert result.step == expected_spec.step
+        assert result.block_rep == expected_spec.block_rep
         assert result.rep == expected_spec.rep
         assert result.rotate == expected_spec.rotate
         assert result.scale == pytest.approx(expected_spec.scale)
@@ -279,8 +506,21 @@ def test_parse_range_part_invalid():
 
 def test_page_spec_tuple():
     """Tests the __tuple__ method of the dataclass for completeness."""
-    spec = PageSpec(1, 10, 1, 3, (90, True), 2.0, {"even"}, [(2, 3)])
-    expected = (1, 10, 1, 3, (90, True), 2.0, {"even"}, [(2, 3)])
+    spec = PageSpec(
+        start=1,
+        end=10,
+        step=1,
+        block_rep=1,  # New field detected in the updated schema
+        rep=3,  # This was the 4th positional argument previously
+        rotate=(90, True),
+        scale=2.0,
+        qualifiers={"even"},
+        omissions=[(2, 3)],
+    )
+
+    # Expected tuple now contains 9 elements matching the new dataclass field order
+    expected = (1, 10, 1, 1, 3, (90, True), 2.0, {"even"}, [(2, 3)])
+
     assert spec.__tuple__() == expected
 
 
@@ -840,3 +1080,81 @@ def test_parse_sub_page_spec(spec, total_pages, expected_fields):
 
 def test_is_invalid_page_spec_invalid():
     assert not is_valid_page_spec("foo")
+
+
+# --- Tests for _parse_block_rep ---
+
+
+@pytest.mark.parametrize(
+    "modifier_str, expected_block_rep, expected_remaining",
+    [
+        ("copy3", 3, ""),
+        ("copy 4", 4, ""),
+        ("copy12x2.0", 12, "x2.0"),
+        ("evencopy2", 2, "even"),
+        ("foo", 1, "foo"),  # Default is 1
+        ("rep2copy3", 3, "rep2"),  # copy consumed, rep left for _parse_rep
+    ],
+)
+def test_parse_block_rep(modifier_str, expected_block_rep, expected_remaining):
+    parser = SpecParser(total_pages=TOTAL_PAGES)
+    block_rep, remaining = parser._parse_block_rep(modifier_str)
+    assert block_rep == expected_block_rep
+    assert remaining == expected_remaining
+
+
+def test_parse_block_rep_invalid():
+    parser = SpecParser(total_pages=TOTAL_PAGES)
+    with pytest.raises(InvalidArgumentError, match="Invalid copy value 0. Should be at least 1."):
+        parser._parse_block_rep("copy0")
+
+
+# --- Tests for parse_sub_page_spec with copy ---
+
+
+def test_parse_sub_page_spec_copy():
+    result = parse_sub_page_spec("1-3copy2", TOTAL_PAGES)
+    assert result.block_rep == 2
+
+
+def test_parse_sub_page_spec_copy_default():
+    result = parse_sub_page_spec("1-3", TOTAL_PAGES)
+    assert result.block_rep == 1
+
+
+# --- Behavioural tests via _new_tuples_from_spec_str ---
+
+
+def test_new_tuples_from_spec_str_copy(mock_pdfs_fixture):
+    """copy repeats the whole block: 1,2,3 -> 1,2,3,1,2,3"""
+    pdf_A = mock_pdfs_fixture["pdf_A"]
+    opened_pdfs_by_alias = {"A": pdf_A, "DEFAULT": pdf_A}
+
+    result = _new_tuples_from_spec_str("A1-3copy2", opened_pdfs_by_alias, "DEFAULT")
+
+    assert len(result) == 6
+    assert [t.index for t in result] == [0, 1, 2, 0, 1, 2]
+
+
+def test_new_tuples_from_spec_str_rep_vs_copy(mock_pdfs_fixture):
+    """rep interleaves (1,1,2,2,3,3) while copy blocks (1,2,3,1,2,3)"""
+    pdf_A = mock_pdfs_fixture["pdf_A"]
+    opened_pdfs_by_alias = {"A": pdf_A, "DEFAULT": pdf_A}
+
+    rep_result = _new_tuples_from_spec_str("A1-3rep2", opened_pdfs_by_alias, "DEFAULT")
+    copy_result = _new_tuples_from_spec_str("A1-3copy2", opened_pdfs_by_alias, "DEFAULT")
+
+    assert [t.index for t in rep_result] == [0, 0, 1, 1, 2, 2]
+    assert [t.index for t in copy_result] == [0, 1, 2, 0, 1, 2]
+
+
+def test_new_tuples_from_spec_str_rep_and_copy_combined(mock_pdfs_fixture):
+    """rep interleaves first, then copy repeats the block:
+    1-3rep2 -> 1,1,2,2,3,3 then copy2 -> 1,1,2,2,3,3,1,1,2,2,3,3"""
+    pdf_A = mock_pdfs_fixture["pdf_A"]
+    opened_pdfs_by_alias = {"A": pdf_A, "DEFAULT": pdf_A}
+
+    result = _new_tuples_from_spec_str("A1-3rep2copy2", opened_pdfs_by_alias, "DEFAULT")
+
+    assert len(result) == 12
+    assert [t.index for t in result] == [0, 0, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2]

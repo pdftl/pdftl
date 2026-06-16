@@ -51,7 +51,7 @@ def _help_topic_page_specs():
     number is higher than the end page number (e.g., `5-1`), then the
     pages are treated in reverse order.
 
-    ### 2. Page qualifiers, step, repetitions and omissions
+    ### 2. Page qualifiers, step, repetitions, copies and omissions
 
     #### Parity qualifiers
 
@@ -109,6 +109,18 @@ def _help_topic_page_specs():
 
     * `1-5step2rep3` (or equivalently `1-5rep3step2`) outputs pages
       1, 1, 1, 3, 3, 3, 5, 5, 5.
+
+    #### Block copies
+
+    The `copy` modifier repeats the entire selected page sequence as a
+    block. Unlike `rep`, which repeats each page in place, `copy` repeats
+    the whole selection N times in succession.
+
+    Examples
+
+    * `1-3copy2` outputs pages 1, 2, 3, 1, 2, 3.
+
+    * `1-5step2rep2copy3` outputs pages 1, 1, 3, 3, 5, 5 repeated 3 times.
 
     #### Omissions
 

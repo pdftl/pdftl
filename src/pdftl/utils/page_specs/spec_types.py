@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -21,18 +21,20 @@ class PageSpec:
 
     start: int
     end: int
-    step: int
-    rep: int
-    rotate: tuple[int, bool]
-    scale: float
-    qualifiers: set[str]
-    omissions: list[tuple[int, int]]
+    step: int = 1
+    block_rep: int = 1
+    rep: int = 1
+    rotate: tuple[int, bool] = (0, True)
+    scale: float = 1.0
+    qualifiers: set[str] = field(default_factory=set)
+    omissions: list[tuple[int, int]] = field(default_factory=list)
 
     def __tuple__(self):
         return (
             self.start,
             self.end,
             self.step,
+            self.block_rep,
             self.rep,
             self.rotate,
             self.scale,

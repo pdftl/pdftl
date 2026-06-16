@@ -14,7 +14,7 @@ SPEC_REGEX = re.compile(
     r"""
     ^                     # Anchor to the start of the string
     (?:                   # Start optional non-capturing group for whole range
-        (r(?!ight))?      # CAPTURE GROUP 1: Optional 'r', reverse start page
+        (r(?!ight|ep))?   # CAPTURE GROUP 1: Optional 'r', reverse start page (not right or rep)
         (end|\d+)?        # CAPTURE GROUP 2: The start page number or 'end'
         (?:               # Start optional non-capturing group for end of range
             -             # literal hyphen separator
@@ -67,6 +67,7 @@ class SpecParser:
         # Note: Order matters. We consume parts of the string.
         qualifiers, modifier_str = self._parse_qualifiers(modifier_str.lower())
         step, modifier_str = self._parse_step(modifier_str)
+        block_rep, modifier_str = self._parse_block_rep(modifier_str)
         rep, modifier_str = self._parse_rep(modifier_str)
         rotate, modifier_str = self._parse_rotation(modifier_str)
         scale, modifier_str = self._parse_scaling(modifier_str)
@@ -76,7 +77,7 @@ class SpecParser:
             raise InvalidArgumentError(
                 f"Invalid page spec modifier '{modifier_str}' in '{spec_str}'. "
                 f"Did you mean one of: even, odd, north, east, south, west, left, right, down, "
-                f"stepN, repN, xN, zN, or ~N for omissions?"
+                f"stepN, copyN, repN, xN, zN, or ~N for omissions?"
             )
 
         omissions, modifier_str = self._parse_omissions(modifier_str)
@@ -85,6 +86,7 @@ class SpecParser:
             start=start,
             end=end,
             step=step,
+            block_rep=block_rep,
             rep=rep,
             rotate=rotate,
             scale=scale,
@@ -165,8 +167,8 @@ class SpecParser:
 
         return step_val, modifier_str
 
-    def _parse_rep(self, modifier_str):
-        rep_re = re.compile(r"(rep *(\d+))")
+    def _parse_rep_like_modifier(self, modifier_str, keyword):
+        rep_re = re.compile(rf"({keyword} *(\d+))")
         rep_match = rep_re.search(modifier_str)
         if not rep_match:
             return 1, modifier_str
@@ -174,10 +176,16 @@ class SpecParser:
         rep_val = int(rep_match.group(2))
 
         if rep_val < 1:
-            raise InvalidArgumentError(f"Invalid rep value {rep_val}. Should be at least 1.")
+            raise InvalidArgumentError(f"Invalid {keyword} value {rep_val}. Should be at least 1.")
 
         modifier_str = rep_re.sub("", modifier_str, 1)
         return rep_val, modifier_str
+
+    def _parse_block_rep(self, modifier_str):
+        return self._parse_rep_like_modifier(modifier_str, "copy")
+
+    def _parse_rep(self, modifier_str):
+        return self._parse_rep_like_modifier(modifier_str, "rep")
 
     def _parse_rotation(self, modifier_str):
         for key, value in ROTATION_MAP.items():

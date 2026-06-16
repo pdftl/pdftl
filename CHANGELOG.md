@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - System font name and file path resolution for `add_text`
 
+- block repetition of page specs via`copy<N>`
+
 ## Changed
 
 - `dump_bookmarks`: named destinations now resolved to `page`/`view` by default; pass `no_resolve`
