@@ -1158,3 +1158,49 @@ def test_new_tuples_from_spec_str_rep_and_copy_combined(mock_pdfs_fixture):
 
     assert len(result) == 12
     assert [t.index for t in result] == [0, 0, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2]
+
+
+# --- Tests for Whitespace Stripping / Sanitization ---
+
+
+@pytest.mark.parametrize(
+    "spaced_spec, total_pages, expected_start, expected_end",
+    [
+        ("1 - 5", 10, 1, 5),
+        (" rep 2 ", 5, 1, 5),  # Strips spaces, falls back to full range, parses rep=2
+        ("1-10 even step 2", 10, 1, 10),
+        ("r1 - r5 x 2.0", 10, 10, 6),
+        ("1 - end ~ 4", 10, 1, 10),
+    ],
+)
+def test_spec_parser_whitespace_stripping(spaced_spec, total_pages, expected_start, expected_end):
+    """
+    Verifies that SpecParser.parse correctly sanitizes and strips internal
+    and surrounding whitespace from tokens without breaking the modifier pipeline.
+    """
+    parser = SpecParser(total_pages=total_pages)
+    result = parser.parse(spaced_spec)
+
+    assert result.start == expected_start
+    assert result.end == expected_end
+
+
+def test_spec_parser_whitespace_logging(caplog):
+    """
+    Verifies that a debug message is triggered inside SpecParser.parse
+    if and only if spaces were actually stripped from the original expression string.
+    """
+    import logging
+
+    parser = SpecParser(total_pages=10)
+
+    with caplog.at_level(logging.DEBUG):
+        # Case 1: Has whitespace, should log
+        parser.parse("1 - 3 rep 2")
+        assert any("cleaned spaces: spec=" in record.message for record in caplog.records)
+
+        caplog.clear()
+
+        # Case 2: No whitespace, should not log the space-cleanup line
+        parser.parse("1-3rep2")
+        assert not any("cleaned spaces: spec=" in record.message for record in caplog.records)

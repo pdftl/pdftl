@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Changed
 
+- page specs now tolerate whitespace (by stripping it before parsing)
+
 - `dump_bookmarks`: named destinations now resolved to `page`/`view` by default; pass `no_resolve`
   to skip
 

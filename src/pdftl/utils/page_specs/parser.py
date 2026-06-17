@@ -59,6 +59,12 @@ class SpecParser:
         Raises pdftl.exceptions.InvalidArgumentError on failure.
         """
         logger.debug("spec=%s, total_pages=%s", spec_str, self.total_pages)
+        # Clean up any accidental internal or surrounding user whitespaces
+        if isinstance(spec_str, str):
+            cleaned_spec_str = spec_str.replace(" ", "")
+            if spec_str != cleaned_spec_str:
+                logger.debug("cleaned spaces: spec=%s", spec_str)
+                spec_str = cleaned_spec_str
 
         # 1. Parse the primary page range
         start, end, modifier_str = self._parse_range_part(spec_str)
