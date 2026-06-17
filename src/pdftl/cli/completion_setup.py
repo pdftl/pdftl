@@ -37,27 +37,52 @@ from pdftl.utils.dependencies import ensure_dependencies
     ],
 )
 def shell_completion_help_topic():
-    """To set up basic tab completion for pdftl:
+    """To set up basic tab completion for pdftl for bash, zsh or powershell:
 
-    Bash:
+    ### Completion in bash
     ```
     $ source <(pdftl --completion bash)
     ```
 
-    Zsh:
+    *Bash hint:*  For improved completion behaviour in bash
+    and other readline-enabled software, add the line
+    ```
+    set skip-completed-text on
+    ```
+    to `~/.inputrc` (or create that file if it does not exist).
+    Then
+    ```
+    pdftl in.pdf render<LEFT><LEFT><TAB>
+    ```
+    should complete correctly to `render`
+    rather than `renderer` (with unwanted trailing characters `er` after the cursor).
+
+    ### Completion in zsh
     ```
     % source <(pdftl --completion zsh)
     ```
 
-    Powershell:
+    ### Completion in powershell
     ```
     PS > pdftl --completion powershell | Out-String | Invoke-Expression
     ```
 
+    ### Guessing your shell
+    A bare
+    ```
+    pdftl --completion
+    ```
+    will try to guess your shell.
+    This might not work, so be careful.
+
+    ### Caching
+
     The first time you use completion, a cache file is generated to speed up
     future runs, which means the first run might feel a bit slow.
 
-    Notes:
+    The cache file lives in your user cache directory.
+
+    ### Notes
 
     - ensure that pdftl is in your PATH if you want to use completion.
 

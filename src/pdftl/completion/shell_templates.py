@@ -6,7 +6,11 @@
 
 BASH_TEMPLATE = """
 _pdftl_completions() {{
-    local cur="${{COMP_WORDS[COMP_CWORD]}}"
+    local line="${{COMP_LINE}}"
+    local point="${{COMP_POINT}}"
+    local cur_fragment="${{line:0:$point}}"
+    cur_fragment="${{cur_fragment##* }}"
+    COMP_WORDS[COMP_CWORD]="$cur_fragment"
     local python_exe="{python_exe}"
     local script_path="{script_path}"
 
@@ -16,21 +20,21 @@ _pdftl_completions() {{
 
     if [[ "$output" == *"__PDF_FILE__"* ]]; then
         compopt -o filenames 2>/dev/null
-        while IFS= read -r line; do
-            COMPREPLY+=("$line"); done < <(compgen -d -- "$cur")
-        while IFS= read -r line; do
-            COMPREPLY+=("$line"); done < <(compgen -f -X "!*.pdf" -- "$cur")
+        while IFS= read -r f; do
+            COMPREPLY+=("$f"); done < <(compgen -d -- "$cur_fragment")
+        while IFS= read -r f; do
+            COMPREPLY+=("$f"); done < <(compgen -f -X "!*.pdf" -- "$cur_fragment")
     fi
 
     if [[ "$output" == *"__FILE__"* ]]; then
         compopt -o filenames 2>/dev/null
-        while IFS= read -r line; do COMPREPLY+=("$line"); done < <(compgen -f -- "$cur")
+        while IFS= read -r f; do COMPREPLY+=("$f"); done < <(compgen -f -- "$cur_fragment")
     fi
 
     local keywords=$(echo "$output" | sed -e 's/__PDF_FILE__//g' -e 's/__FILE__//g' | xargs)
     if [[ -n "$keywords" ]]; then
-        while IFS= read -r line; do
-            COMPREPLY+=("$line"); done < <(compgen -W "$keywords" -- "$cur")
+        while IFS= read -r f; do
+            COMPREPLY+=("$f"); done < <(compgen -W "$keywords" -- "$cur_fragment")
     fi
 }}
 complete -F _pdftl_completions pdftl
