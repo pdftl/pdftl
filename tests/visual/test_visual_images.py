@@ -3,8 +3,8 @@ import io
 import pikepdf
 from PIL import Image, ImageDraw
 
-from pdftl.utils.images import convert_image_dict_to_grayscale
-
+# FIX: Import the phased processing functions from the new grayscale module
+import pdftl.utils.images.grayscale as gray_mod
 
 JPEG_QUALITY = 75
 
@@ -17,8 +17,6 @@ def test_visual_grayscale_image_conversion(assert_pdf_match):
     shows the successfully converted grayscale version.
     """
     # --- 1. Create a valid color JPEG in memory ---
-    # We use a solid bright red color so the grayscale transformation
-    # is stark and obvious to a human reviewer.
     img = Image.new("RGB", (200, 200), color=(255, 50, 50))
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
@@ -35,24 +33,30 @@ def test_visual_grayscale_image_conversion(assert_pdf_match):
     img_xobj["/Height"] = 200
     img_xobj["/BitsPerComponent"] = 8
     img_xobj["/Filter"] = pikepdf.Name("/DCTDecode")
-    img_xobj["/ColorSpace"] = pikepdf.Name("/DeviceRGB")  # Valid, renderable color space
+    img_xobj["/ColorSpace"] = pikepdf.Name("/DeviceRGB")
 
     page = pdf.pages[0]
     page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=img_xobj))
-    # Draw the image in the center of the page
     page.Contents = pdf.make_stream(b"q 200 0 0 200 100 100 cm /Im1 Do Q")
 
     # --- 3. Snapshot the BEFORE state ---
-    # This creates a baseline file showing a bright red square.
     assert_pdf_match(pdf, suffix="before")
 
-    # --- 4. Run the target conversion logic ---
-    img_meta = {"xobj": img_xobj, "format": "dctdecode"}
-    success = convert_image_dict_to_grayscale(img_meta, JPEG_QUALITY)
+    # --- 4. Run the target conversion logic (Phased Pipeline) ---
+    img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
+    seen_objgens = set()
+
+    prepared = gray_mod.prepare_recolor_payload(img_meta, JPEG_QUALITY, seen_objgens)
+    if prepared:
+        payload, ctx = prepared
+        result = gray_mod.worker_recolor_pixels(payload)
+        success = gray_mod.commit_recolored_stream(ctx, result, payload)
+    else:
+        success = False
+
     assert success is True, "Image conversion failed unexpectedly."
 
     # --- 5. Snapshot the AFTER state ---
-    # This creates a baseline file showing the neutralized dark gray square.
     assert_pdf_match(pdf, suffix="after")
 
 
@@ -65,7 +69,6 @@ def test_visual_grayscale_multi_color_grid(assert_pdf_match):
     img = Image.new("RGB", (200, 200))
     draw = ImageDraw.Draw(img)
 
-    # Paint 4 distinct color zones (100x100 pixels each)
     draw.rectangle([0, 0, 100, 100], fill=(255, 50, 50))  # Top-Left: Bright Red
     draw.rectangle([100, 0, 200, 100], fill=(50, 255, 50))  # Top-Right: Bright Green
     draw.rectangle([0, 100, 100, 200], fill=(50, 50, 255))  # Bottom-Left: Deep Blue
@@ -90,16 +93,24 @@ def test_visual_grayscale_multi_color_grid(assert_pdf_match):
 
     page = pdf.pages[0]
     page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=img_xobj))
-    # Center the 200x200 grid on the 400x400 canvas
     page.Contents = pdf.make_stream(b"q 200 0 0 200 100 100 cm /Im1 Do Q")
 
-    # --- 3. Snapshot the BEFORE state (Beautiful 4-color grid) ---
+    # --- 3. Snapshot the BEFORE state ---
     assert_pdf_match(pdf, suffix="before")
 
-    # --- 4. Run the target conversion logic ---
-    img_meta = {"xobj": img_xobj, "format": "dctdecode"}
-    success = convert_image_dict_to_grayscale(img_meta, JPEG_QUALITY)
+    # --- 4. Run the target conversion logic (Phased Pipeline) ---
+    img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
+    seen_objgens = set()
+
+    prepared = gray_mod.prepare_recolor_payload(img_meta, JPEG_QUALITY, seen_objgens)
+    if prepared:
+        payload, ctx = prepared
+        result = gray_mod.worker_recolor_pixels(payload)
+        success = gray_mod.commit_recolored_stream(ctx, result, payload)
+    else:
+        success = False
+
     assert success is True, "Image conversion failed unexpectedly."
 
-    # --- 5. Snapshot the AFTER state (4 distinct shades of gray) ---
+    # --- 5. Snapshot the AFTER state ---
     assert_pdf_match(pdf, suffix="after")

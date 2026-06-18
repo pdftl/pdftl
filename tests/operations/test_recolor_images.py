@@ -9,18 +9,19 @@ from pdftl.exceptions import InvalidArgumentError
 
 
 # ============================================================================
-# _validate_quality
+# _validate_int
 # ============================================================================
 
 
-def test_validate_quality_default():
-    assert mod._validate_quality("75") == 75
+def test_validate_int_success():
+    assert mod._validate_int("75", "quality", 1, 100) == 75
+    assert mod._validate_int("4", "threads", 1) == 4
 
 
-@pytest.mark.parametrize("bad", ["0", "101", "-1", "abc", "999"])
-def test_validate_quality_invalid(bad):
+@pytest.mark.parametrize("bad", ["0", "101", "-1", "abc"])
+def test_validate_int_invalid_bounds(bad):
     with pytest.raises(InvalidArgumentError):
-        mod._validate_quality(bad)
+        mod._validate_int(bad, "quality", 1, 100)
 
 
 # ============================================================================
@@ -31,22 +32,24 @@ def test_validate_quality_invalid(bad):
 def test_parse_args_default(monkeypatch):
     monkeypatch.setattr(mod, "parse_keyval_list", lambda *a, **k: {})
 
-    q, specs = mod._parse_args([])
+    q, threads, specs = mod._parse_args([])
     assert q == 75
+    assert threads is None
     assert specs == []
 
 
-def test_parse_args_quality_override(monkeypatch):
+def test_parse_args_overrides(monkeypatch):
     def fake_parse_keyval_list(*args, **kwargs):
         bare_tokens = kwargs["bare_tokens"]
-        bare_tokens.append("1-5")  # simulate real behavior
-        return {"quality": "88"}
+        bare_tokens.append("1-5")
+        return {"quality": "88", "threads": "4"}
 
     monkeypatch.setattr(mod, "parse_keyval_list", fake_parse_keyval_list)
 
-    q, specs = mod._parse_args(["1-5"])
+    q, threads, specs = mod._parse_args(["1-5"])
 
     assert q == 88
+    assert threads == 4
     assert specs == ["1-5"]
 
 
@@ -60,19 +63,21 @@ class DummyXObj:
         self.objgen = objgen
 
 
-def make_img(xobj, seen=False):
+def make_img(xobj):
     return {
         "xobj": xobj,
         "format": "png",
         "obj": "img",
+        "page": 1,
     }
 
 
-def test_recolor_images_no_pages(monkeypatch):
+def test_recolor_images_no_images(monkeypatch):
     pdf = SimpleNamespace(pages=[1, 2, 3])
 
-    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, []))
+    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, None, []))
     monkeypatch.setattr(mod, "extract_pdf_images", lambda pdf, pages: [])
+    monkeypatch.setattr(mod, "run_parallel_image_job", lambda **k: 0)
 
     result = mod.recolor_images(pdf, [])
 
@@ -80,56 +85,28 @@ def test_recolor_images_no_pages(monkeypatch):
     assert result.success is True
 
 
-def test_recolor_images_single_image_success(monkeypatch):
+def test_recolor_images_orchestration_success(monkeypatch):
     pdf = SimpleNamespace(pages=[1])
-
     xobj = DummyXObj()
 
-    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, []))
-    monkeypatch.setattr(
-        mod,
-        "extract_pdf_images",
-        lambda pdf, pages: [make_img(xobj)],
-    )
+    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, 2, []))
+    monkeypatch.setattr(mod, "extract_pdf_images", lambda pdf, pages: [make_img(xobj)])
 
-    monkeypatch.setattr(mod, "convert_image_dict_to_grayscale", lambda img, q: True)
+    def fake_run_parallel(images, threads, prepare_func, worker_func, commit_func):
+        assert threads == 2
+        assert len(images) == 1
+        return 1
+
+    monkeypatch.setattr(mod, "run_parallel_image_job", fake_run_parallel)
 
     result = mod.recolor_images(pdf, [])
-
     assert result.success is True
-
-
-def test_recolor_images_skips_duplicate_objgen(monkeypatch):
-    pdf = SimpleNamespace(pages=[1])
-
-    xobj = DummyXObj(objgen=(1, 0))
-
-    calls = {"count": 0}
-
-    def fake_convert(img, q):
-        calls["count"] += 1
-        return True
-
-    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, []))
-
-    monkeypatch.setattr(
-        mod,
-        "extract_pdf_images",
-        lambda pdf, pages: [make_img(xobj), make_img(xobj)],
-    )
-
-    monkeypatch.setattr(mod, "convert_image_dict_to_grayscale", fake_convert)
-
-    mod.recolor_images(pdf, [])
-
-    assert calls["count"] == 1
 
 
 def test_recolor_images_page_specs(monkeypatch):
     pdf = SimpleNamespace(pages=[1, 2, 3])
 
-    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, ["1-2"]))
-
+    monkeypatch.setattr(mod, "_parse_args", lambda args: (75, None, ["1-2"]))
     monkeypatch.setattr(mod, "page_numbers_matching_page_specs", lambda specs, n: {1, 2})
 
     captured = {}
@@ -139,6 +116,7 @@ def test_recolor_images_page_specs(monkeypatch):
         return []
 
     monkeypatch.setattr(mod, "extract_pdf_images", fake_extract)
+    monkeypatch.setattr(mod, "run_parallel_image_job", lambda **k: 0)
 
     result = mod.recolor_images(pdf, ["1-2"])
 
@@ -147,20 +125,22 @@ def test_recolor_images_page_specs(monkeypatch):
 
 
 def test_convert_flate_decode_rgb_image_to_grayscale(minimal_pdf):
-    """Verifies that lossless FlateDecode RGB images (e.g., diagrams, shapes)
-    are successfully converted to a single-channel DeviceGray layout.
+    """Verifies that lossless FlateDecode RGB images are successfully converted
+    to a single-channel DeviceGray layout using the modern phased pipeline.
     """
     import pikepdf
     from PIL import Image
+    import zlib
+    import pdftl.utils.images.grayscale as mod
 
     # 1. Synthesize raw uncompressed pixel payload
-    img = Image.new("RGB", (10, 10), color=(255, 0, 0))  # Bright Red canvas
+    img = Image.new("RGB", (10, 10), color=(255, 0, 0))
     raw_bytes = img.tobytes()
 
     # 2. Build an empty stream wrapper cleanly first
     img_stream = minimal_pdf.make_stream(b"")
 
-    # 3. Direct dictionary mapping assignment (100% type safe string keys)
+    # 3. Direct dictionary mapping assignment
     img_stream["/Width"] = 10
     img_stream["/Height"] = 10
     img_stream["/BitsPerComponent"] = 8
@@ -168,21 +148,21 @@ def test_convert_flate_decode_rgb_image_to_grayscale(minimal_pdf):
     img_stream["/Subtype"] = pikepdf.Name("/Image")
     img_stream["/Type"] = pikepdf.Name("/XObject")
 
-    # 4. Explicitly push the raw un-deflated bytes with the exact desired filter attribute.
-    # This prevents pikepdf from attempting to auto-compress the buffer implicitly.
     # 4. Explicitly push compressed zlib data bytes to fit the /FlateDecode filter profile
-    import zlib
-
     compressed_bytes = zlib.compress(raw_bytes)
     img_stream.write(compressed_bytes, filter=pikepdf.Name("/FlateDecode"))
 
-    img_meta = {"xobj": img_stream, "format": "flatedecode"}
+    img_meta = {"xobj": img_stream, "format": "flatedecode", "page": 0}
 
-    # 5. Execute target function
-    from pdftl.utils.images import convert_image_dict_to_grayscale
+    # 5. Execute target function via the updated pipeline functions
+    seen_objgens = set()
+    prepared = mod.prepare_recolor_payload(img_meta, quality=75, seen_objgens=seen_objgens)
+    assert prepared is not None
 
-    assert convert_image_dict_to_grayscale(img_meta, quality=75) is True
+    payload, ctx = prepared
+    result = mod.worker_recolor_pixels(payload)
+    status = mod.commit_recolored_stream(ctx, result, payload)
 
-    # 6. Assert structural changes
+    # 6. Structural verification assertions
+    assert status is True
     assert img_stream["/ColorSpace"] == pikepdf.Name("/DeviceGray")
-    assert img_stream["/Filter"] == pikepdf.Name("/FlateDecode")

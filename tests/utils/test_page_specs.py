@@ -590,11 +590,14 @@ def mock_pdfs_fixture():
     """Provides mock PDFs, aliases, and inputs for expand_specs_to_pages."""
     # Create mock Pdf objects
     pdf_A = MagicMock(spec=pikepdf.Pdf)
-    pdf_A.pages = [MagicMock()] * 10  # 10 pages
+
+    # FIX: Use a list comprehension to guarantee 10 distinct instances
+    pdf_A.pages = [MagicMock() for _ in range(10)]
+
     pdf_A.filename = "A.pdf"
 
     pdf_B = MagicMock(spec=pikepdf.Pdf)
-    pdf_B.pages = [MagicMock()] * 5  # 5 pages
+    pdf_B.pages = [MagicMock() for _ in range(5)]
     pdf_B.filename = "B.pdf"
 
     inputs = ["A.pdf", "B.pdf"]

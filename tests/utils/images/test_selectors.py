@@ -1,86 +1,82 @@
 import pytest
 import pikepdf
-from PIL import Image
 from pdftl.utils.images.selectors import extract_to_pil
 
 
-class MockRuntimeError(RuntimeError):
-    """Explicitly mimics a C++ nanobind runtime engine breakdown."""
+def test_selectors_read_bytes_exception_handling(empty_pdf, monkeypatch):
+    """Directly hits selectors.py lines 56-58 using a lightweight object proxy wrapper."""
+    # Set up a generic dummy object with required geometry attributes
+    img_xobj = empty_pdf.make_stream(b"")
+    img_xobj["/Width"] = 10
+    img_xobj["/Height"] = 10
 
-    pass
+    # Force Block A (high-level extraction) to fail via standard PdfError
+    def mock_pdf_image_fail(*args, **kwargs):
+        raise pikepdf.PdfError("Force native fallback")
 
+    monkeypatch.setattr(pikepdf, "PdfImage", mock_pdf_image_fail)
 
-class MockHifiPrintImageError(Exception):
-    """Mimics pikepdf's internal high-resolution profile errors."""
+    # Clean proxy pattern to intercept read_bytes safely without touching C++ state tables
+    class StreamReadFailureProxy:
+        def __init__(self, target):
+            self._target = target
 
-    pass
-
-
-def test_extract_to_pil_traps_nanobind_runtime_errors(monkeypatch):
-    """Covers lines 24-32: Verifies unmapped C++ extensions trigger the low-level cascade."""
-
-    class StubXObj:
         def __getitem__(self, key):
-            return 10  # Standard Width / Height placeholder
+            return self._target[key]
 
         def read_bytes(self):
-            return b"fake_pixel_bytes"
+            raise pikepdf.DataDecodingError("Simulated unfilterable stream data")
 
-    # Force Block A to blow up with a simulated C++ runtime failure
-    monkeypatch.setattr(
-        pikepdf, "PdfImage", lambda x: (_ for _ in ()).throw(MockRuntimeError("C++ binding crash"))
-    )
+    proxy_obj = StreamReadFailureProxy(img_xobj)
 
-    # Verify execution rolls safely into Block B/C instead of crashing the process
-    res = extract_to_pil(StubXObj())
-    assert (
-        res is None
-    )  # Pillow returns None on fake_pixel_bytes, verifying the cascade hit Block C
+    # Execution safely hits lines 56-58, logs the warning, and returns None
+    assert extract_to_pil(proxy_obj) is None
 
 
-def test_extract_to_pil_re_raises_actual_bugs(monkeypatch):
-    """Covers line 31: Verifies critical developer bugs (e.g., NameError) bypass guards."""
+def test_selectors_cpp_runtime_exception_isolation(empty_pdf, monkeypatch):
+    """Directly hits selectors.py lines 32-51 by mimicking an unmapped C++ runtime error."""
+    img_xobj = empty_pdf.make_stream(b"")
+    img_xobj["/Width"] = 10
+    img_xobj["/Height"] = 10
 
-    class StubXObj:
+    # Force pikepdf.PdfImage to raise a raw RuntimeError to trigger the second except block
+    def mock_cpp_explosion(*args, **kwargs):
+        raise RuntimeError("Nanobind core-dump violation")
+
+    monkeypatch.setattr(pikepdf, "PdfImage", mock_cpp_explosion)
+
+    # We also want to let the test exit gracefully after it logs and drops down,
+    # so we prevent the raw_bytes logic from executing fully.
+    class StreamFallbackStopProxy:
+        def __init__(self, target):
+            self._target = target
+
         def __getitem__(self, key):
-            return 10
-
-    monkeypatch.setattr(
-        pikepdf, "PdfImage", lambda x: (_ for _ in ()).throw(NameError("developer_typo"))
-    )
-
-    with pytest.raises(NameError, match="developer_typo"):
-        extract_to_pil(StubXObj())
-
-
-def test_extract_to_pil_canvas_assembly_value_error_fallback(monkeypatch):
-    """Covers lines 42-49: Verifies that frombytes value mismatches cascade safely into Image.open."""
-
-    class StubXObj:
-        def __getitem__(self, key):
-            return 10
+            return self._target[key]
 
         def read_bytes(self):
-            return b"corrupt_or_truncated_stream"
+            # Abort here to confirm it cascaded past the isolation layer into block B
+            raise pikepdf.PdfError("Cascaded correctly")
 
-        def read_raw_bytes(self):
-            return b"corrupt_or_truncated_stream"
+    proxy_obj = StreamFallbackStopProxy(img_xobj)
 
-    # Block A passes, moving execution into Block B/C
-    monkeypatch.setattr(
-        pikepdf, "PdfImage", lambda x: (_ for _ in ()).throw(ValueError("Native failed"))
-    )
+    # Execution hits line 32, runs the isolator string checks, prints the debug log,
+    # drops into Block B, hits our custom abort, and returns None.
+    assert extract_to_pil(proxy_obj) is None
 
-    # Mock Image.open to see if Block C executes its deepest rescue branch
-    open_called = False
 
-    def mock_open(fp):
-        nonlocal open_called
-        open_called = True
-        raise OSError("Ultimate fallback failure")
+def test_selectors_unexpected_exception_reraise(empty_pdf, monkeypatch):
+    """Verifies lines 45-51 re-raise completely unhandled non-C++ system crashes."""
+    img_xobj = empty_pdf.make_stream(b"")
+    img_xobj["/Width"] = 10
+    img_xobj["/Height"] = 10
 
-    monkeypatch.setattr(Image, "open", mock_open)
+    # Throw an exception that is NEITHER a pikepdf error nor contains "RuntimeError"/"HifiPrintImage"
+    def mock_unexpected_crash(*args, **kwargs):
+        raise KeyError("Unexpected system environment error")
 
-    res = extract_to_pil(StubXObj())
-    assert res is None
-    assert open_called is True
+    monkeypatch.setattr(pikepdf, "PdfImage", mock_unexpected_crash)
+
+    # The unexpected exception block should trap it, error-log it, and re-raise it
+    with pytest.raises(KeyError):
+        extract_to_pil(img_xobj)

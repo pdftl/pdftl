@@ -20,6 +20,7 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
+import pikepdf
 
 from pdftl.core.registry import registry
 
@@ -29,6 +30,12 @@ TESTS_DIR = Path(__file__).parent
 SCRIPT_PATH = TESTS_DIR / "scripts" / "generate_form.py"
 ASSETS_DIR = TESTS_DIR / "assets"
 FORM_PDF = ASSETS_DIR / "Form.pdf"
+
+
+@pytest.fixture
+def empty_pdf():
+    with pikepdf.Pdf.new() as pdf:
+        yield pdf
 
 
 @pytest.fixture

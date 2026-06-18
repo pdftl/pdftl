@@ -4,37 +4,43 @@
 
 # src/pdftl/operations/recolor_images.py
 
-"""Operation to convert PDF bitmap images to grayscale."""
+"""Operation to convert PDF bitmap images to grayscale using parallel execution."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.utils.images import extract_pdf_images, convert_image_dict_to_grayscale
+from pdftl.operations.helpers.image_processor import run_parallel_image_job
+from pdftl.utils.images.finders import extract_pdf_images
+from pdftl.utils.images.grayscale import (
+    prepare_recolor_payload,
+    worker_recolor_pixels,
+    commit_recolored_stream,
+)
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
 _RECOLOR_IMAGES_LONG_DESC = """
 The `recolor_images` operation walks targeted page content streams to locate
 bitmap image XObjects, permanently transforming their pixel data and
-colorspace entries to grayscale (/DeviceGray).
+colorspace entries to grayscale (/DeviceGray) using parallel processing.
 
 Arguments:
   * `<specs>`: Optional page ranges to limit the operation.
 
-  * `quality=<q>`: The JPEG compression quality (1-100) used when writing back
-    originally lossy images. (Default: 75)
-"""
+  * `quality=<q>`: The JPEG compression quality (1-100) used when writing back originally lossy
+    images. (Default: 75)
+
+  * `threads=<n>`: Number of parallel worker threads to use for image processing. (Default:
+    system CPU count)
+
+ """
 
 _RECOLOR_IMAGES_EXAMPLES = [
     {
@@ -48,33 +54,35 @@ _RECOLOR_IMAGES_EXAMPLES = [
 ]
 
 
-def _validate_quality(val_str: str) -> int:
-    """Helper to validate quality boundaries."""
+def _validate_int(val_str: str, name: str, min_val: int = 1, max_val: int | None = None) -> int:
+    """Helper to validate integer boundaries for arguments."""
     try:
         val = int(val_str)
-        if not (1 <= val <= 100):
+        if val < min_val or (max_val is not None and val > max_val):
             raise ValueError
         return val
     except ValueError as exc:
+        limit_str = f"between {min_val} and {max_val}" if max_val else f"at least {min_val}"
         raise InvalidArgumentError(
-            f"recolor_images: Invalid value for quality: '{val_str}'. "
-            "Must be an integer between 1 and 100."
+            f"recolor_images: Invalid value for {name}: '{val_str}'. "
+            f"Must be an integer {limit_str}."
         ) from exc
 
 
-def _parse_args(args: list) -> tuple[int, list]:
+def _parse_args(args: list) -> tuple[int, int | None, list]:
     """Parses incoming arguments via the shared keyval_parser."""
     page_specs = []
     kv = parse_keyval_list(
         args or [],
         bare_tokens=page_specs,
-        allowed_keys=["quality"],
+        allowed_keys=["quality", "threads"],
         context="recolor_images",
     )
 
-    quality = _validate_quality(kv["quality"]) if "quality" in kv else 75
+    quality = _validate_int(kv["quality"], "quality", 1, 100) if "quality" in kv else 75
+    threads = _validate_int(kv["threads"], "threads", 1) if "threads" in kv else None
 
-    return quality, page_specs
+    return quality, threads, page_specs
 
 
 @register_operation(
@@ -83,13 +91,13 @@ def _parse_args(args: list) -> tuple[int, list]:
     type="single input operation",
     desc="Convert images to grayscale",
     long_desc=_RECOLOR_IMAGES_LONG_DESC,
-    usage="<input> recolor_images [<spec>...] [quality=val] output <output>",
+    usage="<input> recolor_images [<spec>...] [quality=val] [threads=val] output <output>",
     examples=_RECOLOR_IMAGES_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
 def recolor_images(pdf, operation_args: list) -> OpResult:
-    """Finds and grayscales color images on targeted pages."""
-    quality, page_specs = _parse_args(operation_args)
+    """Finds and grayscales color images on targeted pages using parallel tasks."""
+    quality, threads, page_specs = _parse_args(operation_args)
     num_pages = len(pdf.pages)
 
     target_pages = (
@@ -98,22 +106,15 @@ def recolor_images(pdf, operation_args: list) -> OpResult:
         else list(range(1, num_pages + 1))
     )
 
-    # Crawl target streams via the existing xobject-walking infrastructure
     images = extract_pdf_images(pdf, target_pages)
-    seen_objgens = set()
-    recolor_count = 0
 
-    for img in images:
-        xobj = img["xobj"]
-
-        # Prevent redundant processing of shared assets
-        if xobj.objgen in seen_objgens:
-            continue
-        seen_objgens.add(xobj.objgen)
-
-        # Delegate mutation directly to the utility function
-        if convert_image_dict_to_grayscale(img, quality):
-            recolor_count += 1
+    recolor_count = run_parallel_image_job(
+        images=images,
+        threads=threads,
+        prepare_func=lambda img, seen: prepare_recolor_payload(img, quality, seen),
+        worker_func=worker_recolor_pixels,
+        commit_func=commit_recolored_stream,
+    )
 
     logger.info("Recolored %d image asset(s) to grayscale.", recolor_count)
     return OpResult(success=True, pdf=pdf)
