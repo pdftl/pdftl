@@ -132,12 +132,14 @@ def initialize_registry():
     # 1. Import the packages to be discovered
     # We must explicitly import 'utils' and 'cli' so their submodules (like
     # page_specs.py and pipeline.py) can be discovered and their decorators executed.
-    for module in ["operations", "core", "output", "cli", "utils"]:
+    for module in ["operations", "core", "output", "cli", "utils", "utils.images"]:
         importlib.import_module(f"pdftl.{module}")  # nosemgrep
 
     # 2. Discover and register all operations and help topics
     # We scan all relevant packages to find @register_operation and @register_help_topic
-    _discover_modules([pdftl.operations, pdftl.core, pdftl.cli, pdftl.utils], "operation")
+    _discover_modules(
+        [pdftl.operations, pdftl.core, pdftl.cli, pdftl.utils, pdftl.utils.images], "operation"
+    )
     _discover_modules([pdftl.output], "option")
 
     # 3. Discover external operations last (change order? depending on shadowing preference)

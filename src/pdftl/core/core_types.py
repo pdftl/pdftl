@@ -144,6 +144,19 @@ class Operation(LegacyDictAccess):
     compatibility: Compatibility | None = None
 
 
+# Keep type hints generic or string-forward to prevent premature evaluation
+@dataclass
+class ImageModifier(LegacyDictAccess):
+    name: str
+    title: str
+    desc: str
+    long_desc: str
+    validator: Callable[[str], Any]
+    function: Callable[[Any, Any], Any]  # Kept open to avoid PIL type check evaluation
+    arg_name: str  # Added dynamically via reflection
+    arg_type: str  # Added dynamically via reflection
+
+
 @dataclass
 class Option(LegacyDictAccess):
     """

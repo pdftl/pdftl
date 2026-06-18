@@ -29,7 +29,7 @@ pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
 * **Familiar syntax:** Command-line compatible with `pdftk`. Verified against [Mike Haertl's php-pdftk test suite][5] and the [pdftk-java][8] test suite logic, so `s/pdftk/pdftl/` should result in working scripts.
 * **Pipelining:** Chain multiple operations in a single command using `---`.
 * **Performant:** `pdftl` seems faster than `pdftk-java` for many operations (based on informal benchmarks). Reason: `pdftl` mostly drives `pikepdf` which drives `qpdf`, a fast C++ library.
-* **Extra/enhanced operations and features** such as zooming pages, smart merging preserving links and outlines, cropping/chopping up pages, text extraction, optimizing images.
+* **Extra/enhanced operations and features** such as zooming pages, smart merging preserving links and outlines, cropping/chopping up pages, text extraction, modifying and optimizing images.
 * **Modern security:** Supports AES-256 encryption and modern permission flags out of the box.
 * **Content editing:** Find & replace text via regular expressions, inject raw PDF operators, or overlay dynamic text.
 
@@ -98,7 +98,7 @@ A simple `pip install pdftl[full]` install is also supported.
 
 * **Content stream replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of raw content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html) and [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html).
+* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html), [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html) and [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html) to apply sharpen/blur, control brightness/contrast, etc.
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
@@ -245,6 +245,7 @@ See the **[API Tutorial][4]** for more details.
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
 | [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |
+| [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html)                 | Apply in-place image pixel modifications and effects            |
 | [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html)                 | Merge or strip specific layers                                  |
 | [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html)                             | Impose pages onto a grid layout                                 |
 | [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html)                                   | Move pages to a new location                                    |

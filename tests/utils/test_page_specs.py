@@ -10,7 +10,6 @@ from pdftl.exceptions import InvalidArgumentError, UserCommandLineError
 # --- Import the module and functions to test ---
 from pdftl.utils.page_specs import (
     PageSpec,
-    PageTransform,
     _create_page_tuples_from_numbers,
     _expand_square_brackets,
     _filter_page_numbers,
@@ -624,10 +623,17 @@ def test_handle_no_specs(mock_pdfs_fixture):
 
     # Should contain all 10 pages from A, then all 5 from B
     assert len(result) == 15
-    assert result[0] == PageTransform(pdf=pdf_A, index=0, rotation=(0, False), scale=1.0)
-    assert result[9] == PageTransform(pdf=pdf_A, index=9, rotation=(0, False), scale=1.0)
-    assert result[10] == PageTransform(pdf=pdf_B, index=0, rotation=(0, False), scale=1.0)
-    assert result[14] == PageTransform(pdf=pdf_B, index=4, rotation=(0, False), scale=1.0)
+
+    def _assert_transform(t, pdf, index, rotation=(0, False), scale=1.0):
+        assert t.pdf is pdf  # identity, not equality: pdf is a MagicMock
+        assert t.index == index
+        assert t.rotation == rotation
+        assert t.scale == scale
+
+    _assert_transform(result[0], pdf_A, 0)
+    _assert_transform(result[9], pdf_A, 9)
+    _assert_transform(result[10], pdf_B, 0)
+    _assert_transform(result[14], pdf_B, 4)
 
 
 def test_resolve_alias_and_spec(mock_pdfs_fixture):
@@ -741,21 +747,27 @@ def test_expand_specs_to_pages_with_specs(mock_pdfs_fixture):
         opened_pdfs=mock_pdfs_fixture["opened_pdfs"],
     )
 
+    def _assert_transform(t, pdf, index, rotation=(0, False), scale=1.0):
+        assert t.pdf is pdf  # identity, not equality: pdf is a MagicMock
+        assert t.index == index
+        assert t.rotation == rotation
+        assert t.scale == scale
+
     # Check "A1-2"
-    assert result[0] == PageTransform(pdf=pdf_A, index=0, rotation=(0, False), scale=1.0)
-    assert result[1] == PageTransform(pdf=pdf_A, index=1, rotation=(0, False), scale=1.0)
+    _assert_transform(result[0], pdf_A, 0)
+    _assert_transform(result[1], pdf_A, 1)
     # Check "B1"
-    assert result[2] == PageTransform(pdf=pdf_B, index=0, rotation=(0, False), scale=1.0)
+    _assert_transform(result[2], pdf_B, 0)
     # Check "A5-4" (reverse)
-    assert result[3] == PageTransform(pdf=pdf_A, index=4, rotation=(0, False), scale=1.0)
-    assert result[4] == PageTransform(pdf=pdf_A, index=3, rotation=(0, False), scale=1.0)
+    _assert_transform(result[3], pdf_A, 4)
+    _assert_transform(result[4], pdf_A, 3)
     # Check "Aevenx2.0" (A has 10 pages)
     # Evens: 2, 4, 6, 8, 10
-    assert result[5] == PageTransform(pdf=pdf_A, index=1, rotation=(0, False), scale=2.0)
-    assert result[6] == PageTransform(pdf=pdf_A, index=3, rotation=(0, False), scale=2.0)
-    assert result[7] == PageTransform(pdf=pdf_A, index=5, rotation=(0, False), scale=2.0)
-    assert result[8] == PageTransform(pdf=pdf_A, index=7, rotation=(0, False), scale=2.0)
-    assert result[9] == PageTransform(pdf=pdf_A, index=9, rotation=(0, False), scale=2.0)
+    _assert_transform(result[5], pdf_A, 1, scale=2.0)
+    _assert_transform(result[6], pdf_A, 3, scale=2.0)
+    _assert_transform(result[7], pdf_A, 5, scale=2.0)
+    _assert_transform(result[8], pdf_A, 7, scale=2.0)
+    _assert_transform(result[9], pdf_A, 9, scale=2.0)
     # Check total length
     assert len(result) == 10
 
@@ -779,10 +791,17 @@ def test_new_tuples_from_spec_str(mock_pdfs_fixture):
     # Rotation 'east' -> (90, False)
 
     assert len(result) == 4
-    assert result[0] == PageTransform(pdf=pdf_A, index=0, rotation=(90, False), scale=1.0)
-    assert result[1] == PageTransform(pdf=pdf_A, index=0, rotation=(90, False), scale=1.0)
-    assert result[2] == PageTransform(pdf=pdf_A, index=2, rotation=(90, False), scale=1.0)
-    assert result[3] == PageTransform(pdf=pdf_A, index=2, rotation=(90, False), scale=1.0)
+
+    def _assert_transform(t, pdf, index, rotation, scale=1.0):
+        assert t.pdf is pdf  # identity, not equality: pdf is a MagicMock
+        assert t.index == index
+        assert t.rotation == rotation
+        assert t.scale == scale
+
+    _assert_transform(result[0], pdf_A, 0, (90, False))
+    _assert_transform(result[1], pdf_A, 0, (90, False))
+    _assert_transform(result[2], pdf_A, 2, (90, False))
+    _assert_transform(result[3], pdf_A, 2, (90, False))
 
 
 # --- merged from test_page_specs_coverage.py ---

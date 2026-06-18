@@ -18,7 +18,6 @@ def test_all_commands_return_op_result(clean_registry):
 
     # Iterate over all registered operations
     for name, op_meta in registry.operations.items():
-        # CORRECTED: Access the function via the .function attribute
         func = op_meta.function
 
         # Get type hints

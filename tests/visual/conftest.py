@@ -140,3 +140,15 @@ def six_page_rotated_pdf(pdf_factory):
     pdf.pages[4].Rotate = 180
     pdf.pages[5].Rotate = 90
     return pdf
+
+
+from .generate_sample import create_multiformat_pdf
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_sample_multiformat_pdf():
+    """Session fixture that guarantees sample_multiformat.pdf exists in tests/files/
+
+    before any visual tests run. Proxies execution out to the generation module.
+    """
+    return create_multiformat_pdf(force=False)

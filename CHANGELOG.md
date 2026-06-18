@@ -10,15 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modify_images` operation
+
 - `diff_text` operation
 
 - `dump_tables` operation
+
+- `modify_images` operation
 
 - System font name and file path resolution for `add_text`
 
 - block repetition of page specs via`copy<N>`
 
-- multithreading for `resample_images`
+- multithreading for `resample_images` and `recolor_images`
 
 ## Changed
 

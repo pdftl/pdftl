@@ -1,10 +1,12 @@
 # src/pdftl/operations/parsers/place_parser.py
 
 import re
+
 from dataclasses import dataclass
 from typing import Any
 
 from pdftl.exceptions import UserCommandLineError
+from pdftl.operations.parsers.command_list_parser import split_spec_and_ops
 
 
 @dataclass
@@ -19,28 +21,14 @@ class PlaceCommand:
     operations: list[PlacementOp]
 
 
-CMD_PATTERN = re.compile(r"^(.*?)\((.*)\)$")
-
-
 def parse_place_args(args: list[str]) -> list[PlaceCommand]:
     commands = []
     for arg in args:
-        arg = arg.strip()
-        if arg.startswith("("):
-            arg = "1-end" + arg
-
-        match = CMD_PATTERN.match(arg.strip())
-        if not match:
-            raise UserCommandLineError(
-                f"Invalid syntax for place command: '{arg}'. Expected format: 'pages(op=val;...)'"
-            )
-
-        page_spec = match.group(1).strip()
-        ops_str = match.group(2).strip()
-
+        if not arg.strip():
+            continue
+        page_spec, ops_str = split_spec_and_ops(arg)
         operations = _parse_operations(ops_str)
         commands.append(PlaceCommand(page_spec, operations))
-
     return commands
 
 

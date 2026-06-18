@@ -6,6 +6,7 @@ __pycache__/
 # python build artifacts
 *.egg-info/
 
+
 # Temporary files
 *.log
 *.tmp
@@ -37,7 +38,8 @@ code[2_]*
 ./test_*
 1
 doc_data.txt
-
+.pre-commit-config.yaml
+cruft/
 pdfs/
 xfdf/
 zips/

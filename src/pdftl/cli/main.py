@@ -168,6 +168,7 @@ def _find_help_command(cli_args):
         find_operator_topic_command,
         find_option_topic_command,
         find_special_topic_command,
+        find_image_mod_topic_command,
     )
 
     tag_queries = [arg for arg in cli_args if arg.startswith(TAG_PREFIX)]
@@ -179,6 +180,7 @@ def _find_help_command(cli_args):
         or find_special_topic_command(first_topic)
         or find_operator_topic_command(help_topics)
         or find_option_topic_command(help_topics)
+        or find_image_mod_topic_command(help_topics)
         or (len(help_args) > 1 and find_special_topic_command(help_args[1]))
         or None
     )

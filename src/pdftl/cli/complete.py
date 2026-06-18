@@ -63,6 +63,7 @@ HARDCODED_KEYWORDS = {
     "inject",
     "insert",
     "modify_annots",
+    "modify_images",
     "modify_layers",
     "montage",
     "move",

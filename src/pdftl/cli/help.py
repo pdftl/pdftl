@@ -29,6 +29,8 @@ from pdftl.utils.string_utils import before_space
 logger = logging.getLogger(__name__)
 
 TAG_PREFIX = "tag:"
+IMAGE_MOD_PREFIX = "mod:"
+
 _HELP_RECURSION_DEPTH = 0
 
 
@@ -78,7 +80,7 @@ def _print_topic_help(hprint, topic_data, topic_name):
         hprint(usage_string)
 
     if long_desc := topic_data.get("long_desc", None):
-        cleaned_desc = long_desc.strip()
+        cleaned_desc = str(long_desc).strip()
         hprint("\n## Details\n" + cleaned_desc)
 
     if examples := topic_data.get("examples", None):
@@ -271,6 +273,7 @@ def _discover_examples():
     for topic, topic_data in itertools.chain(
         registry.operations.items(),
         registry.options.items(),
+        registry.image_modifiers.items(),
         registry.help_topics.items(),
     ):
         new_examples = topic_data.get("examples", [])
@@ -288,7 +291,9 @@ def _print_help_dispatch_table():
         before_space(op): (
             lambda hprint, op_info=info, op_name=op: _print_topic_help(hprint, op_info, op_name)
         )
-        for op, info in itertools.chain(registry.operations.items(), registry.options.items())
+        for op, info in itertools.chain(
+            registry.operations.items(), registry.options.items(), registry.image_modifiers.items()
+        )
     }
     dispatch_table.update(
         {
@@ -409,6 +414,19 @@ def find_option_topic_command(help_topics):
     """Searches for a command that matches a known option."""
     known_options = [before_space(opt) for opt in registry.options]
     return next((topic for topic in help_topics if topic in known_options), None)
+
+
+def find_image_mod_topic_command(help_topics):
+    """Searches for a command that matches a known option."""
+    known_filters = [before_space(opt) for opt in registry.image_modifiers]
+    return next(
+        (
+            topic.removeprefix(IMAGE_MOD_PREFIX)
+            for topic in help_topics
+            if topic.removeprefix(IMAGE_MOD_PREFIX) in known_filters
+        ),
+        None,
+    )
 
 
 @register_help_topic(
