@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - block repetition of page specs via`copy<N>`
 
+- multithreading for `resample_images`
+
 ## Changed
 
 - page specs now tolerate whitespace (by stripping it before parsing)
