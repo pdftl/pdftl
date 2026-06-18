@@ -12,14 +12,19 @@ import io
 import logging
 import os
 import zlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.helpers.image_processor import (
+    ImageContext,
+    ensure_thread_safe,
+    get_orig_stream_size,
+    run_parallel_image_job,
+)
 from pdftl.utils.images import extract_pdf_images
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
@@ -172,17 +177,6 @@ class ProcessedPayload:
     smask_bytes: bytes | None
 
 
-@dataclass
-class ImageContext:
-    """Main thread context keeping track of pikepdf objects for a given task."""
-
-    xobj: Any
-    smask_xobj: Any | None
-    orig_size: int
-    img_dict: dict
-    page_num: int
-
-
 # --- Argument Validation and Parsing ---
 
 
@@ -246,32 +240,6 @@ def _get_resample_dims(img: dict, dpi: int, allow_upscale: bool) -> tuple[int, i
     return new_width, new_height
 
 
-def _get_orig_stream_size(stream_obj) -> int:
-    """Returns the compressed stream size in bytes, as stored in the PDF."""
-    import pikepdf
-
-    try:
-        return len(stream_obj.read_raw_bytes())
-    except (pikepdf.PdfError, AttributeError, ValueError):
-        return 999_999_999
-
-
-def _ensure_thread_safe(pil_img) -> None:
-    """
-    Forces an image to load on the main thread ONLY if it is tied to an
-    unsafe file pointer. If it's an in-memory BytesIO buffer, it's safe
-    to pass to a worker thread for lazy decoding.
-    """
-    if not hasattr(pil_img, "fp") or pil_img.fp is None:
-        return  # Already loaded or created from raw bytes
-
-    if not isinstance(pil_img.fp, io.BytesIO):
-        # The image is backed by something other than an in-memory buffer.
-        # Force the decode now to prevent C++ binding or file I/O crashes in workers.
-        logger.debug("Unexpectedly forcing image decode on main thread for pil_img: %s", pil_img)
-        pil_img.load()
-
-
 def _prepare_image_for_worker(
     img: dict,
     dpi: int,
@@ -301,7 +269,7 @@ def _prepare_image_for_worker(
         is_bitonal = bool(xobj.get("/ImageMask") or int(xobj.get("/BitsPerComponent", 8)) == 1)
         pdf_img = PdfImage(xobj)
         pil_img = pdf_img.as_pil_image()
-        _ensure_thread_safe(pil_img)
+        ensure_thread_safe(pil_img)
 
         if pil_img.mode not in _SAFE_PIL_MODES and not force:
             logger.debug(
@@ -316,14 +284,14 @@ def _prepare_image_for_worker(
         smask_pil = None
         if smask_xobj and isinstance(smask_xobj, pikepdf.Stream):
             smask_pil = PdfImage(smask_xobj).as_pil_image().convert("L")
-            _ensure_thread_safe(smask_pil)
+            ensure_thread_safe(smask_pil)
         else:
             smask_xobj = None
 
         # Determine limits for the growth guard
-        orig_size = _get_orig_stream_size(xobj)
+        orig_size = get_orig_stream_size(xobj)
         if smask_xobj and not allow_growth:
-            orig_size += _get_orig_stream_size(smask_xobj)
+            orig_size += get_orig_stream_size(smask_xobj)
 
         is_jpeg = img.get("format") == "dctdecode" and not is_bitonal
 
@@ -346,7 +314,10 @@ def _prepare_image_for_worker(
 
     except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as e:
         logger.debug(
-            "Page %s: Failed to extract image %s for resample: %s", page_num, img["name"], e
+            "Page %s: Failed to extract image %s for resample: %s",
+            page_num,
+            img.get("name", "?"),
+            e,
         )
         return None
 
@@ -495,45 +466,29 @@ def resample_images(pdf, operation_args: list) -> OpResult:
         if page_specs
         else list(range(1, num_pages + 1))
     )
-    import pikepdf
 
     images = extract_pdf_images(pdf, target_pages)
-    seen_objgens = set()
-    resample_count = 0
 
-    # Dictionary to map futures to their original context and payload
-    future_to_task = {}
+    def prepare_wrapper(
+        img_dict: dict, seen_set: set
+    ) -> tuple[ExtractionPayload, ImageContext] | None:
+        return _prepare_image_for_worker(
+            img_dict, dpi, quality, allow_upscale, allow_growth, force, seen_set
+        )
 
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        for img in images:
-            task = _prepare_image_for_worker(
-                img, dpi, quality, allow_upscale, allow_growth, force, seen_objgens
-            )
-            if task:
-                payload, ctx = task
-                future = executor.submit(_worker_compute_resample, payload)
-                future_to_task[future] = (payload, ctx)
+    def commit_wrapper(
+        ctx: ImageContext, result: ProcessedPayload, payload: ExtractionPayload
+    ) -> bool:
+        return _commit_resampled_data(ctx, result, payload, allow_growth)
 
-        for future in as_completed(future_to_task):
-            payload, ctx = future_to_task[future]
-            try:
-                result = future.result()
-                if _commit_resampled_data(ctx, result, payload, allow_growth):
-                    resample_count += 1
-            except (
-                pikepdf.PdfError,
-                ValueError,
-                TypeError,
-                OSError,
-                RuntimeError,
-                zlib.error,
-            ) as e:
-                logger.debug(
-                    "Page %s: Failed to compute/commit image %s: %s",
-                    ctx.page_num,
-                    ctx.img_dict["name"],
-                    e,
-                )
+    resample_count = run_parallel_image_job(
+        images=images,
+        threads=threads,
+        prepare_func=prepare_wrapper,
+        worker_func=_worker_compute_resample,
+        commit_func=commit_wrapper,
+    )
+
     logger.info(
         "Resampled %d image(s) to max %s DPI (JPEG Quality: %d, Guard Active: %s, Threads: %d).",
         resample_count,

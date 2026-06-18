@@ -2,7 +2,7 @@
 
 import io
 import zlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pikepdf
 import pytest
@@ -14,8 +14,6 @@ from pdftl.operations.resample_images import (
     ExtractionPayload,
     _apply_metadata_updates,
     _commit_resampled_data,
-    _ensure_thread_safe,
-    _get_orig_stream_size,
     _get_resample_dims,
     _parse_args,
     _prepare_image_for_worker,
@@ -223,7 +221,7 @@ def simulate_pipeline(
         # 3. Main thread commit
         return _commit_resampled_data(ctx, result, payload, allow_growth)
     except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError, zlib.error):
-        # Replicate the exception catching found in the production future.result() loop
+        # Graceful simulation of thread catching failures
         return False
 
 
@@ -280,7 +278,7 @@ def test_resample_skip_conditions(real_pdf):
     assert simulate_pipeline(img, dpi=600) is False
 
 
-@patch("pdftl.operations.resample_images._get_orig_stream_size")
+@patch("pdftl.operations.resample_images.get_orig_stream_size")
 def test_resample_growth_guard(mock_orig_size, real_pdf):
     img = make_real_image_dict(real_pdf)
 
@@ -290,8 +288,6 @@ def test_resample_growth_guard(mock_orig_size, real_pdf):
 
 
 def test_exception_handling(real_pdf):
-    assert _get_orig_stream_size(None) == 999_999_999
-
     # Test main pipeline execution crash safety by deleting required structural keys
     img = make_real_image_dict(real_pdf)
     del img["xobj"].Width
@@ -318,49 +314,24 @@ def test_worker_force_convert():
     assert result.mode == "RGB"
 
 
-def test_ensure_thread_safe_logic():
-    # Case 1: Already loaded (fp is None)
-    img1 = MagicMock()
-    img1.fp = None
-    _ensure_thread_safe(img1)
-    img1.load.assert_not_called()
-
-    # Case 2: Backed by thread-safe pure Python memory buffer
-    img2 = MagicMock()
-    img2.fp = io.BytesIO()
-    _ensure_thread_safe(img2)
-    img2.load.assert_not_called()
-
-    # Case 3: Backed by an unsafe live file descriptor (or C++ proxy stream)
-    img3 = MagicMock()
-    img3.fp = "some_unsafe_file_pointer"
-    _ensure_thread_safe(img3)
-    img3.load.assert_called_once()
-
-
 def test_apply_metadata_updates_modes(real_pdf):
-    # Covers line 275-276 (del xobj["/DecodeParms"] explicitly)
     stream_with_params = real_pdf.make_stream(b"")
     stream_with_params["/DecodeParms"] = pikepdf.Dictionary()
     _apply_metadata_updates(stream_with_params, "RGB", is_bitonal=False, force=False)
     assert "/DecodeParms" not in stream_with_params
 
-    # Covers line 277-278 (is_bitonal condition block explicitly)
     stream_bitonal = real_pdf.make_stream(b"")
     _apply_metadata_updates(stream_bitonal, "1", is_bitonal=True, force=False)
     assert stream_bitonal.BitsPerComponent == 1
 
-    # Covers lines 279-281 (ColorSpace update for mode 'RGB')
     stream_rgb = real_pdf.make_stream(b"")
     _apply_metadata_updates(stream_rgb, "RGB", is_bitonal=False, force=True)
     assert stream_rgb.ColorSpace == pikepdf.Name("/DeviceRGB")
 
-    # Covers lines 282-283 (ColorSpace update for mode 'L')
     stream_l = real_pdf.make_stream(b"")
     _apply_metadata_updates(stream_l, "L", is_bitonal=False, force=True)
     assert stream_l.ColorSpace == pikepdf.Name("/DeviceGray")
 
-    # Covers lines 284-285 (ColorSpace update for mode 'CMYK')
     stream_cmyk = real_pdf.make_stream(b"")
     _apply_metadata_updates(stream_cmyk, "CMYK", is_bitonal=False, force=True)
     assert stream_cmyk.ColorSpace == pikepdf.Name("/DeviceCMYK")
@@ -374,10 +345,8 @@ def test_resample_images_main(mock_extract, real_pdf):
     real_pdf.add_blank_page(page_size=(612, 792))
 
     mock_extract.return_value = [
-        make_real_image_dict(
-            real_pdf, name="/Im1", width=400, height=400
-        ),  # High resolution: Downsamples
-        make_real_image_dict(real_pdf, name="/Im2", width=50, height=50),  # Low resolution: Skips
+        make_real_image_dict(real_pdf, name="/Im1", width=400, height=400),
+        make_real_image_dict(real_pdf, name="/Im2", width=50, height=50),
     ]
 
     res = resample_images(real_pdf, ["dpi=150", "allow_growth=yes"])
@@ -387,7 +356,7 @@ def test_resample_images_main(mock_extract, real_pdf):
 
 @patch("pikepdf.models.PdfImage")
 def test_prepare_image_exception(mock_pdf_image, real_pdf):
-    """Covers lines 348-352: Exception handling inside _prepare_image_for_worker."""
+    """Exception handling inside _prepare_image_for_worker."""
     mock_pdf_image.side_effect = ValueError("Simulated PDF extraction failure")
     img = make_real_image_dict(real_pdf)
     seen = set()
@@ -403,24 +372,3 @@ def test_prepare_image_exception(mock_pdf_image, real_pdf):
     )
     # The exception should be caught, a debug log emitted, and None returned
     assert result is None
-
-
-@patch("pdftl.operations.resample_images.extract_pdf_images")
-@patch("pdftl.operations.resample_images._worker_compute_resample")
-def test_resample_images_worker_exception(mock_worker, mock_extract, real_pdf):
-    """Covers lines 523-531: Exception handling in the main thread's future loop."""
-    real_pdf.add_blank_page(page_size=(612, 792))
-
-    # We need an image that qualifies for resampling to trigger the thread executor
-    img = make_real_image_dict(real_pdf, name="/ImCrash", width=400, height=400)
-    mock_extract.return_value = [img]
-
-    # Simulate a crash inside the future (worker thread)
-    mock_worker.side_effect = RuntimeError("Simulated thread crash")
-
-    # Execute the main wrapper which spawns the executor and unwraps the crash
-    res = resample_images(real_pdf, ["dpi=150"])
-
-    # The pipeline should catch the exception, skip the image, and complete successfully
-    assert isinstance(res, OpResult)
-    assert res.success is True
