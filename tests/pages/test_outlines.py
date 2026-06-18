@@ -24,11 +24,22 @@ pytestmark = pytest.mark.hypothesis
 
 # --- Hypothesis Strategies & Helpers ---
 
-# Create a "pool" of mock PDF objects for hypothesis to sample from
+
+class DummyPdf:
+    """Lightweight dummy class to avoid Hypothesis entropy explosion caused by MagicMock."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return self.name
+
+
+# Create a "pool" of lightweight PDF objects for hypothesis to sample from
 MOCK_PDF_POOL = [
-    MagicMock(spec=Pdf, name="PDF_A"),
-    MagicMock(spec=Pdf, name="PDF_B"),
-    MagicMock(spec=Pdf, name="PDF_C"),
+    DummyPdf("PDF_A"),
+    DummyPdf("PDF_B"),
+    DummyPdf("PDF_C"),
 ]
 
 # A strategy for a single processed page tuple: (pdf, src_idx, inst_num)
@@ -363,13 +374,7 @@ def test_build_chunks_smoke_test(processed_page_info):
     Tests that the chunker always produces a valid, non-empty
     list of chunks for any non-empty input and doesn't crash.
     """
-    # 1. Arrange
-    assume(len(processed_page_info) > 0)
-
-    # 2. Act
     chunks = _build_outline_chunks(processed_page_info)
-
-    # 3. Assert
     assert chunks  # Not empty
     assert len(chunks) >= 1
     assert chunks[0].output_start_page == 1
