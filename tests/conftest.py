@@ -354,10 +354,19 @@ def dummy_pdfs(tmp_path_factory, assets_dir, worker_id):
             link_path.symlink_to(target_pdf)
         paths[name] = link_path
 
-    for item in ["meta.txt", "bookmarks.json", "bookmarks.yaml", "Form.pdf"]:
-        src_item = assets_dir / item
+    def _copy_to_tmp_path_if_exists(src_item):
         if src_item.exists():
             shutil.copy(src_item, tmp_path / item)
+        else:
+            pytest.fail()
+
+    for item in ["meta.txt", "bookmarks.json", "bookmarks.yaml", "Form.pdf"]:
+        _copy_to_tmp_path_if_exists(assets_dir / item)
+
+    files_dir = Path(__file__).parent / "files"
+
+    for item in ["watermark.png", "logo.png", "background.jpg"]:
+        _copy_to_tmp_path_if_exists(files_dir / "images" / item)
 
     scripts_source = Path(__file__).parent / "files" / "python"
     if scripts_source.exists():

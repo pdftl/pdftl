@@ -138,7 +138,7 @@ def test_print_help_variants(monkeypatch, caplog, cmd):
     monkeypatch.setattr(helpmod, "get_project_version", lambda: "1.0.0")
 
     # 4. Run the help command
-    # FIX: Patch the Console class used inside help.py.
+    # Patch the Console class used inside help.py.
     # This ensures that even if the code tries to create a new Console(file=print),
     # it gets our capture_console instead, avoiding the AttributeError.
     with patch("rich.console.Console", return_value=capture_console):
@@ -389,7 +389,6 @@ class TestHelpLogicEdgeCases(unittest.TestCase):
 
         output = format_examples_block(examples, show_topics=True)
 
-        # FIX: The logic uses "Example" for the first one, not "Example 1"
         self.assertIn("Example for '`foo`'", output)  # First example
         self.assertIn("Example 2 for '`foo`'", output)  # Second example increments
         self.assertIn("Example for '`bar`'", output)  # Resets for new topic
@@ -438,7 +437,6 @@ class TestHelpRichRendering(unittest.TestCase):
         first_call_args = mock_console_instance.print.call_args_list[0]
         renderable = first_call_args[0][0]  # args[0]
 
-        # FIX: The first item printed is now the Title Panel, not HelpMarkdown
         self.assertEqual(type(renderable).__name__, "Panel")
 
     def test_raw_mode_bypass(self):

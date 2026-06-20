@@ -57,6 +57,9 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     """
     # --- Step 0: Setup Isolation ---
     # Create a completely fresh workspace for this specific test run
+
+    examples_files_dir = tmp_path / ".." / "example_filescurrent"
+
     work_dir = tmp_path / "work_area"
     work_dir.mkdir()
 
@@ -69,6 +72,12 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     for filename in ["meta.txt", "bookmarks.yaml", "bookmarks.json", "Form.pdf"]:
         if (assets_dir / filename).exists():
             shutil.copy(assets_dir / filename, work_dir / filename)
+
+    for filename in ["background.jpg", "watermark.png", "logo.png"]:
+        if (examples_files_dir / filename).exists():
+            shutil.copy(examples_files_dir / filename, work_dir / filename)
+        else:
+            breakpoint()
 
     # --- Step 1: Prepare Arguments ---
     args = shlex.split(command_str)

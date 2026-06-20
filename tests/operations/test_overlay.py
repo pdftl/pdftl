@@ -106,7 +106,6 @@ def test_apply_overlay_stdin():
     # 1. Setup Mocks
     input_pdf = MagicMock()
     page_mock = MagicMock()
-    # FIX: Provide actual coordinates so pikepdf.Rectangle(*map(float, ...)) works
     page_mock.trimbox = [0, 0, 612, 792]
     input_pdf.pages = [page_mock]
 

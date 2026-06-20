@@ -171,7 +171,7 @@ def test_dump_signatures_suspicious_mod(signed_pdf_path):
     mock_status.signing_cert.subject.native = {"common_name": "Test Signer"}
     mock_status.diff_result = Exception()
 
-    # FIX: Since validate_pdf_signature is imported LOCALLY inside the function,
+    #  Since validate_pdf_signature is imported LOCALLY inside the function,
     # we must patch it in the place it is IMPORTED FROM (pyhanko.sign.validation)
     # rather than where it is used.
     target = "pyhanko.sign.validation.validate_pdf_signature"

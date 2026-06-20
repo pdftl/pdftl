@@ -20,6 +20,7 @@ HARDCODED_KEYWORDS = {
     "JOB",
     "DONE",
     "add_bookmarks",
+    "add_images",
     "add_text",
     "attach_files",
     "background",

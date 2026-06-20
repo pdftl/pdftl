@@ -1,9 +1,15 @@
-import io
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+# tests/visual/test_visual_images.py
+
+import io
 import pikepdf
 from PIL import Image, ImageDraw
 
 import pdftl.utils.images.grayscale as gray_mod
+from pdftl.utils.images.stamper import stamp_images_on_pdf
 
 JPEG_QUALITY = 75
 
@@ -113,3 +119,101 @@ def test_visual_grayscale_multi_color_grid(assert_pdf_match):
 
     # --- 5. Snapshot the AFTER state ---
     assert_pdf_match(pdf, suffix="after")
+
+
+def test_visual_stamp_images_variations(assert_pdf_match, tmp_path):
+    """
+    Generates a single PDF document testing a wide variety of image stamping
+    configurations (overlays, underlays, rotations, opacities, and percentage sizing),
+    and verifies it against the visual baseline.
+    """
+    # 1. Create a test image (vibrant checkerboard pattern)
+    stamp_img_path = tmp_path / "stamp_pattern.png"
+    img = Image.new("RGB", (100, 100), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([0, 0, 50, 50], fill=(255, 100, 100))
+    draw.rectangle([50, 50, 100, 100], fill=(100, 100, 255))
+    img.save(stamp_img_path, format="PNG")
+
+    # 2. Initialize a blank 5-page PDF with size 400x400
+    pdf = pikepdf.Pdf.new()
+    for _ in range(5):
+        pdf.add_blank_page(page_size=(400, 400))
+
+    # 3. Apply Stamp Variations page-by-page
+
+    # Page 1: Standard top-right overlay with partial opacity
+    stamp_images_on_pdf(
+        pdf=pdf,
+        images=[stamp_img_path],
+        pages="1",
+        underlay=False,
+        position="top-right",
+        width="120pt",
+        height="80pt",
+        opacity=0.7,
+    )
+
+    # Page 2: Center underlay (behind text)
+    # First, write some text on Page 2
+    font_dict = pdf.make_indirect(
+        {
+            "/Type": pikepdf.Name.Font,
+            "/Subtype": pikepdf.Name.Type1,
+            "/BaseFont": pikepdf.Name.Helvetica,
+        }
+    )
+    pdf.pages[1].Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font_dict))
+    pdf.pages[1].Contents = pdf.make_stream(b"BT /F1 24 Tf 80 200 Td (FOREGROUND TEXT) Tj ET\n")
+
+    stamp_images_on_pdf(
+        pdf=pdf,
+        images=[stamp_img_path],
+        pages="2",
+        underlay=True,
+        position="center",
+        width="250pt",
+        height="250pt",
+        scale_mode="fit",
+    )
+
+    # Page 3: Relative percentage sizing and center-left alignment with custom offsets
+    stamp_images_on_pdf(
+        pdf=pdf,
+        images=[stamp_img_path],
+        pages="3",
+        underlay=False,
+        position="center-left",
+        width="50%",
+        height="50%",
+        offset_x="20pt",
+        offset_y="-10pt",
+    )
+
+    # Page 4: Visual page rotation (90 degrees) with top-left anchor stamping
+    pdf.pages[3].Rotate = 90
+    stamp_images_on_pdf(
+        pdf=pdf,
+        images=[stamp_img_path],
+        pages="4",
+        underlay=False,
+        position="top-left",
+        width="100pt",
+        height="100pt",
+    )
+
+    # Page 5: Watermark style scaling (fill) with extreme transparency
+    stamp_images_on_pdf(
+        pdf=pdf,
+        images=[stamp_img_path],
+        pages="5",
+        underlay=False,
+        position="center",
+        width="100%",
+        height="100%",
+        scale_mode="fill",
+        opacity=0.25,
+    )
+
+    # 4. Perform visual matching
+    assert_pdf_match(pdf)

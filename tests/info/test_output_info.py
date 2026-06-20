@@ -161,7 +161,6 @@ class TestInfoExtraction:
     def test_get_info_basic(self, mock_pdf):
         """Test basic extraction of pages, IDs, and DocInfo."""
         mock_pdf.pages = [MagicMock(), MagicMock()]
-        # FIX: Populate docinfo so the extraction logic runs
         mock_pdf.docinfo = {"/Title": "Test Doc", "/Author": "Test Author"}
 
         info = get_info(mock_pdf, "input.pdf", extra_info=True)
@@ -177,7 +176,6 @@ class TestInfoExtraction:
 
     def test_get_info_page_media(self, mock_pdf):
         """Test extraction of page media data."""
-        # FIX: Create page mocks and set expected return value for rotation
         page_mock = MagicMock()
         page_mock.get.return_value = 0
         mock_pdf.pages = [page_mock, page_mock]

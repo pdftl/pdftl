@@ -91,15 +91,12 @@ def test_render_pdf_generator_success(mock_ensure):
 
         pypdfium2.PdfDocument.return_value = mock_doc
 
-        # FIX: The utility now fetches pages by index
         mock_doc.__getitem__.return_value = mock_page
-        # FIX: The utility needs to know the range if no specs are provided
         mock_doc.__len__.return_value = 2
 
         mock_page.render.return_value = mock_bitmap
         mock_bitmap.to_pil.return_value = mock_pil_image
 
-        # FIX: Pass "1,2" to ensure the generator is asked for 2 pages
         result = render_pdf(input_pdf, ["1,2"], output_pattern="img_%d.png")
 
         assert result.success

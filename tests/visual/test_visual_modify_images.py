@@ -1,7 +1,7 @@
 # tests/visual/test_visual_modify_images.py
 import pdftl.api
 
-FIXTURE_PATH = "tests/files/sample_multiformat.pdf"
+FIXTURE_PATH = "tests/files/pdfs/sample_multiformat.pdf"
 
 
 def _modify_and_label(args, init_pdf=FIXTURE_PATH):

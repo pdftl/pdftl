@@ -28,7 +28,7 @@ def test_extract_text_components():
     with pytest.raises(ValueError, match="Delimiter must be a non-alphanumeric character"):
         _extract_text_components("1-5xhellox")
 
-    # FIX: Place the valid delimiter at the end so it passes the alphanumeric
+    #  Place the valid delimiter at the end so it passes the alphanumeric
     # check and hits the unmatched error block
     with pytest.raises(ValueError, match="Unmatched text delimiter"):
         _extract_text_components("hello!")

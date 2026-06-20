@@ -12,7 +12,7 @@ PHOTO_URL = "https://upload.wikimedia.org/wikipedia/commons/c/c1/Wikipedia-sipi-
 
 VISUAL_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = VISUAL_DIR.parent.parent
-SAMPLE_PDF_PATH = PROJECT_ROOT / "tests" / "files" / "sample_multiformat.pdf"
+SAMPLE_PDF_PATH = PROJECT_ROOT / "tests" / "files" / "pdfs" / "sample_multiformat.pdf"
 MANDRILL_CROP = PROJECT_ROOT / "tests" / "files" / "images" / "mandrill_crop.png"
 
 

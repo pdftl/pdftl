@@ -34,6 +34,116 @@ AnchorType = Literal[
 ScaleMode = Literal["fit", "fill", "stretch", "none"]
 
 
+def _resolve_stretch_size(
+    box_w: float, box_h: float, req_w: float | None, req_h: float | None
+) -> tuple[float, float]:
+    """Resolves target size for stretch mode, defaulting to box bounds."""
+    target_w = req_w if req_w is not None else box_w
+    target_h = req_h if req_h is not None else box_h
+    return target_w, target_h
+
+
+def _resolve_aspect_ratio_size(
+    img_w: float,
+    img_h: float,
+    box_w: float,
+    box_h: float,
+    req_w: float | None,
+    req_h: float | None,
+    mode: Literal["fit", "fill"],
+) -> tuple[float, float]:
+    """Resolves aspect ratio preserving sizes for fit and fill modes."""
+    limit_w = req_w if req_w is not None else box_w
+    limit_h = req_h if req_h is not None else box_h
+
+    if mode == "fit":
+        scale = min(limit_w / img_w, limit_h / img_h)
+    else:  # mode == "fill"
+        scale = max(limit_w / img_w, limit_h / img_h)
+
+    return img_w * scale, img_h * scale
+
+
+def _resolve_none_size(
+    img_w: float, img_h: float, req_w: float | None, req_h: float | None
+) -> tuple[float, float]:
+    """Resolves target size when no scaling strategy is active."""
+    if req_w is not None and req_h is not None:
+        return req_w, req_h
+    if req_w is not None:
+        return req_w, img_h * (req_w / img_w)
+    if req_h is not None:
+        return img_w * (req_h / img_h), req_h
+    return img_w, img_h
+
+
+def _resolve_target_size(
+    img_size: tuple[float, float],
+    box_w: float,
+    box_h: float,
+    requested_size: tuple[float | None, float | None],
+    scale_mode: ScaleMode,
+) -> tuple[float, float]:
+    """Resolves target width and height based on the image size and requested scale_mode."""
+    img_w, img_h = img_size
+    req_w, req_h = requested_size
+
+    if scale_mode == "stretch":
+        return _resolve_stretch_size(box_w, box_h, req_w, req_h)
+    if scale_mode in ("fit", "fill"):
+        return _resolve_aspect_ratio_size(img_w, img_h, box_w, box_h, req_w, req_h, scale_mode)
+    return _resolve_none_size(img_w, img_h, req_w, req_h)
+
+
+def _get_anchor_offsets(
+    box_w: float, box_h: float, target_w: float, target_h: float, anchor: AnchorType
+) -> tuple[float, float]:
+    """Maps anchor string representation to visual translation offsets."""
+    parts = anchor.split("-")
+    if len(parts) == 1:
+        v, h = "center", "center"
+    else:
+        v, h = parts[0], parts[1]
+
+    # Horizontal alignment offset
+    if h == "left":
+        align_x = 0.0
+    elif h == "center":
+        align_x = (box_w - target_w) / 2.0
+    else:  # right
+        align_x = box_w - target_w
+
+    # Vertical alignment offset
+    if v == "top":
+        align_y = box_h - target_h
+    elif v == "center" or v == "mid":
+        align_y = (box_h - target_h) / 2.0
+    else:  # bottom
+        align_y = 0.0
+
+    return align_x, align_y
+
+
+def _resolve_alignment(
+    box_bounds: tuple[float, float, float, float],
+    target_size: tuple[float, float],
+    anchor: AnchorType,
+    offset: tuple[float, float],
+) -> tuple[float, float]:
+    """Maps final absolute positioning by combining coordinates, alignments, and custom offsets."""
+    bx1, by1, bx2, by2 = box_bounds
+    box_w = bx2 - bx1
+    box_h = by2 - by1
+    target_w, target_h = target_size
+
+    align_x, align_y = _get_anchor_offsets(box_w, box_h, target_w, target_h, anchor)
+
+    dx, dy = offset
+    final_x = bx1 + align_x + dx
+    final_y = by1 + align_y + dy
+    return final_x, final_y
+
+
 def calculate_placement_matrix(
     *,
     img_size: tuple[float, float],
@@ -75,75 +185,7 @@ def calculate_placement_matrix(
     if img_w <= 0 or img_h <= 0 or box_w <= 0 or box_h <= 0:
         return (0.0, 0.0, 0.0, 0.0, bx1, by1)
 
-    # 1. Resolve targeted width and height before applying alignment anchors
-    req_w, req_h = requested_size
-    target_w, target_h = img_w, img_h
+    target_size = _resolve_target_size(img_size, box_w, box_h, requested_size, scale_mode)
+    final_x, final_y = _resolve_alignment(box_bounds, target_size, anchor, offset)
 
-    if scale_mode == "stretch":
-        target_w = req_w if req_w is not None else box_w
-        target_h = req_h if req_h is not None else box_h
-    elif scale_mode == "fit":
-        # Fit image entirely within box while preserving aspect ratio
-        limit_w = req_w if req_w is not None else box_w
-        limit_h = req_h if req_h is not None else box_h
-        scale = min(limit_w / img_w, limit_h / img_h)
-        target_w = img_w * scale
-        target_h = img_h * scale
-    elif scale_mode == "fill":
-        # Fill box completely with image while preserving aspect ratio
-        limit_w = req_w if req_w is not None else box_w
-        limit_h = req_h if req_h is not None else box_h
-        scale = max(limit_w / img_w, limit_h / img_h)
-        target_w = img_w * scale
-        target_h = img_h * scale
-    else:  # scale_mode == "none" or unspecified
-        if req_w is not None and req_h is not None:
-            # Explicitly sized but preserving aspect ratio was not forced by fit/fill/stretch
-            target_w, target_h = req_w, req_h
-        elif req_w is not None:
-            target_w = req_w
-            target_h = img_h * (req_w / img_w)
-        elif req_h is not None:
-            target_h = req_h
-            target_w = img_w * (req_h / img_h)
-
-    # 2. Compute translation relative to target box boundary and alignment anchor
-    # Default origin is at (bx1, by1) (bottom-left of crop/media boundary)
-    align_x, align_y = 0.0, 0.0
-
-    if anchor == "center":
-        align_x = (box_w - target_w) / 2.0
-        align_y = (box_h - target_h) / 2.0
-    elif anchor == "top-left":
-        align_x = 0.0
-        align_y = box_h - target_h
-    elif anchor == "top-center":
-        align_x = (box_w - target_w) / 2.0
-        align_y = box_h - target_h
-    elif anchor == "top-right":
-        align_x = box_w - target_w
-        align_y = box_h - target_h
-    elif anchor == "center-left":
-        align_x = 0.0
-        align_y = (box_h - target_h) / 2.0
-    elif anchor == "center-right":
-        align_x = box_w - target_w
-        align_y = (box_h - target_h) / 2.0
-    elif anchor == "bottom-left":
-        align_x = 0.0
-        align_y = 0.0
-    elif anchor == "bottom-center":
-        align_x = (box_w - target_w) / 2.0
-        align_y = 0.0
-    elif anchor == "bottom-right":
-        align_x = box_w - target_w
-        align_y = 0.0
-
-    # 3. Incorporate offsets (dx, dy)
-    dx, dy = offset
-    final_x = bx1 + align_x + dx
-    final_y = by1 + align_y + dy
-
-    # Matrix: a, b, c, d, e, f
-    # b and c are 0.0 (no skewing)
-    return (target_w, 0.0, 0.0, target_h, final_x, final_y)
+    return (target_size[0], 0.0, 0.0, target_size[1], final_x, final_y)

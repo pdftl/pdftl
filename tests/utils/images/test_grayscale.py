@@ -453,7 +453,6 @@ def test_commit_handles_nested_smask_neutralization(empty_pdf):
     smask_stream = empty_pdf.make_stream(b"")
     smask_stream.ColorSpace = pikepdf.Name("/DeviceRGB")
 
-    # Fix: build a structurally valid image stream first, then inject the SMask key
     fake_xobj = create_real_image_stream(empty_pdf, mode="RGB", fmt="RAW")
     fake_xobj["/SMask"] = smask_stream
 

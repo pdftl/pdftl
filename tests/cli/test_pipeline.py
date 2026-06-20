@@ -531,7 +531,6 @@ def mock_sys_stdin():
 class TestPipelineManagerCoverage:
     def test_cli_stage_resolve_io_prompts_stage_num_gt_one(self, mock_context):
         """Covers line 62: Prompt text includes stage number when stage_num > 1."""
-        # FIX: Added matching input_passwords list
         stage = CliStage(
             inputs=["PROMPT", "PROMPT"],
             input_passwords=[None, None],
@@ -560,7 +559,6 @@ class TestPipelineManagerCoverage:
         self, mock_context, mock_pikepdf, mock_save_content, mock_registry
     ):
         """Covers line 100: self.pipeline_pdf.close() in the finally block."""
-        # FIX: Added matching input_passwords list
         stage = CliStage(operation="basic_op", inputs=["file1.pdf"], input_passwords=[None])
         manager = PipelineManager(stages=[stage], input_context=mock_context)
 
@@ -627,7 +625,6 @@ class TestPipelineManagerCoverage:
 
     def test_validate_effective_inputs_no_type_returns(self, mock_context, mock_registry):
         """Covers line 177: return if op_data doesn't have a 'type' key."""
-        # FIX: Added matching input_passwords list
         stage = CliStage(operation="no_type_op", inputs=["file.pdf"], input_passwords=[None])
         manager = PipelineManager(stages=[stage], input_context=mock_context)
 
@@ -649,7 +646,6 @@ class TestPipelineManagerCoverage:
 
         # We need to ensure a PDF is opened first to test the exception handling post-opening.
 
-        # FIX: Added matching input_passwords list
         stage = CliStage(operation="error_op", inputs=["file.pdf"], input_passwords=[None])
         manager = PipelineManager(stages=[stage], input_context=mock_context)
 
@@ -678,7 +674,6 @@ class TestPipelineManagerCoverage:
         # ISOLATION: Ensure this test's one call to open returns pdf_a_ref
         pdf_open_mock.side_effect = [pdf_a_ref]
 
-        # FIX: Added matching input_passwords list
         stage = CliStage(inputs=["-"], input_passwords=[None])
         manager = PipelineManager(stages=[stage], input_context=mock_context)
 

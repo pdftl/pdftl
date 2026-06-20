@@ -94,11 +94,18 @@ A simple `pip install pdftl[full]` install is also supported.
 * **Encryption:** using [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw) and [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), optionally setting permissions with [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm). Read permissions/encryption data with [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html)
 * **Signatures:** add secure signatures using [`sign_key`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file) and [`sign_cert`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file). List and verify signatures using [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html) (powered by [`pyHanko`][6]).
 
+
+### 🖼️  Images
+* **Info:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) gives detailed per-image info
+* **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) your PDF to images
+* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), or , [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html),
+* **Image editing:** [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html) f and [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html) to apply sharpen/blur, control brightness/contrast, etc, or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html).
+
+
 ### 🛠️ Advanced
 
 * **Content stream replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of raw content streams using regular expressions (experimental).
 * **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Images:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) or [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) PDF to images, [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html), [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html) and [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html) to apply sharpen/blur, control brightness/contrast, etc.
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
 * **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
@@ -202,6 +209,7 @@ See the **[API Tutorial][4]** for more details.
 | Operation                                                                                               | Description                                                     |
 |---------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
 | [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html)                 | Add top-level bookmarks                                         |
+| [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html)                       | Stamp user-specified images onto PDF pages                      |
 | [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages                    |
 | [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |

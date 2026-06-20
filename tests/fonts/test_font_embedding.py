@@ -242,7 +242,6 @@ def test_embed_truetype_font_success(tmp_path, monkeypatch):
             scale=1.0,
         ),
     )
-    # FIX: Added *args to accept the optional 3rd argument (custom_encoding_map)
     monkeypatch.setattr(fe, "_widths_array", lambda tt, metrics, *args: [600.0] * 256)
     monkeypatch.setattr("fontTools.ttLib.TTFont", lambda path: tt_mock)
 

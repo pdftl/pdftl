@@ -192,7 +192,6 @@ def test_delete_attachments_scrubs_annotations(mock_eval):
 
     # Setup Pages with Annotations
     page1 = MagicMock()
-    # FIX: Explicitly mock __contains__ so `if "/Annots" in page:` evaluates to True
     page1.__contains__.side_effect = lambda key: key == "/Annots"
 
     # Annot 1: Matches the file to delete

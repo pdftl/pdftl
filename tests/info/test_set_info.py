@@ -355,7 +355,7 @@ class TestSetInfo:
     @patch("pdftl.info.set_info._add_bookmark")
     def test_set_bookmarks_loop(self, mock_add_bookmark, mock_pdf):
         """Tests the _set_bookmarks loop and outline clearing."""
-        # FIX: Added dummy level=1, page_number=1 to satisfy the constructor
+        #  Added dummy level=1, page_number=1 to satisfy the constructor
         bookmark_list = [
             BookmarkEntry(title="A", level=1, page_number=1),
             BookmarkEntry(title="B", level=1, page_number=1),
@@ -514,7 +514,7 @@ def test_info_page_media_errors(minimal_pdf, caplog):
     caplog.clear()
 
     # 3. Other Box (CropBox) Error
-    # Fix: Attribute in PageMediaEntry is 'crop_rect', not 'crop_box'
+    #  Attribute in PageMediaEntry is 'crop_rect', not 'crop_box'
     # We intentionally pass invalid types to trigger the catch block in the code under test
     bad_crop = PageMediaEntry(page_number=1, crop_rect=["Not", "A", "Rect"])
     _set_page_media_entry(minimal_pdf, bad_crop)
@@ -546,7 +546,7 @@ def test_info_page_label_validation(minimal_pdf, caplog):
     caplog.clear()
 
     # 3. Invalid Start Number
-    # Fix: 'decimal' was causing a style error before the start error could trigger.
+    #  'decimal' was causing a style error before the start error could trigger.
     # We must use a VALID style (e.g. 'DecimalArabicNumerals') to test the INVALID start.
     bad_start = PageLabelEntry(
         new_index=1,

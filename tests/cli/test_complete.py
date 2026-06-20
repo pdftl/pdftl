@@ -117,7 +117,7 @@ def test_get_cache_dir_logic_branching():
         mock_os.name = "posix"
         mock_os.environ.get.return_value = "/custom/cache"
 
-        # FIX: Use posixpath.join to force forward slashes,
+        # Use posixpath.join to force forward slashes,
         # even when running on Windows.
         mock_os.path.join.side_effect = posixpath.join
 

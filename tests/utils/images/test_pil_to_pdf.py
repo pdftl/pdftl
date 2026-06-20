@@ -165,7 +165,6 @@ def test_extract_raw_ccitt_from_tiff():
     # 3. Little Endian, valid inline payload
     header = b"II" + struct.pack("<HI", 42, 8)
     num_entries = struct.pack("<H", 2)
-    # FIX: Shifted offset from 34 to 38 to clear the 38-byte IFD structure
     entry1 = struct.pack("<HHII", 273, 4, 1, 38)  # Offset: 38
     entry2 = struct.pack("<HHII", 279, 4, 1, 4)  # Count: 4
 
@@ -177,7 +176,6 @@ def test_extract_raw_ccitt_from_tiff():
     # 4. Big Endian, valid pointer payload (Count > 1 bypasses inline limits)
     header_be = b"MM" + struct.pack(">HI", 42, 8)
     num_entries_be = struct.pack(">H", 2)
-    # FIX: Shift offset to 38 to point to the pointer array
     entry1_be = struct.pack(">HHII", 273, 4, 2, 38)
     entry2_be = struct.pack(">HHII", 279, 4, 1, 5)  # Count: 5
 

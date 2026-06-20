@@ -212,7 +212,6 @@ def test_process_content_stream_recursive_form():
     resources_mock = MagicMock()
     resources_mock.__contains__.return_value = True
 
-    # Fix: mock .values() to return a list containing your form_xobj
     resources_mock.XObject.values.return_value = [form_xobj]
 
     # (Optional) Keep .items() mocked if other parts of the code still use it

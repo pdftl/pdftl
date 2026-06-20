@@ -14,7 +14,6 @@ def test_basic_inline_pipeline(dummy_pdfs, tmp_path):
     input_pdf = dummy_pdfs["a.pdf"]
     output_pdf = tmp_path / "out.pdf"
 
-    # Fix: Use "rotate right" instead of "rotate 90"
     args = [
         "R=JOB",
         str(input_pdf),
@@ -45,7 +44,7 @@ def test_inline_scope_visibility(dummy_pdfs, tmp_path):
     in_b = dummy_pdfs["b.pdf"]
     output_pdf = tmp_path / "scope_test.pdf"
 
-    # Fix: "Y=JOB X cat ..."
+    # "Y=JOB X cat ..."
     # Load X first so cat has something to append to
     args = [
         f"X={in_a}",

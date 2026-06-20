@@ -12,7 +12,7 @@ except ImportError:
 
 
 def print_usage_and_exit():
-    print("Usage: ./add_operation.py <operation-name> ['<changelog-entry>']")
+    print("Usage: ./finalize_operation.py <operation-name> ['<changelog-entry>']")
     sys.exit(1)
 
 

@@ -48,7 +48,6 @@ def test_barcode_pdf_handles_page_rotations(mock_create_layer, mock_stamp, mock_
     us_letter = [0.0, 0.0, 612.0, 792.0]
 
     mock_page_0 = MagicMock(spec=pikepdf.Page)
-    # Fix: Cast `key` to string to catch pikepdf.Name objects
     mock_page_0.get.side_effect = lambda key, default=None: {
         "/Rotate": 0,
         "/MediaBox": us_letter,
@@ -58,7 +57,6 @@ def test_barcode_pdf_handles_page_rotations(mock_create_layer, mock_stamp, mock_
     mock_page_0.cropbox = us_letter
 
     mock_page_90 = MagicMock(spec=pikepdf.Page)
-    # Fix: Cast `key` to string here as well
     mock_page_90.get.side_effect = lambda key, default=None: {
         "/Rotate": 90,
         "/MediaBox": us_letter,

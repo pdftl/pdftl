@@ -272,7 +272,6 @@ def test_radio_group_off_state():
     field = MagicMock(spec=RadioButtonGroup)
     field.value = None
     field.default_value = None
-    # FIX: Use string keys for pikepdf.Dictionary
     field.obj = pikepdf.Dictionary({"/Subtype": "/Form"})
 
     _write_field_as_fdf_to_file("Radio1", field, buffer)

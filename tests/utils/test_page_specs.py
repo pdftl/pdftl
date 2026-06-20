@@ -590,7 +590,6 @@ def mock_pdfs_fixture():
     # Create mock Pdf objects
     pdf_A = MagicMock(spec=pikepdf.Pdf)
 
-    # FIX: Use a list comprehension to guarantee 10 distinct instances
     pdf_A.pages = [MagicMock() for _ in range(10)]
 
     pdf_A.filename = "A.pdf"

@@ -6,9 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.22.0] - 2026-06-20
 
 ### Added
+
+- `add_images` operation
 
 - `modify_images` operation
 
@@ -20,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - System font name and file path resolution for `add_text`
 
-- block repetition of page specs via`copy<N>`
+- block repetition of page specs via `copy<N>`
 
 - multithreading for `resample_images` and `recolor_images`
 

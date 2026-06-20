@@ -194,7 +194,6 @@ class TestFitCropContext:
 
 
 class TestGetVisibleBbox:
-    # FIX: Patch the global PIL library, not the local module
     @mock.patch("PIL.ImageOps.invert")
     def test_get_visible_bbox_standard(self, mock_invert):
         """

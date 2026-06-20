@@ -221,7 +221,6 @@ def test_build_item_fails_to_create_obj():
     Covers line 213: raise OperationError("Invalid item (no obj)")
     """
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
-    # FIX: Mock the pages list so len(pdf.pages) >= 1
     mock_pdf.pages = [MagicMock()]
 
     node = {"title": "Ghost Item", "page": 1}
