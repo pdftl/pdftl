@@ -46,11 +46,12 @@ add-text = ["reportlab"]
 barcode = ["pypdfium2", "zxing-cpp>=3.0,<4.0"]
 crop-visible = ["pypdfium2"]
 delete-blank = ["numpy"]
-diff-text = ["diff-match-patch"]
+diff-text = ["diff-match-patch", "pypdfium2"]
 dump-tables = ["tablers"]
 dump-text = ["pypdfium2"]
 flatten = ["pypdfium2"]
 highlight = ["pypdfium2"]
+modify-images = ["numpy"]
 optimize-images = ["ocrmypdf"]
 replacement-font = [ "fonttools>=4.0,<5.0" ]
 signing = ["pyhanko"]
@@ -68,6 +69,7 @@ extras = [
     "pdftl[dump-text]",
     "pdftl[flatten]",
     "pdftl[highlight]",
+    "pdftl[modify-images]",
     "pdftl[optimize-images]",
     "pdftl[replacement-font]",
     "pdftl[signing]",

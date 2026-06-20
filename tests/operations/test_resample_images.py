@@ -372,3 +372,40 @@ def test_prepare_image_exception(mock_pdf_image, real_pdf):
     )
     # The exception should be caught, a debug log emitted, and None returned
     assert result is None
+
+
+def test_resample_images_parallel_exception_logged(mocker, caplog):
+    """Exercises lines 494-495 when parallel processing encounters an error."""
+    import logging
+    from pdftl.operations.resample_images import resample_images
+
+    mocker.patch(
+        "pdftl.operations.resample_images.extract_pdf_images",
+        return_value=[
+            {
+                "xobj": mocker.MagicMock(),
+                "page": 1,
+                "name": "Im0",
+                "bbox": [0, 0, 100, 100],
+                "width_px": 200,
+                "height_px": 200,
+            }
+        ],
+    )
+    mocker.patch(
+        "pdftl.operations.resample_images.run_parallel_image_job",
+        side_effect=OSError("Corrupted thread context memory"),
+    )
+
+    mock_pdf = mocker.MagicMock()
+    mock_pdf.pages = [mocker.MagicMock()]
+
+    with caplog.at_level(logging.DEBUG, logger="pdftl.operations.resample_images"):
+        result = resample_images(mock_pdf, [])
+
+    assert result.success is True
+    assert any(
+        "Skipped resampling an image due to an error in resample_images parallel processing"
+        in record.message
+        for record in caplog.records
+    )

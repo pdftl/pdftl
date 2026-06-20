@@ -97,6 +97,9 @@ class OutlineCopier:
                 self.remapper.source_pdf.make_indirect(source_item.obj)
             ),
         )
+        # /Count *should* always be present
+        # But if not, viewers seems to assume the item is closed. So we do that too.
+        # The pikepdf default is 'open' so we need to set it explicitly in this case.
         new_item.is_closed = source_item.is_closed or Name.Count not in source_item.obj
 
         # --- 4. Recurse on children ---

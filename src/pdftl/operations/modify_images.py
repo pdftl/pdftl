@@ -20,6 +20,7 @@ from pdftl.operations.helpers.image_processor import (
     encode_and_update_pdf_image,
 )
 from pdftl.operations.parsers.modify_images_parser import parse_modify_images_args
+from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,8 @@ def modify_images_operation(pdf: Any, args: list[str]) -> OpResult:
     Raises InvalidArgumentError on unknown image modifiers.
     """
 
+    ensure_dependencies("modify_images", ["PIL", "numpy"], "modify-images")
+
     if not args:
         raise InvalidArgumentError(
             "Missing execution payload statement. Expected format: `(image_modifier=value)`"
@@ -113,37 +116,37 @@ def modify_images_operation(pdf: Any, args: list[str]) -> OpResult:
             "Missing execution payload statement. Expected format: `(image_modifier=value)`"
         )
 
-    primary_cmd = commands[0]
-    page_spec_str = primary_cmd.page_spec
+    for cmd in commands:
+        page_spec_str = cmd.page_spec
 
-    # 3. Perform string-to-primitive casting natively on the main thread
-    steps, have_image_modifiers = _compile_pipeline_steps(primary_cmd)
+        # 3. Perform string-to-primitive casting natively on the main thread
+        steps, have_image_modifiers = _compile_pipeline_steps(cmd)
 
-    total_pages = len(pdf.pages)
-    target_pages = page_numbers_matching_page_spec(page_spec_str, total_pages)
-    if not target_pages:
-        return OpResult(success=True, pdf=pdf)
+        total_pages = len(pdf.pages)
+        target_pages = page_numbers_matching_page_spec(page_spec_str, total_pages)
+        if not target_pages:
+            continue
 
-    # 4. Discover target image objects
-    images_to_process = _discover_target_images(pdf, target_pages, total_pages)
+        # 4. Discover target image objects
+        images_to_process = _discover_target_images(pdf, target_pages, total_pages)
 
-    if not images_to_process:
-        logger.info("No embedded image assets discovered on selected target pages.")
-        return OpResult(success=True, pdf=pdf)
+        if not images_to_process:
+            logger.info("No embedded image assets discovered on selected target pages.")
+            continue
 
-    # 5. Build local task callbacks leveraging the shared boilerplate helper
-    prepare_cb, worker_cb, commit_cb = _build_callbacks(have_image_modifiers, steps, quality)
+        # 5. Build local task callbacks leveraging the shared boilerplate helper
+        prepare_cb, worker_cb, commit_cb = _build_callbacks(have_image_modifiers, steps, quality)
 
-    logger.info("Initializing multi-threaded image pipeline engine processing job...")
+        logger.info("Initializing multi-threaded image pipeline engine processing job...")
 
-    # 6. Dispatch tasks smoothly down to your untouched orchestrator
-    run_parallel_image_job(
-        images=images_to_process,
-        threads=threads_val,
-        prepare_func=prepare_cb,
-        worker_func=worker_cb,
-        commit_func=commit_cb,
-    )
+        # 6. Dispatch tasks smoothly down to your untouched orchestrator
+        run_parallel_image_job(
+            images=images_to_process,
+            threads=threads_val,
+            prepare_func=prepare_cb,
+            worker_func=worker_cb,
+            commit_func=commit_cb,
+        )
 
     return OpResult(success=True, pdf=pdf)
 
@@ -174,10 +177,10 @@ def _parse_operational_args(args: list[str]) -> tuple[int | None, int, list[str]
     return threads_val, quality, clean_args
 
 
-def _compile_pipeline_steps(primary_cmd: Any) -> tuple[list[tuple[str, Any]], bool]:
+def _compile_pipeline_steps(cmd: Any) -> tuple[list[tuple[str, Any]], bool]:
     """Validates commands and identifies if any mutations are actively requested."""
     steps = []
-    for op in primary_cmd.operations:
+    for op in cmd.operations:
         if op.name not in registry.image_modifiers:
             raise InvalidArgumentError(f"Unknown image modifier plugin context: '{op.name}'")
 

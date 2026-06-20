@@ -12,8 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `add_images` operation
 
-- `modify_images` operation
-
 - `diff_text` operation
 
 - `dump_tables` operation
@@ -26,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - multithreading for `resample_images` and `recolor_images`
 
-## Changed
+### Changed
 
 - page specs now tolerate whitespace (by stripping it before parsing)
 

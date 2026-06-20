@@ -100,6 +100,8 @@ _DUMP_TOC_EXAMPLES = [
 
 def _resolve_single_node_dest(node: dict, page_map: dict, named_dests: Any) -> None:
     """Safely resolves a single bookmark node's destination properties if needed."""
+    import pikepdf
+
     if "dest" not in node or "page" in node:
         return
 
@@ -114,15 +116,15 @@ def _resolve_single_node_dest(node: dict, page_map: dict, named_dests: Any) -> N
         if "view" not in node:
             # Clean up pikepdf data types into native python primitives for encoders
             clean_args = [
-                float(arg)
+                int(arg)
+                if isinstance(arg, (int, pikepdf.Integer))
+                else float(arg)
                 if hasattr(arg, "__float__")
-                else int(arg)
-                if hasattr(arg, "__int__")
                 else arg
                 for arg in resolved.args
             ]
             node["view"] = [resolved.dest_type] + clean_args
-    except (KeyError, IndexError, ValueError, TypeError, AttributeError) as e:
+    except (KeyError, IndexError, ValueError, TypeError, AttributeError, pikepdf.PdfError) as e:
         logger.warning(f"Failed to resolve destination '{node['dest']}': {e}")
 
 

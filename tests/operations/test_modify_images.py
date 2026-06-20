@@ -1,4 +1,6 @@
 import pytest
+from pdftl.core.registry import registry
+from pdftl.exceptions import OperationError
 from unittest.mock import MagicMock, patch
 
 # Assuming the package is installed or in PYTHONPATH as pdftl
@@ -338,11 +340,6 @@ def test_modify_images_operation_no_images_discovered(
 
     res = modify_images_operation(mock_pdf, ["1(contrast=1)"])
     assert res.success is True
-
-
-import pytest
-from pdftl.core.registry import registry
-from pdftl.exceptions import OperationError
 
 
 def test_worker_callback_converts_value_error_to_operation_error():

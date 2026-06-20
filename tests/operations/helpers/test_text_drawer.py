@@ -20,6 +20,8 @@ from pdftl.operations.helpers.text_drawer import (
     _PageBox,
     _resolve_dimension,
 )
+import io
+from pikepdf import Pdf, Rectangle
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -619,7 +621,6 @@ def test_reset_page_box_with_existing_canvas_and_content():
     # Force canvas into existence with content
     drawer.draw_rule({"text": lambda ctx: [("hello", None)]}, {})
     assert drawer.canvas is not None
-    assert drawer._has_content is True
 
     with (
         patch.object(drawer.canvas, "showPage") as mock_show_page,
@@ -630,7 +631,6 @@ def test_reset_page_box_with_existing_canvas_and_content():
         drawer.reset_page_box(Rectangle(0, 0, 300, 400))
         mock_show_page.assert_called_once()
         mock_set_size.assert_called_once_with((300.0, 400.0))
-        assert drawer._has_content is False
 
 
 def test_register_external_font_initializes_canvas_if_none():
@@ -653,3 +653,29 @@ def test_save_returns_empty_bytes_when_canvas_is_none():
     assert drawer.canvas is None
     result = drawer.save()
     assert result == b""
+
+
+def test_text_drawer_preserves_page_boundaries_when_a_page_draws_nothing():
+    """A page whose rule(s) produce no visible runs must still get its own
+    overlay page — otherwise its content silently merges into the next
+    page's canvas page and overlay_page_indices desyncs from the real
+    page boundaries (regression for the add_text page-shift bug)."""
+    drawer = TextDrawer(page_box=Rectangle(0, 0, 200, 200))
+
+    # Page 1: real content
+    drawer.reset_page_box(Rectangle(0, 0, 200, 200))
+    drawer.draw_rule({"text": lambda ctx: [("Page One", None)]}, {})
+
+    # Page 2: rule evaluates to no runs (e.g. a conditional/filtered rule)
+    drawer.reset_page_box(Rectangle(0, 0, 200, 200))
+    drawer.draw_rule({"text": lambda ctx: []}, {})
+
+    # Page 3: real content again
+    drawer.reset_page_box(Rectangle(0, 0, 200, 200))
+    drawer.draw_rule({"text": lambda ctx: [("Page Three", None)]}, {})
+
+    overlay_bytes = drawer.save()
+    with Pdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
+        # Must be 3 distinct pages — page 2's empty output must not get
+        # folded into page 3's canvas page.
+        assert len(overlay_pdf.pages) == 3

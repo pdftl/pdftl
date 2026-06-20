@@ -58,19 +58,16 @@ def _is_eligible_for_recolor(xobj: pikepdf.Stream, seen_objgens: set[str]) -> bo
 
 def _extract_and_stage_pil(xobj: pikepdf.Stream) -> Any | None:
     """Decodes the stream to a PIL image and applies thread-safety staging."""
-    # 3. Decode attempt
     pil_img = extract_to_pil(xobj)
     if pil_img is None:
+        logger.debug("Skipping recolor: could not decode pixel data for %s", xobj.objgen)
         return None
-
-    # 4. Already grayscale images are not processed
     if pil_img.mode in ("L", "1"):
+        logger.debug("Skipping recolor: already grayscale (%s)", pil_img.mode)
         return None
-
-    # 5. Must still have valid ColorSpace after all checks
     if "/ColorSpace" not in xobj:
+        logger.debug("Skipping recolor: no /ColorSpace entry")
         return None
-
     # Lock the file pointer safely into memory to prevent thread access faults
     ensure_thread_safe(pil_img)
     return pil_img

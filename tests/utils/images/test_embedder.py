@@ -143,3 +143,53 @@ def test_embed_rgb_fallback(tmp_path, empty_pdf):
     assert xobj.ColorSpace == pikepdf.Name("/DeviceRGB")
     assert xobj.BitsPerComponent == 8
     assert "/SMask" not in xobj
+
+
+def test_create_image_xobject_with_transparent_grayscale_forces_base_mode_l(tmp_path, mocker):
+    """Exercises line 65 by ensuring LA images set base_mode to 'L' and isolate the alpha channel."""
+    import pikepdf
+    from PIL import Image
+    from pdftl.utils.images.embedder import create_image_xobject
+
+    # 1. Construct a temporary 8-bit Grayscale image with an alpha channel ("LA")
+    img_path = tmp_path / "transparent_grayscale.png"
+    img = Image.new("LA", (50, 50), color=(128, 255))
+    img.save(img_path)
+
+    # 2. Mock pikepdf document context
+    mock_pdf = mocker.MagicMock(spec=pikepdf.Pdf)
+    mock_stream = mocker.MagicMock(spec=pikepdf.Stream)
+    mock_pdf.make_stream.return_value = mock_stream
+
+    # Mock the colorspace helper so it doesn't fail on a MagicMock stream
+    mocker.patch(
+        "pdftl.utils.images.embedder.get_colorspace_dict",
+        return_value=(pikepdf.Name("/DeviceGray"), 8),
+    )
+
+    # 3. Trigger the function. This forces line 65 to evaluate to True.
+    xobj = create_image_xobject(mock_pdf, img_path)
+
+    # 4. Assertions ensuring it successfully wrapped the channels
+    assert xobj is not None
+    # Verify that make_stream was called at least twice (once for alpha /SMask, once for base)
+    assert mock_pdf.make_stream.call_count >= 2
+
+
+def test_create_image_xobject_with_transparent_grayscale_executes_line_65(tmp_path):
+    """Exercises embedder.py line 65 (base_mode = "L") using an LA mode image."""
+    # 1. Create a minimal 8-bit grayscale image with an alpha channel ("LA")
+    img_path = tmp_path / "transparent_grayscale.png"
+    img = Image.new("LA", (10, 10), color=(128, 255))
+    img.save(img_path)
+
+    # 2. Open an empty pikepdf target document context
+    with pikepdf.Pdf.new() as pdf:
+        # 3. Trigger the embedding pipeline
+        xobj = create_image_xobject(pdf, img_path)
+
+        # 4. Assertions to confirm the logic completed correctly
+        assert isinstance(xobj, pikepdf.Stream)
+        assert xobj.ColorSpace == pikepdf.Name("/DeviceGray")
+        assert "/SMask" in xobj
+        assert xobj.SMask.ColorSpace == pikepdf.Name("/DeviceGray")

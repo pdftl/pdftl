@@ -266,7 +266,6 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
     if not page_rules:
         return OpResult(success=True, pdf=pdf)
 
-    _ = TextDrawer(page_box=Rectangle(0, 0, 1, 1))
     drawer = TextDrawer(page_box=Rectangle(0, 0, 1, 1))
     overlay_page_indices = _build_overlay_index(pdf, page_rules, static_context, drawer)
     overlay_bytes = drawer.save()
@@ -297,6 +296,12 @@ def _apply_overlays(pdf, overlay_bytes, overlay_page_indices):
 
     try:
         with PikePdf.open(io.BytesIO(overlay_bytes)) as overlay_pdf:
+            if len(overlay_pdf.pages) != len(overlay_page_indices):
+                logger.warning(
+                    "Overlay page count mismatch: expected %d, got %d — overlay may be misapplied",
+                    len(overlay_page_indices),
+                    len(overlay_pdf.pages),
+                )
             for original_idx, generated_idx in overlay_page_indices.items():
                 if generated_idx < len(overlay_pdf.pages):
                     target_page = pdf.pages[original_idx]

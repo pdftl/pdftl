@@ -97,6 +97,8 @@ def _parse_args(args: list) -> tuple[int, int | None, list]:
 )
 def recolor_images(pdf, operation_args: list) -> OpResult:
     """Finds and grayscales color images on targeted pages using parallel tasks."""
+    import pikepdf
+
     quality, threads, page_specs = _parse_args(operation_args)
     num_pages = len(pdf.pages)
 
@@ -107,14 +109,21 @@ def recolor_images(pdf, operation_args: list) -> OpResult:
     )
 
     images = extract_pdf_images(pdf, target_pages)
-
-    recolor_count = run_parallel_image_job(
-        images=images,
-        threads=threads,
-        prepare_func=lambda img, seen: prepare_recolor_payload(img, quality, seen),
-        worker_func=worker_recolor_pixels,
-        commit_func=commit_recolored_stream,
-    )
+    recolor_count = 0
+    try:
+        recolor_count = run_parallel_image_job(
+            images=images,
+            threads=threads,
+            prepare_func=lambda img, seen: prepare_recolor_payload(img, quality, seen),
+            worker_func=worker_recolor_pixels,
+            commit_func=commit_recolored_stream,
+        )
+    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
+        logger.warning(
+            "Skipped recoloring an image due to an error in recolor_images parallel processing: "
+            "%s",
+            exc,
+        )
 
     logger.info("Recolored %d image asset(s) to grayscale.", recolor_count)
     return OpResult(success=True, pdf=pdf)

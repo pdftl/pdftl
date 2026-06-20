@@ -20,7 +20,11 @@ def get_command_files():
     cmd_dir = os.path.join("src", "pdftl", "operations")
     if not os.path.exists(cmd_dir):
         return []
-    return [os.path.join(cmd_dir, f) for f in os.listdir(cmd_dir) if f.endswith(".py")]
+    return [
+        os.path.join(cmd_dir, f)
+        for f in os.listdir(cmd_dir)
+        if f.endswith(".py") and not f.startswith(".")
+    ]
 
 
 @pytest.mark.parametrize("filepath", get_command_files())

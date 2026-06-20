@@ -210,8 +210,8 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
         add_text_pdf(self.pdf, ["spec"])
 
-        # TextDrawer instantiated once for dep check + once for page 0 only
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+        # TextDrawer instantiated once for page 0 only
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 1)
 
     def test_add_text_pdf_orchestration(self):
         self.pdf.add_blank_page(page_size=(500, 800))
@@ -220,12 +220,12 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
         result = add_text_pdf(self.pdf, ["spec"]).pdf
 
         self.assertIs(result, self.pdf)
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 1)
 
         init_kwargs = self.mock_TextDrawer_cls.call_args_list[0][1]
         self.assertIsInstance(init_kwargs["page_box"], Rectangle)
 
-        shared_drawer = self.created_instances[1]
+        shared_drawer = self.created_instances[0]
         shared_drawer.reset_page_box.assert_called_once()
         reset_box = shared_drawer.reset_page_box.call_args[0][0]
         self.assertEqual(reset_box.width, 500)
@@ -241,8 +241,8 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
         add_text_pdf(self.pdf, ["spec"])
 
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
-        shared_drawer = self.created_instances[1]
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 1)
+        shared_drawer = self.created_instances[0]
         reset_box = shared_drawer.reset_page_box.call_args[0][0]
         self.assertIsInstance(reset_box, Rectangle)
         self.assertEqual(reset_box.width, 612)
@@ -254,8 +254,8 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
         add_text_pdf(self.pdf, ["spec"])
 
-        self.assertEqual(self.mock_TextDrawer_cls.call_count, 2)
-        shared_drawer = self.created_instances[1]
+        self.assertEqual(self.mock_TextDrawer_cls.call_count, 1)
+        shared_drawer = self.created_instances[0]
         reset_box = shared_drawer.reset_page_box.call_args[0][0]
         self.assertEqual(reset_box.width, 500)
 
@@ -268,7 +268,7 @@ class TestAddTextOrchestration(ModuleSandboxMixin, unittest.TestCase):
 
         add_text_pdf(self.pdf, ["spec"])
 
-        shared_drawer = self.created_instances[1]
+        shared_drawer = self.created_instances[0]
         reset_box = shared_drawer.reset_page_box.call_args[0][0]
         self.assertEqual(reset_box.width, 800)
         self.assertEqual(reset_box.height, 500)
@@ -422,9 +422,9 @@ class TestAddTextCoverage(ModuleSandboxMixin):
 
             add_text_pdf(pdf, [spec])
 
-            # Instantiated once for dependency check, once for Page 1.
+            # Instantiated once for Page 1.
             # Should NOT be instantiated for Page 2.
-            assert MockDrawer.call_count == 2
+            assert MockDrawer.call_count == 1
 
     def test_add_text_overlay_exception(self, pdf, caplog):
         """Test handling exception during overlay application."""

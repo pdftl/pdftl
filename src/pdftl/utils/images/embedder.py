@@ -27,6 +27,24 @@ if TYPE_CHECKING:
 from pdftl.utils.images.pil_to_pdf import get_colorspace_dict, get_optimal_1bit_payload
 
 
+def _is_grayscale_mode(img):
+    orig_mode = img.mode
+    # Identify if the original image mode represents grayscale or bitonal data
+    if orig_mode in ("L", "1", "LA", "La"):
+        return True
+
+    # If the mode is Palette 'P' or 'PA', check if it's a grayscale palette
+    if orig_mode in ("P", "PA") and hasattr(img, "getpalette"):
+        palette = img.getpalette()
+        if palette:
+            # Check if R==G==B for all color triplets in the palette
+            return all(
+                palette[i] == palette[i + 1] == palette[i + 2] for i in range(0, len(palette), 3)
+            )
+
+    return False
+
+
 def create_image_xobject(pdf: pikepdf.Pdf, filepath: Path | str) -> pikepdf.Stream:
     """
     Lazily reads an image from disk and wraps it into a native PDF Image XObject,
@@ -61,8 +79,7 @@ def create_image_xobject(pdf: pikepdf.Pdf, filepath: Path | str) -> pikepdf.Stre
         alpha_stream.Filter = Name("/FlateDecode")
 
         # Flatten the main image to remove the alpha channel for the primary stream
-        base_mode = "RGB" if "RGB" in orig_mode else "L"
-        img = img.convert(base_mode)
+        img = img.convert("L" if _is_grayscale_mode(img) else "RGB")
 
     # 2. Build the Primary XObject Stream
     if img_format in ("JPEG", "MPO") and not has_alpha:

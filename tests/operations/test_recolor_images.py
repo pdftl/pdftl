@@ -166,3 +166,38 @@ def test_convert_flate_decode_rgb_image_to_grayscale(minimal_pdf):
     # 6. Structural verification assertions
     assert status is True
     assert img_stream["/ColorSpace"] == pikepdf.Name("/DeviceGray")
+
+
+def test_recolor_images_parallel_exception_logged(mocker, caplog):
+    """Exercises lines 118-119 when parallel processing encounters an error."""
+    import logging
+    from pdftl.operations.recolor_images import recolor_images
+
+    # 1. Mock extract_pdf_images to return a dummy image dictionary list
+    # so it attempts the job block
+    mocker.patch(
+        "pdftl.operations.recolor_images.extract_pdf_images",
+        return_value=[{"xobj": mocker.MagicMock(), "page": 1, "name": "Im0"}],
+    )
+
+    # 2. Force run_parallel_image_job to raise a covered error type (e.g., RuntimeError)
+    mocker.patch(
+        "pdftl.operations.recolor_images.run_parallel_image_job",
+        side_effect=RuntimeError("Simulated parallel processing failure"),
+    )
+
+    # Create a mock PDF object
+    mock_pdf = mocker.MagicMock()
+    mock_pdf.pages = [mocker.MagicMock()]
+
+    # 3. Run and catch log output
+    with caplog.at_level(logging.WARNING, logger="pdftl.operations.recolor_images"):
+        result = recolor_images(mock_pdf, [])
+
+    # 4. Invariants and branch verification
+    assert result.success is True
+    assert any(
+        "Skipped recoloring an image due to an error in recolor_images parallel processing"
+        in record.message
+        for record in caplog.records
+    )

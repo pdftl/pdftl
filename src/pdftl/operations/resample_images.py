@@ -456,6 +456,8 @@ def _commit_resampled_data(
 )
 def resample_images(pdf, operation_args: list) -> OpResult:
     """Resample images exceeding the dpi threshold using a ThreadPoolExecutor."""
+    import pikepdf
+
     dpi, quality, threads, allow_upscale, allow_growth, force, page_specs = _parse_args(
         operation_args
     )
@@ -481,13 +483,21 @@ def resample_images(pdf, operation_args: list) -> OpResult:
     ) -> bool:
         return _commit_resampled_data(ctx, result, payload, allow_growth)
 
-    resample_count = run_parallel_image_job(
-        images=images,
-        threads=threads,
-        prepare_func=prepare_wrapper,
-        worker_func=_worker_compute_resample,
-        commit_func=commit_wrapper,
-    )
+    resample_count = 0
+    try:
+        resample_count = run_parallel_image_job(
+            images=images,
+            threads=threads,
+            prepare_func=prepare_wrapper,
+            worker_func=_worker_compute_resample,
+            commit_func=commit_wrapper,
+        )
+    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
+        logger.warning(
+            "Skipped resampling an image due to an error in resample_images parallel processing: "
+            "%s",
+            exc,
+        )
 
     logger.info(
         "Resampled %d image(s) to max %s DPI (JPEG Quality: %d, Guard Active: %s, Threads: %d).",
