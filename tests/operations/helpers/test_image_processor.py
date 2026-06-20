@@ -17,7 +17,6 @@ from pdftl.operations.helpers.image_processor import (
     _handle_dct_encode,
     _handle_jpx_encode,
     _handle_flate_fallback,
-    _extract_raw_ccitt_from_tiff,
 )
 
 
@@ -215,7 +214,7 @@ def test_handle_1bit_optimized_encode():
     # Patch both the extraction utility AND ImageOps.invert
     with (
         patch(
-            "pdftl.operations.helpers.image_processor._extract_raw_ccitt_from_tiff"
+            "pdftl.utils.images.pil_to_pdf._extract_raw_ccitt_from_tiff",
         ) as mock_extract,
         patch("PIL.ImageOps.invert", return_value=pil_img) as mock_invert,
     ):
@@ -284,76 +283,6 @@ def test_handle_flate_fallback():
     assert ctx.xobj.data == expected_data
     assert ctx.xobj.filter == pikepdf.Name("/FlateDecode")
     assert "/DecodeParms" not in ctx.xobj
-
-
-# --- 5. Byte-Level TIFF Extraction Tests ---
-
-
-def test_extract_raw_ccitt_from_tiff():
-    # 1. Byte length too short
-    assert _extract_raw_ccitt_from_tiff(b"short") == b"short"
-
-    # 2. Bad Magic identifier
-    bad_magic = b"II" + struct.pack("<HI", 99, 8)
-    assert _extract_raw_ccitt_from_tiff(bad_magic) == bad_magic
-
-    # 3. Little Endian, valid inline payload
-    header = b"II" + struct.pack("<HI", 42, 8)
-    num_entries = struct.pack("<H", 2)
-    # FIX: Shifted offset from 34 to 38 to clear the 38-byte IFD structure
-    entry1 = struct.pack("<HHII", 273, 4, 1, 38)  # Offset: 38
-    entry2 = struct.pack("<HHII", 279, 4, 1, 4)  # Count: 4
-
-    # 38 bytes exactly, so b"DATA" starts right at offset 38
-    tiff_inline = header + num_entries + entry1 + entry2 + b"\x00" * 4 + b"DATA"
-
-    assert _extract_raw_ccitt_from_tiff(tiff_inline) == b"DATA"
-
-    # 4. Big Endian, valid pointer payload (Count > 1 bypasses inline limits)
-    header_be = b"MM" + struct.pack(">HI", 42, 8)
-    num_entries_be = struct.pack(">H", 2)
-    # FIX: Shift offset to 38 to point to the pointer array
-    entry1_be = struct.pack(">HHII", 273, 4, 2, 38)
-    entry2_be = struct.pack(">HHII", 279, 4, 1, 5)  # Count: 5
-
-    # Offset 38 contains the pointer array. We point the first value to offset 46.
-    pointer_data = struct.pack(">I", 46) + b"\x00" * 4
-    data_be = b"HELLO"  # Length 5, sits at offset 46
-
-    tiff_pointer = (
-        header_be + num_entries_be + entry1_be + entry2_be + b"\x00" * 4 + pointer_data + data_be
-    )
-
-    assert _extract_raw_ccitt_from_tiff(tiff_pointer) == b"HELLO"
-
-    # 5. Missing critical tags bypass
-    tiff_missing_tag = header + struct.pack("<H", 1) + entry1 + b"\x00" * 4 + b"DATA"
-    assert _extract_raw_ccitt_from_tiff(tiff_missing_tag) == tiff_missing_tag
-
-    # 6. Ignore non-essential tags (Coverage for line 238)
-    header_ignore = b"II" + struct.pack("<HI", 42, 8)
-    num_entries_ignore = struct.pack("<H", 3)  # 3 entries this time
-
-    # Tag 256 (ImageWidth), Type 4, Count 1, Value 100
-    # This is the tag that will trigger line 238!
-    entry_ignored = struct.pack("<HHII", 256, 4, 1, 100)
-
-    # We have to shift the offset to 50 to clear the larger 50-byte IFD structure
-    # 8 (header) + 2 (num entries) + 36 (3x 12-byte entries) + 4 (next IFD ptr) = 50
-    entry1_ignore = struct.pack("<HHII", 273, 4, 1, 50)
-    entry2_ignore = struct.pack("<HHII", 279, 4, 1, 4)
-
-    tiff_ignore_tag = (
-        header_ignore
-        + num_entries_ignore
-        + entry_ignored
-        + entry1_ignore
-        + entry2_ignore
-        + b"\x00" * 4
-        + b"DATA"
-    )
-
-    assert _extract_raw_ccitt_from_tiff(tiff_ignore_tag) == b"DATA"
 
 
 from unittest.mock import patch
@@ -429,7 +358,7 @@ def test_handle_1bit_encode_flate_wins_suspicious_ratio():
 
     with (
         patch(
-            "pdftl.operations.helpers.image_processor._extract_raw_ccitt_from_tiff",
+            "pdftl.utils.images.pil_to_pdf._extract_raw_ccitt_from_tiff",
             return_value=ccitt_payload,
         ),
         patch("PIL.ImageOps.invert", return_value=pil_img),
@@ -472,7 +401,7 @@ def test_handle_1bit_encode_ccitt_barely_wins_suspicious_ratio():
 
     with (
         patch(
-            "pdftl.operations.helpers.image_processor._extract_raw_ccitt_from_tiff",
+            "pdftl.utils.images.pil_to_pdf._extract_raw_ccitt_from_tiff",
             return_value=ccitt_payload,
         ),
         patch("PIL.ImageOps.invert", return_value=pil_img),
