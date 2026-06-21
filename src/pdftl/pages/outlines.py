@@ -22,11 +22,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf
+    from pikepdf import Pdf, OutlineItem
 
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.pages.links import RebuildLinksPartialContext
-from pdftl.utils.progress import get_track_progress
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,38 @@ ChunkData = namedtuple(
 )
 
 
+@dataclass
+class CachedOutlineItem:
+    """Pure Python representation of an outline item to avoid lazy-loading loops."""
+
+    title: str
+    action: Any
+    is_closed: bool
+    obj: Any
+    children: list["CachedOutlineItem"]
+
+
+def _cache_outline_tree(items) -> list[CachedOutlineItem]:
+    """Recursively converts a pikepdf Outline tree into an eager Python cache."""
+    from pikepdf import Name
+
+    cached = []
+    for item in items:
+        # /Count *should* always be present
+        # But if not, viewers seems to assume the item is closed. So we do that too.
+        # The pikepdf default is 'open' so we need to set it explicitly in this case.
+        cached.append(
+            CachedOutlineItem(
+                title=item.title,
+                action=_get_source_action(item),
+                is_closed=item.is_closed or Name.Count not in item.obj,
+                obj=item.obj,
+                children=_cache_outline_tree(item.children),
+            )
+        )
+    return cached
+
+
 # pylint: disable=too-few-public-methods
 class OutlineCopier:
     """Class for copying an outline intelligently"""
@@ -52,63 +83,62 @@ class OutlineCopier:
         self.remapper = remapper
         self.new_dests_list = []
 
-    def copy_item(self, source_item, new_parent_list):
+    def _remap_item_action(self, action) -> tuple[Any, bool]:
+        """Remaps the item action and extracts the destination."""
+        if not action:
+            return None, False
+
+        new_action, new_named_dest = self.remapper.remap_goto_action(action)
+        if new_named_dest:
+            # remap_goto_action returns a 2-tuple (name, dest)
+            # .extend() intentionally flattens this into a flat list for write_named_dests
+            self.new_dests_list.extend(new_named_dest)
+
+        if new_action:
+            return new_action.D, True
+        return None, False
+
+    def _apply_cached_meta(self, cached_item: "CachedOutlineItem", new_item: "OutlineItem"):
+        """Extracts and sets formatting metadata manually onto the item."""
+        from pikepdf import Name
+
+        if cached_item.obj is None:
+            return
+
+        if Name.C in cached_item.obj:
+            new_item._cached_color = [float(c) for c in cached_item.obj[Name.C]]
+        if Name.F in cached_item.obj:
+            new_item._cached_flags = int(cached_item.obj[Name.F])
+
+        new_item.is_closed = cached_item.is_closed
+
+    def copy_item(self, cached_item: "CachedOutlineItem") -> "OutlineItem | None":
         """
         Recursively copies a source outline item, remaps its destination,
         and prunes it if it's no longer valid.
-
-        This function uses the LinkRemapper to handle all destination
-        types (explicit, named, action) and coordinate transformations.
         """
-        from pikepdf import OutlineItem, Name
+        from pikepdf import OutlineItem
 
-        # --- 1. Get/Create a GoTo Action Dictionary ---
-        source_action = _get_source_action(source_item)
-        final_destination = None  # This will be passed to the constructor
-        is_valid_destination = False
+        # --- 1. Remap Destination Actions ---
+        final_dest, is_valid_dest = self._remap_item_action(cached_item.action)
 
-        # --- 2. Remap the Action ---
-        if source_action:
-            # This single call handles all cases:
-            # - Resolves named destinations (using the dest_caches)
-            # - Finds the remapped page (using page_map and rev_maps)
-            # - Applies coordinate transforms (using page_transforms)
-            # - Prunes invalid links
-            new_action, new_named_dest = self.remapper.remap_goto_action(source_action)
+        # --- 2. Recurse on children (Bottom-Up) ---
+        valid_children = [
+            new_child
+            for child in cached_item.children
+            if (new_child := self.copy_item(child)) is not None
+        ]
 
-            # --- Capture the new destination ---
-            if new_named_dest:
-                # _new_named_dest is a (name_str, dest_array) tuple
-                # We use .extend() to add them as flat items ['name', dest]
-                self.new_dests_list.extend(new_named_dest)
+        # --- 3. Pruning ---
+        if not is_valid_dest and not valid_children:
+            return None
 
-            if new_action:
-                # Success! The new_action.D is the remapped destination
-                # (either an Array or a new Name/String).
-                is_valid_destination = True
-                final_destination = new_action.D
+        # --- 4. Instantiate and apply stashed attributes ---
+        new_item = OutlineItem(title=cached_item.title, destination=final_dest)
+        self._apply_cached_meta(cached_item, new_item)
+        new_item.children.extend(valid_children)
 
-        # --- 3. Create the new item, copying the source obj to preserve
-        #        formatting (/F bold/italic flags, /C colour) and open/closed state.
-        new_item = OutlineItem(
-            title=source_item.title,
-            destination=final_destination,
-            obj=self.remapper.pdf.copy_foreign(
-                self.remapper.source_pdf.make_indirect(source_item.obj)
-            ),
-        )
-        # /Count *should* always be present
-        # But if not, viewers seems to assume the item is closed. So we do that too.
-        # The pikepdf default is 'open' so we need to set it explicitly in this case.
-        new_item.is_closed = source_item.is_closed or Name.Count not in source_item.obj
-
-        # --- 4. Recurse on children ---
-        for source_child in source_item.children:
-            self.copy_item(source_child, new_item.children)
-
-        # --- 5. Pruning and Appending ---
-        if is_valid_destination or new_item.children:
-            new_parent_list.append(new_item)
+        return new_item
 
 
 def _get_source_action(source_item):
@@ -125,24 +155,26 @@ def _get_source_action(source_item):
     return source_action
 
 
+def _apply_formatting_and_state(item):
+    """Post-processing layout step executed after outline tree closes."""
+    from pikepdf import Name
+
+    if hasattr(item, "obj") and item.obj is not None:
+        if hasattr(item, "_cached_color"):
+            item.obj[Name.C] = item._cached_color
+        if hasattr(item, "_cached_flags"):
+            item.obj[Name.F] = item._cached_flags
+
+    for child in item.children:
+        _apply_formatting_and_state(child)
+
+
 def rebuild_outlines(
     new_pdf: "Pdf",
     source_pages_to_process: list,
     call_context: RebuildLinksPartialContext,
     remapper: LinkRemapper,
 ) -> list:
-    """
-    Rebuilds the document outline (bookmarks) for the new PDF.
-
-    Args:
-        new_pdf: The destination pikepdf.Pdf object.
-        source_pages_to_process: The flat list of PageTransform objects.
-        call_context: The RebuildLinksPartialContext from PASS 1.
-        remapper: The pre-configured LinkRemapper instance.
-
-    Returns:
-        list: a flat list of [name, dest, ...] for all new dests.
-    """
     logger.debug("rebuild_outlines called. Processing %s pages.", len(source_pages_to_process))
     chunks = _build_outline_chunks(call_context.processed_page_info)
     logger.debug("_build_outline_chunks created %s chunks.", len(chunks))
@@ -151,26 +183,30 @@ def rebuild_outlines(
         logger.debug("no chunks found. exiting")
         return []
 
-    new_dests_from_outlines: list[Any] = []
+    new_dests_list: list[Any] = []
+    source_outline_caches = {}
+    final_root_items = []
 
-    track = get_track_progress(interactive=True)
-    with new_pdf.open_outline() as new_outline:
-        for chunk in track(chunks, description="Bookmark chunk handling", transient=True):
+    with new_pdf.open_outline() as outline:
+        from pikepdf.models.outlines import Outline
+
+        for chunk in chunks:
             remapper.set_call_context(new_pdf, chunk.pdf, chunk.instance_num)
 
-            # Instantiate without using as a context manager — we are reading only.
-            # The context manager's __exit__ unconditionally calls _save(), which
-            # re-serialises the entire outline tree even if nothing was modified.
-            # Accessing .root directly populates the cache without triggering write-back.
-            from pikepdf.models.outlines import Outline
+            if chunk.pdf not in source_outline_caches:
+                source_outline_caches[chunk.pdf] = _cache_outline_tree(Outline(chunk.pdf).root)
+            cached_root_items = source_outline_caches[chunk.pdf]
 
-            source_outline = Outline(chunk.pdf)
-            root_items = list(source_outline.root)
+            chunk_dests, new_items = _process_chunk(chunk, remapper, cached_root_items)
+            new_dests_list.extend(chunk_dests)
+            outline.root.extend(new_items)
+            final_root_items.extend(new_items)
 
-            chunk_dests = _process_chunk(chunk, remapper, new_outline, root_items)
-            new_dests_from_outlines.extend(chunk_dests)
+    # --- Post-Processing: Run AFTER the outline context manager closes ---
+    for root_item in final_root_items:
+        _apply_formatting_and_state(root_item)
 
-    return new_dests_from_outlines
+    return new_dests_list
 
 
 ##################################################
@@ -235,7 +271,6 @@ def _build_outline_chunks_helper(
     i: int, data: tuple, state: _OutlineChunkState
 ) -> _OutlineChunkState:
     output_page_num = i + 1  # 1-based
-
     pdf, src_idx, inst_num = data
 
     is_new_chunk = (
@@ -261,37 +296,26 @@ def _build_outline_chunks_helper(
     return state
 
 
-def _process_chunk(chunk, remapper: LinkRemapper, new_outline, root_items: list) -> list:
+def _process_chunk(chunk, remapper: LinkRemapper, cached_root_items: list) -> tuple[list, list]:
     """
-    Process a single outline chunk, copying its items into new_outline.
-
-    Args:
-        chunk: ChunkData describing the source PDF and page range.
-        remapper: Active LinkRemapper for this chunk.
-        new_outline: The destination Outline object (open context manager).
-        root_items: Pre-loaded list of OutlineItem objects from the source PDF.
-            Passed in rather than loaded here so that callers control the
-            Outline lifecycle and tests can inject items directly.
-
-    Returns:
-        list: Flat list of (name, dest) pairs for new named destinations.
+    Process a single outline chunk entirely in pure Python memory.
     """
     logger.debug(
         "Processing outline chunk: start_page=%s, instance_num=%s",
         chunk.output_start_page,
         chunk.instance_num,
     )
-    logger.debug("Source outline has %s root items.", len(root_items))
+    logger.debug("Source outline has %s cached root items.", len(cached_root_items))
 
-    if not root_items:
-        return []
+    if not cached_root_items:
+        return [], []
 
     copier = OutlineCopier(remapper)
+    new_items = []
 
-    # Capture new_outline.root once — accessing it repeatedly re-parses the
-    # outline tree on each call.
-    new_root = new_outline.root
-    for source_item in root_items:
-        copier.copy_item(source_item, new_root)
+    for cached_item in cached_root_items:
+        new_item = copier.copy_item(cached_item)
+        if new_item is not None:
+            new_items.append(new_item)
 
-    return copier.new_dests_list
+    return copier.new_dests_list, new_items

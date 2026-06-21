@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock, call, patch, ANY
+# tests/pages/test_outlines.py
+from unittest.mock import MagicMock, call, patch
 
 import pikepdf
 import pytest
@@ -13,8 +14,10 @@ from pdftl.pages.links import RebuildLinksPartialContext
 
 # --- Import the module and functions to test ---
 from pdftl.pages.outlines import (
+    CachedOutlineItem,
     OutlineCopier,
     _build_outline_chunks,
+    _cache_outline_tree,
     _get_source_action,
     rebuild_outlines,
 )
@@ -115,19 +118,15 @@ def test_build_outline_chunks_simple(mock_source_pdf):
     """
     Tests the new chunking logic for a simple "A, B" case.
     """
-    # 1. Arrange
     mock_pdf_b = MagicMock(spec=Pdf, id=67890)
-    # Mimics "cat A(1-2) B(1)"
     processed_page_info = [
         (mock_source_pdf, 0, 0),  # A, p1, i0
         (mock_source_pdf, 1, 0),  # A, p2, i0
         (mock_pdf_b, 0, 1),  # B, p1, i1
     ]
 
-    # 2. Act
     chunks = _build_outline_chunks(processed_page_info)
 
-    # 3. Assert
     assert len(chunks) == 2
 
     assert chunks[0].pdf == mock_source_pdf
@@ -145,8 +144,6 @@ def test_build_outline_chunks_cat_A_A_case(mock_source_pdf):
     """
     Tests the "A, A" (multi-instance) case that was failing.
     """
-    # 1. Arrange
-    # Mimics "cat A(1-2) A(1-2)"
     processed_page_info = [
         (mock_source_pdf, 0, 0),  # A, p1, i0
         (mock_source_pdf, 1, 0),  # A, p2, i0
@@ -154,10 +151,8 @@ def test_build_outline_chunks_cat_A_A_case(mock_source_pdf):
         (mock_source_pdf, 1, 1),  # A, p2, i1
     ]
 
-    # 2. Act
     chunks = _build_outline_chunks(processed_page_info)
 
-    # 3. Assert
     assert len(chunks) == 2
 
     assert chunks[0].pdf == mock_source_pdf
@@ -176,17 +171,13 @@ def test_build_outline_chunks_non_contiguous(mock_source_pdf):
     Tests that non-contiguous pages create a new chunk, even
     from the same instance.
     """
-    # 1. Arrange
-    # Mimics "cat A(1, 3)"
     processed_page_info = [
         (mock_source_pdf, 0, 0),  # A, p1, i0
         (mock_source_pdf, 2, 0),  # A, p3, i0 (non-contiguous)
     ]
 
-    # 2. Act
     chunks = _build_outline_chunks(processed_page_info)
 
-    # 3. Assert
     assert len(chunks) == 2
 
     assert chunks[0].pdf == mock_source_pdf
@@ -210,75 +201,67 @@ def test_copy_item_remaps_and_collects_dests(mock_remapper):
     """
     Tests that OutlineCopier.copy_item:
     1. Calls the remapper with a GoTo action.
-    2. Appends the new item to the parent list.
+    2. Returns a new valid item.
     3. Extends the new_dests_list with the result from the remapper.
     """
     # 1. Arrange
-    # Mock an OutlineItem with a .destination
-    mock_item = MagicMock(spec=OutlineItem)
-    mock_item.title = "Test Item"
-    mock_item.destination = Name.Dest1
-    mock_item.action = None
-    mock_item.children = []
-    mock_item.obj = MagicMock()
-    mock_item.is_closed = MagicMock()
+    mock_action = Dictionary(S=Name.GoTo, D=Name.Dest1)
+
+    # We now mock a CachedOutlineItem directly
+    cached_item = CachedOutlineItem(
+        title="Test Item", action=mock_action, is_closed=False, obj=Dictionary(), children=[]
+    )
 
     # Set up the remapper's return value
     new_action = Dictionary(S=Name.GoTo, D=Name.NewDest)
-    new_dest_tuple = ("NewDest_str", Array([1, 2, 3]))  # (name, dest_array)
+    new_dest_tuple = [("NewDest_str", Array([1, 2, 3]))]  # Flat list returned
 
     # remap_goto_action returns *both* the action and the (name, dest) tuple
     mock_remapper.remap_goto_action.return_value = (new_action, new_dest_tuple)
 
-    new_parent_list = []
-
     # 2. Act
-    with patch("pikepdf.OutlineItem", MagicMock()) as mock_OI_constructor:
+    with patch("pikepdf.OutlineItem") as mock_OI_constructor:
+        # Give the mock a children list so extend() doesn't fail
+        mock_OI_constructor.return_value.children = []
+
         copier = OutlineCopier(mock_remapper)
-        copier.copy_item(
-            mock_item,
-            new_parent_list,
-        )
+        result = copier.copy_item(cached_item)
 
     # 3. Assert
-    # Check that the remapper was called with a constructed GoTo action
-    expected_action = Dictionary(S=Name.GoTo, D=Name.Dest1)
-    mock_remapper.remap_goto_action.assert_called_once_with(expected_action)
+    mock_remapper.remap_goto_action.assert_called_once_with(mock_action)
 
-    # Check that the new item was created and added
-    mock_OI_constructor.assert_called_with(title="Test Item", destination=Name.NewDest, obj=ANY)
-    assert len(new_parent_list) == 1
+    # Check that the new item was created and returned
+    mock_OI_constructor.assert_called_with(title="Test Item", destination=Name.NewDest)
+    assert result is not None
 
     # Check that the destinations list was extended
-    # Note: .extend() means we add the tuple's *contents*
-    assert copier.new_dests_list == ["NewDest_str", Array([1, 2, 3])]
+    assert copier.new_dests_list == [("NewDest_str", Array([1, 2, 3]))]
 
 
 def test_copy_item_uses_action(mock_remapper):
     """
-    Tests that OutlineCopier.copy_item uses the .action if .destination is None.
+    Tests that OutlineCopier.copy_item uses the .action property from the cache.
     """
     # 1. Arrange
     mock_action = Dictionary(S=Name.GoTo, D=Name.Dest1)
-    mock_item = MagicMock(spec=OutlineItem)
-    mock_item.title = "Test Action Item"
-    mock_item.destination = None
-    mock_item.action = mock_action  # Use this
-    mock_item.children = []
-    mock_item.obj = MagicMock()
-    mock_item.is_closed = MagicMock()
+    cached_item = CachedOutlineItem(
+        title="Test Action Item",
+        action=mock_action,
+        is_closed=False,
+        obj=Dictionary(),
+        children=[],
+    )
 
     mock_remapper.remap_goto_action.return_value = (None, None)  # Prune
-    new_parent_list = []
 
     # 2. Act
     copier = OutlineCopier(mock_remapper)
-    copier.copy_item(mock_item, new_parent_list)
+    result = copier.copy_item(cached_item)
 
     # 3. Assert
     # Check that the remapper was called with the *existing* action
     mock_remapper.remap_goto_action.assert_called_once_with(mock_action)
-    assert len(new_parent_list) == 0  # Pruned
+    assert result is None  # Pruned
     assert len(copier.new_dests_list) == 0
 
 
@@ -288,46 +271,35 @@ def test_copy_item_recursive_pruning(mock_remapper):
     AND it has no valid children.
     """
     # 1. Arrange
-    mock_item = MagicMock(spec=OutlineItem)
-    mock_item.destination = Name.Dest1
-    mock_item.title = "Test Pruning Item"
-    mock_item.action = None
-    mock_item.children = []  # No children
-    mock_item.obj = MagicMock()
-    mock_item.is_closed = MagicMock()
+    cached_item = CachedOutlineItem(
+        title="Test Pruning Item",
+        action=Dictionary(S=Name.GoTo, D=Name.Dest1),
+        is_closed=False,
+        obj=Dictionary(),
+        children=[],
+    )
 
     # Remapper returns (None, None), meaning "prune this link"
     mock_remapper.remap_goto_action.return_value = (None, None)
 
-    new_parent_list = []
-
     # 2. Act
-    # --- Configure the mock OutlineItem to have "falsy" children ---
-    # A default MagicMock is "truthy", which breaks the pruning logic.
-    mock_constructor = MagicMock(spec=OutlineItem)
-    mock_new_item = MagicMock(spec=OutlineItem)
-    mock_new_item.children = []  # This makes it "falsy"
-    mock_constructor.return_value = mock_new_item
-
     copier = OutlineCopier(mock_remapper)
-    with patch("pikepdf.OutlineItem", mock_constructor):
-        copier.copy_item(mock_item, new_parent_list)
+    result = copier.copy_item(cached_item)
 
     # 3. Assert
-    # The new item is *created* (for its children to be processed)
-    mock_constructor.assert_called_once_with(title=mock_item.title, destination=None, obj=ANY)
-    # But it is *not appended* to the parent list
-    assert len(new_parent_list) == 0
+    assert result is None
     assert len(copier.new_dests_list) == 0
 
 
+@patch("pdftl.pages.outlines._cache_outline_tree")
 @patch("pdftl.pages.outlines._build_outline_chunks")
 @patch("pdftl.pages.outlines.OutlineCopier.copy_item")
 @patch("pikepdf.models.outlines.Outline")
 def test_rebuild_outlines_processes_chunks(
     mock_outline_class,
-    mock_copy_recursive,
+    mock_copy_item,
     mock_build_chunks,
+    mock_cache_tree,
     mock_context,
     mock_source_pdf,
     mock_remapper,
@@ -340,6 +312,9 @@ def test_rebuild_outlines_processes_chunks(
     mock_outline_instance = MagicMock()
     mock_outline_instance.root = ["item_A", "item_B"]
     mock_outline_class.return_value = mock_outline_instance
+
+    # Mock the caching step to return two dummy CachedOutlineItems
+    mock_cache_tree.return_value = ["cached_A", "cached_B"]
 
     chunks = [
         MagicMock(pdf=mock_source_pdf, instance_num=0, output_start_page=1),
@@ -360,8 +335,9 @@ def test_rebuild_outlines_processes_chunks(
             call(mock_pdf, mock_source_pdf, 1),
         ]
     )
-    assert mock_copy_recursive.call_count == 4
-    # Check that the (empty) list of destinations was returned
+
+    # copy_item called for each cached item in each chunk (2 chunks * 2 items)
+    assert mock_copy_item.call_count == 4
     assert result_dests == []
 
 
@@ -397,7 +373,6 @@ def test_build_chunks_invariant(processed_page_info):
     page_map = build_page_to_chunk_map(chunks, len(processed_page_info))
 
     # 3. Assert
-    # Check the invariant for every adjacent page pair
     for i in range(len(processed_page_info) - 1):
         page_num_current = i + 1  # 1-based page number
         page_num_next = i + 2
@@ -405,9 +380,7 @@ def test_build_chunks_invariant(processed_page_info):
         chunk_current = page_map[page_num_current]
         chunk_next = page_map[page_num_next]
 
-        # If they are in the same chunk...
         if chunk_current == chunk_next:
-            # ...then the non-break condition MUST be true.
             p_curr = processed_page_info[i]
             p_next = processed_page_info[i + 1]
 
@@ -417,8 +390,6 @@ def test_build_chunks_invariant(processed_page_info):
 
 
 def test_build_outline_chunks_malformed_data(caplog):
-    """Covers lines 199-203: Malformed processed_page_info."""
-    # Passing a list with a tuple that has the wrong number of elements
     malformed_info = [("pdf_obj", 0)]  # Missing inst_num
 
     result = _build_outline_chunks(malformed_info)
@@ -428,7 +399,6 @@ def test_build_outline_chunks_malformed_data(caplog):
 
 
 def test_get_source_action_non_goto_action():
-    """Covers line 111-114 logic: Action exists but is not GoTo."""
     mock_item = MagicMock()
     mock_item.destination = None
     # Simulate a URI action instead of GoTo
@@ -441,39 +411,40 @@ def test_get_source_action_non_goto_action():
 
 
 def test_copy_item_recursion_and_pruning():
-    """Covers line 96: Recursive child copying."""
     mock_remapper = MagicMock()
     # Mock remap to return a valid action for everything
     mock_remapper.remap_goto_action.return_value = (MagicMock(D="remapped"), None)
 
     copier = OutlineCopier(mock_remapper)
 
-    # Create a mock structure: Parent -> Child
-    child = MagicMock(title="Child", children=[])
-    parent = MagicMock(title="Parent", children=[child])
-    parent.destination = "some_dest"
-    child.destination = "some_dest"
+    # Create a cache structure: Parent -> Child
+    child = CachedOutlineItem(
+        title="Child", action=MagicMock(), is_closed=False, obj=Dictionary(), children=[]
+    )
+    parent = CachedOutlineItem(
+        title="Parent", action=MagicMock(), is_closed=False, obj=Dictionary(), children=[child]
+    )
 
-    new_parent_list = []
-
-    # This triggers the recursion at line 96
+    # This triggers the recursion
     with patch(
         "pikepdf.OutlineItem",
-        side_effect=lambda title, destination, **kwargs: MagicMock(title=title, children=[]),
+        side_effect=lambda title, destination, **kwargs: MagicMock(
+            title=title, children=[], obj=Dictionary()
+        ),
     ):
-        copier.copy_item(parent, new_parent_list)
+        result = copier.copy_item(parent)
 
-    assert len(new_parent_list) == 1
+    assert result is not None
+    assert len(result.children) == 1
+    assert result.children[0].title == "Child"
     # Verify child was processed (remapper called twice: parent + child)
     assert mock_remapper.remap_goto_action.call_count == 2
 
 
 def test_rebuild_outlines_no_chunks():
-    """Hits outlines.py:141-142."""
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
     mock_remapper = MagicMock()
     mock_context = MagicMock()
-    # Providing an empty list of page info results in zero chunks
     mock_context.processed_page_info = []
 
     result = rebuild_outlines(mock_pdf, [], mock_context, mock_remapper)
@@ -481,79 +452,28 @@ def test_rebuild_outlines_no_chunks():
     assert result == []
 
 
-def test_copy_item_preserves_open_closed_state(mock_remapper):
+def test_cache_outline_tree_closed_when_count_missing():
     """
-    Tests that the is_closed state is faithfully copied from the source item.
-    """
-    for source_is_closed in (True, False):
-        mock_item = MagicMock(spec=OutlineItem)
-        mock_item.title = "Test Item"
-        mock_item.destination = Name.Dest1
-        mock_item.action = None
-        mock_item.children = []
-        mock_item.obj = MagicMock()
-        mock_item.obj.__contains__ = lambda self, key: True  # Count IS present
-        mock_item.is_closed = source_is_closed
-
-        mock_remapper.remap_goto_action.return_value = (
-            Dictionary(S=Name.GoTo, D=Name.NewDest),
-            None,
-        )
-
-        copier = OutlineCopier(mock_remapper)
-        new_parent_list = []
-        copier.copy_item(mock_item, new_parent_list)
-
-        assert len(new_parent_list) == 1
-        assert new_parent_list[0].is_closed == source_is_closed
-
-
-def test_copy_item_closed_when_count_missing(mock_remapper):
-    """
-    Tests that an item is marked closed if /Count is absent from the source obj,
-    regardless of the is_closed flag (matches PDF spec default behaviour).
+    Tests that an item is marked closed during the caching phase if /Count is
+    absent from the source obj (matches PDF spec default behaviour).
     """
     mock_item = MagicMock(spec=OutlineItem)
     mock_item.title = "Test Item"
-    mock_item.destination = Name.Dest1
     mock_item.action = None
+    mock_item.destination = None
     mock_item.children = []
-    mock_item.obj = MagicMock()
-    mock_item.obj.__contains__ = lambda self, key: False  # Count is ABSENT
+
+    # Simulate a dictionary missing /Count
+    mock_dict = MagicMock()
+    mock_dict.__contains__.side_effect = lambda key: False
+    mock_item.obj = mock_dict
+
     mock_item.is_closed = False  # Would normally be open
 
-    mock_remapper.remap_goto_action.return_value = (Dictionary(S=Name.GoTo, D=Name.NewDest), None)
+    cached_list = _cache_outline_tree([mock_item])
 
-    copier = OutlineCopier(mock_remapper)
-    new_parent_list = []
-    copier.copy_item(mock_item, new_parent_list)
-
-    assert len(new_parent_list) == 1
-    assert new_parent_list[0].is_closed is True
-
-
-def test_copy_item_copies_obj_for_formatting(mock_remapper):
-    """
-    Tests that copy_foreign is called on the source item's obj,
-    which preserves /F (bold/italic) and /C (colour) formatting fields.
-    """
-    mock_item = MagicMock(spec=OutlineItem)
-    mock_item.title = "Test Item"
-    mock_item.destination = Name.Dest1
-    mock_item.action = None
-    mock_item.children = []
-    mock_item.obj = MagicMock()
-    mock_item.is_closed = False
-
-    mock_remapper.remap_goto_action.return_value = (Dictionary(S=Name.GoTo, D=Name.NewDest), None)
-
-    copier = OutlineCopier(mock_remapper)
-    copier.copy_item(mock_item, [])
-
-    mock_remapper.source_pdf.make_indirect.assert_called_once_with(mock_item.obj)
-    mock_remapper.pdf.copy_foreign.assert_called_once_with(
-        mock_remapper.source_pdf.make_indirect.return_value
-    )
+    assert len(cached_list) == 1
+    assert cached_list[0].is_closed is True
 
 
 def test_copy_item_preserves_formatting_and_state_integration():
@@ -562,7 +482,7 @@ def test_copy_item_preserves_formatting_and_state_integration():
     state survive a round-trip through rebuild_outlines.
     """
     import pikepdf
-    from pikepdf import Array, Dictionary, Name, Pdf
+    from pikepdf import Array, Name, Pdf
 
     from pdftl.pages.add_pages import add_pages
     from pdftl.utils.page_specs.spec_types import PageTransform
@@ -586,32 +506,30 @@ def test_copy_item_preserves_formatting_and_state_integration():
 
     # Build outline manually so we can set /F and /C
     with src.open_outline() as outline:
-        # Parent: bold+italic (/F=3), red (/C), closed (negative Count)
+        # Pass the actual page object for a valid destination
         parent = pikepdf.OutlineItem("Parent", destination=0)
-        parent.obj = src.make_indirect(
-            Dictionary(
-                Title=pikepdf.String("Parent"),
-                F=3,  # bold + italic
-                C=Array([1.0, 0.0, 0.0]),  # red
-                Count=-1,  # closed
-            )
-        )
+        outline.root.append(parent)
+
+    with src.open_outline() as outline:
+        parent = outline.root[0]
+        # UPDATE the existing obj instead of overwriting it
+        parent.obj[Name.F] = 3  # bold + italic
+        parent.obj[Name.C] = Array([1.0, 0.0, 0.0])  # red
+        parent.obj[Name.Count] = -1  # closed
         parent.is_closed = True
 
-        # Child: italic only (/F=1), blue (/C), open
+        # Pass the actual page object for the child
         child = pikepdf.OutlineItem("Child", destination=1)
-        child.obj = src.make_indirect(
-            Dictionary(
-                Title=pikepdf.String("Child"),
-                F=1,  # italic
-                C=Array([0.0, 0.0, 1.0]),  # blue
-                Count=0,
-            )
-        )
-        child.is_closed = False
-
         parent.children.append(child)
-        outline.root.append(parent)
+        outline.root[0] = parent
+
+    with src.open_outline() as outline:
+        # UPDATE the existing obj
+        parent = outline.root[0]
+        child = parent.children[0]
+        child.obj[Name.F] = 1  # italic
+        child.obj[Name.C] = Array([0.0, 0.0, 1.0])  # blue
+        child.is_closed = False
 
     # --- Run through add_pages ---
     out = Pdf.new()
@@ -627,7 +545,8 @@ def test_copy_item_preserves_formatting_and_state_integration():
         out_parent = out_outline.root[0]
         assert out_parent.title == "Parent"
         assert out_parent.is_closed is True
-        assert int(out_parent.obj.F) == 3
+        # breakpoint()
+        assert int(out_parent.obj[Name.F]) == 3
         assert list(out_parent.obj.C) == pytest.approx([1.0, 0.0, 0.0])
 
         assert len(out_parent.children) == 1
@@ -636,3 +555,126 @@ def test_copy_item_preserves_formatting_and_state_integration():
         assert out_child.is_closed is False
         assert int(out_child.obj.F) == 1
         assert list(out_child.obj.C) == pytest.approx([0.0, 0.0, 1.0])
+
+
+def test_copy_item_preserves_open_closed_state(mock_remapper):
+    """
+    Tests that the is_closed state is faithfully copied from the cached item.
+    """
+    for source_is_closed in (True, False):
+        cached_item = CachedOutlineItem(
+            title="Test Item",
+            action=Dictionary(S=Name.GoTo, D=Name.Dest1),
+            is_closed=source_is_closed,
+            obj=Dictionary(),
+            children=[],
+        )
+
+        mock_remapper.remap_goto_action.return_value = (
+            Dictionary(S=Name.GoTo, D=Name.NewDest),
+            None,
+        )
+
+        copier = OutlineCopier(mock_remapper)
+
+        with patch("pikepdf.OutlineItem") as mock_OI:
+            mock_OI.return_value.children = []
+            result = copier.copy_item(cached_item)
+
+        assert result is not None
+        assert result.is_closed == source_is_closed
+
+
+def test_copy_item_copies_obj_for_formatting(mock_remapper):
+    """
+    Tests that copy_item manually extracts /F (bold/italic) and /C (colour)
+    formatting fields and stashes them to bypass pikepdf limitations.
+    """
+    mock_obj = Dictionary()
+    mock_obj[Name.C] = Array([1.0, 0.5, 0.0])
+    mock_obj[Name.F] = 3  # Both italic (1) and bold (2)
+
+    cached_item = CachedOutlineItem(
+        title="Test Item",
+        action=Dictionary(S=Name.GoTo, D=Name.Dest1),
+        is_closed=False,
+        obj=mock_obj,
+        children=[],
+    )
+
+    mock_remapper.remap_goto_action.return_value = (Dictionary(S=Name.GoTo, D=Name.NewDest), None)
+
+    copier = OutlineCopier(mock_remapper)
+
+    with patch("pikepdf.OutlineItem") as mock_OI:
+        new_item_mock = MagicMock()
+        new_item_mock.children = []
+        mock_OI.return_value = new_item_mock
+
+        result = copier.copy_item(cached_item)
+
+    assert result is not None
+    # Verify the minimal clean constructor call required by pikepdf
+    mock_OI.assert_called_once_with(title="Test Item", destination=Name.NewDest)
+    # Check that properties are stashed accurately for post-processing outside the context
+    assert result._cached_color == [1.0, 0.5, 0.0]
+    assert result._cached_flags == 3
+
+
+import pytest
+from unittest.mock import Mock
+
+from pdftl.pages.outlines import (
+    _process_chunk,
+    ChunkData,
+)
+
+
+def test_remap_item_action_with_no_action():
+    """Hits Line 89: action is None/falsy."""
+    remapper = Mock()
+    copier = OutlineCopier(remapper)
+
+    # Directly call the internal method to guarantee target execution
+    dest, is_valid = copier._remap_item_action(None)
+
+    assert dest is None
+    assert is_valid is False
+
+
+def test_apply_cached_meta_none_obj():
+    """Hits Line 104: cached_item has no obj or obj is None."""
+    remapper = Mock()
+    copier = OutlineCopier(remapper)
+    new_item = Mock()
+
+    item_with_none = CachedOutlineItem(
+        title="Test", action=Mock(), is_closed=False, obj=None, children=[]
+    )
+    copier._apply_cached_meta(item_with_none, new_item)  # Should early return cleanly
+
+
+def test_get_source_action_fallback_to_goto_action():
+    """Hits Line 152: item has no destination but holds a valid /GoTo action."""
+    source_item = Mock()
+    source_item.destination = None
+
+    # Mock an action where .S evaluates to Name.GoTo
+    mock_action = Mock()
+    mock_action.S = Name.GoTo
+    source_item.action = mock_action
+
+    action = _get_source_action(source_item)
+    assert action == mock_action
+
+
+def test_process_chunk_empty_cached_root_items():
+    """Hits Line 309: chunk setup yields an empty list of cached root elements."""
+    mock_chunk = ChunkData(pdf=Mock(), source_page_map={}, output_start_page=1, instance_num=0)
+    mock_remapper = Mock()
+
+    # Pass empty array as cached_root_items
+    dests, items = _process_chunk(mock_chunk, mock_remapper, [])
+
+    assert dests == []
+    assert items == []
