@@ -25,6 +25,7 @@ from pdftl.exceptions import MissingArgumentError, UserCommandLineError
 from pdftl.output.save import save_content
 from pdftl.utils.arg_helpers import expand_shorthand_args
 from pdftl.utils.io_helpers import smart_pikepdf_open
+from pdftl.utils.profiling import CliStageProfiler
 from pdftl.utils.user_input import pdf_filename_completer
 
 logger = logging.getLogger(__name__)
@@ -143,7 +144,10 @@ class PipelineManager:
         try:
             for i, stage in enumerate(self.stages):
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
-                self._validate_and_execute_numbered_stage(i, stage)
+                stage_name = stage.operation or "filter"
+                stage_args = stage.operation_args
+                with CliStageProfiler(stage_name, stage_args):
+                    self._validate_and_execute_numbered_stage(i, stage)
                 stage_output = stage.options.get(c.OUTPUT)
                 logger.debug("stage_output=%s", stage_output)
 
