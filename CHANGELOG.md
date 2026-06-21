@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `png_compression` seting for the `render` operation
+- `png_compression` setting for the `render` operation
+
+- operations are now linked in the HTML docs
 
 ### Fixed
 

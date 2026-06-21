@@ -11,3 +11,8 @@ html_context = {
     "github_repo": "pdftl",  # Repo name
     "github_version": "main",  # Version
 }
+
+html_static_path = ["_static"]
+html_css_files = [
+    "custom.css",
+]

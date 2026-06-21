@@ -1,0 +1,21 @@
+/* 1. Target all cross-linked backtick keywords everywhere by default */
+a code {
+    color: #2e7d32 !important; /* Elegant dark green */
+    text-decoration: none;
+}
+
+a:hover code {
+    color: #1b5e20 !important; /* Slightly darker green on hover */
+    text-decoration: underline;
+}
+
+/* 2. Revert the styles back to the theme default ONLY if inside a toctree list item */
+li[class^="toctree"] a code {
+    color: inherit !important;
+    text-decoration: inherit !important;
+}
+
+li[class^="toctree"] a:hover code {
+    color: inherit !important;
+    text-decoration: inherit !important;
+}
