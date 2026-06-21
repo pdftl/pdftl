@@ -1,3 +1,5 @@
+# tests/operations/test_burst.py
+import io
 import logging
 from unittest.mock import MagicMock, call, patch
 
@@ -343,3 +345,195 @@ def test_burst_cli_hook_raises_on_missing_pdf():
     result = OpResult(success=True, data=[("file.pdf", MagicMock())], pdf=None)
     with pytest.raises(OperationError, match="Invalid result: not a PDF"):
         burst_cli_hook(result, MagicMock(), MagicMock())
+
+
+# --- Regression tests: burst must preserve outlines/links (via add_pages) ---
+#
+# Prior to the fix, `_make_chunk_pdf` built each chunk with a raw
+# `new_pdf.pages.extend(pages[start:end])`. That silently dropped document
+# structures that live OUTSIDE the page tree -- /Root/Outlines (bookmarks)
+# and /Root/Names/Dests (named destinations) -- even when they pointed
+# entirely within a single chunk. (On-page link annotations with an inline
+# *array* destination, e.g. `D=[page_obj, /Fit]`, already survived raw page
+# slicing reasonably well, since that's handled natively by qpdf's
+# page-selection logic; those tests below mainly guard against future
+# regressions in `add_pages` itself, rather than reproducing the original
+# bug.)
+
+
+@pytest.fixture
+def pdf_with_internal_navigation():
+    """
+    A 4-page PDF with:
+      - Bookmarks: 'Chapter 1' -> page 0, 'Chapter 2' -> page 2
+      - An "intra-chunk" array-destination link on page 0 pointing to page 1
+      - A "cross-chunk" array-destination link on page 1 pointing to page 3
+
+    Bursting this with split points at pages 1 and 3 produces two
+    2-page chunks: [page0, page1] and [page2, page3]. So 'Chapter 1'
+    and the intra-chunk link stay fully within chunk 1, while the
+    cross-chunk link's target (page 3) ends up in chunk 2.
+    """
+    pdf = pikepdf.Pdf.new()
+    for _ in range(4):
+        pdf.add_blank_page(page_size=(200, 200))
+
+    with pdf.open_outline() as outline:
+        outline.root.append(
+            pikepdf.OutlineItem("Chapter 1", destination=[pdf.pages[0].obj, pikepdf.Name.Fit])
+        )
+        outline.root.append(
+            pikepdf.OutlineItem("Chapter 2", destination=[pdf.pages[2].obj, pikepdf.Name.Fit])
+        )
+
+    intra_link = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Link,
+        Rect=pikepdf.Array([0, 0, 50, 50]),
+        A=pikepdf.Dictionary(S=pikepdf.Name.GoTo, D=[pdf.pages[1].obj, pikepdf.Name.Fit]),
+    )
+    pdf.pages[0].Annots = pdf.make_indirect(pikepdf.Array([pdf.make_indirect(intra_link)]))
+
+    cross_link = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Link,
+        Rect=pikepdf.Array([0, 0, 50, 50]),
+        A=pikepdf.Dictionary(S=pikepdf.Name.GoTo, D=[pdf.pages[3].obj, pikepdf.Name.Fit]),
+    )
+    pdf.pages[1].Annots = pdf.make_indirect(pikepdf.Array([pdf.make_indirect(cross_link)]))
+
+    return pdf
+
+
+@pytest.fixture
+def pdf_with_named_destination_link():
+    """
+    A 2-page PDF where page 0 has a link that points to a NAMED
+    destination ("GoToPage1", stored in /Root/Names/Dests) rather than
+    an inline destination array. Named destinations live entirely outside
+    the page tree, so they are a sharper regression check than array-style
+    destinations: raw page slicing drops /Root/Names entirely, which left
+    a dangling, unresolvable link (pointing at a name that no longer
+    exists anywhere in the output file) rather than a cleanly pruned one.
+    """
+    pdf = pikepdf.Pdf.new()
+    for _ in range(2):
+        pdf.add_blank_page(page_size=(200, 200))
+
+    dests_tree = pikepdf.NameTree.new(pdf)
+    dests_tree["GoToPage1"] = pikepdf.Array([pdf.pages[1].obj, pikepdf.Name.Fit])
+    pdf.Root.Names = pdf.make_indirect(pikepdf.Dictionary(Dests=dests_tree.obj))
+
+    named_link = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Link,
+        Rect=pikepdf.Array([0, 0, 50, 50]),
+        A=pikepdf.Dictionary(S=pikepdf.Name.GoTo, D="GoToPage1"),
+    )
+    pdf.pages[0].Annots = pdf.make_indirect(pikepdf.Array([pdf.make_indirect(named_link)]))
+
+    return pdf
+
+
+def _outline_titles(pdf):
+    with pdf.open_outline() as outline:
+        return [item.title for item in outline.root]
+
+
+def test_burst_preserves_outlines_within_each_chunk(pdf_with_internal_navigation):
+    """Each chunk should keep only the bookmark(s) for the pages it contains,
+    correctly retargeted to a page that actually exists in that chunk."""
+    results = list(
+        _generate_burst_chunks(
+            opened_pdfs=[pdf_with_internal_navigation],
+            specs=["1", "3"],
+            output_pattern="chunk_%d.pdf",
+        )
+    )
+    assert len(results) == 2
+    _, chunk1 = results[0]
+    _, chunk2 = results[1]
+
+    assert len(chunk1.pages) == 2
+    assert len(chunk2.pages) == 2
+
+    assert _outline_titles(chunk1) == ["Chapter 1"]
+    assert _outline_titles(chunk2) == ["Chapter 2"]
+
+    with chunk1.open_outline() as outline:
+        dest_page = outline.root[0].destination[0]
+        assert any(p.objgen == dest_page.objgen for p in chunk1.pages)
+
+
+def test_burst_remaps_intra_chunk_links_and_drops_cross_chunk_links(
+    pdf_with_internal_navigation,
+):
+    """On-page links to another page in the SAME chunk must be retargeted
+    to the correct local page object. Links to a page that lands in a
+    DIFFERENT chunk must be pruned safely rather than left dangling, and
+    the resulting chunk must still be a valid, saveable PDF."""
+    results = list(
+        _generate_burst_chunks(
+            opened_pdfs=[pdf_with_internal_navigation],
+            specs=["1", "3"],
+            output_pattern="chunk_%d.pdf",
+        )
+    )
+    _, chunk1 = results[0]
+
+    # Original page 0 -> local page 0: intra-chunk link to original page 1
+    # (now local page 1) should resolve to a page within this same chunk.
+    page0_annots = chunk1.pages[0].Annots
+    assert len(page0_annots) == 1
+    intra_dest_page = page0_annots[0].A.D[0]
+    assert intra_dest_page.objgen == chunk1.pages[1].obj.objgen
+
+    # Original page 1 -> local page 1: cross-chunk link to original page 3
+    # (which is not part of this chunk) must not reference a foreign/missing
+    # page object.
+    page1_annots = chunk1.pages[1].Annots
+    assert len(page1_annots) == 1
+    cross_dest_page = page1_annots[0].A.D[0]
+    assert cross_dest_page is None
+
+    # Sanity: the chunk must still save out as a structurally valid PDF.
+    buf = io.BytesIO()
+    chunk1.save(buf)
+
+
+def test_burst_preserves_named_destination_links(pdf_with_named_destination_link):
+    """Regression test: a link to a NAMED destination (rather than an
+    inline destination array) must survive burst. The /Root/Names/Dests
+    name tree has to be rebuilt in the chunk, and the name must resolve
+    to the correct local page -- not be left as a dangling string
+    reference to a name tree that no longer exists."""
+    results = list(
+        _generate_burst_chunks(
+            opened_pdfs=[pdf_with_named_destination_link],
+            specs=["1"],
+            output_pattern="chunk_%d.pdf",
+        )
+    )
+    assert len(results) == 1
+    _, chunk = results[0]
+
+    # The link annotation itself should still reference the name by string.
+    annot = chunk.pages[0].Annots[0]
+    assert annot.A.D == "GoToPage1"
+
+    # And that name must actually be resolvable in the output PDF's own
+    # name tree, pointing at the correct (local) destination page.
+    assert "/Names" in chunk.Root, "/Root/Names was dropped -- named destination is now dangling"
+    assert "/Dests" in chunk.Root.Names
+
+    name_tree = pikepdf.NameTree(chunk.Root.Names.Dests)
+    assert "GoToPage1" in name_tree
+
+    resolved = name_tree["GoToPage1"]
+    # pdftl stores resolved named destinations as a {/D: [...]} dict.
+    target_page = resolved.D[0]
+    assert target_page.objgen == chunk.pages[1].obj.objgen
+
+    # Sanity: the chunk must still save out as a structurally valid PDF.
+    buf = io.BytesIO()
+    chunk.save(buf)

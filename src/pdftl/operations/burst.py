@@ -14,8 +14,9 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError, OperationError
+from pdftl.pages.add_pages import add_pages
 from pdftl.utils.outline_select import get_outlines_to_level_pages
-from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.utils.page_specs import page_numbers_matching_page_specs, expand_specs_to_pages
 
 logger = logging.getLogger(__name__)
 
@@ -152,12 +153,6 @@ def burst_pdf(opened_pdfs, operation_args=None, output_pattern="pg_%04d.pdf") ->
 
 
     Note: Uses the hook side-effect to actually burst
-
-    Bugs:
-
-    * Discards various parts of the PDF file that may still be
-      relevant to single-page files, e.g., internal links
-
     """
     specs = operation_args or []
 
@@ -188,12 +183,15 @@ def burst_pdf(opened_pdfs, operation_args=None, output_pattern="pg_%04d.pdf") ->
     )
 
 
-def _make_chunk_pdf(pages, start_idx, end_idx):
-    """Create a new PDF containing pages[start_idx:end_idx+1]."""
+def _make_chunk_pdf(source_pdf, start_idx, end_idx):
+    """Create a new PDF containing page start_idx to end_idx (inclusive) of source_pdf."""
     import pikepdf
 
+    spec = f"{start_idx + 1}-{end_idx + 1}"
+    source_pages = expand_specs_to_pages([spec], {}, [], [source_pdf])
+
     new_pdf = pikepdf.Pdf.new()
-    new_pdf.pages.extend(pages[start_idx : end_idx + 1])
+    add_pages(new_pdf, [source_pdf], source_pages)
     return new_pdf
 
 
@@ -224,7 +222,7 @@ def _warn_if_oversized(source_pdf, page_idx, max_bytes):
 
 
 def _yield_size_constrained_chunks(
-    source_pdf, pages, chunk_start, chunk_end, pattern, chunk_counter, max_bytes
+    source_pdf, chunk_start, chunk_end, pattern, chunk_counter, max_bytes
 ):
     """Yield one or more (filename, pdf) pairs from a page range, split to respect max_bytes."""
     current_start = chunk_start
@@ -233,7 +231,7 @@ def _yield_size_constrained_chunks(
         if best_end == current_start:
             _warn_if_oversized(source_pdf, current_start, max_bytes)
         page_file = pattern % chunk_counter
-        yield page_file, _make_chunk_pdf(pages, current_start, best_end)
+        yield page_file, _make_chunk_pdf(source_pdf, current_start, best_end)
         chunk_counter += 1
         current_start = best_end + 1
     return chunk_counter
@@ -257,11 +255,14 @@ def _iter_chunks(source_pdf, specs, pattern, chunk_counter, max_bytes):
             continue
 
         if max_bytes is None:
-            yield pattern % chunk_counter, _make_chunk_pdf(pages, chunk_start, chunk_end)
+            yield (
+                pattern % chunk_counter,
+                _make_chunk_pdf(source_pdf, chunk_start, chunk_end),
+            )
             chunk_counter += 1
         else:
             for item in _yield_size_constrained_chunks(
-                source_pdf, pages, chunk_start, chunk_end, pattern, chunk_counter, max_bytes
+                source_pdf, chunk_start, chunk_end, pattern, chunk_counter, max_bytes
             ):
                 yield item
                 chunk_counter += 1
