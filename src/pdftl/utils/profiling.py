@@ -51,6 +51,15 @@ class CliStageProfiler:
         # fast path exit: zero-overhead return if no breach and not profiling
         if not self.profiler and elapsed <= self.threshold:
             return
+        if elapsed > self.threshold:
+            logger.info(
+                "Stage '%s' took %.2fs, which exceeds %.2fs",
+                self.stage_name,
+                elapsed,
+                self.threshold,
+            )
+        if not self.profiler:
+            return
 
         self._process_breach(elapsed)
 
