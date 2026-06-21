@@ -17,6 +17,7 @@ from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.page_images import iter_pages_as_pil
 from pdftl.utils.page_specs import expand_specs_to_pages
 from pdftl.utils.progress import get_track_progress
+from pdftl.utils.keyval_parser import parse_keyval_list
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,10 @@ If no pages are specified, all pages are rendered.
 
 The `dpi=<val>` argument sets the raster image resolution, in dots per
 inch (default: 150). It must be a positive number.
+
+The `png_compression=<level>` argument sets the PNG compression, for PNG output.
+It must be an integer between 1 and 9, where 9 is the highest compression level,
+and the slowest. The default level is 9.
 
 The default `<template>` is `page_%d.png`. The parameter `%d` is replaced
 with the output page counter value, starting at `1`. Standard formatting
@@ -72,10 +77,11 @@ def _save_single_pdf(image_generator, filename: str, dpi: float) -> int:
         raise InvalidArgumentError(f"Failed to render single PDF. Details: {exc}") from exc
 
 
-def _save_multiple_images(image_generator) -> int:
+def _save_multiple_images(image_generator, png_compression=9) -> int:
     """Helper to save generated images to individual files."""
     from PIL import Image
 
+    logger.debug("png_compression=%s", png_compression)
     Image.init()
     count = 0
     for filename, image in image_generator:
@@ -84,12 +90,16 @@ def _save_multiple_images(image_generator) -> int:
         if fmt == "JPG":
             fmt = "JPEG"
 
+        save_kw_args = {"format": fmt}
+        if fmt == "PNG":
+            save_kw_args.update({"compress_level": png_compression})
+
         try:
             if fmt not in Image.SAVE:
                 raise ValueError(
                     f"Unsupported image format: {fmt}. Choose from {list(Image.SAVE.keys())}"
                 )
-            image.save(filename, format=fmt)
+            image.save(filename, **save_kw_args)
         except ValueError as exc:
             raise InvalidArgumentError(
                 f"Invalid render output template. Details:\n  {exc}"
@@ -112,6 +122,7 @@ def render_cli_hook(result: OpResult, stage, _pipeline):
     meta = result.meta or {}
     output_pattern = meta.get("output_pattern", "")
     dpi = meta.get("dpi", 150.0)
+    png_compression = meta.get("png_compression", 9)
 
     is_single_pdf = output_pattern.lower().endswith(".pdf") and "%" not in output_pattern
 
@@ -119,7 +130,7 @@ def render_cli_hook(result: OpResult, stage, _pipeline):
         count = _save_single_pdf(image_generator, output_pattern, dpi)
         logger.info("Rendered %s pages into a single PDF: %s", count, output_pattern)
     else:
-        count = _save_multiple_images(image_generator)
+        count = _save_multiple_images(image_generator, png_compression=png_compression)
         logger.info("Rendered %s images.", count)
 
 
@@ -127,26 +138,40 @@ def _parse_render_args(args):
     """Separates the dpi= kwarg from page specifications."""
     dpi = 150.0
     page_specs = []
-    found_page_spec = False
+    png_compression = 9
 
-    for arg in args:
-        if arg.startswith("dpi="):
-            try:
-                dpi = float(arg.split("=", 1)[1])
-                if dpi <= 0:
-                    raise ValueError("should be positive")
-            except ValueError as exc:
-                raise InvalidArgumentError(
-                    f"'render': invalid dpi '{arg}'. Should be a positive number."
-                ) from exc
-        else:
-            found_page_spec = True
-            page_specs.append(arg)
+    try:
+        parsed = parse_keyval_list(
+            args, allowed_keys=["dpi", "png_compression"], bare_tokens=page_specs
+        )
+    except InvalidArgumentError as exc:
+        raise InvalidArgumentError(f"Could not parse `render` arguments {args}: {exc}")
+    if "dpi" in parsed:
+        val_str = parsed["dpi"]
+        try:
+            dpi = float(val_str)
+            if dpi <= 0:
+                raise ValueError("dpi should be positive")
+        except ValueError as exc:
+            raise InvalidArgumentError(
+                f"'render': invalid dpi '{val_str}'. Should be a positive number."
+            ) from exc
+    if "png_compression" in parsed:
+        val_str = parsed["png_compression"]
+        try:
+            png_compression = int(val_str)
+            if not 1 <= png_compression <= 9:
+                raise ValueError("png_compression should be between 1 and 9")
+        except ValueError as exc:
+            raise InvalidArgumentError(
+                f"'render': invalid png_compression '{val_str}'. "
+                "Should be an integer between 1 and 9."
+            ) from exc
 
-    if not found_page_spec:
+    if not page_specs:
         page_specs = ["1-end"]
 
-    return dpi, page_specs
+    return dpi, page_specs, png_compression
 
 
 @register_operation(
@@ -167,7 +192,7 @@ def _parse_render_args(args):
     skip_pipeline_save=True,
 )
 def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
-    dpi, page_specs = _parse_render_args(args)
+    dpi, page_specs, png_compression = _parse_render_args(args)
 
     ensure_dependencies("render", ["pypdfium2", "PIL"], "render")
 
@@ -196,5 +221,5 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
         pdf=input_pdf,
         data=_render_generator(),
         is_discardable=True,
-        meta={"output_pattern": output_pattern, "dpi": dpi},
+        meta={"output_pattern": output_pattern, "dpi": dpi, "png_compression": png_compression},
     )

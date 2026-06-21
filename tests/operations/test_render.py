@@ -19,19 +19,30 @@ def test_render_cli_hook_jpg_extension():
 # --- Test Core Logic (render_pdf) ---
 
 
-def test_render_pdf_invalid_args():
+def test_render_pdf_more_invalid_args():
     mock_pdf = MagicMock()
-    mock_pdf.pages = [MagicMock()] * 150
-    # Test too many arguments
-    with pytest.raises(InvalidArgumentError, match="[Ii]nvalid page spec modifier"):
-        render_pdf(mock_pdf, ["150", "extra"])
+    mock_pdf.pages = [MagicMock()]
+    with pytest.raises(InvalidArgumentError, match="Could not parse `render` arguments"):
+        render_pdf(mock_pdf, ["invalid_key=value"])
+    with pytest.raises(InvalidArgumentError, match="invalid png_compression 'not-an-int'"):
+        render_pdf(mock_pdf, ["png_compression=not-an-int"])
+    with pytest.raises(InvalidArgumentError, match="Should be an integer between 1 and 9"):
+        render_pdf(mock_pdf, ["png_compression=10"])
+    with pytest.raises(InvalidArgumentError, match="Should be an integer between 1 and 9"):
+        render_pdf(mock_pdf, ["png_compression=0"])
 
-    # Test invalid DPI
-    with pytest.raises(InvalidArgumentError, match="invalid dpi"):
-        render_pdf(mock_pdf, ["dpi=not-a-number"])
 
-    with pytest.raises(InvalidArgumentError, match="positive number"):
-        render_pdf(mock_pdf, ["dpi=-10"])
+def test_render_pdf_dpi_error_handling():
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [MagicMock()]
+
+    # Explicitly triggers line 156 (ValueError on string parsing) -> caught at line 157
+    with pytest.raises(InvalidArgumentError, match="'render': invalid dpi 'abc'"):
+        render_pdf(mock_pdf, ["dpi=abc"])
+
+    # Explicitly triggers line 154 (ValueError on <= 0 check) -> caught at line 157
+    with pytest.raises(InvalidArgumentError, match="Should be a positive number"):
+        render_pdf(mock_pdf, ["dpi=0"])
 
 
 # --- Test CLI Hook (render_cli_hook) ---
@@ -50,8 +61,8 @@ def test_render_cli_hook_saving():
     render_cli_hook(result, "render_stage", None)
 
     # Assert saving
-    mock_img_1.save.assert_called_with("page_1.png", format="PNG")
-    mock_img_2.save.assert_called_with("page_2", format="PNG")
+    mock_img_1.save.assert_called_with("page_1.png", format="PNG", compress_level=9)
+    mock_img_2.save.assert_called_with("page_2", format="PNG", compress_level=9)
 
 
 def test_render_cli_hook_error_handling():

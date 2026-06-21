@@ -75,7 +75,10 @@ def iter_pages_as_pil(pdf, dpi: float, page_indices: list[int] | None = None):
         for i in iterator:
             page = ui_pdf[i]
             bitmap = page.render(scale=scale)
-            yield i, bitmap.to_pil()
+            del page
+            pil_img = bitmap.to_pil()
+            del bitmap
+            yield i, pil_img
     finally:
         if ui_pdf:
             ui_pdf.close()
