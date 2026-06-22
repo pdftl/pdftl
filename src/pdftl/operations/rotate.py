@@ -18,7 +18,7 @@ from pdftl.utils.transform import transform_pdf
 
 _ROTATE_LONG_DESC = """
 
-Rotates pages by 90, 180, or 270 degrees. Each '<spec>' consists of a
+Rotates pages by 90, 180, or 270 degrees. Each `<spec>` consists of a
 page range followed by a rotation direction. A rotation direction is
 either a cardinal direction or a relative direction.
 
