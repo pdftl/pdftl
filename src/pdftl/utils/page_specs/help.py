@@ -12,6 +12,10 @@ def _help_topic_page_specs():
     select pages and optionally apply transformations to them as
     they are processed.
 
+    Spaces are ignored, and may be added to aid legibility.
+    In this case, you should quote the entire page specification
+    to avoid it being broken up into separate arguments by your shell.
+
     A complete page specification string combines up to three
     optional components in the following order:
 
@@ -53,10 +57,10 @@ def _help_topic_page_specs():
 
     ### 2. Page qualifiers, step, repetitions, copies and omissions
 
-    #### Parity qualifiers
+    #### Parity and aspect ratio qualifiers
 
-    Parity qualifiers filter the selected pages based on their
-    number. They are added immediately after the page
+    These qualifiers filter the selected pages based on the parity of their
+    page number or their aspect ratio. They are added immediately after the page
     range. Valid qualifiers are:
 
     * `even`: selects only even-numbered pages in the range (e.g.,
