@@ -98,9 +98,9 @@ A simple `pip install pdftl[full]` install is also supported.
 ### 🖼️  Images
 * **Info:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) gives detailed per-image info
 * **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) your PDF to images
-* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), or [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
-* **Image editing:** [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html) and [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html) to apply sharpen/blur, control brightness/contrast, etc, or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html).
-
+* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), or [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html)
+* **Image editing:** [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html) and [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html) to apply sharpen/blur, control brightness/contrast, etc, or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html)
+* **Vector operations**: [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html) and [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html)
 
 ### 🛠️ Advanced
 
@@ -271,6 +271,7 @@ See the **[API Tutorial][4]** for more details.
 | [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
 | [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html)                                     | Set document properties, viewer preferences, and page labels    |
 | [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |
+| [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html)           | Reduce vector path complexity                                   |
 | [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |
 | [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html)                       | Change appearance of text                                       |
 | [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                                         |

@@ -122,7 +122,7 @@ class TextDrawer:
 
     def __init__(self, page_box: Any):
         ensure_dependencies(
-            feature_name="add-text", dependencies={"reportlab": "reportlab"}, extra_tag="add-text"
+            feature_name="add_text", dependencies={"reportlab": "reportlab"}, extra_tag="add-text"
         )
 
         self.page_box = _PageBox(width=page_box.width, height=page_box.height)

@@ -10,6 +10,8 @@ ALWAYS_FORBIDDEN = [
     "reportlab",
     "pyhanko",
     "fonttools",
+    "numpy",
+    "numba",
 ]
 
 

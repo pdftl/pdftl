@@ -82,6 +82,7 @@ HARDCODED_KEYWORDS = {
     "rotate",
     "set",
     "shuffle",
+    "simplify_vectors",
     "stamp",
     "style_text",
     "unpack_files",

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `simplify_vectors` operation
+
 - `png_compression` setting for the `render` operation
 
 - operations are now linked in the HTML docs

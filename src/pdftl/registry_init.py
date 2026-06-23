@@ -91,6 +91,9 @@ def _discover_modules(parent_modules, label):
             continue
 
         for _, module_name, _ in pkgutil.iter_modules(path):
+            if module_name.startswith("_"):
+                logger.debug("Skipping private module: %s", module_name)
+                continue
             if not module_name.isidentifier():
                 logger.error("Skipping invalid module name: %s", module_name)
                 continue

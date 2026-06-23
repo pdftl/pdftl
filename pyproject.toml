@@ -55,6 +55,7 @@ modify-images = ["numpy"]
 optimize-images = ["ocrmypdf"]
 replacement-font = [ "fonttools>=4.0,<5.0" ]
 signing = ["pyhanko"]
+simplify-vectors = ["numpy", "numba"]
 shell-completion = ["lark", "cloudpickle"]
 yaml-bookmarks = ["pyyaml"]
 
@@ -70,6 +71,7 @@ extras = [
     "pdftl[flatten]",
     "pdftl[highlight]",
     "pdftl[modify-images]",
+    "pdftl[simplify-vectors]",
     "pdftl[optimize-images]",
     "pdftl[replacement-font]",
     "pdftl[signing]",
@@ -193,6 +195,7 @@ exclude_also = [
     # A pragma comment that excludes an entire file:
     '\A(?s:.*# pragma: exclude this file.*)\Z',
 ]
+skip_covered = true
 
 [[tool.mypy.overrides]]
 module = "pypdfium2"
