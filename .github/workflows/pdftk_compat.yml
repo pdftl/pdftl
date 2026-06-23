@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: read
-  checks: write  # Required for the stats line item
-  pull-requests: write
 
 jobs:
   pdftk-compat:
@@ -29,17 +27,5 @@ jobs:
           pip install .[dev]
 
       - name: Run PDFtk Vendor Tests
-        # We run ONLY the pdftk-java folder here.
-        continue-on-error: true  # workflow green even if this is red
         run: |
-          pytest -ra vendor_tests/pdftk-java --junitxml=test-results.xml
-
-      - name: Publish PDFtk Stats
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040
-        if: always()
-        with:
-          check_name: "PDFtk Compat Stats"
-          files: test-results.xml
-          check_run: false
-          job_summary: true
-          action_fail: false # Keeps the check green/neutral even if tests fail
+          pytest -ra vendor_tests/pdftk-java
