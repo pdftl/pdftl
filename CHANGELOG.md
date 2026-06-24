@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - operations are now linked in the HTML docs
 
+### Changed
+
+- `replace` now recurses into XObjects by default
+
 ### Fixed
 
 - `delete_images` global mode fixed to delete per-page images too
