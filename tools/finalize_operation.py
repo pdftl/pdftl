@@ -190,31 +190,33 @@ def main():
 
         if match:
             unreleased_block = match.group(1)
-
-            if re.search(r"^### Added", unreleased_block, re.IGNORECASE | re.MULTILINE):
-                updated_block = re.sub(
-                    r"(^### Added\s*\n)",
-                    f"### Added\n\n{changelog_entry}\n\n",
-                    unreleased_block,
-                    count=1,
-                    flags=re.IGNORECASE | re.MULTILINE,
-                )
+            if changelog_entry.strip() in unreleased_block:
+                print("ℹ️ Changelog entry already exists; skipping.")
             else:
-                updated_block = re.sub(
-                    r"(^## \[?Unreleased\]?\s*\n)",
-                    f"## Unreleased\n\n### Added\n\n{changelog_entry}\n\n",
-                    unreleased_block,
-                    count=1,
-                    flags=re.IGNORECASE | re.MULTILINE,
+                if re.search(r"^### Added", unreleased_block, re.IGNORECASE | re.MULTILINE):
+                    updated_block = re.sub(
+                        r"(^### Added\s*\n)",
+                        f"### Added\n\n{changelog_entry}\n\n",
+                        unreleased_block,
+                        count=1,
+                        flags=re.IGNORECASE | re.MULTILINE,
+                    )
+                else:
+                    updated_block = re.sub(
+                        r"(^## \[?Unreleased\]?\s*\n)",
+                        f"## Unreleased\n\n### Added\n\n{changelog_entry}\n\n",
+                        unreleased_block,
+                        count=1,
+                        flags=re.IGNORECASE | re.MULTILINE,
+                    )
+
+                updated_block = re.sub(r"\n{3,}", "\n\n", updated_block)
+                changelog_content = changelog_content.replace(unreleased_block, updated_block)
+                changelog_path.write_text(changelog_content)
+                print(
+                    f"✅ Updated {changelog_path} "
+                    "(inserted entry conforming to spacing conventions)"
                 )
-
-            updated_block = re.sub(r"\n{3,}", "\n\n", updated_block)
-
-            changelog_content = changelog_content.replace(unreleased_block, updated_block)
-            changelog_path.write_text(changelog_content)
-            print(
-                f"✅ Updated {changelog_path} (inserted entry conforming to spacing conventions)"
-            )
     else:
         print(f"❌ Error: {changelog_path} not found.")
 
