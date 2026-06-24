@@ -42,7 +42,7 @@ def _ops_from(mixed):
 
 
 def _paths_from(mixed):
-    return [item for item in mixed if isinstance(item, Path)]
+    return [item for item in mixed if hasattr(item, "subpaths") and hasattr(item, "paint_op")]
 
 
 # ---------------------------------------------------------------------------
