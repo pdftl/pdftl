@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `delete_images` global mode fixed to delete per-page images too
+
 - `burst` now keeps outlines and annotations, like `cat`
 
 ## [0.22.0] - 2026-06-20

@@ -244,6 +244,7 @@ def _apply_spec(pdf, spec, modified_objects, pikepdf):
 
 
 def _delete_images_globally(pdf, params, modified_objects, pikepdf):
+    _delete_images_from_pages("-", pdf, params, modified_objects, pikepdf)
     for obj in pdf.objects:
         if (
             isinstance(obj, pikepdf.Stream)
