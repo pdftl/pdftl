@@ -243,6 +243,7 @@ See the **[API Tutorial][4]** for more details.
 | [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html)                     | Extract PDF embedded image metadata to JSON                     |
 | [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)                     | Dump layer info (JSON)                                          |
 | [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html)             | List and validate digital signatures                            |
+| [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html)                   | Dump page content streams as seen by `replace`                  |
 | [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html)                     | Extract tables to JSON, CSV, or Markdown                        |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |

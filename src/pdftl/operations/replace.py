@@ -57,6 +57,9 @@ By default, the replacement also recurses into Form XObjects referenced
 by the page. Pass ``recurse=false`` to restrict replacement to the
 top-level page content stream only.
 
+*See also* the `dump_streams` operation, which lets you examine normalized content
+streams so you can formulate a regular expression to use with `replace`.
+
 """
 
 _REPLACE_EXAMPLES = [
