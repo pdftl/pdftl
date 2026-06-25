@@ -150,6 +150,15 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     # CRITICAL: We run inside work_dir. The tool sees "a.pdf" and finds it locally.
     result = subprocess.run(command_to_run, capture_output=True, text=False, cwd=work_dir)
 
+    if result.returncode != 0:
+        stderr_str = result.stderr.decode("utf-8", errors="replace")
+
+        # Intercept your custom framework message from ensure_dependencies/shutil.which
+        if "was not found on your PATH" in stderr_str:
+            pytest.skip(
+                "Skipping test because a required system binary is missing: " + stderr_str.strip()
+            )
+
     # --- Step 4: Assert Success ---
     assert result.returncode == 0, (
         f"Command failed with exit code {result.returncode}.\n"

@@ -105,3 +105,38 @@ def test_ensure_dependencies_multiple_missing(mock_find_spec, mock_is_pipx):
 
     with pytest.raises(InvalidArgumentError, match=expected_msg):
         ensure_dependencies("Advanced", ["lib_a", "lib_b"], "adv")
+
+
+@patch("shutil.which")
+@patch("pdftl.utils.dependencies.importlib.util.find_spec")
+def test_ensure_dependencies_required_executables_found(mock_find_spec, mock_which):
+    """Hits lines 54-57: Executables list provided and successfully located on PATH."""
+    mock_find_spec.return_value = True  # Libraries are present
+    mock_which.return_value = "/usr/bin/pdfinfo"  # Executable found
+
+    # Should run cleanly without blowing up
+    ensure_dependencies(
+        feature_name="Extraction",
+        dependencies=["os"],
+        extra_tag="core",
+        required_executables=["pdfinfo"],
+    )
+    mock_which.assert_called_once_with("pdfinfo")
+
+
+@patch("shutil.which")
+@patch("pdftl.utils.dependencies.importlib.util.find_spec")
+def test_ensure_dependencies_required_executables_missing(mock_find_spec, mock_which):
+    """Hits lines 54-58: Executables list provided but not located on PATH."""
+    mock_find_spec.return_value = True  # Libraries are present
+    mock_which.return_value = None  # Executable missing!
+
+    expected_msg = "The required system executable 'missing-tool' was not found on your PATH."
+
+    with pytest.raises(InvalidArgumentError, match=expected_msg):
+        ensure_dependencies(
+            feature_name="Extraction",
+            dependencies=["os"],
+            extra_tag="core",
+            required_executables=["missing-tool"],
+        )

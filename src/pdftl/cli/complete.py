@@ -86,6 +86,7 @@ HARDCODED_KEYWORDS = {
     "simplify_vectors",
     "stamp",
     "style_text",
+    "tag",
     "unpack_files",
     "unpause",
     "update_bookmarks",

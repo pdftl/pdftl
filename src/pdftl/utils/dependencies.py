@@ -20,7 +20,10 @@ def is_pipx_install() -> bool:
 
 
 def ensure_dependencies(
-    feature_name: str, dependencies: dict[str, str] | list[str] | set[str], extra_tag: str
+    feature_name: str,
+    dependencies: dict[str, str] | list[str] | set[str],
+    extra_tag: str,
+    required_executables: list[str] | None = None,
 ):
     """
     Checks for multiple dependencies.
@@ -46,3 +49,13 @@ def ensure_dependencies(
         raise InvalidArgumentError(
             f"The '{feature_name}' feature requires {deps_str}.\nPlease install with: {cmd}"
         )
+
+    if required_executables:
+        import shutil
+
+        for exe in required_executables:
+            if not shutil.which(exe):
+                raise InvalidArgumentError(
+                    f"The required system executable '{exe}' was not found on your PATH. "
+                    f"Please install it to use the '{feature_name}' feature."
+                )

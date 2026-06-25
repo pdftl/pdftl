@@ -53,10 +53,11 @@ flatten = ["pypdfium2"]
 highlight = ["pypdfium2"]
 modify-images = ["numpy"]
 optimize-images = ["ocrmypdf"]
-replacement-font = [ "fonttools>=4.0,<5.0" ]
+replacement-font = ["fonttools>=4.0,<5.0"]
 signing = ["pyhanko"]
 simplify-vectors = ["numpy", "numba"]
 shell-completion = ["lark", "cloudpickle"]
+tag = ["opendataloader_pdf"]
 yaml-bookmarks = ["pyyaml"]
 
 # All optional CLI dependencies
@@ -76,6 +77,7 @@ extras = [
     "pdftl[replacement-font]",
     "pdftl[signing]",
     "pdftl[shell-completion]",
+    "pdftl[tag]",
     "pdftl[yaml-bookmarks]",
 ]
 
