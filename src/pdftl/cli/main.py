@@ -59,6 +59,9 @@ def main(argv=None):
         pipeline = _prepare_pipeline_from_remaining_args(args_for_parsing)
         _validate_inputs_exist(pipeline)
         pipeline.run()
+        # Flush stdout permanently so any BrokenPipeErrors
+        # happen safely inside this try/except block.
+        sys.stdout.flush()
         return 0
 
     except BrokenPipeError:

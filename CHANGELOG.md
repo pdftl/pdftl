@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `burst` now keeps outlines and annotations, like `cat`
 
+- Prevent BrokenPipeError leaking out
+
 ## [0.22.0] - 2026-06-20
 
 ### Added
