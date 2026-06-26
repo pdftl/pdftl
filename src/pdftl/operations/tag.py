@@ -164,14 +164,8 @@ def _run_java_pipeline(jar_path: str, in_pdf: str, out_dir: str, extra_args: lis
 
 def _load_and_mark_pdf(out_dir: str, expected_filename: str) -> "pikepdf.Pdf":
     """Find the verified output document and stamp required PDF/UA accessibility keys."""
-    import pikepdf
-
-    # Strip '.pdf' to get the bare base name (e.g., 'tmp0tl8pu6f')
     base_name = os.path.splitext(expected_filename)[0]
 
-    # Locate any file that starts with our base name and ends with .pdf
-    # This safely catches 'tmp0tl8pu6f_tagged.pdf' or 'tmp0tl8pu6f.pdf'
-    # while ignoring Java's 'tmp_pdf_file*.pdf' artifacts.
     matched_files = [
         f for f in os.listdir(out_dir) if f.startswith(base_name) and f.lower().endswith(".pdf")
     ]
@@ -182,15 +176,26 @@ def _load_and_mark_pdf(out_dir: str, expected_filename: str) -> "pikepdf.Pdf":
         )
 
     out_pdf_path = os.path.join(out_dir, matched_files[0])
-    tagged_pdf = pikepdf.Pdf.open(out_pdf_path)
 
-    # Persuade Adobe Reader that it's tagged
-    if "/MarkInfo" not in tagged_pdf.Root:
-        tagged_pdf.Root["/MarkInfo"] = pikepdf.Dictionary({"/Marked": True})
-    else:
-        tagged_pdf.Root["/MarkInfo"]["/Marked"] = True
+    # 1. Open the file, tag it, and extract its memory representation to an unlinked state
+    import pikepdf
 
-    return tagged_pdf
+    with pikepdf.Pdf.open(out_pdf_path) as disk_pdf:
+        if "/MarkInfo" not in disk_pdf.Root:
+            disk_pdf.Root["/MarkInfo"] = pikepdf.Dictionary({"/Marked": True})
+        else:
+            disk_pdf.Root["/MarkInfo"]["/Marked"] = True
+
+        # Write out to a new memory buffer
+        from io import BytesIO
+
+        mem_buffer = BytesIO()
+        disk_pdf.save(mem_buffer)
+        mem_buffer.seek(0)
+
+    # At this point, the file block context block closes, releasing out_pdf_path on Windows.
+    # 2. Return a memory-backed instance completely isolated from the file system path
+    return pikepdf.Pdf.open(mem_buffer)
 
 
 @register_operation(
@@ -216,28 +221,37 @@ def tag_pdf(pdf: "pikepdf.Pdf", op_args: list) -> OpResult:
 
     extra_args = _prepare_args(pdf, op_args)
 
-    # 1. Serialize the current pipeline state
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_in:
-        pdf.save(tmp_in.name)
-        tmp_in_path = tmp_in.name
-
-    # Capture the basename (e.g., 'tmp0tl8pu6f.pdf') to locate it deterministically later
-    expected_filename = os.path.basename(tmp_in_path)
-    tmp_out_dir = tempfile.mkdtemp()
+    # 1. Initialize NamedTemporaryFile with delete=False
+    tmp_in = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+    tmp_in_path = tmp_in.name
 
     try:
-        # 2. Execute the sub-process
-        with _jar_path() as jar:
-            _run_java_pipeline(jar, tmp_in_path, tmp_out_dir, extra_args)
+        # Close the handle immediately so Windows unlocks the file.
+        tmp_in.close()
 
-        # 3 & 4. Re-parse result explicitly and stamp PDF/UA metadata
-        tagged_pdf = _load_and_mark_pdf(tmp_out_dir, expected_filename)
-        return OpResult(success=True, pdf=tagged_pdf)
+        # Serialize the current pipeline state
+        pdf.save(tmp_in_path)
+
+        # Capture the basename (e.g., 'tmp0tl8pu6f.pdf') to locate it deterministically later
+        expected_filename = os.path.basename(tmp_in_path)
+        tmp_out_dir = tempfile.mkdtemp()
+
+        try:
+            # 2. Execute the sub-process
+            with _jar_path() as jar:
+                _run_java_pipeline(jar, tmp_in_path, tmp_out_dir, extra_args)
+
+            # 3 & 4. Re-parse result explicitly and stamp PDF/UA metadata
+            tagged_pdf = _load_and_mark_pdf(tmp_out_dir, expected_filename)
+            return OpResult(success=True, pdf=tagged_pdf)
+
+        finally:
+            if os.path.exists(tmp_out_dir):
+                import shutil
+
+                shutil.rmtree(tmp_out_dir)
 
     finally:
+        # Explicitly clean up the named temporary file since delete=False was used
         if os.path.exists(tmp_in_path):
             os.unlink(tmp_in_path)
-        if os.path.exists(tmp_out_dir):
-            import shutil
-
-            shutil.rmtree(tmp_out_dir)

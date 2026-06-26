@@ -16,7 +16,6 @@ from pdftl.operations.tag import (
     tag_pdf,
 )
 
-
 # ==============================================================================
 # 1. UNIT TESTS FOR HELPER FUNCTIONS
 # ==============================================================================
@@ -127,35 +126,59 @@ def test_load_and_mark_pdf_not_found():
         assert "the tagged PDF was not found" in str(exc_info.value)
 
 
-def test_load_and_mark_pdf_creates_markinfo_if_missing():
+@pytest.fixture
+def temp_pdf_factory(tmp_path):
+    """Fixture to create a real, minimal PDF on disk for testing."""
+
+    def _create_pdf(root_modifier_fn=None):
+        pdf = pikepdf.Pdf.new()
+        if root_modifier_fn:
+            root_modifier_fn(pdf.Root)
+
+        filepath = tmp_path / "testfile.pdf"
+        pdf.save(filepath)
+        pdf.close()
+        return str(tmp_path), "testfile.pdf"
+
+    return _create_pdf
+
+
+def test_load_and_mark_pdf_creates_markinfo_if_missing(temp_pdf_factory):
     """Verify /MarkInfo node injects seamlessly if completely missing from the dictionary."""
-    with (
-        patch("os.listdir", return_value=["testfile_tagged.pdf"]),
-        patch("pikepdf.Pdf.open") as mock_open,
-    ):
-        mock_pdf = MagicMock()
-        mock_pdf.Root = {}  # Empty Root dictionary
-        mock_open.return_value = mock_pdf
+    # 1. Arrange: Create a real PDF on disk with an empty Root
+    fake_dir, fake_file = temp_pdf_factory(root_modifier_fn=lambda root: None)
 
-        result_pdf = _load_and_mark_pdf("/fake/dir", "testfile.pdf")
+    # 2. Act: Patch only the filesystem lookup, let pikepdf read the real file
+    with patch("os.listdir", return_value=[fake_file]):
+        result_pdf = _load_and_mark_pdf(fake_dir, fake_file)
 
+    # 3. Assert: Verify against actual pikepdf structures
+    try:
         assert "/MarkInfo" in result_pdf.Root
         assert result_pdf.Root["/MarkInfo"]["/Marked"] is True
+    finally:
+        result_pdf.close()  # Clean up file handles
 
 
-def test_load_and_mark_pdf_updates_markinfo_if_exists():
+def test_load_and_mark_pdf_updates_markinfo_if_exists(temp_pdf_factory):
     """Verify /MarkInfo value is driven to True even if the root node already exists."""
-    with (
-        patch("os.listdir", return_value=["testfile.pdf"]),
-        patch("pikepdf.Pdf.open") as mock_open,
-    ):
-        mock_pdf = MagicMock()
-        mock_pdf.Root = {"/MarkInfo": {"/Marked": False}}  # Use a standard mutable dict
-        mock_open.return_value = mock_pdf
 
-        result_pdf = _load_and_mark_pdf("/fake/dir", "testfile.pdf")
+    # 1. Arrange: Pre-seed a real PDF with /MarkInfo set to False
+    def seed_false_markinfo(root):
+        root.MarkInfo = pikepdf.Dictionary(Marked=False)
 
+    fake_dir, fake_file = temp_pdf_factory(root_modifier_fn=seed_false_markinfo)
+
+    # 2. Act
+    with patch("os.listdir", return_value=[fake_file]):
+        result_pdf = _load_and_mark_pdf(fake_dir, fake_file)
+
+    # 3. Assert
+    try:
+        assert result_pdf.Root.MarkInfo.Marked is True
         assert result_pdf.Root["/MarkInfo"]["/Marked"] is True
+    finally:
+        result_pdf.close()
 
 
 # ==============================================================================
@@ -197,7 +220,8 @@ def test_tag_pdf_full_success_flow(
 
     mock_tmp_in = MagicMock()
     mock_tmp_in.name = "/tmp/in_file.pdf"
-    mock_named_tmp.return_value.__enter__.return_value = mock_tmp_in
+    mock_named_tmp.return_value = mock_tmp_in
+    mock_tmp_in.close = MagicMock()
     mock_mkdtemp.return_value = "/tmp/out_dir"
 
     mock_load_mark.return_value = mock_op_result_pdf
@@ -254,7 +278,8 @@ def test_tag_pdf_lifecycle_cleanup_on_exception(
 
     mock_tmp_in = MagicMock()
     mock_tmp_in.name = "/tmp/error_in.pdf"
-    mock_named_tmp.return_value.__enter__.return_value = mock_tmp_in
+    mock_named_tmp.return_value = mock_tmp_in
+    mock_tmp_in.close = MagicMock()
     mock_mkdtemp.return_value = "/tmp/error_out_dir"
 
     mock_run_java.side_effect = OperationError("Java execution collapsed")
