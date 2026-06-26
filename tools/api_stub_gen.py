@@ -1,9 +1,25 @@
 import inspect
+import subprocess
 
 import pdftl.core.constants as c
 from pdftl.core.registry import registry
 from pdftl.fluent import pipeline
 from pdftl.registry_init import initialize_registry
+
+
+def ruff_then_write(name, lines):
+    filename = f"src/pdftl/{name}.pyi"
+    content = "\n".join(lines) + "\n"
+    result = subprocess.run(
+        ["ruff", "format", "-", "--stdin-filename", filename],
+        input=content,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    formatted = result.stdout
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(formatted)
 
 
 def generate():
@@ -48,7 +64,8 @@ def generate():
         "    def __init__(self, pdf: pikepdf.Pdf): ...",
         "    @classmethod",
         "    def open(cls, filename: str, password: Optional[str] = None) -> 'PdfPipeline': ...",
-        "    def save(self, filename: Union[str, Path], input_context: Any = None, set_pdf_id: Optional[bytes] = None, **kwargs: Any) -> 'PdfPipeline': ...",
+        "    def save(self, filename: Union[str, Path], input_context: Any = None, "
+        "             set_pdf_id: Optional[bytes] = None, **kwargs: Any) -> 'PdfPipeline': ...",
         "    def get(self) -> pikepdf.Pdf: ...",
         "    def __enter__(self) -> 'PdfPipeline': ...",
         "    def __exit__(self, t: Any, v: Any, tb: Any) -> None: ...",
@@ -92,11 +109,8 @@ def generate():
         api_stubs.append(f"def {name}({', '.join(api_params)}) -> pikepdf.Pdf: ...")
         fluent_stubs.append(f"    def {name}({', '.join(fluent_params)}) -> 'PdfPipeline': ...")
 
-    with open("src/pdftl/api.pyi", "w") as f:
-        f.write("\n".join(api_stubs))
-
-    with open("src/pdftl/fluent.pyi", "w") as f:
-        f.write("\n".join(fluent_stubs))
+    ruff_then_write("api", api_stubs)
+    ruff_then_write("fluent", fluent_stubs)
 
     print("DONE: Generated clean API and Fluent stubs.")
 

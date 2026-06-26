@@ -53,6 +53,7 @@ ruff check src tests --fix      # should be no warnings here
      (There seems to be no need to bump the grammar version just for this.)
   2. Update table and possibly body of `README.md`
   3. Add a stub entry to `CHANGELOG.md` under `Unreleased`. You probably want to edit this.
+  4. Run `tools/api_stub_gen.py` to update API stubs
 
 
 ## What makes a good PR

@@ -53,9 +53,6 @@ jobs:
       - name: Install dependencies
         run: pip install -e .[dev-all]
 
-      - name: Generate stubs
-        run: python tools/api_stub_gen.py
-
       - name: Run tests
         working-directory: ${{ github.workspace }}
         run: |
@@ -105,9 +102,6 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           python3 -m pip install --break-system-packages -e .[dev-all]
-
-      - name: Generate stubs
-        run: python3 tools/api_stub_gen.py
 
       - name: Run tests
         run: python3 -X utf8 -m pytest -n auto --dist loadfile
