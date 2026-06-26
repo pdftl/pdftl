@@ -56,6 +56,7 @@ HARDCODED_KEYWORDS = {
     "dump_signatures",
     "dump_streams",
     "dump_tables",
+    "dump_tags",
     "dump_text",
     "fill_form",
     "filter",

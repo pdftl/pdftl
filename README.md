@@ -245,6 +245,7 @@ See the **[API Tutorial][4]** for more details.
 | [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html)             | List and validate digital signatures                            |
 | [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html)                   | Dump page content streams as seen by `replace`                  |
 | [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html)                     | Extract tables to JSON, CSV, or Markdown                        |
+| [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html)                         | Inspect the PDF structure tree and reading order                |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |
 | [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |

@@ -200,7 +200,7 @@ def _load_and_mark_pdf(out_dir: str, expected_filename: str) -> "pikepdf.Pdf":
 
 @register_operation(
     "tag",
-    tags=["accessibility", "tagging", "tagged-pdf", "pdf-ua"],
+    tags=["accessibility", "tagging", "tagged-pdf", "pdf-ua", "tags"],
     type="single input operation",
     desc="Auto-tag a PDF for accessibility using OpenDataLoader",
     long_desc=_TAG_LONG_DESC,

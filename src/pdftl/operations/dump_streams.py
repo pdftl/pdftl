@@ -1,7 +1,13 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/operations/dump_streams.py
 
 """Dump page content streams (and Form XObject streams) for inspection,
 mirroring what the `replace` operation operates on."""
+
+from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
@@ -10,6 +16,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.operations.helpers.stream_annotator import annotate_stream
+from pdftl.operations.helpers.xobject_helpers import read_xobject_stream
 from pdftl.operations.helpers.pretty_printers import pretty_format_pdf_obj
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.normalize import get_normalized_page_content_stream
@@ -69,7 +76,7 @@ def _scan_xobject_resources(resources, page_num: int, seen: set, objgen_to_pages
             _scan_xobject_resources(xobj.Resources, page_num, seen, objgen_to_pages)
 
 
-def _build_xobject_page_map(pdf: "pikepdf.Pdf", target_page_nums: list[int]) -> dict:
+def _build_xobject_page_map(pdf: pikepdf.Pdf, target_page_nums: list[int]) -> dict:
     """
     Build a map of XObject objgen -> list of page numbers (from target_page_nums)
     that reference it, recursively. Used to warn when an XObject is shared.
@@ -80,21 +87,6 @@ def _build_xobject_page_map(pdf: "pikepdf.Pdf", target_page_nums: list[int]) -> 
         if "/Resources" in page:
             _scan_xobject_resources(page.Resources, page_num, set(), objgen_to_pages)
     return objgen_to_pages
-
-
-def _read_xobject_stream(xobj, normalize: bool) -> bytes:
-    """Return the content bytes for a Form XObject, normalized or raw."""
-    import pikepdf
-
-    if not normalize:
-        return xobj.read_bytes()
-    try:
-        return pikepdf.unparse_content_stream(pikepdf.parse_content_stream(xobj))
-    except (pikepdf.PdfError, ValueError, TypeError) as e:
-        logger.warning(
-            "Could not normalize Form XObject stream: %s. Falling back to raw bytes.", e
-        )
-        return xobj.read_bytes()
 
 
 def _xobject_shared_warnings(xobj, page_num: int, xobject_page_map: dict) -> list[str]:
@@ -145,7 +137,7 @@ def _recurse_and_collect(
         obj_num, gen_num = xobj.objgen
         header = f"Page {page_num} / XObject {name} ({obj_num}:{gen_num})"
 
-        content = _read_xobject_stream(xobj, normalize)
+        content = read_xobject_stream(xobj, normalize)
         warnings = _xobject_shared_warnings(
             xobj, page_num, xobject_page_map
         ) + _xobject_content_warnings(content)
@@ -254,7 +246,7 @@ Default is all pages.
 
 `dump_streams` intentionally mirrors `replace`'s behavior:
 
-| Behavior                          | `replace`           | `dump_streams`      |
+| Behavior                           | `replace`           | `dump_streams`      |
 |-----------------------------------|---------------------|---------------------|
 | Normalizes page streams           | yes                 | yes (default)       |
 | Normalizes XObject streams        | yes                 | yes (default)       |
@@ -319,7 +311,7 @@ def dump_streams_cli_hook(result: OpResult, stage, _pipeline) -> None:
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {"output_file": c.OUTPUT}),
     skip_pipeline_save=True,
 )
-def dump_streams(pdf: "pikepdf.Pdf", specs, output_file=None) -> OpResult:
+def dump_streams(pdf: pikepdf.Pdf, specs, output_file=None) -> OpResult:
     """
     Dump page content streams in the form that `replace` operates on them.
     """
@@ -378,7 +370,9 @@ def dump_streams(pdf: "pikepdf.Pdf", specs, output_file=None) -> OpResult:
     )
 
 
-##################################################
+# ---------------------------------------------------------------------------
+# Page processors
+# ---------------------------------------------------------------------------
 
 
 def _process_page_resources(page, page_num: int) -> tuple[str, bytes]:
