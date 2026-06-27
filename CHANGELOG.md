@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `delete_actions` operation
+
+- `dump_actions` operation
+
 - `dump_tags` operation
 
 - `tag` operation

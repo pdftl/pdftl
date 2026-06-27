@@ -102,6 +102,13 @@ def delete(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def delete_actions(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def delete_annots(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -136,6 +143,14 @@ def delete_images(
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
 def diff_text(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    output: Optional[str] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def dump_actions(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
     output: Optional[str] = ...,

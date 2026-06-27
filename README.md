@@ -222,12 +222,14 @@ See the **[API Tutorial][4]** for more details.
 | [`create`](https://pdftl.readthedocs.io/en/latest/operations/create.html)                               | Create a new PDF                                                |
 | [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages to a rectangle                                       |
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
+| [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html)               | Delete action info                                              |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
 | [`delete_attachments`](https://pdftl.readthedocs.io/en/latest/operations/delete_attachments.html)       | Delete file attachments based on criteria                       |
 | [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
 | [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
 | [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html)                         | Diff the text content of two PDFs and output bounding boxes     |
+| [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html)                   | Dump action info                                                |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |
 | [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html)               | Extract PDF bookmarks into YAML or JSON                         |
 | [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html)           | Report color spaces used                                        |
