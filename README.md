@@ -9,112 +9,92 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pdftl)](https://pypi.org/project/pdftl/)
 [![Static Badge](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-lightgrey)](#quick-start)
 
-**pdftl** ("PDF tackle") is a CLI tool for PDF manipulation written in Python. It started as a command-line compatible extension of the venerable `pdftk`, and has since gained many new features.
+**pdftl** ("PDF tackle") is a command-line interface for PDF manipulation written in Python.
+It provides a [`pdftk`-compatible interface](https://github.com/pdftl/pdftl/blob/main/COMPATIBILITY.md)
+for standard operations while adding extended capabilities for text extraction, image modification, and document analysis.
 
-Leveraging [`pikepdf`](https://github.com/pikepdf/pikepdf) ([qpdf](https://github.com/qpdf/qpdf)) and other modern libraries, it offers advanced capabilities like cropping, chopping, adding/finding text and arbitrary content stream injection/replacement.
+The core of `pdftl` relies on [`pikepdf`](https://github.com/pikepdf/pikepdf)
+(a Python binding for [`qpdf`](https://github.com/qpdf/qpdf)).
 
-## Quick start
-```bash
-pipx install pdftl[full]
+Full online documentation is available via [_Read the Docs_][3].
 
-# merge, crop to letter paper, rotate last page and output with encryption with one command
-pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
-    --- crop '4-8,12(letter)' \
-    --- rotate endright \
-    output out.pdf owner_pw foo user_pw bar encrypt_aes256
-```
+## Quick Start
 
-## Key features and `pdftk` compatibility
+`pdftl` requires Python 3.10 or later.
 
-* **Familiar syntax:** Command-line compatible with `pdftk`. Verified against [Mike Haertl's php-pdftk test suite][5] and the [pdftk-java][8] test suite logic, so `s/pdftk/pdftl/` should result in working scripts.
-* **Pipelining:** Chain multiple operations in a single command using `---`.
-* **Performant:** `pdftl` seems faster than `pdftk-java` for many operations (based on informal benchmarks). Reason: `pdftl` mostly drives `pikepdf` which drives `qpdf`, a fast C++ library.
-* **Extra/enhanced operations and features** such as zooming pages, smart merging preserving links and outlines, cropping/chopping up pages, text extraction, modifying and optimizing images.
-* **Modern security:** Supports AES-256 encryption and modern permission flags out of the box.
-* **Content editing:** Find & replace text via regular expressions, inject raw PDF operators, or overlay dynamic text.
+Because `pdftl` is a command-line tool, the recommended installation method is via [`pipx`](https://pipx.pypa.io/), which installs the application into an isolated environment so its dependencies don't conflict with your system Python.
 
-`pdftl` maintains command-line compatibility with `pdftk` while introducing features required for modern PDF workflows.
-
-| Feature              | `pdftk` (Legacy)         | `pdftl` (Modern)                                                        |
-|:---------------------|:-------------------------|:------------------------------------------------------------------------|
-| **Pipelining**       | ❌                       | ✅ **Native** (Chain ops with `---`)                                    |
-| **Encryption**       | ⚠️ (Obsolete RC4)         | ✅ **AES-256 Support**                                                  |
-| **Syntax**           | Standard                 | ✅ **Compatible Extension**                                             |
-| **Page Geometry**    | ❌                       | ✅ **Crop to fit, Zoom, & Chop**                                        |
-| **Pipelined Logic**  | ❌                       | ✅ **Rotate + Stamp in one command**                                    |
-| **Plugins**          | ❌                       | ✅ **Custom operations/mutation scripts written in Python**             |
-| **Text Processing**  | ❌                       | ✅ **Geometry-aware full text search, and text dumping**                |
-| **Installation**     | Often complex binary     | ✅ **Simple: `pipx install pdftl`**                                      |
-| **Performance**      | Variable                 | ✅ **Powered by pikepdf/qpdf**                                          |
-| **Link Integrity**   | ⚠️ Often breaks TOC/Links | ✅ **Preserves internal cross-refs**                                    |
-| **Shell Completion** | ⚠️ zsh                    | ✅  **bash, zsh and powershell**                                        |
-| **Help**             | ⚠️ Basic (manpage)        | ✅ **Self-documenting: [`pdftl help <operation/option/topic/tag>`][7]** |
-
-## Installation
-
-Install [`pipx`](https://pipx.pypa.io), and then:
+To install the core package (covers standard `pdftk` functionality):
 
 ```bash
-pipx install pdftl[full]
+pipx install pdftl
 ```
 
-A simple `pip install pdftl[full]` install is also supported.
+Many of the extended features require additional system or Python dependencies. To install the tool with all optional features enabled:
 
-**Note:** The `[full]` install includes [`ocrmypdf`](https://pypi.org/project/ocrmypdf/) for image optimization, [`reportlab`](https://pypi.org/project/reportlab/) for text generation, [`pypdfium2`](https://pypi.org/project/pypdfium2/) for text extraction, search and flattening, and [`pyHanko`][6] for cryptographic signature functionality. Omit `[full]` to omit those features and dependencies.
+```bash
+pipx install "pdftl[full]"
+```
 
-## Key features
+Some features may require addition system software, such as `java`.
 
-### 📄 Standard operations
+*Note: You can also use standard `pip` if you prefer to manage your own virtual environments, or if you only need specific feature subsets (e.g., `pip install "pdftl[signing,optimize-images]"`).*
 
-* **Combine:** [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html) (interleave pages from multiple docs).
-* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html) (split into single pages, by bookmarks, by size,...), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html) pages or [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html) pages.
-* **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html) page labels, document properties, ...
+## Feature Overview
+
+### Standard Operations
+
+* **Combine & Organize:** [`create`](https://pdftl.readthedocs.io/en/latest/operations/create.html), [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html), [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html), and [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html).
+* **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html), or [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html).
+* **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html).
 * **Attachments:** [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html), [`dump_files`](https://pdftl.readthedocs.io/en/latest/operations/dump_files.html), [`delete_attachments`](https://pdftl.readthedocs.io/en/latest/operations/delete_attachments.html).
-* **Bookmarks:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html), [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html), [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html) and [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html) with high fidelity, using structured YAML or JSON.
-* **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html) (single page), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
+* **Bookmarks & Links:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html), [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html), [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html), [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html), and [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html).
+* **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
 
-### ✂️ Geometry & splitting
+### Geometry & Splitting
 
-* **Whole-page geometry:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages (absolute or relative) or [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) pages
-* **Clip** and **Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) pages to margins or standard paper sizes (e.g., "A4"), or keep pages unchanged and [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) to hide content outside a given region.
-* **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows (e.g., split a scanned spread into two pages).
-* **Shift, scale and spin** page content *inside* the page boundaries using [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
-* **Montage:** [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html) multiple pages onto a grid layout for contact sheets and N-up handouts.
-* **Booklet:** create a print-ready [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html) with optional RTL support and signature splitting.
+* **Geometry:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) or [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html).
+* **Clip and Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) to margins or standard paper sizes, or [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) content outside a given region.
+* **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows.
+* **Layout:** Shift, scale, and spin content with [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
+* **Montage:** [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html) multiple pages onto a grid layout.
+* **Booklet:** Create a printable [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html).
 
-### 📝 Text, Forms & annotations
+### Text, Forms & Annotations
 
-* **Text search/comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html) for pattern matching and comparison, with visual bounding box coordinates.
-* **Text extraction:** [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html) for plain text extraction, and [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html) to extract tables.
+* **Search/Comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html).
+* **Extraction:** [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html), [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html), and [`dump_fonts`](https://pdftl.readthedocs.io/en/latest/operations/dump_fonts.html).
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
-* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html) (surgical edits to link properties, colors, borders), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)  text matching a regular expression.
+* **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html).
+* **Actions & Scripts:** [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html) and [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html).
+* **Accessibility & Structure:** [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html) for auto-tagging, and [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html) to inspect the structure tree.
 
-### 🔐 Security
-* **Decryption:** using [`input_pw`](https://pdftl.readthedocs.io/en/latest/general/input.html).
-* **Encryption:** using [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw) and [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), optionally setting permissions with [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm). Read permissions/encryption data with [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html)
-* **Signatures:** add secure signatures using [`sign_key`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file) and [`sign_cert`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file). List and verify signatures using [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html) (powered by [`pyHanko`][6]).
+### Security
 
+* **Decryption:** [`input_pw`](https://pdftl.readthedocs.io/en/latest/general/input.html).
+* **Encryption:** [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw), [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), and [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm). Inspect with [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html).
+* **Signatures:** [`sign_key`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file), [`sign_cert`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file), and [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html).
 
-### 🖼️  Images
-* **Info:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) gives detailed per-image info
-* **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) your PDF to images
-* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html) (smart compression via OCRmyPDF), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), or [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html)
-* **Image editing:** [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html) and [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html) to apply sharpen/blur, control brightness/contrast, etc, or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html)
-* **Vector operations**: [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html) and [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html)
+### Images & Vectors
 
-### 🛠️ Advanced
+* **Information:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) and [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html).
+* **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) pages as images.
+* **Optimization & Editing:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html), [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html), [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html), or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html).
+* **Vectors:** [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html) and [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html).
+* **Barcodes:** Generate and place on pages with [`barcode`](https://pdftl.readthedocs.io/en/latest/operations/barcode.html).
 
-* **Content stream replacement:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of raw content streams using regular expressions (experimental).
-* **Code injection:** [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) raw PDF operators at the head/tail of content streams.
-* **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) supports Bates stamping and can add page numbers, filenames, timestamps, etc.
-* **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) content streams, [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize) for web viewing.
-* **Layers (aka OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html)) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html): list, strip or merge PDF layers.
-* **Plugins:** write your own custom operation in Python, save to `~/.config/pdftl/operations` (*nix) or
- `%APPDATA%\pdftl\config` (Windows) and you can use it in pdftl, just like the built-in operations. And you can [`mutate_content`](https://pdftl.readthedocs.io/en/latest/operations/mutate_content.html) using simple Python scripts.
+### Advanced
+
+* **Content Streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html).
+* **Dynamic Text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
+* **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) and [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize).
+* **Layers (OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html).
+* **Presentations:** Remove slide transition frames with [`unpause`](https://pdftl.readthedocs.io/en/latest/operations/unpause.html).
+* **Plugins:** Write custom operations in Python or use [`mutate_content`](https://pdftl.readthedocs.io/en/latest/operations/mutate_content.html).
 
 ## Examples
 
-For more than 100 other examples: `pdftl help examples`.
+For additional examples, run `pdftl help examples`.
 
 ### Concatenation
 
@@ -144,6 +124,14 @@ pdftl in.pdf rotate south \
   --- burst output page_%04d.pdf
 ```
 
+```bash
+# Merge, crop to letter paper, rotate the last page, and output with encryption
+pdftl A=a.pdf B=b.pdf cat A1-5 B2-end \
+  --- crop '4-8,12(letter)' \
+  --- rotate endright \
+  output out.pdf owner_pw foo user_pw bar encrypt_aes256
+```
+
 ### Forms and metadata
 
 ```bash
@@ -161,16 +149,16 @@ pdftl docs.pdf modify_annots "odd/Highlight(C=[1 0 0])" output red_notes.pdf
 ### Modify content
 
 ```bash
-# Add a watermark, the pdftk way
+# Add a watermark
 pdftl in.pdf stamp watermark.pdf output marked1.pdf
 ```
 
-```
-# Add an obnoxious semi-transparent red watermark on odd pages only
+```bash
+# Add a semi-transparent red watermark on odd pages
 pdftl in.pdf add_text 'odd/YOUR AD HERE/(position=mid-center, font=Helvetica-Bold, size=72, rotate=45, color=1 0 0 0.5)' output with_ads.pdf
 ```
 
-```
+```bash
 # Add Bates numbering starting at 000121
 # Result: DEF-000121, DEF-000122, ...
 pdftl in.pdf \
@@ -178,17 +166,15 @@ pdftl in.pdf \
   output bates.pdf
 ```
 
-```
-# Content stream replacement with regular expressions (YMMV)
+```bash
+# Content stream replacement with regular expressions
 # Change black to red
 pdftl in.pdf replace '/0 0 0 (RG|rg)/1 0 0 \1/' output redder.pdf
 ```
 
-
 ## Python API
 
-While `pdftl` is primarily a CLI tool, it also exposes a Python API for integrating PDF workflows into your scripts.
- It supports both a Functional interface (similar to the CLI) and a Fluent interface (for method chaining).
+While `pdftl` is primarily a CLI tool, it also exposes a Python API for integrating PDF workflows into your scripts. It supports both a Functional interface (similar to the CLI) and a Fluent interface (for method chaining).
 
 ```python
 from pdftl import pipeline
@@ -202,7 +188,7 @@ from pdftl import pipeline
 )
 ```
 
-See the **[API Tutorial][4]** for more details.
+See the [**API Tutorial**][4] for more details.
 
 ## Operations and options
 
@@ -268,8 +254,8 @@ See the **[API Tutorial][4]** for more details.
 | [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html)             | Optimize images                                                 |
 | [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                             |
 | [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                                      |
-| [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html)                             | Convert images to grayscale                       |
-| [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html)                             | Make non-image page content gray                |
+| [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html)               | Convert images to grayscale                                     |
+| [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html)             | Make non-image page content gray                                |
 | [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams                       |
 | [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html)             | Resample images                                                 |
 | [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
@@ -316,18 +302,14 @@ See the **[API Tutorial][4]** for more details.
 | [`user_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw)                       | Set user password and encrypt output                      |
 | [`verbose`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#verbose)                               | Turn on verbose output                                    |
 
-
 ## Links
 
 * **License:** This project is licensed under the [Mozilla Public License 2.0][1].
 * **Changelog:** [CHANGELOG.md][2].
-* **Documentation:** [pdftl.readthedocs.io][3].
+* **Online Documentation:** at [_Read the Docs_][3].
 
 [1]: https://raw.githubusercontent.com/pdftl/pdftl/main/LICENSE
 [2]: https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md
 [3]: https://pdftl.readthedocs.io
 [4]: https://pdftl.readthedocs.io/en/latest/api_tutorial.html
 [5]: https://github.com/mikehaertl/php-pdftk
-[6]: https://github.com/MatthiasValvekens/pyHanko
-[7]: https://pdftl.readthedocs.io/en/latest/general/help.html
-[8]: https://gitlab.com/pdftk-java/pdftk
