@@ -1,5 +1,8 @@
 # tests/operations/test_set_props.py
 
+import logging
+from unittest.mock import PropertyMock, patch
+
 import pikepdf
 import pytest
 
@@ -24,6 +27,46 @@ def test_set_props_missing_args(blank_pdf):
 def test_set_props_invalid_arg_format(blank_pdf):
     with pytest.raises(InvalidArgumentError, match="missing '=' in argument"):
         set_props(blank_pdf, ["lang_en-US"])
+
+
+def test_set_props_metadata_legacy_docinfo(blank_pdf):
+    """Tests that legacy /Info gets populated for PDF 1.x documents."""
+    with patch("pikepdf.Pdf.pdf_version", new_callable=PropertyMock, return_value="1.7"):
+        op_args = ["title=My Title", "trapped=true", "author=Jane Doe, John Smith"]
+        res = set_props(blank_pdf, op_args)
+
+        assert res.success is True
+        assert str(blank_pdf.docinfo["/Title"]) == "My Title"
+        assert str(blank_pdf.docinfo["/Trapped"]) == "/True"
+        assert str(blank_pdf.docinfo["/Author"]) == "Jane Doe, John Smith"
+
+
+def test_set_props_metadata_pdf20_deprecation(blank_pdf):
+    """Tests that PDF 2.0 docs only get ModDate/CreationDate in /Info."""
+    with patch("pikepdf.Pdf.pdf_version", new_callable=PropertyMock, return_value="2.0"):
+        op_args = ["title=My Title", "moddate=2026-01-01", "trapped=false"]
+        set_props(blank_pdf, op_args)
+
+        # ISO 32000-2 deprecated these in the DocInfo dictionary
+        assert "/Title" not in blank_pdf.docinfo
+        assert "/Trapped" not in blank_pdf.docinfo
+        # ModDate is explicitly exempt from deprecation
+        assert "/ModDate" in blank_pdf.docinfo
+
+
+def test_set_props_xmp_updates(blank_pdf):
+    """Tests that XMP properties are updated correctly, including sequences."""
+    set_props(blank_pdf, ["author=Jane, John", "trapped=Unknown"])
+
+    with blank_pdf.open_metadata() as meta:
+        assert meta["dc:creator"] == ["Jane", "John"]
+        assert meta["pdf:Trapped"] == "Unknown"
+
+
+def test_set_props_trapped_invalid(blank_pdf):
+    """Tests that invalid trapped values are rejected."""
+    with pytest.raises(OperationError, match="trapped must be True, False, or Unknown"):
+        set_props(blank_pdf, ["trapped=yes"])
 
 
 def test_set_props_standard_properties(blank_pdf):
@@ -168,3 +211,33 @@ def test_set_props_pagelabels_clear(blank_pdf):
 
     set_props(blank_pdf, ["pagelabels=   "])
     assert "/PageLabels" not in blank_pdf.Root
+
+
+def test_set_props_metadata_legacy_date_format(blank_pdf):
+    """Tests parsing of a legacy PDF date format (D:...). (Coverage for line 188)"""
+    set_props(blank_pdf, ["creationdate=D:20260101120000Z"])
+    # pikepdf natively formats this back to a standard string
+    assert str(blank_pdf.docinfo["/CreationDate"]).startswith("D:20260101")
+
+
+def test_set_props_metadata_backfill_error(blank_pdf, caplog):
+    """Tests that backfilling gracefully catches format errors from existing docinfo. (Coverage for lines 264-267)"""
+    caplog.set_level(logging.DEBUG)
+    # Inject a malformed date into the original docinfo
+    blank_pdf.docinfo["/ModDate"] = "InvalidDateString"
+    # Trigger metadata update
+    set_props(blank_pdf, ["title=New Title"])
+    # Assert that the backfilling gracefully failed and logged the debug message
+    assert "Failed to backfill xmp:ModifyDate" in caplog.text
+
+
+def test_set_props_metadata_apply_error(blank_pdf):
+    """Tests that general metadata extraction/update errors are caught and re-raised. (Coverage for lines 294-295)"""
+    # Mock open_metadata to raise a PdfError, simulating corrupted XMP metadata
+    with patch.object(
+        blank_pdf, "open_metadata", side_effect=pikepdf.PdfError("Corrupted XMP stream")
+    ):
+        with pytest.raises(
+            OperationError, match="Failed to set document metadata: Corrupted XMP stream"
+        ):
+            set_props(blank_pdf, ["title=Another Title"])

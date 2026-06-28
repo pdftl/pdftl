@@ -32,16 +32,20 @@ preferences, logical page labels, and open actions without altering page content
 You can provide one or more `key=value` pairs.
 
 ### Document Metadata (Auto-syncs Info Dict & XMP Stream)
-Updates standard metadata properties. pdftl automatically synchronizes these
-values across both the legacy `/Info` dictionary and the modern PDF 2.0 XMP stream.
+Updates standard metadata properties. For PDF 1.x documents, pdftl synchronizes
+these values across both the legacy `/Info` dictionary and the XMP stream.
+For PDF 2.0+ documents, per ISO 32000-2, most legacy `/Info` entries are
+deprecated; pdftl will write all properties to the XMP stream but will only
+write `creationdate` and `moddate` to the `/Info` dictionary.
 * **title**: The document's title.
-* **author**: The name of the person who created the document.
+* **author**: The name of the person who created the document (comma-separated for multiple).
 * **subject**: The subject of the document.
 * **keywords**: Comma-separated keywords associated with the document.
 * **creator**: The application that originally created the document.
 * **producer**: The tool used to convert the document to PDF.
 * **creationdate**: Document creation timestamp (ISO 8601 or PDF `D:...` date).
 * **moddate**: Document modification timestamp (ISO 8601 or PDF `D:...` date).
+* **trapped**: Indicates if the document has trapping information (`True`, `False`, or `Unknown`).
 
 ### Supported Properties
 * **lang**: The language identifier of the document (e.g., `en-US`). Important for accessibility.
@@ -199,15 +203,33 @@ def _format_date_for_xmp(val):
     return _parse_to_datetime(val).isoformat()
 
 
+def _format_trapped_xmp(val):
+    val_cap = str(val).capitalize()
+    if val_cap not in ("True", "False", "Unknown"):
+        raise OperationError(f"trapped must be True, False, or Unknown. Got: {val}")
+    return val_cap
+
+
+def _format_trapped_docinfo(val):
+    import pikepdf
+
+    return pikepdf.Name(f"/{_format_trapped_xmp(val)}")
+
+
+def _format_author_xmp(val):
+    """Parses a comma-separated author string into an XMP sequence list."""
+    return [author.strip() for author in str(val).split(",") if author.strip()]
+
+
 # Format: "cli_key": ("/InfoKey", "xmp:Key", xmp_formatter, docinfo_formatter)
 _METADATA_MAP = {
     "title": ("/Title", "dc:title", str, str),
-    "author": ("/Author", "dc:creator", lambda x: [str(x)], str),
+    "author": ("/Author", "dc:creator", _format_author_xmp, str),
     "subject": ("/Subject", "dc:description", str, str),
     "keywords": ("/Keywords", "pdf:Keywords", str, str),
     "creator": ("/Creator", "xmp:CreatorTool", str, str),
     "producer": ("/Producer", "pdf:Producer", str, str),
-    # The new date fields:
+    "trapped": ("/Trapped", "pdf:Trapped", _format_trapped_xmp, _format_trapped_docinfo),
     "creationdate": (
         "/CreationDate",
         "xmp:CreateDate",
@@ -219,9 +241,19 @@ _METADATA_MAP = {
 
 
 def _apply_cli_to_docinfo(pdf, kwargs):
-    """Applies CLI updates to the legacy /Info dict."""
+    """Applies CLI updates to the legacy /Info dict, respecting PDF 2.0 deprecations."""
+    pdf_major_version = int(pdf.pdf_version.split(".")[0])
+
     for kw_key, (info_key, _, _, doc_fmt) in _METADATA_MAP.items():
         if kw_key in kwargs:
+            # ISO 32000-2 §14.3.3: In PDF 2.0+, only CreationDate and ModDate
+            # should be written to the /Info dictionary. Other keys are deprecated.
+            if pdf_major_version >= 2 and info_key not in (
+                "/CreationDate",
+                "/ModDate",
+            ):
+                continue
+
             pdf.docinfo[info_key] = doc_fmt(kwargs[kw_key])
 
 

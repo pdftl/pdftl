@@ -16,7 +16,7 @@ for standard operations while adding extended capabilities for text extraction, 
 The core of `pdftl` relies on [`pikepdf`](https://github.com/pikepdf/pikepdf)
 (a Python binding for [`qpdf`](https://github.com/qpdf/qpdf)).
 
-Full online documentation is available via [_Read the Docs_][3].
+For online documentation: [_Read the Docs_][3].
 
 ## Quick Start
 
@@ -30,13 +30,13 @@ To install the core package (covers standard `pdftk` functionality):
 pipx install pdftl
 ```
 
-Many of the extended features require additional system or Python dependencies. To install the tool with all optional features enabled:
+Many of the extended features require additional Python dependencies. To install the tool with all optional features enabled:
 
 ```bash
 pipx install "pdftl[full]"
 ```
 
-Some features may require addition system software, such as `java`.
+Some features require system software such as `java`.
 
 *Note: You can also use standard `pip` if you prefer to manage your own virtual environments, or if you only need specific feature subsets (e.g., `pip install "pdftl[signing,optimize-images]"`).*
 
