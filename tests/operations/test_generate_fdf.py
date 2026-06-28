@@ -1,3 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# tests/operations/test_generate_fdf.py
+
+"""Test suite for FDF generation operations."""
+
 import io
 import unittest
 from types import SimpleNamespace
@@ -249,10 +257,6 @@ class TestFDFFieldEdgeCases(unittest.TestCase):
         self.assertIn("/T (RadioTest)", output)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def test_write_string_utf8_fallback():
     """Covers lines 102-105: Fallback to UTF-8 for non-Latin-1 chars."""
     buffer = io.BytesIO()
@@ -449,3 +453,46 @@ def test_pikepdf_name_formatting_bug_fix():
     # Should be /V /Yes, NOT /V //Yes
     assert b"/V /Yes" in buffer.getvalue()
     assert b"//Yes" not in buffer.getvalue()
+
+
+# --- New ISO Specification Feature Tests ---
+
+
+def test_generate_fdf_status_message(fdf_source_pdf, tmp_path):
+    """ISO 32000-2 Table 246: Verifies custom status string is cleanly generated."""
+    output = tmp_path / "status.fdf"
+
+    result = generate_fdf(
+        fdf_source_pdf, lambda x: x, str(output), status="Operation Completed Successfully"
+    )
+    generate_fdf_cli_hook(result, None, None)
+
+    content = output.read_bytes()
+    assert b"/Status (Operation Completed Successfully)" in content
+
+
+def test_generate_fdf_multi_select_choice_array(fdf_source_pdf, tmp_path):
+    """ISO 32000-2 §12.7.5.4: Test array serialization for multi-select choice fields."""
+    choice_dict = pikepdf.Dictionary(
+        FT=pikepdf.Name.Ch,
+        Ff=1 << 21,
+        T=pikepdf.String("Languages"),
+        V=pikepdf.Array([pikepdf.String("Spanish"), pikepdf.Name("/German"), 123]),
+        Rect=[0, 100, 100, 120],
+    )
+    choice_obj = fdf_source_pdf.make_indirect(choice_dict)
+    fdf_source_pdf.Root.AcroForm.Fields.append(choice_obj)
+    fdf_source_pdf.pages[0].Annots.append(choice_obj)
+
+    output = tmp_path / "multiselect.fdf"
+    result = generate_fdf(fdf_source_pdf, lambda x: x, str(output))
+    generate_fdf_cli_hook(result, None, None)
+
+    content = output.read_bytes()
+    # Verifies the array formatting is structured correctly in output: [(Spanish) /German (123)]
+    assert b"/T (Languages)" in content
+    assert b"/V [(Spanish) /German (123)]" in content
+
+
+if __name__ == "__main__":
+    unittest.main()

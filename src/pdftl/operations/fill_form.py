@@ -4,7 +4,7 @@
 
 # src/pdftl/operations/fill_form.py
 
-"""Fill in forms in a PDF"""
+"""Operation to fill in interactive forms (AcroForm) in a PDF file."""
 
 import logging
 from collections.abc import Callable
@@ -30,34 +30,33 @@ The `fill_form` operation is used to fill in a form in a PDF.
 The `<form_data>` can be the path to a file in FDF or XFDF format,
 or `-`, or `PROMPT`.
 
-**Warning** This is not very well tested; beware! Please
-report bugs on GitHub, ideally with files to reproduce the
-bugs.
+This operation supports text boxes, checkboxes, list-boxes,
+radio buttons (including multi-page synchronized groups),
+and choice fields with single or multiple options selected.
 
 """
 
-# _FILL_FORM_EXAMPLES = [
-#     {
-#         "cmd": "in.pdf fill_form data.fdf output out.pdf",
-#         "desc": "Complete a form in in.pdf using data from data.fdf"
-#     }
-# ]
+_FILL_FORM_EXAMPLES = [
+    {
+        "cmd": "in.pdf fill_form data.fdf output out.pdf",
+        "desc": "Complete a form in in.pdf using data from data.fdf",
+        "test_example": False,
+    }
+]
 
 
 @register_operation(
     "fill_form",
-    tags=["in_place", "forms", "alpha"],
+    tags=["in_place", "forms"],
     type="single input operation",
     desc="Fill a PDF form",
     long_desc=_FILL_FORM_LONG_DESC,
     usage="<input> fill_form <form_data> output <file> [<option>...]",
-    #    examples=_FILL_FORM_EXAMPLES,  # FIXME
+    examples=_FILL_FORM_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS, c.GET_INPUT], {}),
 )
 def fill_form(pdf: "Pdf", args: list[str], get_input: Callable = filename_completer) -> OpResult:
-    """
-    Fill in a form, treating the first argument as a filename (or similar) for data
-    """
+    """Fill in a form, treating the first argument as a filename for data."""
     if not args:
         args = ["PROMPT"]
 
@@ -78,9 +77,7 @@ def fill_form(pdf: "Pdf", args: list[str], get_input: Callable = filename_comple
 
 
 def _fill_form_from_data(pdf, data):
-    """
-    Fill in a form, using given data
-    """
+    """Fill in a form, using given raw data string."""
     from pikepdf.exceptions import PdfError
     from pikepdf.form import Form
 
@@ -103,20 +100,19 @@ def _fill_form_from_data(pdf, data):
 
 
 def _fill_form_from_fdf_data(form, data):
-    """Fill in a form, using given FDF data"""
+    """Fill in a form, using given FDF data bytes."""
     import pikepdf
 
     with pikepdf.open(wrap_fdf_data_in_pdf_bytes(data)) as wrapper_pdf:
         fdf_fields = wrapper_pdf.Root.FDF.Fields
         if not isinstance(fdf_fields, pikepdf.Array):
             raise UserCommandLineError(f"FDF fields is not an array: {type(fdf_fields)}")
-        # logger.debug(fdf_fields)
         for fdf_field in as_iterable(fdf_fields):
             _fill_form_field_from_fdf_field(form, fdf_field)
 
 
 def _fill_form_field_from_fdf_field(form, fdf_field, ancestors=None):
-    """Fill in a form field, using given FDF field"""
+    """Fill in a form field, using given FDF field."""
     logger.debug("title=%s", getattr(fdf_field, "T", None))
     if ancestors is None:
         ancestors = []
@@ -128,7 +124,7 @@ def _fill_form_field_from_fdf_field(form, fdf_field, ancestors=None):
 
 
 def _process_fdf_field_kids(form, fdf_field, ancestors):
-    """Process kids of an FDF field recursively"""
+    """Process kids of an FDF field recursively."""
     kid_ancestors = ancestors.copy()
     if hasattr(fdf_field, "T"):
         kid_ancestors.append(str(fdf_field.T))
@@ -137,7 +133,7 @@ def _process_fdf_field_kids(form, fdf_field, ancestors):
 
 
 def _fill_form_value_from_fdf_field(form, fdf_field, ancestors):
-    """Fill in a form value from an FDF field"""
+    """Fill in a form value from an FDF field."""
     import pikepdf
     from pikepdf.form import RadioButtonGroup
 
@@ -182,7 +178,7 @@ def _recurse_into_named_xfdf_field(field, name, xfdf_data, parent_name):
 
 
 def _fill_form_from_xfdf_data(form, data):
-    """Fill in a form, using given XFDF data"""
+    """Fill in a form, using given XFDF data."""
     import defusedxml.ElementTree as ET
 
     try:
@@ -212,6 +208,24 @@ def _fill_form_from_xfdf_data(form, data):
 
 
 def _set_form_field_value(field, value):
+    import pikepdf
+
+    # ISO 32000-2 §12.7.5.5 Guard: Never write primitive string values onto digital signature
+    # fields
+    if field.obj.get("/FT") == pikepdf.Name("/Sig"):
+        logger.warning(
+            "Skipping digital signature field '%s'. Custom signature filling "
+            "is not supported directly.",
+            field.fully_qualified_name,
+        )
+        return
+
+    # ISO 32000-2 §12.7.5.4 Choice Multi-Select Array support
+    # We assign directly to field.obj.V to bypass pikepdf.ChoiceField's limited array support
+    if isinstance(value, (list, pikepdf.Array)):
+        field.obj.V = pikepdf.Array([pikepdf.String(str(v)) for v in value])
+        return
+
     if field.is_text:
         field.value = str(value)
 
@@ -222,7 +236,7 @@ def _set_form_field_value(field, value):
         _set_radio_button_value(field, value)
 
     else:
-        # Fallback for other types
+        # Standard fallback (includes choice fields with single selections)
         field.value = str(value)
 
 
@@ -238,13 +252,8 @@ def _set_checkbox_value(field, value):
         field.checked = is_checked
     except AttributeError:
         # FALLBACK: The PDF is missing the /AP (Appearance) dictionary.
-        # pikepdf fails because it can't lookup the "On" state name.
-        # We must set the raw object values blindly.
-        # Standard PDF checkboxes use "/Yes" for on and "/Off" for off.
-
+        # We update the Value (/V) and Appearance State (/AS) manually.
         val = Name("/Yes") if is_checked else Name("/Off")
-
-        # Update the Value (/V) and Appearance State (/AS)
         field.obj.V = val
         field.obj.AS = val
 
@@ -274,7 +283,6 @@ def _set_radio_button_value(field, value):
                 raise e
 
 
-# Helper to safely clear the field (handle "/Off")
 def _clear_radio(field):
     if "/V" in field.obj:
         del field.obj["/V"]
@@ -283,7 +291,5 @@ def _clear_radio(field):
 
 
 def fully_qualified_name(x, ancestors):
-    """Return the fully qualified name (dot-separated
-    coordinates starting from FDF object root) of an FDF object"""
-    # FIXME! Is this good enough?
+    """Return the fully qualified name starting from FDF object root."""
     return ".".join(map(str, [*ancestors, x.T]))

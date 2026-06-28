@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fill_form`: multi-select choice fields now supported (ISO 32000-2 §12.7.5.4)
+
+- `fill_form`: radio buttons, checkboxes, list-boxes, and nested fields now handled correctly
+
+- `generate_fdf`: optional `status` string in generated FDF output (ISO 32000-2 Table 246)
+
+- `generate_fdf`: multi-select choice field arrays now serialized correctly in FDF output
+
 - `set` operation: `trapped` field for document trapping status (`True`, `False`, or `Unknown`)
 
 - `set` operation: `author` now accepts comma-separated values for multiple authors
@@ -18,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copying or round-tripping outlines via `dump_bookmarks` / `add_bookmarks`
 
 ### Fixed
+
+- `fill_form`: digital signature fields are now safely skipped instead of corrupted
 
 - Bookmarks: non-GoTo outline actions (e.g. URI links, launch actions) were silently dropped
   when merging PDFs; they are now preserved

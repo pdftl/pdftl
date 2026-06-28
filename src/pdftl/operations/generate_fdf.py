@@ -64,7 +64,7 @@ def generate_fdf_cli_hook(result: OpResult, stage, _pipeline):
     args=([c.INPUT_PDF, c.GET_INPUT], {"output_file": c.OUTPUT}),
     skip_pipeline_save=True,
 )
-def generate_fdf(pdf, get_input, output_file) -> OpResult:
+def generate_fdf(pdf, get_input, output_file, status=None) -> OpResult:
     """Output FDF data for the given PDF"""
     from pikepdf.form import Form
 
@@ -80,6 +80,11 @@ def generate_fdf(pdf, get_input, output_file) -> OpResult:
 
     buffer = io.BytesIO()
     buffer.write(c.FDF_START)  # FDF_START is bytes
+
+    # ISO 32000-2 Table 246: Optional status string displaying transaction results
+    if status is not None:
+        buffer.write(f"\n  /Status ({status})".encode("latin-1"))
+
     form = Form(pdf)
     for field_name, field in form.items():
         _write_field_as_fdf_to_file(field_name, field, buffer)
@@ -121,15 +126,36 @@ def _write_field_as_fdf_to_file(field_name, field, file):
 
 
 def _get_val_as_string(field):
-    from pikepdf import Name, String
+    from pikepdf import Array, Name, String
     from pikepdf.form import CheckboxField, RadioButtonGroup
 
-    # Resolve the value to use
-    val = field.value if field.value is not None else field.default_value
+    val = getattr(field, "value", None)
+    if val is None:
+        val = getattr(field, "default_value", None)
+
+    # Bypass pikepdf stringification for Arrays
+    if hasattr(field, "obj"):
+        raw_v = field.obj.get("/V")
+        if isinstance(raw_v, Array):
+            val = raw_v
+
     val_as_string = None
 
     if val is None:
         val_as_string = _val_string_from_none(field)
+
+    # ISO 32000-2 §12.7.5.4 Choice Multi-Select Array support
+    elif isinstance(val, (list, Array)):
+        items_str = []
+        for v in val:
+            if isinstance(v, String):
+                items_str.append(f"({str(v)})")
+            elif isinstance(v, Name):
+                s_val = str(v)
+                items_str.append(s_val if s_val.startswith("/") else f"/{s_val}")
+            else:
+                items_str.append(f"({str(v)})")
+        val_as_string = f"[{' '.join(items_str)}]"
 
     elif isinstance(field, (RadioButtonGroup, CheckboxField)):
         # State-based fields use Name format (/Value)

@@ -20,7 +20,7 @@ For online documentation: [_Read the Docs_][3].
 
 ## Installation
 
-`pdftl` requires Python 3.10 or later and runs on Windows, MacOS and Linux.
+`pdftl` requires Python 3.10 or later and runs on Windows, macOS and Linux.
 
 Because `pdftl` is a command-line tool, the recommended installation method is via [`pipx`](https://pipx.pypa.io/), which installs the application into an isolated environment so its dependencies don't conflict with your system Python.
 

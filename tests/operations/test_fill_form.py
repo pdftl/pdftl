@@ -1,3 +1,5 @@
+# tests/operations/test_fill_form.py
+
 import io
 from unittest.mock import MagicMock, patch
 
@@ -20,6 +22,94 @@ def pdf():
         NeedAppearances=True,
     )
     return p
+
+
+def test_fill_form_prompt(pdf, tmp_path):
+    """Hits lines 61 & 66: Testing fallback to PROMPT when args are empty."""
+    fdf_path = tmp_path / "data.fdf"
+    fdf = pikepdf.new()
+    fdf.Root.FDF = pikepdf.Dictionary(Fields=[])
+    fdf.save(fdf_path)
+
+    with patch("pdftl.operations.fill_form.smart_open", return_value=open(fdf_path, "rb")):
+        # Lambda mimics user typing the correct path during get_input prompt
+        fill_form(pdf, [], lambda msg, **kw: str(fdf_path))
+
+
+def test_fill_form_os_error(pdf):
+    """Hits line 74: Validates OSError fallback wrapping."""
+    with patch("pdftl.operations.fill_form.smart_open", side_effect=OSError("Permission denied")):
+        with pytest.raises(UserCommandLineError, match="Permission denied"):
+            fill_form(pdf, ["dummy.fdf"], None)
+
+
+def test_fill_form_xfdf_success(pdf, tmp_path):
+    """Hits lines 158-207: Test filling a form from valid XFDF data structure."""
+    xfdf_data = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve">
+        <fields>
+            <field name="MyText">
+                <value>XFDF Hello</value>
+            </field>
+            <field name="MyCheckbox">
+                <value>Yes</value>
+            </field>
+            <field name="Parent">
+                <field name="Child">
+                    <value>Nested Value</value>
+                </field>
+            </field>
+        </fields>
+    </xfdf>"""
+
+    xfdf_path = tmp_path / "data.xfdf"
+    xfdf_path.write_bytes(xfdf_data)
+
+    # Add fields to PDF
+    f1 = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Widget,
+        FT=pikepdf.Name.Tx,
+        T=pikepdf.String("MyText"),
+        V=pikepdf.String(""),
+        Rect=[0, 0, 100, 20],
+    )
+    f2 = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Widget,
+        FT=pikepdf.Name.Btn,
+        T=pikepdf.String("MyCheckbox"),
+        V=pikepdf.Name.Off,
+        Rect=[0, 30, 100, 50],
+    )
+    f3_child = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Widget,
+        FT=pikepdf.Name.Tx,
+        T=pikepdf.String("Child"),
+        V=pikepdf.String(""),
+        Rect=[0, 60, 100, 80],
+    )
+    f3_child_obj = pdf.make_indirect(f3_child)
+    f3_parent = pikepdf.Dictionary(
+        T=pikepdf.String("Parent"), Kids=[f3_child_obj], FT=pikepdf.Name.Tx
+    )
+    f3_parent_obj = pdf.make_indirect(f3_parent)
+    f3_child_obj.Parent = f3_parent_obj
+
+    pdf.Root.AcroForm.Fields.extend([pdf.make_indirect(f1), pdf.make_indirect(f2), f3_parent_obj])
+
+    # We need to force FDF to fail so XFDF is tried. `_fill_form_from_fdf_data` fails natively if data is XML.
+    fill_form(pdf, [str(xfdf_path)], None)
+
+    from pikepdf.form import Form
+
+    form = Form(pdf)
+    assert form["MyText"].value == "XFDF Hello"
+    assert (
+        str(form["MyCheckbox"].obj.V) == "/Yes"
+    )  # _set_checkbox_value fallback sets /Yes via AttributeError
+    assert form["Parent.Child"].value == "Nested Value"
 
 
 def test_fill_form_xfdf_fallback(pdf):
@@ -232,6 +322,7 @@ def test_radio_exception_reraise_real_error():
         is_radio_button = True
         # Emulate having kids so we hit the try/except block
         obj = {"/Kids": ["fake_kid"]}
+        fully_qualified_name = "DummyField"
 
         @property
         def value(self):
@@ -273,3 +364,74 @@ def test_fill_form_fdf_fields_not_array():
 
         with pytest.raises(UserCommandLineError, match="FDF fields is not an array"):
             _fill_form_from_fdf_data(form_proxy, malformed_data)
+
+
+# --- EDGE CASE FAILURES ---
+
+
+def test_fill_form_skip_signature_field(pdf):
+    """Ensures filling is skipped entirely for cryptographically sensitive Signature fields."""
+    sig_dict = pikepdf.Dictionary(
+        FT=pikepdf.Name.Sig, T=pikepdf.String("MySignature"), V=pikepdf.Dictionary()
+    )
+    sig_obj = pdf.make_indirect(sig_dict)
+    pdf.Root.AcroForm.Fields.append(sig_obj)
+
+    form_field = Form(pdf)["MySignature"]
+
+    # Attempting to assign string value to Signature field should skip (log warning) and leave unchanged
+    _set_form_field_value(form_field, "HackedSignatureValue")
+    assert isinstance(form_field.obj.V, pikepdf.Dictionary)
+
+
+def test_fill_form_multi_select_choice_array(pdf):
+    """Ensures choice fields accept lists/arrays for multi-selection."""
+    choice_dict = pikepdf.Dictionary(
+        FT=pikepdf.Name.Ch,
+        Ff=1 << 21,  # MultiSelect flag (bit 22)
+        T=pikepdf.String("Languages"),
+        Opt=pikepdf.Array(
+            [pikepdf.String("English"), pikepdf.String("Spanish"), pikepdf.String("German")]
+        ),
+    )
+    choice_obj = pdf.make_indirect(choice_dict)
+    pdf.Root.AcroForm.Fields.append(choice_obj)
+
+    form_field = Form(pdf)["Languages"]
+
+    # Set value using raw list
+    _set_form_field_value(form_field, ["Spanish", "German"])
+
+    # Check field.obj.V directly since field.value getter might fail
+    assert len(form_field.obj.V) == 2
+    assert str(form_field.obj.V[0]) == "Spanish"
+    assert str(form_field.obj.V[1]) == "German"
+
+
+def test_fill_form_single_choice_fallback(pdf):
+    """Hits line 240: Standard fallback for Choice fields with single selection."""
+    choice_dict = pikepdf.Dictionary(
+        FT=pikepdf.Name.Ch,
+        T=pikepdf.String("SingleChoice"),
+        Opt=pikepdf.Array([pikepdf.String("Option1"), pikepdf.String("Option2")]),
+    )
+    choice_obj = pdf.make_indirect(choice_dict)
+    pdf.Root.AcroForm.Fields.append(choice_obj)
+
+    form_field = Form(pdf)["SingleChoice"]
+
+    # Pass a single string, which falls through to the `else` block
+    _set_form_field_value(form_field, "Option2")
+
+    assert str(form_field.value) == "Option2"
+
+
+def test_radio_no_kids_missing_slash(radio_no_kids):
+    """Hits line 267: Adds missing slash to radio button value."""
+    field, obj = radio_no_kids
+
+    # Pass value without slash
+    _set_form_field_value(field, "NewValNoSlash")
+
+    # It should prepend the slash automatically
+    assert str(obj.V) == "/NewValNoSlash"
