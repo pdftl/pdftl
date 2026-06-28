@@ -210,42 +210,40 @@ def _check_heading_issues(
     heading_levels_by_order: list[tuple[int, str, str]], issues: list[dict]
 ) -> None:
     """Analyse the sequence of headings for skips or missing root levels."""
-    if heading_levels_by_order:
-        first_level, first_path, first_raw = heading_levels_by_order[0]
-        if first_level != 1:
-            msg = f"First heading in document is H{first_level}, expected H1"
-            if first_raw != f"H{first_level}":
-                msg = (
-                    f"First heading in document is H{first_level} (role='{first_raw}'), "
-                    "expected H1"
-                )
+    if not heading_levels_by_order:
+        _add_issue(
+            issues, "info", "NO_HEADINGS", "Document has no heading elements in structure tree"
+        )
+        return
+
+    first_level, first_path, first_raw = heading_levels_by_order[0]
+    if first_level != 1:
+        msg = f"First heading in document is H{first_level}, expected H1"
+        if first_raw != f"H{first_level}":
+            msg = f"First heading in document is H{first_level} (role='{first_raw}'), expected H1"
+
+        _add_issue(
+            issues,
+            "warning",
+            "HEADING_NOT_H1_FIRST",
+            msg,
+            tag=f"H{first_level}",
+        )
+    prev = first_level
+    for level, path, raw_tag in heading_levels_by_order[1:]:
+        if level > prev + 1:
+            msg = f"Heading level skip: H{prev} → H{level} at {path}"
+            if raw_tag != f"H{level}":
+                msg = f"Heading level skip: H{prev} → H{level} (role='{raw_tag}') at {path}"
 
             _add_issue(
                 issues,
                 "warning",
-                "HEADING_NOT_H1_FIRST",
+                "HEADING_LEVEL_SKIP",
                 msg,
-                tag=f"H{first_level}",
+                tag=f"H{level}",
             )
-        prev = first_level
-        for level, path, raw_tag in heading_levels_by_order[1:]:
-            if level > prev + 1:
-                msg = f"Heading level skip: H{prev} → H{level} at {path}"
-                if raw_tag != f"H{level}":
-                    msg = f"Heading level skip: H{prev} → H{level} (role='{raw_tag}') at {path}"
-
-                _add_issue(
-                    issues,
-                    "warning",
-                    "HEADING_LEVEL_SKIP",
-                    msg,
-                    tag=f"H{level}",
-                )
-            prev = level
-    else:
-        _add_issue(
-            issues, "info", "NO_HEADINGS", "Document has no heading elements in structure tree"
-        )
+        prev = level
 
 
 def _check_stream_cross_references(
