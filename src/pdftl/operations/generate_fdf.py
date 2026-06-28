@@ -146,16 +146,7 @@ def _get_val_as_string(field):
 
     # ISO 32000-2 §12.7.5.4 Choice Multi-Select Array support
     elif isinstance(val, (list, Array)):
-        items_str = []
-        for v in val:
-            if isinstance(v, String):
-                items_str.append(f"({str(v)})")
-            elif isinstance(v, Name):
-                s_val = str(v)
-                items_str.append(s_val if s_val.startswith("/") else f"/{s_val}")
-            else:
-                items_str.append(f"({str(v)})")
-        val_as_string = f"[{' '.join(items_str)}]"
+        val_as_string = _val_string_from_array(val)
 
     elif isinstance(field, (RadioButtonGroup, CheckboxField)):
         # State-based fields use Name format (/Value)
@@ -169,6 +160,21 @@ def _get_val_as_string(field):
         val_as_string = f"({val})"
 
     return val_as_string
+
+
+def _val_string_from_array(val):
+    from pikepdf import Name, String
+
+    items_str = []
+    for v in val:
+        if isinstance(v, (String, str)):
+            items_str.append(f"({str(v)})")
+        elif isinstance(v, Name):
+            s_val = str(v)
+            items_str.append(s_val if s_val.startswith("/") else f"/{s_val}")
+        else:
+            items_str.append(f"({str(v)})")
+    return f"[{' '.join(items_str)}]"
 
 
 def _val_string_from_none(field):

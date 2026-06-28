@@ -30,6 +30,159 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Union of standard structure namespaces across all PDF versions (PDF 1.7 & PDF 2.0)
+# per ISO 32000-2 Tables 366 to 375 and Annex M.
+# Note: "H1" through "H6" are listed here for completeness but are technically redundant
+# because the dynamic "_validate_standard_tag" function automatically accepts any "Hn"
+# heading tags where "n" is a positive integer (supporting PDF 2.0's unbounded "Hn" roles).
+_STANDARD_TAGS = frozenset(
+    [
+        # Grouping
+        "Document",
+        "DocumentFragment",
+        "Part",
+        "Art",
+        "Sect",
+        "Div",
+        "Aside",
+        "BlockQuote",
+        "Caption",
+        "TOC",
+        "TOCI",
+        "Index",
+        "NonStruct",
+        "Private",
+        "Title",
+        "Artifact",
+        # Block-Level
+        "P",
+        "H",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        # List
+        "L",
+        "LI",
+        "Lbl",
+        "LBody",
+        # Table
+        "Table",
+        "TR",
+        "TH",
+        "TD",
+        "THead",
+        "TBody",
+        "TFoot",
+        # Inline
+        "Span",
+        "Quote",
+        "Note",
+        "Reference",
+        "BibEntry",
+        "Code",
+        "Link",
+        "Annot",
+        "Ruby",
+        "RB",
+        "RT",
+        "RP",
+        "Warichu",
+        "WT",
+        "WP",
+        "FENote",
+        "Sub",
+        "Em",
+        "Strong",
+        # Illustration
+        "Figure",
+        "Formula",
+        "Form",
+    ]
+)
+
+# Standard Attribute Owners and their attributes per ISO 32000-2 Tables 378 to 386
+_STANDARD_ATTR_OWNERS = {
+    "Layout": frozenset(
+        [
+            # Layout Attributes (Table 379)
+            "Placement",
+            "WritingMode",
+            "BackgroundColor",
+            "BorderColor",
+            "BorderStyle",
+            "BorderThickness",
+            "Color",
+            "Padding",
+            "SpaceBefore",
+            "SpaceAfter",
+            "StartIndent",
+            "EndIndent",
+            "TextIndent",
+            "TextAlign",
+            "BBox",
+            "Width",
+            "Height",
+            "BlockAlign",
+            "InlineAlign",
+            "TBorderStyle",
+            "TPadding",
+            "BaselineShift",
+            "LineHeight",
+            "TextDecorationColor",
+            "TextDecorationThickness",
+            "TextDecorationType",
+            "RubyAlign",
+            "RubyPosition",
+            "GlyphOrientationVertical",
+            "TextPosition",
+            # Column Attributes (Table 381)
+            "ColumnCount",
+            "ColumnWidths",
+            "ColumnGap",
+        ]
+    ),
+    "List": frozenset(
+        [
+            # List Attributes (Table 382)
+            "ListNumbering",
+            "ContinuedList",
+            "ContinuedFrom",
+        ]
+    ),
+    "PrintField": frozenset(
+        [
+            # PrintField Attributes (Table 385)
+            "Role",
+            "checked",
+            "Checked",
+            "Desc",
+        ]
+    ),
+    "Table": frozenset(
+        [
+            # Table Attributes (Table 383/384)
+            "RowSpan",
+            "ColSpan",
+            "Headers",
+            "Scope",
+            "Summary",
+            "Short",
+        ]
+    ),
+    "Artifact": frozenset(
+        [
+            # Artifact Attributes (Table 386)
+            "Type",
+            "Subtype",
+            "BBox",
+            "Attached",
+        ]
+    ),
+}
+
 
 # ---------------------------------------------------------------------------
 # Issue collection helpers
@@ -67,25 +220,62 @@ def _check_document_root(pdf, issues: list[dict]) -> bool:
     return True
 
 
+def _validate_attr_dict(attr_dict, current_path: str, issues: list[dict]) -> None:
+    """Helper to validate a single attribute dictionary against allowed ISO keys."""
+    import pikepdf
+
+    if not isinstance(attr_dict, pikepdf.Dictionary):
+        return
+
+    owner = attr_dict.get("/O")
+    if owner is None:
+        return
+
+    owner_str = str(owner).lstrip("/")
+    if owner_str not in _STANDARD_ATTR_OWNERS:
+        return
+
+    allowed_keys = _STANDARD_ATTR_OWNERS[owner_str]
+    for key in attr_dict.keys():
+        key_str = str(key).lstrip("/")
+        if key_str in ("O", "Type", "Revision"):
+            continue
+        if key_str not in allowed_keys:
+            _add_issue(
+                issues,
+                "warning",
+                "INVALID_STANDARD_ATTRIBUTE",
+                f"Attribute '{key_str}' is not a valid standard attribute "
+                f"for owner '{owner_str}' at {current_path}",
+            )
+
+
+def _check_attributes(elem, current_path: str, issues: list[dict]) -> None:
+    """Validate attribute objects against standard owner keys per ISO 32000-2 §14.8.5."""
+    import pikepdf
+
+    attrs_obj = elem.get("/A")
+    if attrs_obj is None:
+        return
+
+    attr_dicts = attrs_obj if isinstance(attrs_obj, pikepdf.Array) else [attrs_obj]
+    for attr_dict in attr_dicts:
+        _validate_attr_dict(attr_dict, current_path, issues)
+
+
 def _process_heading(
     raw_tag: str,
     current_path: str,
     heading_levels_by_order: list[tuple[int, str, str]],
     role_map: dict,
 ) -> None:
-    """Extract and track heading levels for hierarchy checks.
-
-    Uses the *resolved* standard tag so that role-mapped heading names
-    (e.g. "chapter" -> "H1") are correctly recognised.
-    """
+    """Extract and track heading levels for hierarchy checks."""
     standard_tag, _ = _resolve_tag(raw_tag, role_map)
     if standard_tag.startswith("H") and len(standard_tag) >= 2:
         try:
             level = int(standard_tag[1:])
             heading_levels_by_order.append((level, current_path, raw_tag))
         except ValueError:
-            # If the heading tag suffix is not an integer (e.g., '/Head' or '/H'),
-            # we skip recording it as a numbered heading level and continue.
             pass
 
 
@@ -97,11 +287,7 @@ def _process_figure(
     current_path: str,
     seen_figures_without_alt: list[dict],
 ) -> None:
-    """Track Figures that are missing alt or actual text.
-
-    Receives the already-resolved standard tag so role-mapped figures
-    (e.g. "img" -> "Figure") are correctly caught.
-    """
+    """Track Figures that are missing alt or actual text."""
     if standard_tag == "Figure":
         if not attrs.get("alt") and not attrs.get("actual_text"):
             seen_figures_without_alt.append(
@@ -117,13 +303,78 @@ def _record_mcid_ref(
     tree_mcids: dict[int, set[int]],
 ) -> None:
     """Track MCID references by identifying the correct page association."""
-    # Prefer /Pg from the MCR dict itself (hand-tagged PDFs)
     item_pg = _resolve_page_num(item, page_objgen_index) if hasattr(item, "get") else None
     effective_pg = item_pg if item_pg is not None else parent_pg
     if effective_pg is not None:
         if effective_pg not in tree_mcids:
             tree_mcids[effective_pg] = set()
         tree_mcids[effective_pg].add(mcid)
+
+
+def _is_node_seen(elem, seen: set) -> bool:
+    """Helper to detect circular references and unhashable elements safely."""
+    try:
+        objgen = getattr(elem, "objgen", None)
+        if objgen and objgen in seen:
+            return True
+        if objgen:
+            seen.add(objgen)
+    except (AttributeError, TypeError):
+        pass
+    return False
+
+
+def _validate_standard_tag(
+    raw_tag: str, standard_tag: str, current_path: str, issues: list[dict]
+) -> None:
+    """Helper to check resolved tags against the allowed ISO standard tag set."""
+    if standard_tag in _STANDARD_TAGS or (
+        standard_tag.startswith("H") and standard_tag[1:].isdigit()
+    ):
+        return
+
+    # Handle internal fallback behavior of _resolve_tag gracefully
+    if standard_tag == "unknown" or standard_tag == raw_tag:
+        msg = f"Tag '{raw_tag}' is a non-standard tag at {current_path}"
+        reported_tag = raw_tag
+    else:
+        msg = f"Tag '{raw_tag}' maps to non-standard tag '{standard_tag}' at {current_path}"
+        reported_tag = standard_tag
+
+    _add_issue(issues, "warning", "NON_STANDARD_TAG", msg, tag=reported_tag)
+
+
+def _process_child_item(
+    item,
+    depth: int,
+    current_path: str,
+    seen: set,
+    page_objgen_index: dict,
+    heading_levels_by_order: list,
+    seen_figures_without_alt: list,
+    tree_mcids: dict,
+    role_map: dict,
+    issues: list,
+    effective_pg: int | None,
+) -> None:
+    """Helper to process individual children nodes and their MCIDs."""
+    mcid = _mcid_from_item(item)
+    if mcid is not None:
+        _record_mcid_ref(item, mcid, effective_pg, page_objgen_index, tree_mcids)
+    elif _is_struct_elem(item):
+        _walk_for_issues(
+            item,
+            depth + 1,
+            current_path,
+            seen,
+            page_objgen_index,
+            heading_levels_by_order,
+            seen_figures_without_alt,
+            tree_mcids,
+            role_map,
+            issues,
+            inherited_pg=effective_pg,
+        )
 
 
 def _walk_for_issues(
@@ -136,19 +387,12 @@ def _walk_for_issues(
     seen_figures_without_alt: list[dict],
     tree_mcids: dict[int, set[int]],
     role_map: dict,
+    issues: list[dict],
     inherited_pg: int | None = None,
 ) -> None:
     """Recursively walk the structure tree to collect elements and references."""
-    try:
-        objgen = getattr(elem, "objgen", None)
-        if objgen and objgen in seen:
-            return
-        if objgen:
-            seen.add(objgen)
-    except (AttributeError, TypeError):
-        # If the element lacks an 'objgen' attribute or is unhashable,
-        # we safely skip tracking circular references for it and proceed.
-        pass
+    if _is_node_seen(elem, seen):
+        return
 
     raw_tag = _elem_tag(elem)
     standard_tag, _ = _resolve_tag(raw_tag, role_map)
@@ -157,28 +401,27 @@ def _walk_for_issues(
     attrs = _elem_text_attrs(elem)
     current_path = f"{path}/{raw_tag}"
 
+    _validate_standard_tag(raw_tag, standard_tag, current_path, issues)
+    _check_attributes(elem, current_path, issues)
     _process_heading(raw_tag, current_path, heading_levels_by_order, role_map)
     _process_figure(
         standard_tag, raw_tag, attrs, effective_pg, current_path, seen_figures_without_alt
     )
 
     for item in _iter_k(elem):
-        mcid = _mcid_from_item(item)
-        if mcid is not None:
-            _record_mcid_ref(item, mcid, effective_pg, page_objgen_index, tree_mcids)
-        elif _is_struct_elem(item):
-            _walk_for_issues(
-                item,
-                depth + 1,
-                current_path,
-                seen,
-                page_objgen_index,
-                heading_levels_by_order,
-                seen_figures_without_alt,
-                tree_mcids,
-                role_map,
-                inherited_pg=effective_pg,
-            )
+        _process_child_item(
+            item,
+            depth,
+            current_path,
+            seen,
+            page_objgen_index,
+            heading_levels_by_order,
+            seen_figures_without_alt,
+            tree_mcids,
+            role_map,
+            issues,
+            effective_pg,
+        )
 
 
 def _check_figure_issues(
@@ -264,7 +507,7 @@ def _check_stream_cross_references(
                 "warning",
                 "MCID_NOT_IN_STREAM",
                 f"Page {page_num}: MCID {mcid} referenced in structure tree "
-                "but not found in page content stream (may be in an XObject)",
+                "but not found in page content stream (may be in XObject)",
                 page=page_num,
             )
 
@@ -317,6 +560,7 @@ def _run_issues(
             seen_figures_without_alt,
             tree_mcids,
             role_map,
+            issues,
         )
 
     _check_figure_issues(seen_figures_without_alt, target_page_nums, issues)

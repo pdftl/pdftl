@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `dump_tags`: non-standard structure tags now reported as warnings (ISO 32000-2 §14.8)
+
+- `dump_tags`: invalid structure attributes now reported as warnings per standard owner
+  definitions (ISO 32000-2 §14.8.5)
+
 - `fill_form`: multi-select choice fields now supported (ISO 32000-2 §12.7.5.4)
 
 - `fill_form`: radio buttons, checkboxes, list-boxes, and nested fields now handled correctly

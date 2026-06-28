@@ -108,6 +108,37 @@ def test_run_issues_marked_invalid() -> None:
 
 @patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
 @patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_empty_roots(mock_index, mock_roots) -> None:
+    """Hits the empty roots loop branch (coverage for lines checking empty child hierarchies)."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_roots.return_value = []
+    mock_index.return_value = {}
+
+    issues = _run_issues(mock_pdf, target_page_nums={1})
+    assert isinstance(issues, list)
+    # Since there are no roots, no structure violations occur
+    codes = [iss["code"] for iss in issues]
+    assert "NON_STANDARD_TAG" not in codes
+
+
+def test_check_stream_cross_references_out_of_bounds() -> None:
+    """Hits the page_num > len(pdf.pages) continue branch."""
+    from pdftl.operations.helpers.tags_linter import _check_stream_cross_references
+
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [MagicMock()]  # len == 1
+    issues = []
+
+    _check_stream_cross_references(mock_pdf, target_page_nums={2}, tree_mcids={}, issues=issues)
+    assert len(issues) == 0
+
+
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
 def test_run_issues_figure_alt_missing(mock_index, mock_roots) -> None:
     """Test linter reports figures with missing alt tags or actual texts."""
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
@@ -543,3 +574,257 @@ def test_run_issues_edge_cases(mock_index, mock_roots) -> None:
 
     codes = [iss["code"] for iss in issues]
     assert "NO_HEADINGS" in codes
+
+
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_standard_tag_validation(mock_index, mock_roots) -> None:
+    """Covers lines verifying standard tag completeness per ISO 32000-2 §14.8."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_index.return_value = {}
+
+    # Node 1: Custom non-standard tag
+    node_bad = MagicMock()
+    node_bad.objgen = (1, 0)
+    node_bad.get.side_effect = lambda k: "/CustomTag" if k == "/S" else None
+
+    # Node 2: Valid extended H tag
+    node_h7 = MagicMock()
+    node_h7.objgen = (2, 0)
+    node_h7.get.side_effect = lambda k: "/H7" if k == "/S" else None
+
+    class MockArray(list):
+        pass
+
+    root_node = MagicMock()
+    root_node.objgen = (3, 0)
+
+    with patch("pikepdf.Array", MockArray):
+        root_node.get.side_effect = (
+            lambda k: "/Document"
+            if k == "/S"
+            else (MockArray([node_bad, node_h7]) if k == "/K" else None)
+        )
+        mock_roots.return_value = [root_node]
+
+        issues = _run_issues(mock_pdf, target_page_nums={1})
+
+    codes = [iss["code"] for iss in issues]
+
+    assert "NON_STANDARD_TAG" in codes
+    bad_issue = next(iss for iss in issues if iss["code"] == "NON_STANDARD_TAG")
+    assert "Tag 'CustomTag' is a non-standard tag" in bad_issue["message"]
+    assert bad_issue["tag"] == "CustomTag"
+
+
+@patch("pdftl.operations.helpers.tags_linter._build_role_map")
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_non_standard_role_mapped_tag(mock_index, mock_roots, mock_role_map) -> None:
+    """Covers lines 295-296: custom tag role-mapped to another non-standard tag."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_index.return_value = {}
+
+    # Map "CustomRaw" -> "CustomMapped" (neither is standard)
+    mock_role_map.return_value = {"CustomRaw": "CustomMapped"}
+
+    node = MagicMock()
+    node.objgen = (1, 0)
+    node.get.side_effect = lambda k: "/CustomRaw" if k == "/S" else None
+
+    mock_roots.return_value = [node]
+
+    issues = _run_issues(mock_pdf, target_page_nums={1})
+    codes = [iss["code"] for iss in issues]
+
+    assert "NON_STANDARD_TAG" in codes
+    issue = next(iss for iss in issues if iss["code"] == "NON_STANDARD_TAG")
+    assert "Tag 'CustomRaw' maps to non-standard tag 'CustomMapped'" in issue["message"]
+    assert issue["tag"] == "CustomMapped"
+
+
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_attribute_validation(mock_index, mock_roots) -> None:
+    """Covers lines verifying standard attribute objects per ISO 32000-2 §14.8.5."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_index.return_value = {}
+
+    # Create dicts representing various attribute combinations
+    # 1. Valid Dict
+    valid_attr = pikepdf.Dictionary({"/O": pikepdf.Name("/Table"), "/RowSpan": 2, "/Revision": 1})
+    # 2. Invalid Standard Dict
+    invalid_attr = pikepdf.Dictionary({"/O": pikepdf.Name("/Table"), "/WrongKey": 1})
+    # 3. Ignored custom owner
+    custom_owner = pikepdf.Dictionary({"/O": pikepdf.Name("/MyXML"), "/WeirdKey": 1})
+    # 4. Dict missing /O
+    no_owner = pikepdf.Dictionary({"/RowSpan": 2})
+
+    node = MagicMock()
+    node.objgen = (1, 0)
+
+    # Test array containing string, valid dict, invalid dict, custom owner, no owner
+    attr_array = pikepdf.Array(
+        [pikepdf.String("not_a_dict"), valid_attr, invalid_attr, custom_owner, no_owner]
+    )
+
+    node.get.side_effect = lambda k: "/P" if k == "/S" else (attr_array if k == "/A" else None)
+    mock_roots.return_value = [node]
+
+    issues = _run_issues(mock_pdf, target_page_nums={1})
+    codes = [iss["code"] for iss in issues]
+
+    assert "INVALID_STANDARD_ATTRIBUTE" in codes
+    bad_issue = next(iss for iss in issues if iss["code"] == "INVALID_STANDARD_ATTRIBUTE")
+    assert (
+        "Attribute 'WrongKey' is not a valid standard attribute for owner 'Table'"
+        in bad_issue["message"]
+    )
+
+
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_attribute_validation_single_dict(mock_index, mock_roots) -> None:
+    """Covers ternary branch for single attribute Dictionary per ISO 32000-2 §14.8.5."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_index.return_value = {}
+
+    node = MagicMock()
+    node.objgen = (1, 0)
+
+    # Test single pikepdf.Dictionary direct assignment (not wrapped in Array)
+    single_dict = pikepdf.Dictionary({"/O": pikepdf.Name("/Table"), "/BadKey": 1})
+    node.get.side_effect = lambda k: "/P" if k == "/S" else (single_dict if k == "/A" else None)
+    mock_roots.return_value = [node]
+
+    issues = _run_issues(mock_pdf, target_page_nums={1})
+    codes = [iss["code"] for iss in issues]
+
+    assert "INVALID_STANDARD_ATTRIBUTE" in codes
+
+
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_new_standard_tags_validation(mock_index, mock_roots) -> None:
+    """Verify that Title, Artifact, and FENote are accepted as standard, but Sup is flagged."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_index.return_value = {}
+
+    # Node 1: "Title" (standard in PDF 2.0)
+    node_title = MagicMock()
+    node_title.objgen = (1, 0)
+    node_title.get.side_effect = lambda k: "/Title" if k == "/S" else None
+
+    # Node 2: "Artifact" (standard in PDF 2.0)
+    node_artifact = MagicMock()
+    node_artifact.objgen = (2, 0)
+    node_artifact.get.side_effect = lambda k: "/Artifact" if k == "/S" else None
+
+    # Node 3: "FENote" (standard in PDF 2.0)
+    node_fenote = MagicMock()
+    node_fenote.objgen = (3, 0)
+    node_fenote.get.side_effect = lambda k: "/FENote" if k == "/S" else None
+
+    # Node 4: "Sup" (NOT standard, text position attribute value)
+    node_sup = MagicMock()
+    node_sup.objgen = (4, 0)
+    node_sup.get.side_effect = lambda k: "/Sup" if k == "/S" else None
+
+    class MockArray(list):
+        pass
+
+    root_node = MagicMock()
+    root_node.objgen = (5, 0)
+
+    with patch("pikepdf.Array", MockArray):
+        root_node.get.side_effect = (
+            lambda k: "/Document"
+            if k == "/S"
+            else (
+                MockArray([node_title, node_artifact, node_fenote, node_sup])
+                if k == "/K"
+                else None
+            )
+        )
+        mock_roots.return_value = [root_node]
+
+        issues = _run_issues(mock_pdf, target_page_nums={1})
+
+    codes = [iss["code"] for iss in issues]
+
+    # Only "Sup" should be flagged as non-standard; Title, Artifact and FENote are fine!
+    assert "NON_STANDARD_TAG" in codes
+    bad_issues = [iss for iss in issues if iss["code"] == "NON_STANDARD_TAG"]
+    assert len(bad_issues) == 1
+    assert bad_issues[0]["tag"] == "Sup"
+    assert "Tag 'Sup' is a non-standard tag" in bad_issues[0]["message"]
+
+
+@patch("pdftl.operations.helpers.tags_linter._collect_tree_roots")
+@patch("pdftl.operations.helpers.tags_linter._build_page_objgen_index")
+def test_run_issues_new_layout_and_artifact_attributes_validation(mock_index, mock_roots) -> None:
+    """Verify that TextPosition, ColumnGap, and Artifact attributes are validated correctly."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.Root = MagicMock()
+    mock_pdf.Root.get.side_effect = (
+        lambda k: MagicMock(get=lambda x: True) if k == "/MarkInfo" else MagicMock()
+    )
+    mock_index.return_value = {}
+
+    # Valid Layout attributes: /TextPosition and singular /ColumnGap (previously ColumnGaps)
+    valid_layout_attr = pikepdf.Dictionary(
+        {"/O": pikepdf.Name("/Layout"), "/TextPosition": pikepdf.Name("/Sub"), "/ColumnGap": 12}
+    )
+
+    # Valid Artifact attributes: /Type, /Subtype, /BBox, /Attached (per Table 386)
+    valid_artifact_attr = pikepdf.Dictionary(
+        {
+            "/O": pikepdf.Name("/Artifact"),
+            "/Type": pikepdf.Name("/Pagination"),
+            "/Subtype": pikepdf.Name("/Header"),
+            "/BBox": pikepdf.Array([0, 0, 100, 20]),
+            "/Attached": pikepdf.Name("/Top"),
+        }
+    )
+
+    # Invalid Artifact attribute
+    invalid_artifact_attr = pikepdf.Dictionary(
+        {"/O": pikepdf.Name("/Artifact"), "/InvalidArtifactKey": 123}
+    )
+
+    node = MagicMock()
+    node.objgen = (1, 0)
+
+    attr_array = pikepdf.Array([valid_layout_attr, valid_artifact_attr, invalid_artifact_attr])
+    node.get.side_effect = lambda k: "/P" if k == "/S" else (attr_array if k == "/A" else None)
+    mock_roots.return_value = [node]
+
+    issues = _run_issues(mock_pdf, target_page_nums={1})
+    codes = [iss["code"] for iss in issues]
+
+    assert "INVALID_STANDARD_ATTRIBUTE" in codes
+    bad_issue = next(iss for iss in issues if iss["code"] == "INVALID_STANDARD_ATTRIBUTE")
+    assert (
+        "Attribute 'InvalidArtifactKey' is not a valid standard attribute for owner 'Artifact'"
+        in bad_issue["message"]
+    )
