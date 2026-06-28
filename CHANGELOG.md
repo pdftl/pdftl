@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Added
+
+- `set` operation: `trapped` field for document trapping status (`True`, `False`, or `Unknown`)
+
+- `set` operation: `author` now accepts comma-separated values for multiple authors
+
+- Bookmarks: non-GoTo actions (e.g. `Launch`, `Named`, `JavaScript`) are now preserved when
+  copying or round-tripping outlines via `dump_bookmarks` / `add_bookmarks`
+
+### Fixed
+
+- Bookmarks: non-GoTo outline actions (e.g. URI links, launch actions) were silently dropped
+  when merging PDFs; they are now preserved
+
+- Named destinations in legacy PDF 1.1 `/Root/Dests` dictionaries are now resolved correctly
+
+- Structure destinations (ISO 32000-2 §12.3.2.3) in outlines now resolve to the correct page,
+  with a fallback to page 1 if no content is found
+
+- `set` operation: PDF 2.0 documents now correctly omit deprecated metadata fields from the
+  `/Info` dictionary, per ISO 32000-2 §14.3.3
+
 ## [0.23.0] - 2026-06-27
 
 ### Added

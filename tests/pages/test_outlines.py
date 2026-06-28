@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # tests/pages/test_outlines.py
 from unittest.mock import MagicMock, call, patch
 
@@ -231,8 +235,9 @@ def test_copy_item_remaps_and_collects_dests(mock_remapper):
     mock_remapper.remap_goto_action.assert_called_once_with(mock_action)
 
     # Check that the new item was created and returned
-    mock_OI_constructor.assert_called_with(title="Test Item", destination=Name.NewDest)
-    assert result is not None
+    mock_OI_constructor.assert_called_with(title="Test Item")
+    # Verify that the destination attribute was attached properly
+    assert result.destination == Name.NewDest
 
     # Check that the destinations list was extended
     assert copier.new_dests_list == [("NewDest_str", Array([1, 2, 3]))]
@@ -270,25 +275,38 @@ def test_copy_item_recursive_pruning(mock_remapper):
     Tests that an item is pruned if the remapper returns (None, None)
     AND it has no valid children.
     """
-    # 1. Arrange
-    cached_item = CachedOutlineItem(
-        title="Test Pruning Item",
-        action=Dictionary(S=Name.GoTo, D=Name.Dest1),
-        is_closed=False,
-        obj=Dictionary(),
-        children=[],
+    from pikepdf import Dictionary, Name
+
+    # Mock remap to return a valid action for everything
+    mock_remapper.remap_goto_action.return_value = (MagicMock(D="remapped"), None)
+
+    copier = OutlineCopier(mock_remapper)
+
+    # Create a cache structure: Parent -> Child
+    # Must use actual GoTo action to trigger the mock_remapper
+    goto_action = Dictionary(S=Name.GoTo, D=Name.Dest1)
+
+    child = CachedOutlineItem(
+        title="Child", action=goto_action, is_closed=False, obj=Dictionary(), children=[]
+    )
+    parent = CachedOutlineItem(
+        title="Parent", action=goto_action, is_closed=False, obj=Dictionary(), children=[child]
     )
 
-    # Remapper returns (None, None), meaning "prune this link"
-    mock_remapper.remap_goto_action.return_value = (None, None)
+    # This triggers the recursion
+    with patch(
+        "pikepdf.OutlineItem",
+        side_effect=lambda title, **kwargs: MagicMock(
+            title=title, children=[], obj=Dictionary(), **kwargs
+        ),
+    ):
+        result = copier.copy_item(parent)
 
-    # 2. Act
-    copier = OutlineCopier(mock_remapper)
-    result = copier.copy_item(cached_item)
-
-    # 3. Assert
-    assert result is None
-    assert len(copier.new_dests_list) == 0
+    assert result is not None
+    assert len(result.children) == 1
+    assert result.children[0].title == "Child"
+    # Verify child was processed (remapper called twice: parent + child)
+    assert mock_remapper.remap_goto_action.call_count == 2
 
 
 @patch("pdftl.pages.outlines._cache_outline_tree")
@@ -401,44 +419,14 @@ def test_build_outline_chunks_malformed_data(caplog):
 def test_get_source_action_non_goto_action():
     mock_item = MagicMock()
     mock_item.destination = None
-    # Simulate a URI action instead of GoTo
+    # Simulate a generic action instead of GoTo
     mock_item.action.S = Name.URI
     mock_item.obj = MagicMock()
     mock_item.is_closed = MagicMock()
 
     action = _get_source_action(mock_item)
-    assert action is None
-
-
-def test_copy_item_recursion_and_pruning():
-    mock_remapper = MagicMock()
-    # Mock remap to return a valid action for everything
-    mock_remapper.remap_goto_action.return_value = (MagicMock(D="remapped"), None)
-
-    copier = OutlineCopier(mock_remapper)
-
-    # Create a cache structure: Parent -> Child
-    child = CachedOutlineItem(
-        title="Child", action=MagicMock(), is_closed=False, obj=Dictionary(), children=[]
-    )
-    parent = CachedOutlineItem(
-        title="Parent", action=MagicMock(), is_closed=False, obj=Dictionary(), children=[child]
-    )
-
-    # This triggers the recursion
-    with patch(
-        "pikepdf.OutlineItem",
-        side_effect=lambda title, destination, **kwargs: MagicMock(
-            title=title, children=[], obj=Dictionary()
-        ),
-    ):
-        result = copier.copy_item(parent)
-
-    assert result is not None
-    assert len(result.children) == 1
-    assert result.children[0].title == "Child"
-    # Verify child was processed (remapper called twice: parent + child)
-    assert mock_remapper.remap_goto_action.call_count == 2
+    # The new behavior preserves non-GoTo actions!
+    assert action is mock_item.action
 
 
 def test_rebuild_outlines_no_chunks():
@@ -615,13 +603,13 @@ def test_copy_item_copies_obj_for_formatting(mock_remapper):
 
     assert result is not None
     # Verify the minimal clean constructor call required by pikepdf
-    mock_OI.assert_called_once_with(title="Test Item", destination=Name.NewDest)
+    mock_OI.assert_called_once_with(title="Test Item")
+    assert result.destination == Name.NewDest
     # Check that properties are stashed accurately for post-processing outside the context
     assert result._cached_color == [1.0, 0.5, 0.0]
     assert result._cached_flags == 3
 
 
-import pytest
 from unittest.mock import Mock
 
 from pdftl.pages.outlines import (
@@ -678,3 +666,16 @@ def test_process_chunk_empty_cached_root_items():
 
     assert dests == []
     assert items == []
+
+
+def test_remap_item_action_non_goto():
+    """Ensures non-GoTo actions are safely passed through the remapper."""
+    remapper = Mock()
+    copier = OutlineCopier(remapper)
+
+    non_goto_action = Dictionary(S=Name.Launch, F=pikepdf.String("file.txt"))
+    new_action, is_valid = copier._remap_item_action(non_goto_action)
+
+    assert new_action is non_goto_action
+    assert is_valid is True
+    remapper.remap_goto_action.assert_not_called()

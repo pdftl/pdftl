@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/info/toc.py
 
 """Core logic for extracting and building PDF Table of Contents (Outlines)."""
@@ -28,7 +32,48 @@ _ALLOWED_BOOKMARK_KEYS = {
     "bold",
     "italic",
     "children",
+    "action",
 }
+
+
+def _to_python_types(obj):
+    """Recursively converts pikepdf Objects to JSON/YAML-safe Python types."""
+    import pikepdf
+
+    if isinstance(obj, pikepdf.Dictionary):
+        return {str(k).lstrip("/"): _to_python_types(v) for k, v in obj.items()}
+    elif isinstance(obj, pikepdf.Array):
+        return [_to_python_types(v) for v in obj]
+    elif isinstance(obj, pikepdf.Name):
+        # Unambiguous tagging to prevent strings from accidentally becoming PDF Names
+        return {"__name__": str(obj)}
+    elif isinstance(obj, pikepdf.String):
+        return str(obj)
+    elif isinstance(obj, (int, float, bool)):
+        return obj
+    elif obj is None:
+        return None
+    return str(obj)
+
+
+def _from_python_types(obj, pdf):
+    """Recursively reconstructs pikepdf Objects from native Python types."""
+    import pikepdf
+
+    if isinstance(obj, dict):
+        if "__name__" in obj:
+            return pikepdf.Name(obj["__name__"])
+        return pikepdf.Dictionary(
+            {
+                f"/{k}" if not str(k).startswith("/") else k: _from_python_types(v, pdf)
+                for k, v in obj.items()
+            }
+        )
+    elif isinstance(obj, list):
+        return pikepdf.Array([_from_python_types(v, pdf) for v in obj])
+    elif isinstance(obj, str):
+        return pikepdf.String(obj)
+    return obj
 
 
 def extract_toc_tree(pdf: "pikepdf.Pdf") -> list[dict]:
@@ -42,8 +87,6 @@ def extract_toc_tree(pdf: "pikepdf.Pdf") -> list[dict]:
 
 
 def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> dict:
-    import pikepdf
-
     if not item.obj:
         raise OperationError("Invalid item (no obj)")
     node: dict[str, Any] = {"title": item.title}
@@ -56,17 +99,15 @@ def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> di
         if flags & 2:
             node["bold"] = True
 
-    # 1. Handle URI Actions
-    if item.obj.get(pikepdf.NamePath.A.S) == pikepdf.Name("/URI"):
-        node["uri"] = str(item.obj.get(pikepdf.NamePath.A.URI))
-    else:
-        # 2. Extract Destination
-        dest = _dest_from_outline_item(item)
+    # 1. Action Extraction (URI, Launch, Named, JavaScript, etc.)
+    action_obj = item.obj.get("/A")
+    if action_obj is not None:
+        _extract_action(action_obj, node)
 
-        if isinstance(dest, (pikepdf.Name, pikepdf.String, str)):
-            node["dest"] = str(dest).lstrip("/")
-        elif isinstance(dest, pikepdf.Array):
-            node.update(_get_node_dest_data(dest, page_map, named_dests))
+    # 2. Destination Extraction
+    # We only process standard destinations if there's no Action OR if it's a GoTo Action.
+    if action_obj is None or str(action_obj.get("/S", "")) == "/GoTo":
+        _extract_destination(item, node, page_map, named_dests)
 
     if item.children:
         node["children"] = [
@@ -74,6 +115,25 @@ def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> di
         ]
 
     return node
+
+
+def _extract_action(action_obj, node):
+    action_type = str(action_obj.get("/S", ""))
+    if action_type == "/URI":
+        node["uri"] = str(action_obj.get("/URI"))
+    elif action_type != "/GoTo":
+        # For non-GoTo/URI actions, perfectly preserve the ISO action dict
+        node["action"] = _to_python_types(action_obj)
+
+
+def _extract_destination(item, node, page_map, named_dests):
+    dest = _dest_from_outline_item(item)
+    import pikepdf
+
+    if isinstance(dest, (pikepdf.Name, pikepdf.String, str)):
+        node["dest"] = str(dest).lstrip("/")
+    elif isinstance(dest, pikepdf.Array):
+        node.update(_get_node_dest_data(dest, page_map, named_dests))
 
 
 def _get_node_dest_data(dest, page_map, named_dests):
@@ -99,7 +159,7 @@ def _get_node_dest_data(dest, page_map, named_dests):
             try:
                 view_list.append(int(arg))
             except (ValueError, TypeError):
-                logger.warn("Ignoring unknown destination argument: %s", arg)
+                logger.warning("Ignoring unknown destination argument: %s", arg)
 
     # Only append view if it's more complex than standard Fit
     if view_list != ["Fit"]:
@@ -193,7 +253,12 @@ def _build_basic_item(node: dict, pdf) -> "pikepdf.OutlineItem":
 
     title = node.get("title", "Untitled")
 
-    if "dest" in node:
+    if "action" in node:
+        # Handles Launch, GoToR, Named, JavaScript, etc. natively
+        action_dict = _from_python_types(node["action"], pdf)
+        item = pikepdf.OutlineItem(title, action=action_dict)
+
+    elif "dest" in node:
         # The API accepts a string reference name directly for named destinations
         item = pikepdf.OutlineItem(title, node["dest"])
 

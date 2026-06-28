@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # tests/info/test_toc.py
 
 import logging
@@ -7,7 +11,14 @@ import pikepdf
 import pytest
 
 from pdftl.exceptions import OperationError
-from pdftl.info.toc import _build_item, _extract_item, build_toc_tree, extract_toc_tree
+from pdftl.info.toc import (
+    _build_item,
+    _extract_item,
+    _from_python_types,
+    _to_python_types,
+    build_toc_tree,
+    extract_toc_tree,
+)
 
 
 @pytest.fixture
@@ -53,14 +64,22 @@ def exotic_pdf():
         parent.children.append(child)
         outline.root.append(parent)
 
+        # 7. Generic Launch Action
+        action_launch = pikepdf.Dictionary(S=pikepdf.Name("/Launch"), F=pikepdf.String("file.pdf"))
+        outline.root.append(pikepdf.OutlineItem("7. Launch", action=action_launch))
+
+        # 8. Named Action
+        action_named = pikepdf.Dictionary(S=pikepdf.Name("/Named"), N=pikepdf.Name("/NextPage"))
+        outline.root.append(pikepdf.OutlineItem("8. Named", action=action_named))
+
     return pdf
 
 
 def test_extract_toc_tree_exotic(exotic_pdf):
-    """Verifies all complex properties are extracted correctly."""
+    """Verifies all complex properties and ISO generic actions are extracted correctly."""
     data = extract_toc_tree(exotic_pdf)
 
-    assert len(data) == 6
+    assert len(data) == 8
     assert data[0] == {"title": "1. Standard", "page": 1}
 
     assert data[1]["title"] == "2. Styled"
@@ -75,6 +94,14 @@ def test_extract_toc_tree_exotic(exotic_pdf):
     assert data[5]["title"] == "6. Parent"
     assert data[5]["children"][0]["title"] == "6.1 Child"
     assert data[5]["children"][0]["view"] == ["FitH", 500]
+
+    assert data[6]["title"] == "7. Launch"
+    assert data[6]["action"]["S"] == {"__name__": "/Launch"}
+    assert data[6]["action"]["F"] == "file.pdf"
+
+    assert data[7]["title"] == "8. Named"
+    assert data[7]["action"]["S"] == {"__name__": "/Named"}
+    assert data[7]["action"]["N"] == {"__name__": "/NextPage"}
 
 
 def test_build_toc_tree_roundtrip(exotic_pdf):
@@ -92,7 +119,7 @@ def test_build_toc_tree_roundtrip(exotic_pdf):
     # Re-extract from the newly built PDF
     roundtrip_data = extract_toc_tree(new_pdf)
 
-    # The data should be structurally identical
+    # The data should be structurally identical, preserving exotic actions!
     assert roundtrip_data == extracted_data
 
 
@@ -179,7 +206,6 @@ def test_extract_toc_tree_view_edge_cases(exotic_pdf):
 
 def test_extract_toc_tree_invalid_view_arg(exotic_pdf, caplog):
     """Covers the ValueError fallback for malformed view arguments."""
-
     with exotic_pdf.open_outline() as outline:
         bad_arg_item = pikepdf.OutlineItem("Bad Arg", 0)
         bad_arg_item.to_dictionary_object(exotic_pdf)
@@ -217,16 +243,13 @@ def test_extract_item_no_obj():
 
 
 def test_build_item_fails_to_create_obj():
-    """
-    Covers line 213: raise OperationError("Invalid item (no obj)")
-    """
+    """Covers line 213: raise OperationError("Invalid item (no obj)")"""
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
     mock_pdf.pages = [MagicMock()]
 
     node = {"title": "Ghost Item", "page": 1}
 
-    # Patching inside the 'pdftl.info.toc' namespace is often safer
-    # if it's already imported there.
+    # Patching inside the namespace is often safer
     with patch("pikepdf.OutlineItem") as MockItem:
         instance = MockItem.return_value
         instance.obj = None
@@ -236,7 +259,7 @@ def test_build_item_fails_to_create_obj():
 
 
 def test_build_toc_validation_errors(caplog):
-    """Covers lines 136-137, 140-141, and 160-164 via logging/skipping."""
+    """Covers validation logic via logging/skipping."""
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
     mock_pdf.Root = {}
 
@@ -247,7 +270,7 @@ def test_build_toc_validation_errors(caplog):
     ]
 
     with caplog.at_level(logging.WARNING):
-        # Prevent the deep pikepdf C++ layout from parsing our structural Page mocks
+        # Prevent pikepdf C++ from parsing our structural mocks
         with patch("pikepdf.models.outlines.make_page_destination", return_value=[]):
             build_toc_tree(mock_pdf, malformed_items)
 
@@ -257,7 +280,7 @@ def test_build_toc_validation_errors(caplog):
 
 
 def test_build_toc_strict_key_check():
-    """Covers line 148: OperationError for unrecognized keys (typos)."""
+    """Covers OperationError for unrecognized keys (typos)."""
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
 
     # User made a typo 'pagee' instead of 'page'
@@ -265,3 +288,38 @@ def test_build_toc_strict_key_check():
 
     with pytest.raises(OperationError, match="Invalid keys found in bookmark 'Intro': pagee"):
         build_toc_tree(mock_pdf, bad_toc)
+
+
+def test_type_converters_edge_cases():
+    """Covers edge cases like None, numbers, and nested Arrays."""
+    import pikepdf
+
+    # Test Null -> None
+    assert _to_python_types(None) is None
+
+    # Test primitives
+    assert _to_python_types(42) == 42
+    assert _to_python_types(3.14) == 3.14
+    assert _to_python_types(True) is True
+
+    class UnknownObj:
+        def __str__(self):
+            return "UnknownObj"
+
+    assert _to_python_types(UnknownObj()) == "UnknownObj"
+
+    # Test complex Array -> list
+    arr = pikepdf.Array([pikepdf.Name("/Val"), pikepdf.String("text"), 100])
+    py_arr = _to_python_types(arr)
+    assert py_arr == [{"__name__": "/Val"}, "text", 100]
+
+    # Test rebuilding
+    mock_pdf = MagicMock()
+    py_dict = {"mykey": py_arr, "num": 42, "bool": False}
+    pdf_dict = _from_python_types(py_dict, mock_pdf)
+    assert isinstance(pdf_dict, pikepdf.Dictionary)
+    assert isinstance(pdf_dict["/mykey"], pikepdf.Array)
+    assert isinstance(pdf_dict["/mykey"][0], pikepdf.Name)
+    assert isinstance(pdf_dict["/mykey"][1], pikepdf.String)
+    assert pdf_dict["/num"] == 42
+    assert pdf_dict["/bool"] is False

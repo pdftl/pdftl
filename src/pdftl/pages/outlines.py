@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pikepdf import Pdf, OutlineItem
+    from pikepdf import OutlineItem, Pdf
 
 from pdftl.pages.link_remapper import LinkRemapper
 from pdftl.pages.links import RebuildLinksPartialContext
@@ -85,18 +85,23 @@ class OutlineCopier:
 
     def _remap_item_action(self, action) -> tuple[Any, bool]:
         """Remaps the item action and extracts the destination."""
+        from pikepdf import Name
+
         if not action:
             return None, False
 
-        new_action, new_named_dest = self.remapper.remap_goto_action(action)
-        if new_named_dest:
-            # remap_goto_action returns a 2-tuple (name, dest)
-            # .extend() intentionally flattens this into a flat list for write_named_dests
-            self.new_dests_list.extend(new_named_dest)
+        # If it's a GoTo action, we remap the destination to the target PDF
+        if action.get("/S") == Name.GoTo:
+            new_action, new_named_dest = self.remapper.remap_goto_action(action)
+            if new_named_dest:
+                self.new_dests_list.extend(new_named_dest)
+            if new_action:
+                return new_action, True
+            return None, False
 
-        if new_action:
-            return new_action.D, True
-        return None, False
+        # For non-GoTo actions (e.g. /Launch, /URI, /Named), pass them through!
+        # They remain valid and should not be pruned.
+        return action, True
 
     def _apply_cached_meta(self, cached_item: "CachedOutlineItem", new_item: "OutlineItem"):
         """Extracts and sets formatting metadata manually onto the item."""
@@ -117,10 +122,10 @@ class OutlineCopier:
         Recursively copies a source outline item, remaps its destination,
         and prunes it if it's no longer valid.
         """
-        from pikepdf import OutlineItem
+        from pikepdf import Name, OutlineItem
 
         # --- 1. Remap Destination Actions ---
-        final_dest, is_valid_dest = self._remap_item_action(cached_item.action)
+        new_action, is_valid_action = self._remap_item_action(cached_item.action)
 
         # --- 2. Recurse on children (Bottom-Up) ---
         valid_children = [
@@ -130,11 +135,18 @@ class OutlineCopier:
         ]
 
         # --- 3. Pruning ---
-        if not is_valid_dest and not valid_children:
+        if not is_valid_action and not valid_children:
             return None
 
         # --- 4. Instantiate and apply stashed attributes ---
-        new_item = OutlineItem(title=cached_item.title, destination=final_dest)
+        new_item = OutlineItem(title=cached_item.title)
+
+        if new_action:
+            if new_action.get("/S") == Name.GoTo and "/D" in new_action:
+                new_item.destination = new_action["/D"]
+            else:
+                new_item.action = new_action
+
         self._apply_cached_meta(cached_item, new_item)
         new_item.children.extend(valid_children)
 
@@ -149,9 +161,8 @@ def _get_source_action(source_item):
         # Case 1: Has .destination. Wrap it in a /GoTo action.
         source_action = Dictionary(S=Name.GoTo, D=source_item.destination)
     elif source_item.action:
-        # Case 2: Has .action. Use it, but only if it's /GoTo.
-        if source_item.action.S == Name.GoTo:
-            source_action = source_item.action
+        # Case 2: Has .action. Preserve it perfectly (even if not GoTo!).
+        source_action = source_item.action
     return source_action
 
 
