@@ -1,3 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# tests/utils/test_destinations.py
+
+"""Test suite for PDF destination resolution and parsing utilities."""
+
 from unittest.mock import MagicMock
 
 import pikepdf
@@ -165,11 +173,59 @@ def test_get_named_destinations_structure():
         dests_dict = pikepdf.Dictionary({"/Names": pikepdf.Array([])})
         pdf.Root.Names.Dests = pdf.make_indirect(dests_dict)
 
-        # Now it should return a NameTree wrapper
+        # Now it should return None since there are no dests
         names = get_named_destinations(pdf)
-        assert names is not None
-        # pikepdf.NameTree behaves like a mapping
-        assert len(names) == 0
+        assert names is None
+
+
+def test_get_named_destinations_legacy_dict(temp_pdf):
+    """Hits §12.3.2.4: Test extracting legacy PDF 1.1 /Root/Dests dictionary."""
+    page = temp_pdf.add_blank_page()
+
+    # Create legacy dictionary /Root/Dests mapping names to arrays
+    legacy_dests = pikepdf.Dictionary(
+        {"/LegacyDest": pikepdf.Array([page.obj, pikepdf.Name("/XYZ"), 0, 0, 1])}
+    )
+    temp_pdf.Root.Dests = legacy_dests
+
+    dests = get_named_destinations(temp_pdf)
+    assert dests is not None
+    assert "LegacyDest" in dests
+    assert dests["LegacyDest"][1] == "/XYZ"
+
+
+def test_resolve_dest_structure_destination(temp_pdf):
+    """Hits §12.3.2.3: Structure destination resolving to a page recursively."""
+    page = temp_pdf.add_blank_page()
+
+    # Create a mock structure element with a /Pg reference
+    struct_elem = pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem"), "/Pg": page.obj})
+    struct_elem_obj = temp_pdf.make_indirect(struct_elem)
+
+    dest_array = pikepdf.Array([struct_elem_obj, pikepdf.Name("/Fit")])
+    res = resolve_dest_to_page_num(dest_array, temp_pdf.pages, None)
+
+    assert res is not None
+    assert res.page_num == len(temp_pdf.pages)  # resolves to the added page
+    assert res.dest_type == "Fit"
+
+
+def test_resolve_dest_structure_destination_fallback(temp_pdf):
+    """Hits §12.3.2.3: Structure dest fallback to page 1 if no content."""
+    temp_pdf.add_blank_page()
+
+    # Structure element without /Pg or children
+    struct_elem = pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem")})
+    struct_elem_obj = temp_pdf.make_indirect(struct_elem)
+
+    dest_array = pikepdf.Array([struct_elem_obj, pikepdf.Name("/FitH"), 100])
+    res = resolve_dest_to_page_num(dest_array, temp_pdf.pages, None)
+
+    assert res is not None
+    # Must fallback to page 1
+    assert res.page_num == 1
+    assert res.dest_type == "FitH"
+    assert res.args == [100]
 
 
 def test_resolve_dest_fallthrough():
@@ -311,3 +367,68 @@ def test_resolve_dest_to_page_num_catch_all(temp_pdf):
 def test_find_page_index_missing_objgen():
     """Hits Line 33: Object has no objgen attribute (edge case)."""
     assert _find_page_index(object(), []) is None
+
+
+def test_struct_elem_not_dictionary(temp_pdf):
+    """Hits Line 159 & 175-176: _walk(el) where kid is not a dictionary."""
+    temp_pdf.add_blank_page()
+    struct_elem = pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem"), "/K": 123})
+    struct_elem_obj = temp_pdf.make_indirect(struct_elem)
+    dest_array = pikepdf.Array([struct_elem_obj, pikepdf.Name("/XYZ")])
+    res = resolve_dest_to_page_num(dest_array, temp_pdf.pages, None)
+    assert res.page_num == 1
+
+
+def test_struct_elem_cycle(temp_pdf):
+    """Hits Line 162: _walk(el) cycle detection."""
+    temp_pdf.add_blank_page()
+    struct_elem = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/StructElem"),
+        }
+    )
+    struct_elem_obj = temp_pdf.make_indirect(struct_elem)
+    # Create cycle
+    struct_elem_obj["/K"] = struct_elem_obj
+
+    dest_array = pikepdf.Array([struct_elem_obj, pikepdf.Name("/XYZ")])
+    res = resolve_dest_to_page_num(dest_array, temp_pdf.pages, None)
+    assert res.page_num == 1
+
+
+def test_struct_elem_array_of_kids(temp_pdf):
+    """Hits Lines 169-174: _walk(el) iterating over an Array in /K."""
+    page = temp_pdf.add_blank_page()
+    kid1 = temp_pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem")}))
+    kid2 = temp_pdf.make_indirect(
+        pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem"), "/Pg": page.obj})
+    )
+
+    struct_elem = pikepdf.Dictionary(
+        {"/Type": pikepdf.Name("/StructElem"), "/K": pikepdf.Array([kid1, kid2])}
+    )
+    struct_elem_obj = temp_pdf.make_indirect(struct_elem)
+
+    dest_array = pikepdf.Array([struct_elem_obj, pikepdf.Name("/XYZ")])
+    res = resolve_dest_to_page_num(dest_array, temp_pdf.pages, None)
+    assert res.page_num == len(temp_pdf.pages)
+    assert res.dest_type == "XYZ"
+
+
+def test_struct_elem_array_of_kids_all_fail(temp_pdf):
+    """Hits the final fallthrough return None in _walk_struct_kids_for."""
+    kid1 = temp_pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem")}))
+    kid2 = temp_pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/StructElem")}))
+
+    struct_elem = pikepdf.Dictionary(
+        {"/Type": pikepdf.Name("/StructElem"), "/K": pikepdf.Array([kid1, kid2])}
+    )
+    struct_elem_obj = temp_pdf.make_indirect(struct_elem)
+
+    dest_array = pikepdf.Array([struct_elem_obj, pikepdf.Name("/XYZ")])
+    res = resolve_dest_to_page_num(dest_array, temp_pdf.pages, None)
+
+    # Because neither kid has /Pg, the walk returns None, and the top-level fallback triggers
+    assert res is not None
+    assert res.page_num == 1
+    assert res.dest_type == "XYZ"

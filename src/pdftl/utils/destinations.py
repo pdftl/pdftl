@@ -1,3 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# src/pdftl/utils/destinations.py
+
+"""PDF destination resolution and parsing utilities."""
+
 import logging
 from collections.abc import Iterable
 from typing import Any, NamedTuple, cast
@@ -20,11 +28,23 @@ def get_page_map(pdf_pages) -> dict[tuple[int, int], int]:
 
 
 def get_named_destinations(pdf):
-    from pikepdf import NameTree
+    from pikepdf import Dictionary, NameTree
 
+    dests = {}
+
+    # 1. PDF 1.1 Legacy /Root/Dests (Dictionary)
+    # ISO 32000-2 §12.3.2.4
+    if "/Dests" in pdf.Root and isinstance(pdf.Root.Dests, Dictionary):
+        for k, v in pdf.Root.Dests.items():
+            dest_str = str(k).lstrip("/")
+            dests[dest_str] = v
+
+    # 2. PDF 1.2+ /Root/Names/Dests (NameTree)
     if "/Names" in pdf.Root and "/Dests" in pdf.Root.Names:
-        return {str(k): v for k, v in NameTree(pdf.Root.Names.Dests).items()}
-    return None
+        name_tree_dests = {str(k): v for k, v in NameTree(pdf.Root.Names.Dests).items()}
+        dests.update(name_tree_dests)
+
+    return dests if dests else None
 
 
 def _find_page_index(page_obj, page_map) -> int | None:
@@ -96,7 +116,19 @@ def resolve_dest_to_page_num(
 
 
 def _resolve_dest_array_to_page_num(dest, pdf_pages):
+    from pikepdf import Dictionary
+
     page_obj = dest[0]
+
+    # ISO 32000-2 §12.3.2.3: Structure destinations
+    if isinstance(page_obj, Dictionary) and page_obj.get("/Type") == "/StructElem":
+        page_obj = _find_page_for_struct_elem(page_obj)
+        if not page_obj:
+            # Spec: fallback to the first page in the document if no content identified
+            return _resolve_struct_elem_fallback(dest)
+
+    if not hasattr(page_obj, "objgen"):
+        return None
 
     # use dictionary if available (fast)
     if isinstance(pdf_pages, dict):
@@ -106,10 +138,54 @@ def _resolve_dest_array_to_page_num(dest, pdf_pages):
         # but warns us that we're using the slow path
         page_num = _find_page_index(page_obj, pdf_pages)
 
-    if hasattr(page_obj, "objgen"):
-        if page_num:
-            dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
-            dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
-            return ResolvedDest(page_num, dest_type, dest_args)
+    if page_num:
+        dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
+        dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
+        return ResolvedDest(page_num, dest_type, dest_args)
 
+    return None
+
+
+def _resolve_struct_elem_fallback(dest):
+    dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "XYZ"
+    dest_args = list(cast(Iterable[Any], dest))[2:] if len(dest) > 2 else []
+    return ResolvedDest(1, dest_type, dest_args)
+
+
+def _find_page_for_struct_elem(elem):
+    """Recursively search a StructElem for a /Pg (Page) reference per §12.3.2.3."""
+    visited = set()
+    return _walk_struct_from(elem, visited)
+
+
+def _walk_struct_from(el, visited):
+    from pikepdf import Dictionary
+
+    if not isinstance(el, Dictionary):
+        return None
+    if hasattr(el, "objgen"):
+        if el.objgen in visited:
+            return None
+        visited.add(el.objgen)
+
+    if "/Pg" in el:
+        return el["/Pg"]
+
+    if "/K" in el:
+        return _walk_struct_kids_for(el, visited)
+
+    return None
+
+
+def _walk_struct_kids_for(el, visited):
+    from pikepdf import Array
+
+    k = el["/K"]
+    if isinstance(k, Array):
+        for kid in k:
+            res = _walk_struct_from(kid, visited)
+            if res:
+                return res
+    else:
+        return _walk_struct_from(k, visited)
     return None
