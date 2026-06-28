@@ -18,9 +18,9 @@ The core of `pdftl` relies on [`pikepdf`](https://github.com/pikepdf/pikepdf)
 
 For online documentation: [_Read the Docs_][3].
 
-## Quick Start
+## Installation
 
-`pdftl` requires Python 3.10 or later.
+`pdftl` requires Python 3.10 or later and runs on Windows, MacOS and Linux.
 
 Because `pdftl` is a command-line tool, the recommended installation method is via [`pipx`](https://pipx.pypa.io/), which installs the application into an isolated environment so its dependencies don't conflict with your system Python.
 
@@ -36,38 +36,44 @@ Many of the extended features require additional Python dependencies. To install
 pipx install "pdftl[full]"
 ```
 
-Some features require system software such as `java`.
+Some features also require system software such as `java`.
 
-*Note: You can also use standard `pip` if you prefer to manage your own virtual environments, or if you only need specific feature subsets (e.g., `pip install "pdftl[signing,optimize-images]"`).*
+<details>
+<summary><b>Alternative installation methods</b></summary>
 
-## Feature Overview
+- You can also use standard `pip` if you prefer to manage your own virtual environments.
+- If you only need specific features you can specify e.g., `pipx install "pdftl[signing,optimize-images]"`. Features are listed under `[project.optional-dependencies]` in [pyproject.toml](https://github.com/pdftl/pdftl/blob/main/pyproject.toml).
 
-### Standard Operations
+</details>
 
-* **Combine & Organize:** [`create`](https://pdftl.readthedocs.io/en/latest/operations/create.html), [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html), [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html), and [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html).
+## Feature overview
+
+### Standard operations
+
+* **Combine and organize:** [`create`](https://pdftl.readthedocs.io/en/latest/operations/create.html), [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html), [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html), [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html), and [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html).
 * **Split:** [`burst`](https://pdftl.readthedocs.io/en/latest/operations/burst.html), [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html), or [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html).
 * **Metadata:** [`dump_data`](https://pdftl.readthedocs.io/en/latest/operations/dump_data.html), [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html), [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html).
 * **Attachments:** [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html), [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html), [`dump_files`](https://pdftl.readthedocs.io/en/latest/operations/dump_files.html), [`delete_attachments`](https://pdftl.readthedocs.io/en/latest/operations/delete_attachments.html).
-* **Bookmarks & Links:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html), [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html), [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html), [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html), and [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html).
+* **Bookmarks and links:** [`dump_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/dump_bookmarks.html), [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html), [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html), [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html), and [`dump_dests`](https://pdftl.readthedocs.io/en/latest/operations/dump_dests.html).
 * **Watermarking:** [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html) / [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html), [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html) / [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html).
 
-### Geometry & Splitting
+### Geometry and splitting
 
 * **Geometry:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) or [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html).
-* **Clip and Crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) to margins or standard paper sizes, or [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) content outside a given region.
+* **Clip and crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) to margins or standard paper sizes, or [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) content outside a given region.
 * **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows.
 * **Layout:** Shift, scale, and spin content with [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
 * **Montage:** [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html) multiple pages onto a grid layout.
 * **Booklet:** Create a printable [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html).
 
-### Text, Forms & Annotations
+### Text, forms and annotations
 
-* **Search/Comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html).
+* **Search and comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html).
 * **Extraction:** [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html), [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html), and [`dump_fonts`](https://pdftl.readthedocs.io/en/latest/operations/dump_fonts.html).
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
 * **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html).
-* **Actions & Scripts:** [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html) and [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html).
-* **Accessibility & Structure:** [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html) for auto-tagging, and [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html) to inspect the structure tree.
+* **Actions and scripts:** [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html) and [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html).
+* **Accessibility and structure:** [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html) for auto-tagging, and [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html) to inspect the structure tree.
 
 ### Security
 
@@ -75,18 +81,18 @@ Some features require system software such as `java`.
 * **Encryption:** [`owner_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw), [`user_pw`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#user-pw-pw), [`encrypt_aes256`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#encrypt-aes256), and [`allow`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#allow-perm). Inspect with [`dump_encryption`](https://pdftl.readthedocs.io/en/latest/operations/dump_encryption.html).
 * **Signatures:** [`sign_key`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-key-file), [`sign_cert`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file), and [`dump_signatures`](https://pdftl.readthedocs.io/en/latest/operations/dump_signatures.html).
 
-### Images & Vectors
+### Images and Vectors
 
 * **Information:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) and [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html).
 * **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) pages as images.
-* **Optimization & Editing:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html), [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html), [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html), or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html).
+* **Optimization and editing:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html), [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html), [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html), or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html).
 * **Vectors:** [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html) and [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html).
 * **Barcodes:** Generate and place on pages with [`barcode`](https://pdftl.readthedocs.io/en/latest/operations/barcode.html).
 
 ### Advanced
 
-* **Content Streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html).
-* **Dynamic Text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
+* **Content streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html).
+* **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) and [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize).
 * **Layers (OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html).
 * **Presentations:** Remove slide transition frames with [`unpause`](https://pdftl.readthedocs.io/en/latest/operations/unpause.html).
@@ -110,7 +116,7 @@ pdftl A=in1.pdf B=in2.pdf cat A Bz1 output combined2.pdf
 
 ```bash
 # Take pages 1-5, rotate them 90 degrees East, and crop to A4
-pdftl in.pdf cat 1-5east --- crop "(a4)" output out.pdf
+pdftl in.pdf cat 1-5east --- crop A4 output out.pdf
 ```
 
 ### Pipelining
@@ -306,10 +312,10 @@ See the [**API Tutorial**][4] for more details.
 
 * **License:** This project is licensed under the [Mozilla Public License 2.0][1].
 * **Changelog:** [CHANGELOG.md][2].
-* **Online Documentation:** at [_Read the Docs_][3].
+* **Online documentation:** [_pdftl on Read the Docs_][3].
 
 [1]: https://raw.githubusercontent.com/pdftl/pdftl/main/LICENSE
 [2]: https://github.com/pdftl/pdftl/blob/main/CHANGELOG.md
 [3]: https://pdftl.readthedocs.io
 [4]: https://pdftl.readthedocs.io/en/latest/api_tutorial.html
-[5]: https://github.com/mikehaertl/php-pdftk
+
