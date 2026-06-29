@@ -11,6 +11,10 @@ class PdftlError(Exception):
     """Base exception for all pdftl errors"""
 
 
+class PdftlOutputError(PdftlError, OSError):
+    """Exception raised when pdftl encounters an error during output"""
+
+
 class PdftlConfigError(PdftlError):
     """Exception raised when required data or configuration is missing."""
 

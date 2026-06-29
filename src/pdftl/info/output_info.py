@@ -58,7 +58,7 @@ def _get_docinfo(info, pdf_docinfo):
             key_str = str(key)[1:]
             value = pdf_docinfo[key]
             if not isinstance(value, (str, pikepdf.String)):
-                logger.warning(
+                logger.debug(
                     "Skipping non-string InfoValue '%s' (type: %s) for InfoKey '%s'",
                     value,
                     type(value),

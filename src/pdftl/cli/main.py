@@ -26,7 +26,7 @@ from pdftl.cli.parser import (
 from pdftl.cli.pipeline import PipelineManager
 from pdftl.cli.whoami import ISSUES, WHOAMI
 from pdftl.core.registry import register_option
-from pdftl.exceptions import OperationError, PackageError, UserCommandLineError
+from pdftl.exceptions import OperationError, PackageError, UserCommandLineError, PdftlOutputError
 from pdftl.registry_init import initialize_registry
 from pdftl.utils.user_input import UserInputContext, get_input
 
@@ -79,7 +79,7 @@ def main(argv=None):
             pass
         return 0
 
-    except (UserCommandLineError, PackageError, OperationError) as e:
+    except (UserCommandLineError, PackageError, OperationError, PdftlOutputError) as e:
         return _handle_error_from_main(e, "debug" in found_flags)
 
 

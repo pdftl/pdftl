@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 import pdftl.core.constants as c
 from pdftl.core.registry import register_option
-from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
+from pdftl.exceptions import InvalidArgumentError, MissingArgumentError, PdftlOutputError
 from pdftl.fonts.form_font_replacer import replace_form_fonts
 from pdftl.output.flatten import flatten_pdf
 from pdftl.output.sign import parse_sign_options, save_and_sign
@@ -367,17 +367,20 @@ def save_content(content, output_path, input_context, **kwargs):
     """
     import types
 
-    # Handle Generators (e.g., burst or render)
-    if isinstance(content, (types.GeneratorType, list)):
-        for filename, item in content:
-            try:
-                _save_by_type(item, filename, input_context, **kwargs)
-            finally:
-                _cleanup_item(item)
+    try:
+        # Handle Generators (e.g., burst or render)
+        if isinstance(content, (types.GeneratorType, list)):
+            for filename, item in content:
+                try:
+                    _save_by_type(item, filename, input_context, **kwargs)
+                finally:
+                    _cleanup_item(item)
 
-    # Handle Single Objects
-    else:
-        _save_by_type(content, output_path, input_context, **kwargs)
+        # Handle Single Objects
+        else:
+            _save_by_type(content, output_path, input_context, **kwargs)
+    except OSError as exc:
+        raise PdftlOutputError(f"While saving content, got {exc}") from exc
 
 
 def _cleanup_item(item):

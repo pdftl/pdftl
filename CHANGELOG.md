@@ -36,7 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bookmarks: non-GoTo actions (e.g. `Launch`, `Named`, `JavaScript`) are now preserved when
   copying or round-tripping outlines via `dump_bookmarks` / `add_bookmarks`
 
+### Changed
+
+- Improved verbose pipeline logging feedback loops
+
+- Suppressed noisy metadata field conversion logging strings in `dump_data`
+
 ### Fixed
+
+- Improve handling of OS errors while saving to disk
 
 - Improve handling of invalid or missing arguments in several operations
 

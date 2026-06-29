@@ -1064,3 +1064,22 @@ def test_cleanup_item_pikepdf():
 
     _cleanup_item(pdf)
     pdf.close.assert_called_once()
+
+
+def test_save_content_os_error_raises_pdftl_output_error():
+    """
+    Covers line 383: Verifies that an OSError caught during saving
+    is wrapped and re-raised as a PdftlOutputError.
+    """
+    from pdftl.exceptions import PdftlOutputError
+
+    # Force the internal saving function to throw an intentional OSError
+    with patch("pdftl.output.save._save_by_type") as mock_save:
+        mock_save.side_effect = OSError("Mocked disk full or permission error")
+
+        # Assert that the custom exception is raised with the correct message
+        with pytest.raises(
+            PdftlOutputError,
+            match="While saving content, got Mocked disk full or permission error",
+        ):
+            save_content("dummy_content", "dummy_path.pdf", None)

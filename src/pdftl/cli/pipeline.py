@@ -140,7 +140,7 @@ class PipelineManager:
 
     def run(self):
         """Executes all stages in the pipeline."""
-        logger.debug("Running pipeline with %s stages", len(self.stages))
+        logger.info("Running pipeline with %s stage(s)", len(self.stages))
         try:
             for i, stage in enumerate(self.stages):
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
@@ -163,6 +163,7 @@ class PipelineManager:
                 if stage_output and self.pipeline_pdf and not skip_pipeline_save:
                     logger.info("Persisting stage output path -> %s", stage_output)
                     self.save_pdf_file(self.pipeline_pdf, stage_output, stage)
+                    logger.info("Success: Output written to %s", stage_output)
                 else:
                     logger.debug(
                         (
@@ -173,7 +174,6 @@ class PipelineManager:
                         stage_output,
                         bool(self.pipeline_pdf),
                     )
-
         finally:
             if self.pipeline_pdf is not None and not self.is_inline:
                 import pikepdf
@@ -251,6 +251,9 @@ class PipelineManager:
         self._output_targets_info(stage, is_first)
         self._output_other_info(i, stage)
 
+    def _output_stage_finished(self, i):
+        logger.info("Stage %s: operation complete.", i + 1)
+
     def _validate_and_execute_numbered_stage(self, i, stage):
         is_first = i == 0 and not self.is_each
         is_last = i == len(self.stages) - 1
@@ -266,6 +269,7 @@ class PipelineManager:
         self._validate_stage_args(stage, is_first, is_last)
         self._output_info(i, stage, is_first)
         self._execute_stage(stage, is_first)
+        self._output_stage_finished(i)
 
     def _execute_stage(self, stage, is_first):
         logger.debug("_execute_stage")

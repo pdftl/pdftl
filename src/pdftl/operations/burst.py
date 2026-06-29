@@ -115,7 +115,10 @@ def burst_cli_hook(result: OpResult, stage, pipeline):
 
     logger.info("Burst to %s files.", count)
     if isinstance(result.pdf, pikepdf.Pdf):
-        pdftl.api.dump_data(result.pdf, output="doc_data.txt", run_cli_hook=True)
+        # dump data for pdftk compatibility
+        dump_file = "doc_data.txt"
+        logger.info("Dumping data to '%s' for compatibility with pdftk", dump_file)
+        pdftl.api.dump_data(result.pdf, output=dump_file, run_cli_hook=True)
     else:
         raise OperationError("Invalid result: not a PDF")
 
