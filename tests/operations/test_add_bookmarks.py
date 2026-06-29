@@ -7,13 +7,10 @@
 import pikepdf
 import pytest
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.core.core_types import OpResult
 from pdftl.operations.add_bookmarks import _parse_spec, add_bookmarks
 from pdftl.utils.destinations import get_named_destinations, get_page_map, resolve_dest_to_page_num
-
-# ---------------------------------------------------------------------------
-# Test helpers
-# ---------------------------------------------------------------------------
 
 
 def setup_existing_outline(pdf: pikepdf.Pdf) -> None:
@@ -40,34 +37,58 @@ def get_outline_titles_and_pages(pdf: pikepdf.Pdf) -> list[tuple[str, int | None
     return result
 
 
-# ---------------------------------------------------------------------------
-# _parse_spec unit tests
-# ---------------------------------------------------------------------------
-
-
 class TestParseSpec:
     def test_basic_slash_delimiter(self):
-        page_range, title, position = _parse_spec("1/My Title/")
+        page_range, title, opts = _parse_spec("1/My Title/")
         assert page_range == "1"
         assert title == "My Title"
-        assert position == "head"
+        assert opts["position"] == "head"
 
     def test_hash_delimiter(self):
-        page_range, title, position = _parse_spec("2-5#Chapter {page}#")
+        page_range, title, opts = _parse_spec("2-5#Chapter {page}#")
         assert page_range == "2-5"
         assert title == "Chapter {page}"
-        assert position == "head"
+        assert opts["position"] == "head"
 
     def test_explicit_position_tail(self):
-        _, _, position = _parse_spec("1/Title/(position=tail)")
-        assert position == "tail"
+        _, _, opts = _parse_spec("1/Title/(position=tail)")
+        assert opts["position"] == "tail"
 
     def test_explicit_position_head(self):
-        _, _, position = _parse_spec("1/Title/(position=head)")
-        assert position == "head"
+        _, _, opts = _parse_spec("1/Title/(position=head)")
+        assert opts["position"] == "head"
+
+    def test_explicit_options(self):
+        _, _, opts = _parse_spec("1/Title/(position=tail, uri=https://abc.com, bold=true)")
+        assert opts["position"] == "tail"
+        assert opts["uri"] == "https://abc.com"
+        assert opts["bold"] is True
+
+    def test_launch_option(self):
+        _, _, opts = _parse_spec("1/Title/(launch=app.exe)")
+        assert opts["launch"] == "app.exe"
+
+    def test_named_option(self):
+        _, _, opts = _parse_spec("1/Title/(named=NextPage)")
+        assert opts["named"] == "NextPage"
+
+    def test_dest_option(self):
+        _, _, opts = _parse_spec("1/Title/(dest=my_dest)")
+        assert opts["dest"] == "my_dest"
+
+    def test_color_option(self):
+        _, _, opts = _parse_spec("1/Title/(color=1.0 0.0 0.5)")
+        assert opts["color"] == [1.0, 0.0, 0.5]
+
+    def test_color_option_malformed(self):
+        with pytest.raises(InvalidArgumentError, match="Expected 3 space-separated numbers"):
+            _parse_spec("1/Title/(color=red)")
+
+        with pytest.raises(InvalidArgumentError, match="Expected 3 space-separated numbers"):
+            _parse_spec("1/Title/(color=1.0 0.0)")
 
     def test_empty_title(self):
-        page_range, title, position = _parse_spec("1//")
+        page_range, title, _ = _parse_spec("1//")
         assert page_range == "1"
         assert title == ""
 
@@ -76,31 +97,26 @@ class TestParseSpec:
         assert title == "Hello World"
 
     def test_invalid_no_delimiter(self):
-        with pytest.raises(ValueError, match="Invalid add_bookmarks spec"):
+        with pytest.raises(InvalidArgumentError, match="Invalid add_bookmarks spec"):
             _parse_spec("1 My Title")
 
     def test_invalid_position_value(self):
-        with pytest.raises(ValueError, match="Invalid position="):
+        with pytest.raises(InvalidArgumentError, match="Invalid position="):
             _parse_spec("1/Title/(position=middle)")
 
     def test_unknown_option(self):
-        with pytest.raises(ValueError, match="Unknown option"):
-            _parse_spec("1/Title/(bold=true)")
+        with pytest.raises(InvalidArgumentError, match="Unknown option"):
+            _parse_spec("1/Title/(zoom=100)")
 
     def test_malformed_option_no_equals(self):
-        with pytest.raises(ValueError, match="expected key=value"):
+        with pytest.raises(InvalidArgumentError, match="expected key=value"):
             _parse_spec("1/Title/(tail)")
 
 
-# ---------------------------------------------------------------------------
-# add_bookmarks integration tests — position and ordering
-# ---------------------------------------------------------------------------
-
-
 def test_add_bookmarks_no_args_raises(six_page_pdf):
-    """Calling with no spec args should raise ValueError."""
+    """Calling with no spec args should raise InvalidArgumentError."""
     pdf = pikepdf.open(six_page_pdf)
-    with pytest.raises(ValueError, match="requires at least one spec"):
+    with pytest.raises(InvalidArgumentError, match="requires at least one spec"):
         add_bookmarks(pdf, [])
 
 
@@ -158,6 +174,98 @@ def test_add_bookmarks_position_tail(six_page_pdf):
     assert items[2] == ("Appendix", 6)
 
 
+def test_add_bookmarks_advanced_styling_and_actions(six_page_pdf):
+    """Verifies that styling, URLs, and external actions parse out and apply cleanly."""
+    pdf = pikepdf.open(six_page_pdf)
+    add_bookmarks(pdf, ["1/ColorBold/(color=1.0 0.0 0.0, bold=true)"])
+    add_bookmarks(pdf, ["1/GoogleLink/(uri=https://google.com, position=tail)"])
+
+    with pdf.open_outline() as outline:
+        assert len(outline.root) == 2
+
+        assert str(outline.root[0].title) == "ColorBold"
+        assert list(outline.root[0].obj.get("/C")) == [1.0, 0.0, 0.0]
+        assert int(outline.root[0].obj.get("/F", 0)) == 2
+
+        assert str(outline.root[1].title) == "GoogleLink"
+        action = outline.root[1].obj.get("/A")
+        assert action is not None
+        assert str(action.get("/S")) == "/URI"
+        assert str(action.get("/URI")) == "https://google.com"
+
+
+def test_add_bookmarks_launch_action(six_page_pdf):
+    pdf = pikepdf.open(six_page_pdf)
+    add_bookmarks(pdf, ["1/LaunchApp/(launch=app.exe)"])
+    with pdf.open_outline() as outline:
+        assert len(outline.root) == 1
+        assert str(outline.root[0].title) == "LaunchApp"
+        action = outline.root[0].obj.get("/A")
+        assert action is not None
+        assert str(action.get("/S")) == "/Launch"
+        assert str(action.get("/F")) == "app.exe"
+
+
+def test_add_bookmarks_named_action(six_page_pdf):
+    pdf = pikepdf.open(six_page_pdf)
+    add_bookmarks(pdf, ["1/Next/(named=NextPage)"])
+    with pdf.open_outline() as outline:
+        assert len(outline.root) == 1
+        assert str(outline.root[0].title) == "Next"
+        action = outline.root[0].obj.get("/A")
+        assert action is not None
+        assert str(action.get("/S")) == "/Named"
+        assert str(action.get("/N")) == "/NextPage"
+
+
+def test_add_bookmarks_dest_action(six_page_pdf):
+    pdf = pikepdf.open(six_page_pdf)
+
+    pdf.Root.Names = pikepdf.Dictionary()
+    dests_tree = pikepdf.NameTree.new(pdf)
+    pdf.Root.Names.Dests = dests_tree.obj
+    dests_tree["my_dest"] = pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")])
+
+    add_bookmarks(pdf, ["1/Destination/(dest=my_dest)"])
+    with pdf.open_outline() as outline:
+        assert len(outline.root) == 1
+        assert str(outline.root[0].title) == "Destination"
+        assert str(outline.root[0].obj.get("/Dest")) == "my_dest"
+
+
+def test_add_bookmarks_named_destination_string_type_and_roundtrip(six_page_pdf):
+    """Verifies that named destinations in outline items are correctly stored
+    as String (byte string) objects per Table 149 and resolve successfully."""
+    pdf = pikepdf.open(six_page_pdf)
+
+    # Establish a named destination mapping in the document catalog
+    pdf.Root.Names = pikepdf.Dictionary()
+    dests_tree = pikepdf.NameTree.new(pdf)
+    pdf.Root.Names.Dests = dests_tree.obj
+
+    # Point 'my_named_target' directly to the first page (index 0)
+    dests_tree["my_named_target"] = pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")])
+
+    add_bookmarks(pdf, ["1/Destination/(dest=my_named_target)"])
+
+    with pdf.open_outline() as outline:
+        assert len(outline.root) == 1
+        item_obj = outline.root[0].obj
+
+        # Verify stored destination is a Byte String (pikepdf.String), not a Name
+        dest_val = item_obj.get("/Dest")
+        assert isinstance(dest_val, pikepdf.String)
+        assert str(dest_val) == "my_named_target"
+
+        # Verify the roundtrip: resolve destination back to the correct physical page
+        page_map = get_page_map(pdf.pages)
+        named_dests = get_named_destinations(pdf)
+        resolved = resolve_dest_to_page_num(outline.root[0], page_map, named_dests)
+
+        assert resolved is not None
+        assert resolved.page_num == 1
+
+
 def test_add_multiple_specs_head_and_tail(six_page_pdf):
     """Multiple specs: head items prepended in order, tail items appended in order."""
     pdf = pikepdf.open(six_page_pdf)
@@ -174,7 +282,6 @@ def test_add_multiple_specs_head_and_tail(six_page_pdf):
 
     items = get_outline_titles_and_pages(pdf)
     titles = [t for t, _ in items]
-    # head specs in arg order, then existing, then tail specs in arg order
     assert titles == ["Head One", "Head Two", "Existing A", "Existing B", "Tail One"]
 
 
@@ -298,14 +405,8 @@ def test_add_bookmarks_multiple_specs_all_tail_order_preserved(six_page_pdf):
     )
 
     items = get_outline_titles_and_pages(pdf)
-    # Tail specs in arg order: spec-1 page 2, spec-2 page 1
     assert items[0] == ("Second", 2)
     assert items[1] == ("First", 1)
-
-
-# ---------------------------------------------------------------------------
-# Integration test via CLI runner
-# ---------------------------------------------------------------------------
 
 
 def test_add_bookmarks_cli_pipeline(runner, six_page_pdf, temp_dir):
@@ -313,7 +414,6 @@ def test_add_bookmarks_cli_pipeline(runner, six_page_pdf, temp_dir):
     in_pdf = temp_dir / "input.pdf"
     out_pdf = temp_dir / "output.pdf"
 
-    # Prepare: give the file a simple existing outline
     with pikepdf.open(six_page_pdf) as pdf:
         with pdf.open_outline() as outline:
             outline.root.clear()
@@ -324,7 +424,6 @@ def test_add_bookmarks_cli_pipeline(runner, six_page_pdf, temp_dir):
 
     with pikepdf.open(out_pdf) as pdf:
         items = get_outline_titles_and_pages(pdf)
-    # "New Cover" prepended before "Existing"
     assert items[0] == ("New Cover", 1)
     assert items[1] == ("Existing", 3)
 
@@ -334,7 +433,6 @@ def test_n_variable_basic(six_page_pdf):
     pdf = pikepdf.open(six_page_pdf)
     add_bookmarks(pdf, ["2-6even/{n}/"])
     items = get_outline_titles_and_pages(pdf)
-    # even pages 2,4,6 -> n=1,2,3
     assert [t for t, _ in items] == ["1", "2", "3"]
     assert [p for _, p in items] == [2, 4, 6]
 
@@ -342,7 +440,6 @@ def test_n_variable_basic(six_page_pdf):
 def test_n_variable_arithmetic(six_page_pdf):
     """{n+3} offsets the ordinal."""
     pdf = pikepdf.open(six_page_pdf)
-    # pages 1,3,5 (odd) -> n=1,2,3 -> titles Chapter 4, Chapter 5, Chapter 6
     add_bookmarks(pdf, ["odd/Chapter {n+3}/"])
     items = get_outline_titles_and_pages(pdf)
     assert [t for t, _ in items] == ["Chapter 4", "Chapter 5", "Chapter 6"]

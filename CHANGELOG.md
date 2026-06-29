@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `add_bookmarks`: new options for bookmark specs: `uri`, `launch`, `named`, `dest`,
+  `color`, `bold`, `italic`
+
+- `dump_colorspaces`: CalGray, CalRGB, and Lab colour spaces now resolved and reported
+  (previously silently fell through)
+
 - `dump_tags`: non-standard structure tags now reported as warnings (ISO 32000-2 §14.8)
 
 - `dump_tags`: invalid structure attributes now reported as warnings per standard owner
@@ -31,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copying or round-tripping outlines via `dump_bookmarks` / `add_bookmarks`
 
 ### Fixed
+
+- Destination coordinates for all ISO 32000-2 explicit destination types (`/FitH`,
+  `/FitV`, `/FitR`, `/FitBH`, `/FitBV`, `/Fit`, `/FitB`) now correctly transformed
+  when rotating or scaling pages; previously only `/XYZ` coordinates were handled
+
+- Null coordinate values in `/XYZ` destinations now correctly preserved during
+  rotation and scaling
 
 - `fill_form`: digital signature fields are now safely skipped instead of corrupted
 
