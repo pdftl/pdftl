@@ -247,6 +247,7 @@ def update_info(pdf, op_args, get_input, xml_strings=True) -> OpResult:
             spec = PdfInfo.from_dict(result)
 
         else:
+            # internal error, want full traceback
             raise TypeError(f"Unexpected result type: {type(result)}")
 
         return execute_update_info(pdf, spec)

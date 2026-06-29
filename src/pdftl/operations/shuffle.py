@@ -19,6 +19,7 @@ from pdftl.core.core_types import Compatibility, FeatureType, OpResult, Parity, 
 from pdftl.core.registry import register_operation
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.page_specs import expand_specs_to_pages
+from pdftl.exceptions import InvalidArgumentError
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,13 @@ def shuffle_pdfs(inputs, specs, opened_pdfs, aliases=None) -> OpResult:
     from pikepdf import Pdf
 
     if not opened_pdfs:
+        # this should never happen. Leave a bare ValueError, because it is an internal error
         raise ValueError("opened_pdfs must contain something")
 
     page_tuples_array = _get_page_tuples_array(inputs, specs, opened_pdfs, aliases)
     # logger.debug("page_tuples_array = \n  %s", page_tuples_array)
     if not page_tuples_array:
-        raise ValueError("Range specifications gave no pages")
+        raise InvalidArgumentError("Range specifications gave no pages")
     max_len = max(len(x) for x in page_tuples_array)
     logger.debug("max_len=%s", max_len)
     source_pages_to_process = []

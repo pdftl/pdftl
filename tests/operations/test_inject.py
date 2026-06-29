@@ -2,6 +2,7 @@ import pikepdf
 import pytest
 
 from pdftl.operations.inject import inject_pdf
+from pdftl.exceptions import InvalidArgumentError
 
 
 def _read_page_content(page):
@@ -70,5 +71,5 @@ def test_inject_invalid_args(pdf):
     """Test error when head/tail is missing."""
     inject_args = ["0.5 G"]
 
-    with pytest.raises(ValueError, match="Did you forget"):
+    with pytest.raises(InvalidArgumentError, match="Did you forget"):
         inject_pdf(pdf, inject_args)

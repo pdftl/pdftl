@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from pikepdf import Pdf
 
 import pdftl.core.constants as c
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.operations.parsers.inject_parser import parse_inject_args
@@ -63,7 +64,7 @@ def inject_pdf(pdf: "Pdf", inject_args: list) -> OpResult:
 
     # 2. Validate that there are no dangling arguments
     if len(remaining_specs) > 0:
-        raise ValueError(
+        raise InvalidArgumentError(
             f"Unexpected arguments {remaining_specs} to inject. "
             "Did you forget to specify 'head' or 'tail'?"
         )

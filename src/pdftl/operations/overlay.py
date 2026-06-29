@@ -166,18 +166,28 @@ def apply_overlay(
     page_specs = page_specs or ["1-end"]  # (Assuming previous type fix)
     target_pages = page_numbers_matching_page_specs(page_specs, total_pages)
     source = None if overlay_filename == "-" else overlay_filename
-    with smart_pikepdf_open(source) as overlay_pdf:
-        if not overlay_pdf.pages:
-            raise OperationError(f"Overlay PDF '{overlay_filename}' has no pages.")
+    try:
+        with smart_pikepdf_open(source) as overlay_pdf:
+            if not overlay_pdf.pages:
+                raise OperationError(f"Overlay PDF '{overlay_filename}' has no pages.")
 
-        ocg = create_layer(input_pdf, layer_name) if layer_name else None
+            ocg = create_layer(input_pdf, layer_name) if layer_name else None
 
-        for stamped_count, page_num in enumerate(target_pages):
-            i = page_num - 1
-            base_page = input_pdf.pages[i]
-            _process_page(
-                stamped_count, base_page, overlay_pdf, pikepdf, scale_to_fit, on_top, multi, ocg
-            )
+            for stamped_count, page_num in enumerate(target_pages):
+                i = page_num - 1
+                base_page = input_pdf.pages[i]
+                _process_page(
+                    stamped_count,
+                    base_page,
+                    overlay_pdf,
+                    pikepdf,
+                    scale_to_fit,
+                    on_top,
+                    multi,
+                    ocg,
+                )
+    except OSError as exc:
+        raise OperationError(exc)
 
     return OpResult(success=True, pdf=input_pdf)
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pdftl.core.constants as c
 from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
+from pdftl.exceptions import MissingArgumentError
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -68,7 +69,7 @@ def mutate_content(pdf: "Pdf", args: list) -> OpResult:
     import importlib.util
 
     if not args:
-        raise ValueError("mutate_content requires a script path.")
+        raise MissingArgumentError("mutate_content requires a script path.")
 
     # 1. Separate the script/func from the following arguments
     script_info = args[0]

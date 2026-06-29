@@ -95,7 +95,7 @@ def test_overlay_background(two_page_pdf, stamp_pdf_path):
 def test_overlay_missing_file_error(two_page_pdf):
     """Test error when overlay file doesn't exist."""
     with pikepdf.open(two_page_pdf) as pdf:
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(OperationError):
             apply_overlay(pdf, "non_existent_file.pdf", ["non_existent_file.pdf"])
 
 

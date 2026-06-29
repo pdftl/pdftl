@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Improve handling of invalid or missing arguments in several operations
+
 - Destination coordinates for all ISO 32000-2 explicit destination types (`/FitH`,
   `/FitV`, `/FitR`, `/FitBH`, `/FitBV`, `/Fit`, `/FitB`) now correctly transformed
   when rotating or scaling pages; previously only `/XYZ` coordinates were handled

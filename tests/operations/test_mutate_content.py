@@ -4,6 +4,7 @@ import pikepdf
 import pytest
 
 from pdftl.operations.mutate_content import mutate_content
+from pdftl.exceptions import MissingArgumentError
 
 # A simple script that inserts a '0 w' op (set line width 0) at start of stream
 SCRIPT_CONTENT = """
@@ -106,7 +107,7 @@ def test_mutate_content_missing_file(simple_pdf):
 
 def test_mutate_content_no_args(simple_pdf):
     """Covers line 49-50: Missing arguments."""
-    with pytest.raises(ValueError, match="requires a script path"):
+    with pytest.raises(MissingArgumentError, match="requires a script path"):
         mutate_content(simple_pdf, [])
 
 
