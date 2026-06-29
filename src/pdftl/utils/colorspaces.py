@@ -66,6 +66,12 @@ def resolve_array(cs_array, resources, pikepdf) -> dict:
         return resolve_device_n(cs_array, resources, pikepdf)
     if tag == "/Indexed":
         return resolve_indexed(cs_array, resources, pikepdf)
+    if tag == "/CalGray":
+        return resolve_calgray(cs_array, pikepdf)
+    if tag == "/CalRGB":
+        return resolve_calrgb(cs_array, pikepdf)
+    if tag == "/Lab":
+        return resolve_lab(cs_array, pikepdf)
     if tag == "/Pattern":
         if len(cs_array) > 1:
             base = resolve_colorspace(cs_array[1], resources, pikepdf)
@@ -136,6 +142,66 @@ def resolve_indexed(cs_array, resources, pikepdf) -> dict:
         result["hival"] = int(cs_array[2])
     except (IndexError, AttributeError, TypeError) as err:
         logger.debug("Indexed colorspace parse failed: %s", err)
+    return result
+
+
+def resolve_calgray(cs_array, pikepdf) -> dict:
+    """Resolve a CalGray color space."""
+    result: dict = {"family": "calgray"}
+    try:
+        dictionary = cs_array[1]
+        white_point = dictionary.get("/WhitePoint")
+        if white_point is not None:
+            result["white_point"] = [float(v) for v in white_point]
+        black_point = dictionary.get("/BlackPoint")
+        if black_point is not None:
+            result["black_point"] = [float(v) for v in black_point]
+        gamma = dictionary.get("/Gamma")
+        if gamma is not None:
+            result["gamma"] = float(gamma)
+    except (IndexError, AttributeError, TypeError, ValueError) as err:
+        logger.debug("CalGray colorspace parse failed: %s", err)
+    return result
+
+
+def resolve_calrgb(cs_array, pikepdf) -> dict:
+    """Resolve a CalRGB color space."""
+    result: dict = {"family": "calrgb"}
+    try:
+        dictionary = cs_array[1]
+        white_point = dictionary.get("/WhitePoint")
+        if white_point is not None:
+            result["white_point"] = [float(v) for v in white_point]
+        black_point = dictionary.get("/BlackPoint")
+        if black_point is not None:
+            result["black_point"] = [float(v) for v in black_point]
+        gamma = dictionary.get("/Gamma")
+        if gamma is not None:
+            result["gamma"] = [float(v) for v in gamma]
+        matrix = dictionary.get("/Matrix")
+        if matrix is not None:
+            result["matrix"] = [float(v) for v in matrix]
+    except (IndexError, AttributeError, TypeError, ValueError) as err:
+        logger.debug("CalRGB colorspace parse failed: %s", err)
+    return result
+
+
+def resolve_lab(cs_array, pikepdf) -> dict:
+    """Resolve a Lab color space."""
+    result: dict = {"family": "lab"}
+    try:
+        dictionary = cs_array[1]
+        white_point = dictionary.get("/WhitePoint")
+        if white_point is not None:
+            result["white_point"] = [float(v) for v in white_point]
+        black_point = dictionary.get("/BlackPoint")
+        if black_point is not None:
+            result["black_point"] = [float(v) for v in black_point]
+        range_val = dictionary.get("/Range")
+        if range_val is not None:
+            result["range"] = [float(v) for v in range_val]
+    except (IndexError, AttributeError, TypeError, ValueError) as err:
+        logger.debug("Lab colorspace parse failed: %s", err)
     return result
 
 
