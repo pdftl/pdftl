@@ -65,6 +65,7 @@ HARDCODED_KEYWORDS = {
     "generate_fdf",
     "grep",
     "highlight",
+    "import_streams",
     "inject",
     "insert",
     "modify_annots",

@@ -91,7 +91,7 @@ Some features also require system software such as `java`.
 
 ### Advanced
 
-* **Content streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html).
+* **Content streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html), edit and import with [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) and [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize).
 * **Layers (OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html).
@@ -246,6 +246,7 @@ See the [**API Tutorial**][4] for more details.
 | [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
 | [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html)                                   | Match text patterns and get bounding boxes                      |
 | [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)                         | Highlight text matching a regex pattern                         |
+| [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html)               | Import and apply modified content streams                       |
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
 | [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |

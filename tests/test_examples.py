@@ -69,7 +69,14 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
         shutil.copy(source_path, work_dir / filename)
 
     # Copy extra assets if they exist
-    for filename in ["meta.txt", "bookmarks.yaml", "bookmarks.json", "Form.pdf"]:
+    for filename in [
+        "meta.txt",
+        "bookmarks.yaml",
+        "bookmarks.json",
+        "Form.pdf",
+        "streams.txt",
+        "patched_streams.txt",
+    ]:
         if (assets_dir / filename).exists():
             shutil.copy(assets_dir / filename, work_dir / filename)
 
