@@ -44,7 +44,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Suppressed noisy metadata field conversion logging strings in `dump_data`
 
+- `dump_streams`: output header format changed from `Page <N>` / `Page <N> / XObject <name> (<obj>:<gen>)`
+  to `Page <N> / Contents` / full nested breadcrumb paths (e.g. `Page 1 / XObject /Fm1 / XObject /Fm0`);
+  obj:gen suffixes are no longer shown. Form XObjects reachable via more than one path now emit a
+  `% ALIAS OF: <canonical path>` stub on repeat references instead of being silently skipped
+
 ### Fixed
+
+- `dump_streams`: content stream lines beginning with `===` or `\` are now escaped so they don't
+  get misread as structural headers when round-tripped through `import_streams`
+
 
 - Improve handling of OS errors while saving to disk
 

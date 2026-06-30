@@ -44,10 +44,9 @@ def _collect_page_stream(page, normalize: bool) -> tuple[bytes | None, list[str]
 
     warnings = []
 
-    if normalize:
-        return get_normalized_page_content_stream(page), warnings
     if "/Contents" not in page:
         return None, warnings
+
     if isinstance(page.Contents, pikepdf.Array):
         sub_streams = list(page.Contents)
         objgens = ", ".join(f"{x.objgen[0]}:{x.objgen[1]}" for x in sub_streams)
@@ -55,7 +54,12 @@ def _collect_page_stream(page, normalize: bool) -> tuple[bytes | None, list[str]
             f"Page /Contents is an array of {len(sub_streams)} streams "
             f"({objgens}), concatenated below."
         )
+        if normalize:
+            return get_normalized_page_content_stream(page), warnings
         return b"".join(x.read_bytes() for x in sub_streams), warnings
+
+    if normalize:
+        return get_normalized_page_content_stream(page), warnings
     return page.Contents.read_bytes(), warnings
 
 
@@ -113,7 +117,8 @@ def _xobject_content_warnings(content: bytes | None) -> list[str]:
 def _recurse_and_collect(
     resources,
     page_num: int,
-    seen_objgens: set,
+    current_path: str,
+    seen_objgens: dict[tuple, str],
     collected: list,
     annotate: bool,
     xobject_page_map: dict,
@@ -121,21 +126,25 @@ def _recurse_and_collect(
     normalize: bool,
 ) -> None:
     """
-    Recursively collect Form XObject streams into *collected*.
+    Recursively collect Form XObject streams into *collected* using deep semantic paths.
     Form XObjects are normalized if requested (normalize=True), mirroring `replace` behavior.
     """
     if "/XObject" not in resources:
         return
 
     for name, xobj in resources.XObject.items():
-        if xobj.objgen in seen_objgens:
-            continue
         if xobj.get("/Subtype") != "/Form":
             continue
 
-        seen_objgens.add(xobj.objgen)
-        obj_num, gen_num = xobj.objgen
-        header = f"Page {page_num} / XObject {name} ({obj_num}:{gen_num})"
+        new_path = f"{current_path} / XObject {name}"
+
+        # DAG Deduplication: if we've seen this object before via another path, emit an ALIAS stub
+        if xobj.objgen in seen_objgens:
+            canonical_path = seen_objgens[xobj.objgen]
+            collected.append((new_path, f"% ALIAS OF: {canonical_path}\n".encode("latin-1"), []))
+            continue
+
+        seen_objgens[xobj.objgen] = new_path
 
         content = read_xobject_stream(xobj, normalize)
         warnings = _xobject_shared_warnings(
@@ -147,17 +156,18 @@ def _recurse_and_collect(
                 content, xobj.get("/Resources"), MIN_COMMENT_COL, MAX_COMMENT_COL
             )
 
-        collected.append((header, content or b"", warnings))
+        collected.append((new_path, content or b"", warnings))
 
         if dump_resources and "/Resources" in xobj:
             res_content = "\n".join(pretty_format_pdf_obj(xobj.Resources)).encode("latin-1")
-            res_header = f"Page {page_num} / XObject {name} ({obj_num}:{gen_num}) / Resources"
+            res_header = f"{new_path} / Resources"
             collected.append((res_header, res_content, []))
 
         if "/Resources" in xobj:
             _recurse_and_collect(
                 xobj.Resources,
                 page_num,
+                new_path,
                 seen_objgens,
                 collected,
                 annotate,
@@ -172,6 +182,21 @@ def _recurse_and_collect(
 # ---------------------------------------------------------------------------
 
 
+def _escape_content_line(line: str) -> str:
+    """Escape a content line that would otherwise be misread by `import_streams`
+    as a structural '===' header, or as an escape sequence itself.
+
+    The on-disk format treats any line starting with '===' as structural
+    regardless of where it falls inside a stream's body, so a content line
+    that happens to start with '=' (or with the escape character '\\') must
+    be escaped with a leading backslash. `import_streams._unescape_content_line`
+    reverses this on read.
+    """
+    if line.startswith("=") or line.startswith("\\"):
+        return "\\" + line
+    return line
+
+
 def _write_stream_block(
     out, header: str, content: bytes, warnings: list[str] | None = None
 ) -> None:
@@ -184,7 +209,9 @@ def _write_stream_block(
         print(line, file=out)
     print(separator, file=out)
     if content:
-        print(content.decode("latin-1"), file=out)
+        decoded = content.decode("latin-1")
+        escaped = "\n".join(_escape_content_line(line) for line in decoded.split("\n"))
+        print(escaped, file=out)
     print("", file=out)
 
 
@@ -216,31 +243,36 @@ match against.
   Particularly useful when learning the PDF content stream format or
   hunting for the right operator to target with `replace`.
 
-### Output format
-
-Each content stream is preceded by a labelled header block:
-
-    ================
-    === Page <N>
-    ================
-
-For Form XObjects:
-
-    ============================================
-    === Page <N> / XObject <name> (<obj>:<gen>)
-    ============================================
-
-When an XObject is shared across multiple pages, a warning appears in
-the header identifying the other pages that reference it.
-
-Stream content follows as decoded text (latin-1). Annotation comments,
-when requested, use standard PDF `%` comment syntax so the output
-remains valid PDF content stream text.
-
 ### Page specification
 
 Standard page specs are supported (e.g. `1`, `2-4`, `1 3-5`).
 Default is all pages.
+
+### Output format
+
+Each content stream is preceded by a semantic breadcrumb path block:
+
+    ================
+    === Page <N> / Contents
+    ================
+
+For nested Form XObjects:
+
+    ============================================
+    === Page <N> / XObject <name1> [ / XObject <name2> ]...
+    ============================================
+
+When an XObject is shared across multiple pages, a warning appears in
+the header identifying the other pages that reference it. Subsequent references
+to the same underlying PDF object will output a lightweight `% ALIAS OF:` stub
+pointing back to the original canonical path.
+
+Stream content follows as decoded text (latin-1). Annotation comments,
+when requested, use standard PDF `%` comment syntax so the output
+remains valid PDF content stream text. Any content line that would
+otherwise be misread as a structural `===` header (or as an escape
+sequence) is escaped with a leading backslash; `import_streams` reverses
+this automatically.
 
 ### Relationship to `replace`
 
@@ -346,6 +378,7 @@ def dump_streams(pdf: pikepdf.Pdf, specs, output_file=None) -> OpResult:
 
     xobject_page_map = _build_xobject_page_map(pdf, all_target_pages) if recurse else {}
     collected: list[tuple[str, bytes, list[str]]] = []
+    seen_objgens: dict[tuple, str] = {}
 
     for spec in page_specs:
         for page_num in page_numbers_matching_page_spec(spec, num_pages):
@@ -357,7 +390,7 @@ def dump_streams(pdf: pikepdf.Pdf, specs, output_file=None) -> OpResult:
                     normalize,
                     annotate,
                     dump_resources,
-                    set(),
+                    seen_objgens,
                     xobject_page_map,
                     recurse,
                 )
@@ -387,7 +420,7 @@ def _process_page(
     normalize: bool,
     annotate: bool,
     dump_resources: bool,
-    seen_objgens: set,
+    seen_objgens: dict[tuple, str],
     xobject_page_map: dict,
     recurse: bool,
 ) -> list[tuple[str, bytes, list[str]]]:
@@ -411,11 +444,7 @@ def _process_page(
             page_num,
         )
 
-    contents_obj = page.get("/Contents")
-    contents_str = (
-        f"({contents_obj.objgen[0]}:{contents_obj.objgen[1]})" if contents_obj else "None"
-    )
-    entries.append((f"Page {page_num} / Contents {contents_str}", content, warnings))
+    entries.append((f"Page {page_num} / Contents", content, warnings))
 
     if dump_resources and "/Resources" in page:
         header, res_content = _process_page_resources(page, page_num)
@@ -425,6 +454,7 @@ def _process_page(
         _recurse_and_collect(
             page.Resources,
             page_num,
+            f"Page {page_num}",
             seen_objgens,
             entries,
             annotate,

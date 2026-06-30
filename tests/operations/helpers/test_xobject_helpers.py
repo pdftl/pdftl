@@ -12,7 +12,10 @@ from unittest.mock import MagicMock, patch
 
 import pikepdf
 
-from pdftl.operations.helpers.xobject_helpers import read_xobject_stream
+from pdftl.operations.helpers.xobject_helpers import (
+    normalize_xobject_stream,
+    read_xobject_stream,
+)
 
 
 def test_read_xobject_stream_raw() -> None:
@@ -54,3 +57,38 @@ def test_read_xobject_stream_normalize_failure_fallback() -> None:
         content = read_xobject_stream(mock_xobj, normalize=True)
 
     assert content == b"raw_fallback_bytes"
+
+
+def test_normalize_xobject_stream_success() -> None:
+    """Directly verifies the shared normalize helper used by both
+    dump_streams and import_streams."""
+    mock_xobj = MagicMock()
+    parsed_stream = [(pikepdf.Name("/Span"), {"/MCID": 1}, "BDC")]
+
+    with (
+        patch("pikepdf.parse_content_stream", return_value=parsed_stream) as mock_parse,
+        patch(
+            "pikepdf.unparse_content_stream", return_value=b"/Span << /MCID 1 >> BDC"
+        ) as mock_unparse,
+    ):
+        content = normalize_xobject_stream(mock_xobj)
+
+    assert content == b"/Span << /MCID 1 >> BDC"
+    mock_parse.assert_called_once_with(mock_xobj)
+    mock_unparse.assert_called_once_with(parsed_stream)
+
+
+def test_normalize_xobject_stream_propagates_error() -> None:
+    """normalize_xobject_stream does not swallow errors; callers are
+    responsible for catching and falling back."""
+    mock_xobj = MagicMock()
+
+    with patch(
+        "pikepdf.parse_content_stream",
+        side_effect=pikepdf.PdfError("Parse Failure"),
+    ):
+        try:
+            normalize_xobject_stream(mock_xobj)
+            assert False, "expected PdfError to propagate"
+        except pikepdf.PdfError:
+            pass
