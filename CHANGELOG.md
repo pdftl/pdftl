@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- added `upscale` and `adaptive_threshold` to `modify_images`
+
 - `import_images` operation
 
 - `export_images` operation

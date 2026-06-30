@@ -10,6 +10,7 @@ from pdftl.utils.images.filter_plugins import (
     _to_percent,
     _to_levels,
     _to_bits,
+    _to_adaptive_params,
     convert_to_continuous,
     preserve_alpha,
     filter_invert,
@@ -28,6 +29,8 @@ from pdftl.utils.images.filter_plugins import (
     filter_sharpen,
     filter_blur,
     filter_unsharp_mask,
+    filter_upscale,
+    filter_adaptive_threshold,
 )
 
 # --- 1. VALIDATOR TESTS ---
@@ -571,3 +574,67 @@ def test_whole_image_decorator_non_rgb_fallback():
     # The decorator handles the inner "L" mode return and safely maps it
     # back into the new palette, keeping the final output as "P"
     assert res.mode == "P"
+
+
+def test_convert_to_continuous_force_grayscale_branch():
+    """Covers lines 270-276: Exercises the non-passthrough 1-bit conversion path."""
+    img_1bit = Image.new("1", (10, 10), color=1)
+    res = convert_to_continuous(img_1bit, one_bit_passthrough=False)
+    assert res.mode == "L"
+
+
+def test_to_adaptive_params():
+    """Validates the flexible single value and dual tuple param variations."""
+    # Single argument fallback path
+    assert _to_adaptive_params("15") == (15, 10)
+    assert _to_adaptive_params("  3  ") == (3, 10)
+
+    # Fully explicit dual parameter path
+    assert _to_adaptive_params("15,5") == (15, 5)
+    assert _to_adaptive_params("11, -2") == (11, -2)
+
+    # Invalid structural inputs
+    with pytest.raises(InvalidArgumentError, match="must be an odd integer >= 3"):
+        _to_adaptive_params("4")
+    with pytest.raises(InvalidArgumentError, match="must be an odd integer >= 3"):
+        _to_adaptive_params("1")
+    with pytest.raises(InvalidArgumentError, match="must be an odd integer or a pair"):
+        _to_adaptive_params("15,10,5")
+    with pytest.raises(InvalidArgumentError, match="must be an odd integer or a pair"):
+        _to_adaptive_params("abc")
+    with pytest.raises(InvalidArgumentError, match="must be an odd integer or a pair"):
+        _to_adaptive_params("15,abc")
+
+
+def test_filter_upscale(rgb_img):
+    """Validates both continuous and 1-bit interpolation behaviors."""
+    # Factor 1.0 identity return mapping
+    assert filter_upscale(rgb_img, 1.0) is rgb_img
+
+    # Standard scale operation
+    res = filter_upscale(rgb_img, 2.0)
+    assert res.width == 20
+    assert res.height == 20
+    assert res.mode == "RGB"
+
+    # 1-bit scaling layout fallback routing
+    img_1bit = Image.new("1", (10, 10), color=1)
+    res_1bit = filter_upscale(img_1bit, 3.0)
+    assert res_1bit.width == 30
+    assert res_1bit.height == 30
+    assert res_1bit.mode == "1"
+
+
+def test_filter_adaptive_threshold(rgb_img, rgba_img):
+    """Validates local window threshold operations across different modes."""
+    # Early-exit optimization for pre-existing 1-bit sources
+    img_1bit = Image.new("1", (10, 10), color=1)
+    assert filter_adaptive_threshold(img_1bit, (15, 10)) is img_1bit
+
+    # Happy path computation mapping
+    res = filter_adaptive_threshold(rgb_img, (3, 10))
+    assert res.mode == "1"
+
+    # Ensure @preserve_alpha wrapper integrates cleanly without regression
+    res_rgba = filter_adaptive_threshold(rgba_img, (5, 5))
+    assert res_rgba.mode == "RGBA"

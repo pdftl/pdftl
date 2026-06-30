@@ -266,6 +266,28 @@ def _to_bits(val: str) -> int:
         raise InvalidArgumentError(f"Posterize bits '{val}' must be an integer between 1 and 8")
 
 
+def _to_adaptive_params(val: str) -> tuple[int, int]:
+    try:
+        parts = [p.strip() for p in val.split(",")]
+        if len(parts) == 1:
+            window_size = int(parts[0])
+            C = 10  # Default noise floor constant
+        elif len(parts) == 2:
+            window_size = int(parts[0])
+            C = int(parts[1])
+        else:
+            raise ValueError
+
+        if window_size < 3 or window_size % 2 == 0:
+            raise InvalidArgumentError(f"Window size '{window_size}' must be an odd integer >= 3")
+        return (window_size, C)
+    except ValueError:
+        raise InvalidArgumentError(
+            f"Adaptive threshold parameters '{val}' must be an odd integer or a pair like "
+            "'window_size,C' (e.g., '15' or '15,12')"
+        )
+
+
 # --- PLUGIN IMPLEMENTATIONS ---
 
 
@@ -608,3 +630,67 @@ def filter_unsharp_mask(img: Any, radius: float) -> Any:
     if img.mode == "1":
         return img
     return convert_to_continuous(img).filter(ImageFilter.UnsharpMask(radius=radius))
+
+
+@register_image_modifier(
+    "upscale",
+    "Upscale / Resample",
+    "Multiplies the image resolution using high-quality interpolation.\n\n"
+    "Argument `factor` (float): "
+    "Multiplier where 1.0 is original, > 1.0 increases resolution.",
+    _to_float,
+)
+def filter_upscale(img: Any, factor: float) -> Any:
+    if factor == 1.0:
+        return img
+    from PIL import Image
+
+    new_width = int(img.width * factor)
+    new_height = int(img.height * factor)
+
+    # Use Lanczos for continuous images for smooth text edges.
+    # If the image is already 1-bit, fallback to Nearest Neighbor to prevent crash/blur.
+    resample_filter = Image.Resampling.NEAREST if img.mode == "1" else Image.Resampling.LANCZOS
+
+    return img.resize((new_width, new_height), resample=resample_filter)
+
+
+@register_image_modifier(
+    "adaptive_threshold",
+    "Adaptive Binarization",
+    "Converts an image to 1-bit monochrome using a local neighborhood calculation.\n\n"
+    "Argument `params` (tuple[int, int]): "
+    "An odd window size or a comma-separated window size and noise-floor adjustment C "
+    "(e.g., '15' or '15,12'). The default value of C is 10.",
+    _to_adaptive_params,
+)
+@preserve_alpha
+def filter_adaptive_threshold(img: Any, params: tuple[int, int]) -> Any:
+    if img.mode == "1":
+        return img
+
+    import numpy as np
+    from PIL import ImageFilter, Image
+
+    window_size, C = params
+
+    # Convert to grayscale for calculations
+    gray = convert_to_continuous(img).convert("L")
+
+    # 1. Calculate local mean using a fast box blur
+    # A box blur radius is roughly half the window size
+    radius = window_size // 2
+    local_mean = gray.filter(ImageFilter.BoxBlur(radius))
+
+    # 2. Convert to fast NumPy arrays for comparison
+    # We use int16 to prevent overflow when subtracting the constant
+    gray_arr = np.array(gray, dtype=np.int16)
+    mean_arr = np.array(local_mean, dtype=np.int16)
+
+    # 3. Apply the threshold:
+    # If a pixel is darker than the local average minus a constant (C), it is text.
+    # C prevents random paper grain in blank areas from turning into black speckles.
+    binary_arr = np.where(gray_arr > (mean_arr - C), 255, 0).astype(np.uint8)
+
+    # 4. Pack back into a strict 1-bit PIL Image
+    return Image.fromarray(binary_arr).convert("1")
