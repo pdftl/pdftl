@@ -69,6 +69,7 @@ _ADD_IMAGES_EXAMPLES = [
             "'/logo.png/(position=top-right, width=5cm, offset-x=-0.5cm, offset-y=-0.5cm)'"
             " output out.pdf"
         ),
+        "test_setup": {"copy_images": {"logo.png": "logo.png"}},
     },
     {
         "desc": "Add a background underlay image to even pages, scaling to fill",
@@ -77,6 +78,7 @@ _ADD_IMAGES_EXAMPLES = [
             "'even!background.jpg!(underlay=true, scale_mode=fill)'"
             " output out.pdf"
         ),
+        "test_setup": {"copy_images": {"background.jpg": "background.jpg"}},
     },
     {
         "desc": "Overlay a semi-transparent watermark centered on page 1",
@@ -85,6 +87,7 @@ _ADD_IMAGES_EXAMPLES = [
             "'1#watermark.png#(position=center, opacity=0.3, width=200pt)'"
             " output out.pdf"
         ),
+        "test_setup": {"copy_images": {"watermark.png": "watermark.png"}},
     },
 ]
 

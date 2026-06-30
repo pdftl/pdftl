@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `import_images` operation
+
+- `export_images` operation
+
 - `import_streams` operation
 
 - `add_bookmarks`: new options for bookmark specs: `uri`, `launch`, `named`, `dest`,
@@ -53,7 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `dump_streams`: content stream lines beginning with `===` or `\` are now escaped so they don't
   get misread as structural headers when round-tripped through `import_streams`
-
 
 - Improve handling of OS errors while saving to disk
 

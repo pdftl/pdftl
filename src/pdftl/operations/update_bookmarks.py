@@ -61,10 +61,12 @@ _UPDATE_TOC_EXAMPLES = [
     {
         "desc": "Apply a YAML bookmarks file",
         "cmd": "in.pdf update_bookmarks bookmarks.yaml output modified.pdf",
+        "test_setup": {"copy_assets": {"bookmarks.yaml": "bookmarks.yaml"}},
     },
     {
         "desc": "Apply a JSON bookmarks file",
         "cmd": "in.pdf update_bookmarks bookmarks.json output modified.pdf",
+        "test_setup": {"copy_assets": {"bookmarks.json": "bookmarks.json"}},
     },
 ]
 

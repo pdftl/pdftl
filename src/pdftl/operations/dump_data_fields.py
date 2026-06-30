@@ -35,10 +35,14 @@ help for `dump_data_fields`.
 
 """
 
+
+_TEST_SETUP_FORM_PDF = {"copy_assets": {"Form.pdf": "Form.pdf"}}
+
 _DUMP_DATA_FIELDS_UTF8_EXAMPLES = [
     {
         "cmd": "Form.pdf dump_data_fields_utf8 output data.txt",
         "desc": "Save form field data for in.pdf to data.txt",
+        "test_setup": _TEST_SETUP_FORM_PDF,
     }
 ]
 
@@ -109,6 +113,7 @@ _DUMP_DATA_FIELDS_EXAMPLES = [
     {
         "cmd": "Form.pdf dump_data_fields output data.txt",
         "desc": "Save XML-escaped form field data for in.pdf to data.txt",
+        "test_setup": _TEST_SETUP_FORM_PDF,
     },
 ]
 

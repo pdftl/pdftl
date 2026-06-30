@@ -241,11 +241,13 @@ See the [**API Tutorial**][4] for more details.
 | [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html)                     | Extract tables to JSON, CSV, or Markdown                        |
 | [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html)                         | Inspect the PDF structure tree and reading order                |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
+| [`export_images`](https://pdftl.readthedocs.io/en/latest/operations/export_images.html)                 | Export images and a JSON manifest for external editing          |
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |
 | [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |
 | [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
 | [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html)                                   | Match text patterns and get bounding boxes                      |
 | [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)                         | Highlight text matching a regex pattern                         |
+| [`import_images`](https://pdftl.readthedocs.io/en/latest/operations/import_images.html)                 | Import edited images from a directory using a JSON manifest     |
 | [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html)               | Import and apply modified content streams                       |
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |

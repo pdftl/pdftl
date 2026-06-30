@@ -30,7 +30,10 @@ def discover_examples():
         cmd = example.get("cmd", None)
         if not cmd or "PROMPT" in cmd or not example.get("test_example", True):
             return
-        all_examples.append(pytest.param(cmd, id=test_id))
+
+        # Extract declarative test setup if it exists
+        setup_data = example.get("test_setup", {})
+        all_examples.append(pytest.param(cmd, setup_data, id=test_id))
 
     sources = [
         registry.operations,
@@ -50,8 +53,8 @@ def discover_examples():
 
 @pytest.mark.slow
 @pytest.mark.serial
-@pytest.mark.parametrize("command_str", discover_examples())
-def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
+@pytest.mark.parametrize("command_str, setup_data", discover_examples())
+def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_dir):
     """
     Tests all example commands discovered from CLI_DATA in a fully isolated environment.
     """
@@ -68,23 +71,21 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
     for filename, source_path in dummy_pdfs.items():
         shutil.copy(source_path, work_dir / filename)
 
-    # Copy extra assets if they exist
-    for filename in [
-        "meta.txt",
-        "bookmarks.yaml",
-        "bookmarks.json",
-        "Form.pdf",
-        "streams.txt",
-        "patched_streams.txt",
-    ]:
-        if (assets_dir / filename).exists():
-            shutil.copy(assets_dir / filename, work_dir / filename)
+    # --- Step 0.5: Execute Decentralized Setup Data ---
+    if setup_data:
+        # 1. Make directories
+        for dir_name in setup_data.get("mkdirs", []):
+            (work_dir / dir_name).mkdir(parents=True, exist_ok=True)
 
-    for filename in ["background.jpg", "watermark.png", "logo.png"]:
-        if (examples_files_dir / filename).exists():
-            shutil.copy(examples_files_dir / filename, work_dir / filename)
-        else:
-            breakpoint()
+        # 2. Create raw files (e.g. JSON manifests)
+        for filepath, content in setup_data.get("create_files", {}).items():
+            target_path = work_dir / filepath
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(content, encoding="utf-8")
+
+        # 3. Copy specific assets from tests/assets
+        _copy_helper(setup_data, "copy_assets", assets_dir, work_dir)
+        _copy_helper(setup_data, "copy_images", examples_files_dir, work_dir)
 
     # --- Step 1: Prepare Arguments ---
     args = shlex.split(command_str)
@@ -187,3 +188,11 @@ def test_example_command(command_str, dummy_pdfs, tmp_path, assets_dir):
             assert output_target.exists(), f"Output missing: {output_target}"
             if output_target.is_file():
                 assert output_target.stat().st_size > 0, f"Output file is empty: {output_target}"
+
+
+def _copy_helper(setup_data, key, assets_dir, work_dir):
+    for asset_name, dest_path in setup_data.get(key, {}).items():
+        src_path = assets_dir / asset_name
+        target_path = work_dir / dest_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(src_path, target_path)

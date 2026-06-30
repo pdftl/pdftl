@@ -111,6 +111,7 @@ class HelpExample(LegacyDictAccess):
     desc: str
     topic: str | None = None
     test_example: bool = True
+    test_setup: dict | None = None
 
 
 @dataclass

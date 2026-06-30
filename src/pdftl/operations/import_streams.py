@@ -256,6 +256,7 @@ the header paths (e.g. using `sed` to rename the target XObject).
   Pass `normalize=false` if you want to force raw text byte injection.
 """
 
+
 _IMPORT_STREAMS_EXAMPLES = [
     {
         "cmd": (
@@ -268,10 +269,12 @@ _IMPORT_STREAMS_EXAMPLES = [
     {
         "cmd": "in.pdf import_streams patched_streams.txt output out.pdf",
         "desc": "Apply modifications from a saved text file back into the document",
+        "test_setup": {"copy_assets": {"streams.txt": "patched_streams.txt"}},
     },
     {
         "cmd": "in.pdf import_streams normalize=false streams.txt output out.pdf",
         "desc": "Inject stream text verbatim, without parsing or stripping comments",
+        "test_setup": {"copy_assets": {"streams.txt": "streams.txt"}},
     },
 ]
 

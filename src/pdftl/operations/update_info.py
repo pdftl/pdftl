@@ -45,10 +45,13 @@ expects, see the help for `dump_data`.
 
 """
 
+_META_TXT_TEST_SETUP = {"copy_assets": {"meta.txt": "meta.txt"}}
+
 _UPDATE_INFO_UTF8_EXAMPLES = [
     {
         "cmd": "in.pdf update_info_utf8 meta.txt output out.pdf",
         "desc": "Update utf-8 metadata according to meta.txt",
+        "test_setup": _META_TXT_TEST_SETUP,
     },
 ]
 
@@ -174,6 +177,7 @@ _UPDATE_INFO_EXAMPLES = [
     {
         "cmd": "in.pdf update_info meta.txt output out.pdf",
         "desc": "Update metadata according to meta.txt",
+        "test_setup": _META_TXT_TEST_SETUP,
     },
 ]
 

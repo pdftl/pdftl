@@ -302,6 +302,14 @@ def dump_text(
     run_cli_hook: bool = False,
     full_result: bool = False,
 ) -> pikepdf.Pdf: ...
+def export_images(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    output: Optional[str] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def fill_form(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -331,6 +339,13 @@ def grep(
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
 def highlight(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def import_images(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
     run_cli_hook: bool = False,
