@@ -400,7 +400,8 @@ class TestImportImages:
         assert png_file.exists()
 
         # Let's delete the png and save a jpg instead (simulating format change by user)
-        img = Image.open(png_file)
+        with Image.open(png_file) as img:
+            img.load()
         png_file.unlink()
         jpg_file = png_file.with_suffix(".jpg")
         img.save(jpg_file, format="JPEG")
