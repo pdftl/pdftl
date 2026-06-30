@@ -88,10 +88,11 @@ class CliStageProfiler:
         base_filename = self._prepare_output_dir()
         self._generate_reports(base_filename, elapsed)
 
-        print(
-            f"\n[PERF WARNING] Stage '{self.stage_name}' breached threshold ({elapsed:.2f}s).\n"
-            f"Diagnostics saved to: {base_filename}.txt",
-            file=sys.stderr,
+        logger.warning(
+            "[PERF WARNING] Stage '%s' breached threshold (%.2fs). Diagnostics saved to: %s.txt",
+            self.stage_name,
+            elapsed,
+            base_filename,
         )
 
     def _prepare_output_dir(self) -> Path:
