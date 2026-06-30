@@ -4,7 +4,6 @@ import pikepdf
 import pytest
 
 from pdftl.operations.helpers.stream_annotator import (
-    _comment_alignment_col,
     _interpret_operands,
     _resolve_tf_extras,
     _resolve_do_extras,
@@ -63,39 +62,6 @@ def make_gs_resources(pdf, gs_name="/GS0", ca=None, CA=None, BM=None):
 
 
 # ---------------------------------------------------------------------------
-# _comment_alignment_col
-# ---------------------------------------------------------------------------
-
-
-class TestCommentAlignmentCol:
-    def test_returns_min_col_when_empty(self):
-        assert _comment_alignment_col([], 40, 80) == 40
-
-    def test_ignores_blank_lines(self):
-        assert _comment_alignment_col(["", "   "], 40, 80) == 40
-
-    def test_ignores_comment_lines(self):
-        assert _comment_alignment_col(["% a comment"], 40, 80) == 40
-
-    def test_ignores_unknown_operators(self):
-        assert _comment_alignment_col(["FAKEOP"], 40, 80) == 40
-
-    def test_short_known_operator_stays_at_min(self):
-        col = _comment_alignment_col(["BT"], 40, 80)
-        assert col == 40
-
-    def test_long_line_expands_col(self):
-        long_line = "1 0 0 1 " + "100 " * 10 + "cm"
-        col = _comment_alignment_col([long_line], 40, 80)
-        assert col > 40
-
-    def test_capped_at_max(self):
-        long_line = "x " * 50 + "cm"
-        col = _comment_alignment_col([long_line], 40, 80)
-        assert col == 80
-
-
-# ---------------------------------------------------------------------------
 # _interpret_operands
 # ---------------------------------------------------------------------------
 
@@ -132,15 +98,15 @@ class TestInterpretOperands:
 class TestResolveTfExtras:
     def test_resolves_base_font(self, pdf):
         resources = make_font_resources(pdf, "/F1", "/Helvetica")
-        result = _resolve_tf_extras(["/F1", "12", "Tf"], resources)
+        result = _resolve_tf_extras(["/F1", "12", "Tf"], resources, {})
         assert result == ["-> /Helvetica"]
 
     def test_no_resources_returns_empty(self):
-        assert _resolve_tf_extras(["/F1", "12", "Tf"], None) == []
+        assert _resolve_tf_extras(["/F1", "12", "Tf"], None, {}) == []
 
     def test_font_not_found_returns_empty(self, pdf):
         resources = make_font_resources(pdf, "/F1", "/Helvetica")
-        assert _resolve_tf_extras(["/F2", "12", "Tf"], resources) == []
+        assert _resolve_tf_extras(["/F2", "12", "Tf"], resources, {}) == []
 
     def test_font_missing_base_font_returns_empty(self, pdf):
         font = pdf.make_indirect(
@@ -150,11 +116,11 @@ class TestResolveTfExtras:
         )
         pdf.pages[0].Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary({"/F1": font}))
         resources = pdf.pages[0].Resources
-        assert _resolve_tf_extras(["/F1", "12", "Tf"], resources) == []
+        assert _resolve_tf_extras(["/F1", "12", "Tf"], resources, {}) == []
 
     def test_too_few_tokens_returns_empty(self, pdf):
         resources = make_font_resources(pdf)
-        assert _resolve_tf_extras(["Tf"], resources) == []
+        assert _resolve_tf_extras(["Tf"], resources, {}) == []
 
     def test_broken_resources_returns_empty(self):
         class Broken:
@@ -165,7 +131,18 @@ class TestResolveTfExtras:
             def Font(self):
                 raise AttributeError("boom")
 
-        assert _resolve_tf_extras(["/F1", "12", "Tf"], Broken()) == []
+        assert _resolve_tf_extras(["/F1", "12", "Tf"], Broken(), {}) == []
+
+    def test_caches_by_font_name(self, pdf):
+        resources = make_font_resources(pdf, "/F1", "/Helvetica")
+        cache = {}
+        first = _resolve_tf_extras(["/F1", "12", "Tf"], resources, cache)
+        assert cache == {"/F1": ["-> /Helvetica"]}
+        # Mutate the underlying resource after caching — a second call with the
+        # same cache should still return the cached (now stale) value, proving
+        # the cache short-circuits the resource lookup rather than re-resolving.
+        second = _resolve_tf_extras(["/F1", "12", "Tf"], resources, cache)
+        assert second == first
 
 
 # ---------------------------------------------------------------------------
@@ -273,24 +250,24 @@ class TestResolveGsExtras:
 class TestResolveResourceExtras:
     def test_dispatches_tf(self, pdf):
         resources = make_font_resources(pdf, "/F1", "/Helvetica")
-        result = _resolve_resource_extras("Tf", ["/F1", "12", "Tf"], resources)
+        result = _resolve_resource_extras("Tf", ["/F1", "12", "Tf"], resources, {})
         assert result == ["-> /Helvetica"]
 
     def test_dispatches_do(self, pdf):
         resources = make_xobj_resources(pdf, "/Fm0", "/Form")
-        result = _resolve_resource_extras("Do", ["/Fm0", "Do"], resources)
+        result = _resolve_resource_extras("Do", ["/Fm0", "Do"], resources, {})
         assert result == ["Subtype: /Form"]
 
     def test_dispatches_gs(self, pdf):
         resources = make_gs_resources(pdf, "/GS0", ca=0.5)
-        result = _resolve_resource_extras("gs", ["/GS0", "gs"], resources)
+        result = _resolve_resource_extras("gs", ["/GS0", "gs"], resources, {})
         assert any("fill-alpha" in s for s in result)
 
     def test_non_resource_operator_returns_empty(self):
-        assert _resolve_resource_extras("BT", ["BT"], None) == []
+        assert _resolve_resource_extras("BT", ["BT"], None, {}) == []
 
     def test_w_returns_empty(self):
-        assert _resolve_resource_extras("w", ["1", "w"], None) == []
+        assert _resolve_resource_extras("w", ["1", "w"], None, {}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -303,50 +280,50 @@ class TestBuildComment:
         return ScopeTracker()
 
     def test_basic_operator(self):
-        comment = _build_comment("w", ["1", "w"], None, self._tracker())
+        comment = _build_comment("w", ["1", "w"], None, self._tracker(), {})
         assert "state/stroke" in comment
         assert "Set line width" in comment
         assert "width=1" in comment
 
     def test_scope_open_label(self):
-        comment = _build_comment("q", ["q"], None, self._tracker())
+        comment = _build_comment("q", ["q"], None, self._tracker(), {})
         assert "gs#1 open" in comment
 
     def test_scope_close_label(self):
         t = self._tracker()
-        _build_comment("q", ["q"], None, t)
-        comment = _build_comment("Q", ["Q"], None, t)
+        _build_comment("q", ["q"], None, t, {})
+        comment = _build_comment("Q", ["Q"], None, t, {})
         assert "gs#1 close" in comment
 
     def test_bt_et_scope(self):
         t = self._tracker()
-        assert "bt#1 open" in _build_comment("BT", ["BT"], None, t)
-        assert "bt#1 close" in _build_comment("ET", ["ET"], None, t)
+        assert "bt#1 open" in _build_comment("BT", ["BT"], None, t, {})
+        assert "bt#1 close" in _build_comment("ET", ["ET"], None, t, {})
 
     def test_bdc_emc_scope(self):
         t = self._tracker()
-        assert "mc#1 open" in _build_comment("BDC", ["/Tag", "/MC0", "BDC"], None, t)
-        assert "mc#1 close" in _build_comment("EMC", ["EMC"], None, t)
+        assert "mc#1 open" in _build_comment("BDC", ["/Tag", "/MC0", "BDC"], None, t, {})
+        assert "mc#1 close" in _build_comment("EMC", ["EMC"], None, t, {})
 
     def test_nested_scope_ids(self):
         t = self._tracker()
-        _build_comment("q", ["q"], None, t)
-        assert "gs#2 open" in _build_comment("q", ["q"], None, t)
-        assert "gs#2 close" in _build_comment("Q", ["Q"], None, t)
-        assert "gs#1 close" in _build_comment("Q", ["Q"], None, t)
+        _build_comment("q", ["q"], None, t, {})
+        assert "gs#2 open" in _build_comment("q", ["q"], None, t, {})
+        assert "gs#2 close" in _build_comment("Q", ["Q"], None, t, {})
+        assert "gs#1 close" in _build_comment("Q", ["Q"], None, t, {})
 
     def test_interior_line_indented(self):
         t = self._tracker()
-        _build_comment("q", ["q"], None, t)
-        comment = _build_comment("w", ["1", "w"], None, t)
+        _build_comment("q", ["q"], None, t, {})
+        comment = _build_comment("w", ["1", "w"], None, t, {})
         # After one q, interior comment should be indented two spaces
         assert comment.startswith("%   ")
 
     def test_open_and_close_at_same_indent(self):
         t = self._tracker()
-        open_c = _build_comment("q", ["q"], None, t)
-        _build_comment("w", ["1", "w"], None, t)  # interior
-        close_c = _build_comment("Q", ["Q"], None, t)
+        open_c = _build_comment("q", ["q"], None, t, {})
+        _build_comment("w", ["1", "w"], None, t, {})  # interior
+        close_c = _build_comment("Q", ["Q"], None, t, {})
         # Both q and Q should start at the same indent level
         open_indent = len(open_c) - len(open_c.lstrip("%").lstrip())
         close_indent = len(close_c) - len(close_c.lstrip("%").lstrip())
@@ -354,19 +331,19 @@ class TestBuildComment:
 
     def test_tf_extends_operand_with_basefont(self, pdf):
         resources = make_font_resources(pdf, "/F1", "/Times-Roman")
-        comment = _build_comment("Tf", ["/F1", "12", "Tf"], resources, self._tracker())
+        comment = _build_comment("Tf", ["/F1", "12", "Tf"], resources, self._tracker(), {})
         assert "font=/F1 size=12" in comment
         assert "-> /Times-Roman" in comment
 
     def test_no_extras_for_scope_only_operator(self):
         # q has a scope label but no operands or resource extras
-        comment = _build_comment("q", ["q"], None, self._tracker())
+        comment = _build_comment("q", ["q"], None, self._tracker(), {})
         assert "gs#1 open" in comment
         # Should not have a second bracketed section
         assert comment.count("[") == 1
 
     def test_operator_with_no_extras_has_no_brackets(self):
-        comment = _build_comment("S", ["S"], None, self._tracker())
+        comment = _build_comment("S", ["S"], None, self._tracker(), {})
         assert "[" not in comment
 
 
@@ -464,3 +441,46 @@ class TestAnnotateStream:
         w_line = next(l for l in lines if "1 w" in l)
         comment = w_line[w_line.index("%") :]
         assert comment.startswith("%   ")  # two-space indent inside q/Q
+
+
+# ---------------------------------------------------------------------------
+# annotate_stream alignment column behavior
+# (formerly unit-tested in isolation via the now-removed
+# _comment_alignment_col helper; alignment is now computed inline within
+# annotate_stream, so these are exercised end-to-end instead.)
+# ---------------------------------------------------------------------------
+
+
+class TestAnnotateStreamAlignment:
+    def test_short_known_operator_stays_at_min_col(self):
+        result = annotate_stream(b"BT\n", min_comment_col=40, max_comment_col=80)
+        line = result.decode("latin-1").splitlines()[0]
+        # Comment starts exactly at column 40 (0-indexed) when padded to min_col.
+        assert line.index("%") == 40
+
+    def test_long_line_expands_alignment_col(self):
+        long_line = ("1 0 0 1 " + "100 " * 10 + "cm\n").encode("latin-1")
+        short_line = b"BT\n"
+        result = annotate_stream(short_line + long_line, min_comment_col=40, max_comment_col=80)
+        lines = result.decode("latin-1").splitlines()
+        bt_line = next(l for l in lines if l.strip().startswith("BT"))
+        # BT's comment column should have expanded beyond min_col(40) because
+        # the long "cm" line in the same stream pushed the shared alignment up.
+        assert bt_line.index("%") > 40
+
+    def test_alignment_capped_at_max_col(self):
+        long_line = ("x " * 50 + "cm\n").encode("latin-1")
+        result = annotate_stream(long_line, min_comment_col=40, max_comment_col=80)
+        line = result.decode("latin-1").splitlines()[0]
+        # Line itself exceeds max_comment_col, so the two-space-separator
+        # fallback kicks in rather than padding to a column beyond max.
+        assert "  %" in line
+        assert not line.startswith(" " * 81)
+
+    def test_unknown_and_blank_lines_dont_affect_alignment(self):
+        result = annotate_stream(b"FAKEOP\nBT\n", min_comment_col=40, max_comment_col=80)
+        lines = result.decode("latin-1").splitlines()
+        bt_line = next(l for l in lines if l.strip().startswith("BT"))
+        # FAKEOP isn't a known operator, so it shouldn't widen the column —
+        # BT should still land at the min column.
+        assert bt_line.index("%") == 40

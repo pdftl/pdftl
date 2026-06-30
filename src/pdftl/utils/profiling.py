@@ -53,7 +53,7 @@ class CliStageProfiler:
             return
         if elapsed > self.threshold:
             logger.info(
-                "Stage '%s' took %.2fs, which exceeds %.2fs",
+                "Stage '%s' took %.2fs, which exceeds %.2fs. To profile: PDFTL_PROFILE_STAGES=1",
                 self.stage_name,
                 elapsed,
                 self.threshold,

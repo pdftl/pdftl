@@ -154,3 +154,37 @@ def test_build_mcid_stream_map_annotate_failure(mock_annotate) -> None:
     assert 42 in mcid_blocks
     assert mcid_blocks[42]["page"] == 1
     assert "(Text) Tj" in lines
+
+
+@patch("pdftl.operations.helpers.stream_annotator.annotate_stream")
+def test_build_mcid_stream_map_annotate_line_count_mismatch(mock_annotate) -> None:
+    """Test builder safely ignores annotation output if its line count doesn't match
+    the unannotated stream (would otherwise misalign MCID block slicing)."""
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_page = MagicMock()
+    mock_pdf.pages = [mock_page]
+
+    parsed_stream = [
+        (pikepdf.Name("/P"), {"/MCID": 42}, "BDC"),
+        ("Tj", "Text"),
+        ("EMC",),
+    ]
+
+    # Annotated output has fewer lines than the original — simulates
+    # annotate_stream() collapsing or merging lines, which would otherwise
+    # corrupt start_line/end_line-based slicing if used.
+    mock_annotate.return_value = b"/P << /MCID 42 >> BDC\nEMC"
+
+    with (
+        patch("pikepdf.parse_content_stream", return_value=parsed_stream),
+        patch(
+            "pikepdf.unparse_content_stream", return_value=b"/P << /MCID 42 >> BDC\n(Text) Tj\nEMC"
+        ),
+    ):
+        mcid_blocks, lines = _build_mcid_stream_map(mock_pdf, page_num=1, annotate=True)
+
+    # Falls back to the unannotated lines/blocks rather than using the
+    # mismatched annotated output.
+    assert 42 in mcid_blocks
+    assert "(Text) Tj" in lines
+    assert lines == ["/P << /MCID 42 >> BDC", "(Text) Tj", "EMC"]

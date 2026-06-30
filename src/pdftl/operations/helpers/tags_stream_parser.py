@@ -128,21 +128,44 @@ def _build_mcid_stream_map(
         logger.warning("Page %d: could not parse content stream: %s", page_num, exc)
         return {}, []
 
+    # IMPORTANT: MCID blocks must be parsed from the *unannotated* stream.
+    # annotate_stream() appends trailing "% ..." comment text to lines, which
+    # shifts the last whitespace-separated token away from BDC/BMC/EMC and
+    # causes _process_stream_line() (which keys off parts[-1]) to silently
+    # miss every operator. Parse first, annotate only for display after.
+    mcid_blocks, lines = parse_stream_bytes_for_mcids(stream_bytes)
+
     if annotate:
-        # Re-use the existing stream annotator if available
+        # Re-use the existing stream annotator if available. This only
+        # changes the *display* text of each line; it must not feed back
+        # into MCID block detection above. We rely on annotate_stream()
+        # preserving line count/order (appending comments in place rather
+        # than inserting/removing lines) so the start_line/end_line indices
+        # recorded above still line up against the annotated lines.
         try:
             from pdftl.operations.helpers.stream_annotator import annotate_stream
 
-            stream_bytes = annotate_stream(
+            annotated_bytes = annotate_stream(
                 stream_bytes,
                 page.get("/Resources"),
                 40,
                 80,
             )
+            annotated_lines = annotated_bytes.decode("latin-1").splitlines()
+            if len(annotated_lines) == len(lines):
+                lines = annotated_lines
+                for block in mcid_blocks.values():
+                    block["lines"] = lines[block["start_line"] - 1 : block["end_line"]]
+            else:
+                logger.debug(
+                    "Page %d: annotated line count (%d) != normalized line count "
+                    "(%d); skipping annotation to avoid misaligned MCID blocks",
+                    page_num,
+                    len(annotated_lines),
+                    len(lines),
+                )
         except (AttributeError, ValueError, TypeError, pikepdf.PdfError) as exc:
             logger.debug("Stream annotation failed: %s", exc)
-
-    mcid_blocks, lines = parse_stream_bytes_for_mcids(stream_bytes)
 
     # Attach page context to the blocks for downstream consumers
     for block in mcid_blocks.values():

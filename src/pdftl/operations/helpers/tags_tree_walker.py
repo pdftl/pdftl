@@ -432,17 +432,23 @@ def _get_xobj_mcid_map(stm, annotate: bool, xobj_mcid_maps: dict) -> tuple[dict,
 
             stream_bytes = read_xobject_stream(stm, normalize=True)
 
+            mcid_blocks, lines = parse_stream_bytes_for_mcids(stream_bytes)
+
             if annotate:
                 try:
                     from pdftl.operations.helpers.stream_annotator import annotate_stream
 
-                    stream_bytes = annotate_stream(stream_bytes, stm.get("/Resources"), 40, 80)
+                    annotated_bytes = annotate_stream(stream_bytes, stm.get("/Resources"), 40, 80)
+                    annotated_lines = annotated_bytes.decode("latin-1").splitlines()
+                    if len(annotated_lines) == len(lines):
+                        lines = annotated_lines
+                        for block in mcid_blocks.values():
+                            block["lines"] = lines[block["start_line"] - 1 : block["end_line"]]
                 except (AttributeError, ValueError, TypeError, pikepdf.PdfError):
                     # If annotating the stream breaks due to malformed font/resource
                     # structures, we fall back silently to parsing the unannotated bytes.
                     pass
 
-            mcid_blocks, lines = parse_stream_bytes_for_mcids(stream_bytes)
             xobj_mcid_maps[objgen] = (mcid_blocks, lines)
         except (AttributeError, ValueError, TypeError, pikepdf.PdfError) as e:
             logger.debug("Failed to parse XObject stream %s: %s", objgen, e)

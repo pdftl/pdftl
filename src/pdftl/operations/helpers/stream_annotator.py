@@ -7,19 +7,6 @@ from pdftl.operations.data.pdf_operator_args import PDF_OPERATOR_ARGS
 from pdftl.utils.scope_tracker import ScopeTracker
 
 
-def _comment_alignment_col(decoded: list[str], min_col: int, max_col: int) -> int:
-    """First pass: find the column at which to align annotation comments."""
-    col = min_col
-    for line in decoded:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("%"):
-            continue
-        tokens = stripped.split()
-        if PDF_OPERATORS.get(tokens[-1]):
-            col = max(col, min(len(line) + 2, max_col))
-    return col
-
-
 def _interpret_operands(op: str, tokens: list[str]) -> str:
     """Return a human-readable operand string for the operator, or empty string."""
     try:
@@ -31,15 +18,28 @@ def _interpret_operands(op: str, tokens: list[str]) -> str:
     return ""
 
 
-def _resolve_tf_extras(tokens: list[str], resources) -> list[str]:
+def _resolve_tf_extras(tokens: list[str], resources, font_cache: dict) -> list[str]:
+    """
+    Resolve the BaseFont name for a Tf operator, caching by font resource
+    name within the current annotate_stream() call. Tf is typically called
+    repeatedly for the same font within a stream, so this avoids re-walking
+    the pikepdf resource dictionary (resources.Font.get(...) + attribute
+    access) for every occurrence.
+    """
     try:
-        if len(tokens) >= 3 and resources and "/Font" in resources:
-            font_obj = resources.Font.get(tokens[-3])
-            if font_obj is not None and "/BaseFont" in font_obj:
-                return [f"-> {font_obj.BaseFont}"]
+        if len(tokens) < 3 or not resources or "/Font" not in resources:
+            return []
+        font_name = tokens[-3]
+        if font_name in font_cache:
+            return font_cache[font_name]
+        result: list[str] = []
+        font_obj = resources.Font.get(font_name)
+        if font_obj is not None and "/BaseFont" in font_obj:
+            result = [f"-> {font_obj.BaseFont}"]
+        font_cache[font_name] = result
+        return result
     except (AttributeError, KeyError, TypeError, ValueError):
-        pass
-    return []
+        return []
 
 
 def _resolve_do_extras(tokens: list[str], resources) -> list[str]:
@@ -68,16 +68,14 @@ def _resolve_gs_extras(tokens: list[str], resources) -> list[str]:
     return []
 
 
-_RESOURCE_RESOLVERS = {
-    "Tf": _resolve_tf_extras,
-    "Do": _resolve_do_extras,
-    "gs": _resolve_gs_extras,
-}
-
-
-def _resolve_resource_extras(op: str, tokens: list[str], resources) -> list[str]:
-    resolver = _RESOURCE_RESOLVERS.get(op)
-    return resolver(tokens, resources) if resolver else []
+def _resolve_resource_extras(op: str, tokens: list[str], resources, font_cache: dict) -> list[str]:
+    if op == "Tf":
+        return _resolve_tf_extras(tokens, resources, font_cache)
+    if op == "Do":
+        return _resolve_do_extras(tokens, resources)
+    if op == "gs":
+        return _resolve_gs_extras(tokens, resources)
+    return []
 
 
 def _build_comment(
@@ -85,6 +83,7 @@ def _build_comment(
     tokens: list[str],
     resources,
     tracker: ScopeTracker,
+    font_cache: dict,
 ) -> str:
     """
     Build the full annotation comment string for one operator line.
@@ -107,13 +106,13 @@ def _build_comment(
     if operand_str:
         # For Tf, resource lookup extends the operand string rather than adding a new part.
         if op == "Tf":
-            res_extras = _resolve_resource_extras(op, tokens, resources)
+            res_extras = _resolve_resource_extras(op, tokens, resources, font_cache)
             suffix = f" {' '.join(res_extras)}" if res_extras else ""
             extra_parts.append(operand_str + suffix)
         else:
             extra_parts.append(operand_str)
     else:
-        extra_parts.extend(_resolve_resource_extras(op, tokens, resources))
+        extra_parts.extend(_resolve_resource_extras(op, tokens, resources, font_cache))
 
     # Indent: open operators sit at outer depth, close operators at post-pop depth,
     # interior operators at their current depth.
@@ -144,29 +143,41 @@ def annotate_stream(
     The comment body is indented to reflect the current nesting depth.
     """
     decoded = [line.decode("latin-1") for line in content.splitlines()]
-    comment_col = _comment_alignment_col(decoded, min_comment_col, max_comment_col)
     tracker = ScopeTracker()
-    out_lines = []
+    font_cache: dict = {}
+
+    # Single pass: tokenize each line once, build its comment (if any), and
+    # track the alignment column as we go. Output is buffered unformatted
+    # here and padded in a second, cheap pass below — this avoids a second
+    # full strip/split/PDF_OPERATORS lookup over every line, which the old
+    # two-pass _comment_alignment_col() + main-loop structure duplicated.
+    comment_col = min_comment_col
+    buffered: list[tuple[str, str | None]] = []
 
     for line in decoded:
         stripped = line.strip()
         if not stripped or stripped.startswith("%"):
-            out_lines.append(line.encode("latin-1"))
+            buffered.append((line, None))
             continue
 
         tokens = stripped.split()
         op = tokens[-1]
 
         if op not in PDF_OPERATORS:
-            out_lines.append(line.encode("latin-1"))
+            buffered.append((line, None))
             continue
 
-        comment = _build_comment(op, tokens, resources, tracker)
+        comment = _build_comment(op, tokens, resources, tracker, font_cache)
+        comment_col = max(comment_col, min(len(line) + 2, max_comment_col))
+        buffered.append((line, comment))
 
-        if len(line) + 2 <= comment_col:
-            annotated = f"{line:<{comment_col}}{comment}"
+    out_lines = []
+    for line, comment in buffered:
+        if comment is None:
+            out_lines.append(line.encode("latin-1"))
+        elif len(line) + 2 <= comment_col:
+            out_lines.append(f"{line:<{comment_col}}{comment}".encode("latin-1"))
         else:
-            annotated = f"{line}  {comment}"
-        out_lines.append(annotated.encode("latin-1"))
+            out_lines.append(f"{line}  {comment}".encode("latin-1"))
 
     return b"\n".join(out_lines)

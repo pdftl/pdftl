@@ -53,11 +53,15 @@ class ScopeTracker:
             "mc": 0,
             "bx": 0,
         }
+        # Maintained incrementally in push() rather than recomputed each
+        # access — current_depth is read twice per annotated operator line,
+        # so summing stack lengths on every call is a hot-path cost at scale.
+        self._depth = 0
 
     @property
     def current_depth(self) -> int:
         """Total nesting depth across all scope types."""
-        return sum(len(s) for s in self._stacks.values())
+        return self._depth
 
     def push(self, op: str) -> str | None:
         """
@@ -75,12 +79,14 @@ class ScopeTracker:
             self._counters[scope] += 1
             n = self._counters[scope]
             self._stacks[scope].append(n)
+            self._depth += 1
             return f"{scope}#{n} open"
 
         if op in self._CLOSE:
             scope = self._CLOSE[op]
             if self._stacks[scope]:
                 n = self._stacks[scope].pop()
+                self._depth -= 1
                 return f"{scope}#{n} close"
             else:
                 # Unbalanced close — stream is malformed but we carry on.

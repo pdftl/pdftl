@@ -829,3 +829,41 @@ def test_reading_order_lines_mcid_page_unknown() -> None:
     out = "\n".join(lines)
 
     assert "[MCID 99]  (page unknown)" in out
+
+
+@patch("pdftl.operations.helpers.tags_tree_walker.parse_stream_bytes_for_mcids")
+@patch("pdftl.operations.helpers.stream_annotator.annotate_stream")
+@patch("pdftl.operations.helpers.xobject_helpers.read_xobject_stream")
+def test_reading_order_lines_xobj_annotation_success(
+    mock_read_xobj, mock_annotate, mock_parse
+) -> None:
+    """Verify XObject MCID blocks pick up annotated line content when annotation
+    succeeds and line counts match the unannotated stream."""
+    pdf = pikepdf.Pdf.new()
+    p1 = pdf.add_blank_page()
+
+    stm = pikepdf.Stream(pdf, b"bytes")
+    mcr = pikepdf.Dictionary({"/MCID": 1, "/Stm": stm})
+
+    div = pikepdf.Dictionary(
+        {"/S": pikepdf.Name("/Div"), "/Pg": p1.obj, "/K": pikepdf.Array([mcr])}
+    )
+    pdf.Root.StructTreeRoot = pikepdf.Dictionary({"/K": div})
+
+    mock_read_xobj.return_value = b"raw text"
+    # Same line count as the unannotated parse below, so the annotated
+    # version should be adopted and block["lines"] re-sliced from it.
+    mock_annotate.return_value = b"raw text  % annotated comment"
+    mock_parse.return_value = (
+        {1: {"start_line": 1, "end_line": 1, "lines": ["raw text"]}},
+        ["raw text"],
+    )
+
+    lines = _reading_order_lines(pdf, {1}, annotate=True, show_streams=True)
+    out = "\n".join(lines)
+
+    obj_id = f"{stm.objgen[0]}:{stm.objgen[1]}"
+    assert f"[MCID 1 in XObject {obj_id}]  stream_lines=1-1" in out
+    # The annotated line content (not the bare unannotated text) should
+    # appear in the displayed stream lines.
+    assert "% annotated comment" in out
