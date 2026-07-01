@@ -14,6 +14,8 @@ from pikepdf import Array, Name, Pdf, Rectangle
 import pdftl.core.constants as c
 from pdftl.exceptions import InvalidArgumentError
 
+from tests.conftest import allow_pdftl_reload
+
 # --- Local Imports ---
 # We import the module to reload it during cleanup
 from pdftl.operations.add_text import add_text_pdf
@@ -304,7 +306,8 @@ class TestAddTextMissingDependency(unittest.TestCase):
 
         # 2. Reload the orchestrator so it forgets the poisoned class
         if "pdftl.operations.add_text" in sys.modules:
-            importlib.reload(sys.modules["pdftl.operations.add_text"])
+            with allow_pdftl_reload():
+                importlib.reload(sys.modules["pdftl.operations.add_text"])
 
     def test_missing_reportlab_raises_error(self):
         """
@@ -327,7 +330,8 @@ class TestAddTextMissingDependency(unittest.TestCase):
             if "pdftl.operations.add_text" in sys.modules:
                 # It exists? Force it to refresh (so it hits the poison)
                 module_obj = sys.modules["pdftl.operations.add_text"]
-                importlib.reload(module_obj)
+                with allow_pdftl_reload():
+                    importlib.reload(module_obj)
             else:
                 # It was wiped? Just import it (it will hit the poison naturally)
                 pass

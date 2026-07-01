@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `import_fonts` operation
+
+- `export_fonts` operation
+
 - added `upscale` and `adaptive_threshold` to `modify_images`
 
 - `import_images` operation

@@ -9,7 +9,7 @@
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, BinaryIO, Any
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
@@ -94,6 +94,40 @@ def _flush_target(
         targets.append((current_target, content))
 
 
+def _decode_stream_line(line_bytes: bytes) -> tuple[str, bytes]:
+    """Helper line transcoder translating incoming bytes cleanly into Unicode representations."""
+    try:
+        # If dump_streams was piped through tools (e.g. sed) it likely outputs as UTF-8.
+        # We decode UTF-8 and re-encode to latin-1 to restore the exact 1-to-1 PDF bytes,
+        # preventing mojibake of high-byte characters inside `(...) Tj` strings.
+        text_str = line_bytes.decode("utf-8")
+        clean_bytes = text_str.encode("latin-1")
+    except UnicodeError:
+        # Explanatory comment: If decoding or encoding fails, it means the bytes are already
+        # raw binary or purely latin-1. We fall back safely to preserving raw bytes.
+        text_str = line_bytes.decode("latin-1", errors="replace")
+        clean_bytes = line_bytes
+    return text_str, clean_bytes
+
+
+def _handle_stream_header(line_str: str) -> tuple[StreamTarget | None, bool, bool]:
+    """Resolves and parses layout page paths or resources from headers.
+
+    Returns: (parsed_target, is_resources_header, is_valid_header).
+    """
+    if not line_str.strip("="):
+        # Ignore pure structural separator lines like "==================="
+        return None, False, False
+
+    if line_str.startswith("=== Page "):
+        header_path = line_str[4:].strip()  # Strip "=== "
+        is_resources = header_path.endswith(" / Resources")
+        target = None if is_resources else _parse_target_path(header_path)
+        return target, is_resources, True
+
+    return None, False, False
+
+
 def _parse_stream_file(file_obj: BinaryIO) -> list[tuple["StreamTarget", bytes]]:
     """Parse a stream dump text file into targets and their raw byte buffers."""
     targets: list[tuple[StreamTarget, bytes]] = []
@@ -101,44 +135,20 @@ def _parse_stream_file(file_obj: BinaryIO) -> list[tuple["StreamTarget", bytes]]
     current_buffer: list[bytes] = []
 
     for line_bytes in file_obj:
-        try:
-            # If dump_streams was piped through tools (e.g. sed) it likely outputs as UTF-8.
-            # We decode UTF-8 and re-encode to latin-1 to restore the exact 1-to-1 PDF bytes,
-            # preventing mojibake of high-byte characters inside `(...) Tj` strings.
-            text_str = line_bytes.decode("utf-8")
-            clean_bytes = text_str.encode("latin-1")
-        except UnicodeError:
-            # Explanatory comment: If decoding or encoding fails, it means the bytes are already
-            # raw binary or purely latin-1. We fall back safely to preserving raw bytes.
-            text_str = line_bytes.decode("latin-1", errors="replace")
-            clean_bytes = line_bytes
-
+        text_str, clean_bytes = _decode_stream_line(line_bytes)
         line_str = text_str.rstrip("\r\n")
 
         if line_str.startswith("==="):
-            if not line_str.strip("="):
-                # Ignore pure structural separator lines like "==================="
-                continue
-
-            # Only reset targets when encountering an actual semantic path header
-            # (or a Resources block, which also marks the end of the prior target).
-            if line_str.startswith("=== Page "):
-                header_path = line_str[4:].strip()  # Strip "=== "
-                is_resources = header_path.endswith(" / Resources")
-                target = None if is_resources else _parse_target_path(header_path)
-
-                if target or is_resources:
-                    # Terminate and flush current target block whenever we resolve a
-                    # valid new target path, or hit a Resources block. This prevents
-                    # warning comments starting with "=== Page " from dropping the
-                    # target, while ensuring Resources headers (and their body lines)
-                    # don't leak into the previous target's buffer.
-                    _flush_target(current_target, current_buffer, targets)
-                    current_target = target
-                    current_buffer = []
-                continue
-
-            # If it's a warning or info line (e.g., "=== Warning:..."), skip it.
+            target, is_resources, is_valid = _handle_stream_header(line_str)
+            if is_valid and (target or is_resources):
+                # Terminate and flush current target block whenever we resolve a
+                # valid new target path, or hit a Resources block. This prevents
+                # warning comments starting with "=== Page " from dropping the
+                # target, while ensuring Resources headers (and their body lines)
+                # don't leak into the previous target's buffer.
+                _flush_target(current_target, current_buffer, targets)
+                current_target = target
+                current_buffer = []
             continue
 
         if current_target is not None:
@@ -150,6 +160,74 @@ def _parse_stream_file(file_obj: BinaryIO) -> list[tuple["StreamTarget", bytes]]
     return targets
 
 
+def _apply_contents_target(
+    pdf: "pikepdf.Pdf", page: Any, page_num: int, content: bytes, normalize: bool
+) -> None:
+    """Helper method executing /Contents stream injection and standard normalization."""
+    import pikepdf
+
+    if isinstance(page.get("/Contents"), pikepdf.Array):
+        logger.warning(
+            "Page %d /Contents is an array of streams; collapsing to a single stream",
+            page_num,
+        )
+    page.Contents = pdf.make_stream(content)
+    if normalize:
+        try:
+            normalize_page_content_stream(pdf, page)
+        except (pikepdf.PdfError, ValueError, TypeError) as e:
+            # Explanatory comment: We attempted to parse and normalize the imported stream,
+            # but it was syntactically invalid. We keep the raw bytes exactly as provided.
+            logger.warning(
+                "Could not normalize imported Contents stream for page %d: %s",
+                page_num,
+                e,
+            )
+
+
+def _apply_xobject_target(
+    page: Any, page_num: int, xobject_path: list[str], content: bytes, normalize: bool
+) -> None:
+    """Helper method executing /XObject stream extraction and structural replacement."""
+    import pikepdf
+
+    if not xobject_path:
+        return
+    try:
+        # ISO 32000-2 7.8.3 Resource Dictionaries
+        current_obj = page
+        for xobj_name in xobject_path:
+            resources = current_obj.Resources
+            xobjects = resources.XObject
+            current_obj = xobjects[xobj_name]
+
+        # We overwrite the stream content of the existing XObject.
+        # This ensures that any other pages referencing this exact object
+        # (Shared Form XObjects) inherit the change simultaneously.
+        current_obj.write(content)
+
+        if normalize:
+            try:
+                current_obj.write(normalize_xobject_stream(current_obj))
+            except (pikepdf.PdfError, ValueError, TypeError) as e:
+                # Explanatory comment: Normalization failed on syntax. We keep raw bytes.
+                logger.warning(
+                    "Could not normalize imported XObject %s on page %d: %s",
+                    " / ".join(xobject_path),
+                    page_num,
+                    e,
+                )
+    except (AttributeError, KeyError) as e:
+        # Explanatory comment: The target page is missing the /Resources or /XObject
+        # dictionary in the tree path, meaning the target cannot exist here.
+        logger.warning(
+            "Could not find XObject path %s on page %d (missing Resources dict): %s",
+            " / ".join(xobject_path),
+            page_num,
+            e,
+        )
+
+
 def _apply_stream_target(
     pdf: "pikepdf.Pdf", target: StreamTarget, content: bytes, normalize: bool
 ) -> None:
@@ -159,8 +237,6 @@ def _apply_stream_target(
     operation collapses them into a single stream.  That matches the output
     of `dump_streams`, which concatenates array sub-streams before exporting.
     """
-    import pikepdf
-
     try:
         page = pdf.pages[target.page_num - 1]
     except IndexError:
@@ -170,60 +246,9 @@ def _apply_stream_target(
         return
 
     if target.target_type == "Contents":
-        if isinstance(page.get("/Contents"), pikepdf.Array):
-            logger.warning(
-                "Page %d /Contents is an array of streams; collapsing to a single stream",
-                target.page_num,
-            )
-        page.Contents = pdf.make_stream(content)
-        if normalize:
-            try:
-                normalize_page_content_stream(pdf, page)
-            except (pikepdf.PdfError, ValueError, TypeError) as e:
-                # Explanatory comment: We attempted to parse and normalize the imported stream,
-                # but it was syntactically invalid. We keep the raw bytes exactly as provided.
-                logger.warning(
-                    "Could not normalize imported Contents stream for page %d: %s",
-                    target.page_num,
-                    e,
-                )
-
+        _apply_contents_target(pdf, page, target.page_num, content, normalize)
     elif target.target_type == "XObject":
-        if not target.xobject_path:
-            return
-        try:
-            # ISO 32000-2 7.8.3 Resource Dictionaries
-            current_obj = page
-            for xobj_name in target.xobject_path:
-                resources = current_obj.Resources
-                xobjects = resources.XObject
-                current_obj = xobjects[xobj_name]
-
-            # We overwrite the stream content of the existing XObject.
-            # This ensures that any other pages referencing this exact object
-            # (Shared Form XObjects) inherit the change simultaneously.
-            current_obj.write(content)
-
-            if normalize:
-                try:
-                    current_obj.write(normalize_xobject_stream(current_obj))
-                except (pikepdf.PdfError, ValueError, TypeError) as e:
-                    # Explanatory comment: Normalization failed on syntax. We keep raw bytes.
-                    logger.warning(
-                        "Could not normalize imported XObject %s on page %d: %s",
-                        " / ".join(target.xobject_path),
-                        target.page_num,
-                        e,
-                    )
-        except (AttributeError, KeyError) as e:
-            # Explanatory comment: The target page is missing the /Resources or /XObject
-            # dictionary in the tree path, meaning the target cannot exist here.
-            logger.warning(
-                "Could not find XObject path %s on page %d (missing Resources dict): %s",
-                " / ".join(target.xobject_path),
-                target.page_num,
-                e,
-            )
+        _apply_xobject_target(page, target.page_num, target.xobject_path, content, normalize)
 
 
 _IMPORT_STREAMS_LONG_DESC = """

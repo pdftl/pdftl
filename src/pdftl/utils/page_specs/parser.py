@@ -216,6 +216,8 @@ class SpecParser:
         zoom_match = zoom_re.search(modifier_str)
         if zoom_match:
             zoom_val = float(zoom_match.group(1))
+            if abs(zoom_val) > 1000:
+                raise InvalidArgumentError(f"Zoom value out of bounds: {zoom_val}")
             scale *= math.pow(math.sqrt(2), zoom_val)
             modifier_str = zoom_re.sub("", modifier_str, 1)
 

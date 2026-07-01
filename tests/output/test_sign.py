@@ -10,6 +10,7 @@ from pyhanko.sign.validation import validate_pdf_signature
 import pdftl.cli.parser
 import pdftl.output.sign
 from pdftl.cli.main import main
+from tests.conftest import allow_pdftl_reload
 
 
 @pytest.fixture
@@ -62,10 +63,11 @@ def test_sign_pipeline_integrity(tmp_path, test_pki):
     input_pdf = Path("tests/assets/2_page.pdf")
     output_pdf = tmp_path / "signed.pdf"
     # 1. Force Python to re-calculate VALUE_KEYWORDS based on the new registry
-    importlib.reload(pdftl.cli.parser)
+    with allow_pdftl_reload():
+        importlib.reload(pdftl.cli.parser)
 
-    # 2. Reload main to ensure it uses the refreshed parser module
-    importlib.reload(pdftl.cli.main)
+        # 2. Reload main to ensure it uses the refreshed parser module
+        importlib.reload(pdftl.cli.main)
 
     # Mock sys.argv so main() thinks it was called from the CLI
     test_args = [
@@ -79,8 +81,9 @@ def test_sign_pipeline_integrity(tmp_path, test_pki):
         str(cert_path),
     ]
 
-    # importlib.reload(pdftl.cli.main)
-    importlib.reload(pdftl.output.sign)
+    with allow_pdftl_reload():
+        # importlib.reload(pdftl.cli.main)
+        importlib.reload(pdftl.output.sign)
 
     with patch("sys.argv", test_args):
         # main() usually returns None or 0 on success

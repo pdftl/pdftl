@@ -85,13 +85,15 @@ Some features also require system software such as `java`.
 
 * **Information:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) and [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html).
 * **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) pages as images.
-* **Optimization and editing:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html), [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html), [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html), or [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html).
+* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
+* **Editing:** [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html), [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html), [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html), or [`export_images`](https://pdftl.readthedocs.io/en/latest/operations/export_images.html), edit externally and then [`import_images`](https://pdftl.readthedocs.io/en/latest/operations/import_images.html).
 * **Vectors:** [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html) and [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html).
 * **Barcodes:** Generate and place on pages with [`barcode`](https://pdftl.readthedocs.io/en/latest/operations/barcode.html).
 
 ### Advanced
 
 * **Content streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html), edit and import with [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html).
+* **Fonts:** [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html), edit as needed and then [`import_fonts`](https://pdftl.readthedocs.io/en/latest/operations/import_fonts.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) and [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize).
 * **Layers (OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html).
@@ -241,12 +243,14 @@ See the [**API Tutorial**][4] for more details.
 | [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html)                     | Extract tables to JSON, CSV, or Markdown                        |
 | [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html)                         | Inspect the PDF structure tree and reading order                |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
+| [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html)                   | Export fonts and a JSON manifest for external editing           |
 | [`export_images`](https://pdftl.readthedocs.io/en/latest/operations/export_images.html)                 | Export images and a JSON manifest for external editing          |
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |
 | [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |
 | [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
 | [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html)                                   | Match text patterns and get bounding boxes                      |
 | [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)                         | Highlight text matching a regex pattern                         |
+| [`import_fonts`](https://pdftl.readthedocs.io/en/latest/operations/import_fonts.html)                   | Import edited fonts from a directory using a JSON manifest      |
 | [`import_images`](https://pdftl.readthedocs.io/en/latest/operations/import_images.html)                 | Import edited images from a directory using a JSON manifest     |
 | [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html)               | Import and apply modified content streams                       |
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |

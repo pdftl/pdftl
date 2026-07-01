@@ -126,6 +126,8 @@ def test_parse_scaling_invalid():
         _parse_scaling("x0")
     with pytest.raises(InvalidArgumentError, match="Invalid scaling: -2.0"):
         _parse_scaling("x-2.0")
+    with pytest.raises(InvalidArgumentError, match="out of bounds: -2000.0"):
+        _parse_scaling("z-2000")
 
 
 @pytest.mark.parametrize(

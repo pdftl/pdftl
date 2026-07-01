@@ -194,7 +194,7 @@ def is_valid_page_spec(spec):
         specs = parse_compound_page_spec(spec)
         for s in specs:
             parse_sub_page_spec(s, BIG_NUM)
-    except InvalidArgumentError as exc:
+    except (InvalidArgumentError, ValueError, KeyError, ArithmeticError) as exc:
         logger.debug("%s is not a valid spec, got %s", spec, exc)
         return False
     return True

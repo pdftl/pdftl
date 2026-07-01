@@ -8,7 +8,10 @@ import pytest
 import pdftl.operations.optimize_images as optimize_images_module
 from pdftl.exceptions import InvalidArgumentError, PackageError
 
-# --- 1. Parameter Parsing Tests (Lines 207-278) ---
+
+from tests.conftest import allow_pdftl_reload
+
+# --- 1. Parameter Parsing Tests ---
 
 
 def test_optimize_args_keywords():
@@ -22,24 +25,24 @@ def test_optimize_args_keywords():
 
 
 def test_optimize_args_jbig2_alias():
-    """Test JBIG2 aliases (Lines 227-228)."""
+    """Test JBIG2 aliases."""
     # jbig2_lossy sets boolean to True, leaves optimize at default (2)
     assert optimize_images_module._parse_args_to_options(["jbig2_lossy"]) == (2, 0, 0, True, 0)
     assert optimize_images_module._parse_args_to_options(["jb2lossy"]) == (2, 0, 0, True, 0)
 
 
 def test_optimize_args_quality_specific():
-    """Test specific jpeg/png quality flags (Lines 239, etc)."""
+    """Test specific jpeg/png quality flags."""
     # jpeg_quality
     opts = optimize_images_module._parse_args_to_options(["jpeg_quality=50"])
     assert opts[1] == 50
-    # png_quality (Line 239)
+    # png_quality
     opts = optimize_images_module._parse_args_to_options(["png_quality=60"])
     assert opts[2] == 60
 
 
 def test_optimize_args_quality_general():
-    """Test generic 'quality' flag (Lines 241-242)."""
+    """Test generic 'quality' flag."""
     # Should set both JPEG and PNG
     opts = optimize_images_module._parse_args_to_options(["quality=75"])
     assert opts[1] == 75
@@ -53,8 +56,8 @@ def test_optimize_args_jobs():
 
 
 def test_optimize_args_errors():
-    """Test invalid inputs (Lines 266, 270)."""
-    # 1. Invalid Key (Line 270)
+    """Test invalid inputs."""
+    # 1. Invalid Key
     with pytest.raises(InvalidArgumentError, match="Unrecognized keyword"):
         optimize_images_module._parse_args_to_options(["not_a_valid_flag=10"])
 
@@ -62,7 +65,7 @@ def test_optimize_args_errors():
     with pytest.raises(InvalidArgumentError, match="Unrecognized keyword"):
         optimize_images_module._parse_args_to_options(["garbage"])
 
-    # 3. Negative Jobs (Line 266)
+    # 3. Negative Jobs
     with pytest.raises(InvalidArgumentError, match="cannot be negative"):
         optimize_images_module._parse_args_to_options(["jobs=-1"])
 
@@ -75,7 +78,7 @@ def test_optimize_args_errors():
         optimize_images_module._parse_args_to_options(["quality=high"])
 
 
-# --- 2. Import Error Logic (Lines 35-40, 125-130) ---
+# --- 2. Import Error Logic  ---
 
 
 def test_optimize_images_import_failure():
@@ -104,7 +107,8 @@ def test_optimize_images_success(two_page_pdf):
 
     with patch.dict(sys.modules, {"ocrmypdf": MagicMock(), "ocrmypdf.optimize": mock_lib}):
         # Reload to hit the 'try' block successfully
-        importlib.reload(optimize_images_module)
+        with allow_pdftl_reload():
+            importlib.reload(optimize_images_module)
 
         import pikepdf
 

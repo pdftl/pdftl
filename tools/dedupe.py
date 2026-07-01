@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import ast
 import subprocess
@@ -23,16 +23,21 @@ def fix_duplicate_functions(file_path_str: str):
 
     # 1. Map out where all functions and class methods live
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
-            start = node.lineno - 1
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            # If decorators exist, use the first decorator's line number as the true start
+            start_node = node.decorator_list[0] if node.decorator_list else node
+            start = start_node.lineno - 1
             end = node.end_lineno
             func_instances.setdefault(("module", node.name), []).append((start, end))
 
         elif isinstance(node, ast.ClassDef):
             # Inspect inside the class body for methods
             for sub_node in node.body:
-                if isinstance(sub_node, ast.FunctionDef):
-                    start = sub_node.lineno - 1
+                if isinstance(sub_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    start_node = (
+                        sub_node.decorator_list[0] if sub_node.decorator_list else sub_node
+                    )
+                    start = start_node.lineno - 1
                     end = sub_node.end_lineno
                     func_instances.setdefault((node.name, sub_node.name), []).append((start, end))
 

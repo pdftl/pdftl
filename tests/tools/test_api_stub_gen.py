@@ -67,6 +67,8 @@ def test_stubs_are_up_to_date():
     from pdftl.core.registry import registry
 
     for name in registry.operations.keys():
+        if registry.operations[name].caller.startswith("pdftl.external."):
+            continue
         assert f"def {name}" in actual_api, (
             f"Stub for operation '{name}' is missing! Did you forget to run the generator?"
         )

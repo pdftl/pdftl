@@ -209,3 +209,40 @@ def test_registry_no_config_dir():
             reg_init._discover_external_operations()
 
             assert len(mock_sys_path) == 0
+
+
+def test_clean_registry_does_not_break_class_identity():
+    """
+    Regression test: clean_registry (via initialize_registry) must not
+    change the identity of classes in already-imported operation modules.
+
+    Guards against reintroducing importlib.reload()-based resets, which
+    silently split class identity and break isinstance() checks for any
+    test module holding a pre-reset reference (see 2026-07-02 postmortem:
+    SimplifiedPath / Path isinstance failures in
+    test_simplify_vectors_stream.py and test_path_geometry.py).
+    """
+    from pdftl.operations.helpers.simplify_vectors_stream import (
+        SimplifiedPath as SimplifiedPathBefore,
+    )
+    from pdftl.operations.helpers.simplify_vectors_stream import Path as PathBefore
+
+    import pdftl.registry_init as reg_init
+
+    if hasattr(reg_init.initialize_registry, "initialized"):
+        delattr(reg_init.initialize_registry, "initialized")
+    reg_init.initialize_registry()
+
+    from pdftl.operations.helpers.simplify_vectors_stream import (
+        SimplifiedPath as SimplifiedPathAfter,
+    )
+    from pdftl.operations.helpers.simplify_vectors_stream import Path as PathAfter
+
+    assert SimplifiedPathBefore is SimplifiedPathAfter, (
+        "SimplifiedPath class identity changed after initialize_registry() — "
+        "something is reloading modules instead of reusing sys.modules cache."
+    )
+    assert PathBefore is PathAfter, (
+        "Path class identity changed after initialize_registry() — "
+        "something is reloading modules instead of reusing sys.modules cache."
+    )

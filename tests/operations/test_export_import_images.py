@@ -207,7 +207,7 @@ class TestExportImages:
             assert _file_hash(filepath) == ""
 
     def test_export_with_page_specs(self, tmp_path):
-        """Covers export_images.py line 109 (resolving page specs in _get_target_pages)."""
+        """Covers export_images.py line 109 (resolving page specs in get_target_pages)."""
         pdf = _make_pdf_with_image()
         out_dir = tmp_path / "exports"
         result = export_images(pdf, specs=["1", str(out_dir)])
@@ -302,7 +302,7 @@ class TestImportImages:
         manifest_file = tmp_path / "manifest.json"
         manifest_data = {
             "image_streams": {
-                "1_0": {"export_file": "../../../etc/passwd", "file_hash": "dummyhash"}
+                "1_0": {"export_file": "../../../etc/passwd", "_file_hash": "dummyhash"}
             }
         }
         with open(manifest_file, "w") as f:
@@ -317,7 +317,7 @@ class TestImportImages:
         pdf = _make_pdf_with_image()
         manifest_file = tmp_path / "manifest.json"
         manifest_data = {
-            "image_streams": {"1_0": {"export_file": "dummy.png", "file_hash": "oldhash"}}
+            "image_streams": {"1_0": {"export_file": "dummy.png", "_file_hash": "oldhash"}}
         }
         with open(manifest_file, "w") as f:
             json.dump(manifest_data, f)
@@ -442,7 +442,7 @@ class TestImportImages:
         pdf = _make_pdf_with_image()
         manifest_file = tmp_path / "manifest.json"
         manifest_data = {
-            "image_streams": {"99_0": {"export_file": "missing.png", "file_hash": "dummyhash"}}
+            "image_streams": {"99_0": {"export_file": "missing.png", "_file_hash": "dummyhash"}}
         }
         with open(manifest_file, "w") as f:
             json.dump(manifest_data, f)
@@ -462,7 +462,7 @@ class TestImportImages:
 
         manifest_file = tmp_path / "manifest.json"
         manifest_data = {
-            "image_streams": {"999_0": {"export_file": "dummy.png", "file_hash": "oldhash"}}
+            "image_streams": {"999_0": {"export_file": "dummy.png", "_file_hash": "oldhash"}}
         }
         with open(manifest_file, "w") as f:
             json.dump(manifest_data, f)
@@ -485,7 +485,7 @@ class TestImportImages:
 
         manifest_file = tmp_path / "manifest.json"
         manifest_data = {
-            "image_streams": {obj_id: {"export_file": "corrupt.png", "file_hash": "oldhash"}}
+            "image_streams": {obj_id: {"export_file": "corrupt.png", "_file_hash": "oldhash"}}
         }
         with open(manifest_file, "w") as f:
             json.dump(manifest_data, f)
@@ -508,7 +508,7 @@ class TestImportImages:
 
         manifest_file = tmp_path / "manifest.json"
         manifest_data = {
-            "image_streams": {obj_id: {"export_file": "dummy.png", "file_hash": "oldhash"}}
+            "image_streams": {obj_id: {"export_file": "dummy.png", "_file_hash": "oldhash"}}
         }
         with open(manifest_file, "w") as f:
             json.dump(manifest_data, f)
@@ -530,7 +530,7 @@ class TestImportImages:
     def test_import_missing_export_file_key(self, tmp_path):
         pdf = _make_pdf_with_image()
         manifest_file = tmp_path / "manifest.json"
-        manifest_data = {"image_streams": {"1_0": {"file_hash": "dummyhash"}}}
+        manifest_data = {"image_streams": {"1_0": {"_file_hash": "dummyhash"}}}
         with open(manifest_file, "w") as f:
             json.dump(manifest_data, f)
 
@@ -551,7 +551,7 @@ class TestImportImages:
             "image_streams": {
                 obj_id: {
                     "export_file": "dummy.png",
-                    "file_hash": "oldhash",
+                    "_file_hash": "oldhash",
                     # Omit placements, width_px, and height_px completely
                 }
             }

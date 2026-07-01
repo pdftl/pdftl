@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pdftl.exceptions import InvalidArgumentError
+from tests.conftest import allow_pdftl_reload
 
 
 @pytest.fixture
@@ -19,7 +20,8 @@ def test_dump_text_missing_dependency(mock_pdfium):
     with patch.dict(sys.modules, {"pypdfium2": None}):
         import pdftl.operations.dump_text
 
-        importlib.reload(pdftl.operations.dump_text)
+        with allow_pdftl_reload():
+            importlib.reload(pdftl.operations.dump_text)
 
         with pytest.raises(InvalidArgumentError, match="requires pypdfium2"):
             pdftl.operations.dump_text.dump_text("dummy.pdf", "passwd123")
@@ -31,7 +33,8 @@ def test_dump_text_password_none(mock_pdfium):
     with patch.dict(sys.modules, {"pypdfium2": mock_pdfium}):
         import pdftl.operations.dump_text
 
-        importlib.reload(pdftl.operations.dump_text)
+        with allow_pdftl_reload():
+            importlib.reload(pdftl.operations.dump_text)
 
         with patch(
             "pdftl.operations.dump_text._extract_text_from_pdf", return_value=[]
@@ -56,7 +59,8 @@ def test_dump_text_real_iteration(two_page_pdf, mock_pdfium):
     with patch.dict(sys.modules, {"pypdfium2": mock_pdfium}):
         import pdftl.operations.dump_text
 
-        importlib.reload(pdftl.operations.dump_text)
+        with allow_pdftl_reload():
+            importlib.reload(pdftl.operations.dump_text)
 
         with patch("pypdfium2.PdfDocument") as MockDoc:
             MockDoc.return_value.__enter__.return_value = mock_pdf

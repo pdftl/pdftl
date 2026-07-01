@@ -1,3 +1,9 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# tests/cli/test_complete.py
+
 import io
 import os
 import posixpath
@@ -52,35 +58,41 @@ def test_rebuild_on_corrupt_cache(tmp_path, monkeypatch):
     assert parser is not None
 
 
-def test_coverage_gap_import_errors():
-    """Targets lines 37-38: Handling missing dependencies during rebuild."""
+def test_rebuild_cache_handles_missing_dependencies():
+    """Ensure rebuild_cache fails gracefully when required parsing dependencies are unavailable."""
     # We poison the sys.modules for cloudpickle to trigger the ImportError
     with patch.dict("sys.modules", {"cloudpickle": None}):
         result = rebuild_cache()
         assert result is None
 
 
-def test_coverage_gap_resolve_file_path():
-    """Targets line 104: The generic FILE_PATH candidate."""
+def test_resolve_candidates_handles_file_path_token():
+    """Ensure the FILE_PATH terminal node safely resolves to the __FILE__ magic candidate."""
     mock_parser = MagicMock()
     candidates = resolve_candidates({"FILE_PATH"}, mock_parser)
     assert "__FILE__" in candidates
 
 
-def test_coverage_gap_main_edge_cases(monkeypatch):
-    """Targets lines 128-129 (no args) and 134 (parser failure)."""
+def test_resolve_dynamic_token_safely_handles_missing_parser():
+    """Ensure dynamic token resolution returns empty sets gracefully when the parser is unavailable."""
+    candidates = resolve_candidates(["UNKNOWN_TOKEN"], None)
+    assert not candidates
+
+
+def test_main_gracefully_exits_on_empty_args_or_parser_failure(monkeypatch):
+    """Ensure the CLI entrypoint exits cleanly when provided no arguments or when the parser fails."""
     # Simulate zero arguments passed to the script
     monkeypatch.setattr(sys, "argv", ["complete.py"])
 
-    # Mock get_parser to return None to hit line 134
+    # Mock get_parser to return None
     with patch("pdftl.cli.complete.get_parser", return_value=None):
         with patch("sys.stdout", new_callable=io.StringIO):
             result = complete_main()
             assert result is None
 
 
-def test_coverage_gap_module_entrypoint(capsys):
-    """Targets line 166: The __main__ execution block quietly."""
+def test_module_execution_as_main_script(capsys):
+    """Ensure the module can be executed directly as a script without raising unhandled errors."""
     import sys
 
     # We use a context manager to ignore the specific runpy warning
@@ -125,8 +137,6 @@ def test_get_cache_dir_logic_branching():
         assert "/custom/cache/pdftl" in cache_dir
 
 
-# --- merged from test_complete_coverage.py ---
-
 # --- FIXTURES ---
 
 
@@ -162,19 +172,19 @@ def mock_cache_env(tmp_path):
         (["input.pdf"], "__one"),
         (["input.pdf", "---"], "__start_pipeline"),
         (["input.pdf", "place"], "__hardcoded:place"),
-        (["input.pdf", "unknown"], None),  # Hit line 332
+        (["input.pdf", "unknown"], None),
     ],
 )
-def test_simple_cache_key_logic(context, expected):
-    """Comprehensive check for cache key branches (Lines 318-332)."""
+def test_simple_cache_key_generation(context, expected):
+    """Comprehensive check for cache key generation mapping logic."""
     assert simple_cache_key(context) == expected
 
 
 # --- CACHE I/O TESTS ---
 
 
-def test_cache_io_flow(mock_cache_env):
-    """Tests loading, updating, and directory auto-creation (Lines 161-186)."""
+def test_cache_io_lifecycle(mock_cache_env):
+    """Verifies cache saving, auto-directory creation, and successful retrieval."""
     # 1. Update (creates dir if missing)
     update_simple_cache("key", ["val"])
     assert mock_cache_env.exists()
@@ -184,8 +194,8 @@ def test_cache_io_flow(mock_cache_env):
         assert load_simple_cache() == {"key": ["val"]}
 
 
-def test_load_simple_cache_handles_corruption():
-    """Hits lines 159-160: Returns {} on marshal/read errors."""
+def test_load_simple_cache_handles_corruption_safely():
+    """Ensure unreadable or garbage cache files return a safe empty state."""
     m_open = mock_open(read_data=b"garbage")
 
     with (
@@ -194,13 +204,12 @@ def test_load_simple_cache_handles_corruption():
         patch("builtins.open", m_open),
         patch("marshal.load", side_effect=ValueError("Corrupt")),
     ):
-        # Now that you changed 'raise' to 'return {}', this passes!
         result = load_simple_cache()
         assert result == {}
 
 
-def test_update_simple_cache_write_error():
-    """Hits lines 177-178: Re-raises if disk is unwritable."""
+def test_update_simple_cache_bubbles_disk_errors():
+    """Ensure cache generation bubbles up unwritable disk permission errors properly."""
     # We mock load_simple_cache to return a dummy dict first
     with patch("pdftl.cli.complete.load_simple_cache", return_value={}):
         with patch("os.makedirs", side_effect=OSError("Permission Denied")):
@@ -211,26 +220,26 @@ def test_update_simple_cache_write_error():
 # --- PACKAGE MONITORING TESTS ---
 
 
-def test_package_freshness(tmp_path):
-    """Tests mtime logic and the memoization shortcut (Lines 199, 210, 238)."""
+def test_package_freshness_invalidation(tmp_path):
+    """Verifies that mtime logic flags the cache as stale when package files are updated."""
     cache_file = str(tmp_path / "cache.bin")
     with open(cache_file, "w") as f:
         f.write("data")
 
-    # Line 199: Memoization hit
+    # Memoization hit test
     from pdftl.cli.complete import _cache_check_results
 
     _cache_check_results[cache_file] = "sentinel"
     assert is_package_newer_than_cache(cache_file) == "sentinel"
     _cache_check_results.clear()
 
-    # Line 210: Package root is newer
+    # Package root is newer test
     with patch("os.path.getmtime", side_effect=[1000, 2000]):
         assert is_package_newer_than_cache(cache_file) is True
 
 
-def test_nt_path_logic():
-    """Hits Windows-specific config pathing (Line 217)."""
+def test_windows_environment_appdata_resolution():
+    """Verifies fallback cache directory structures handle Windows APPDATA paths correctly."""
     with patch("os.name", "nt"), patch.dict("os.environ", {"APPDATA": "C:\\App"}):
         # We just need it to execute without crashing
         is_package_newer_than_cache("fake")
@@ -239,9 +248,9 @@ def test_nt_path_logic():
 # --- MAIN & PARSER FALLBACK TESTS ---
 
 
-def test_main_and_parser_failures(capsys):
-    """Hits the tricky exit points in main and get_parser (Lines 365, 372)."""
-    # Line 365-367: Fast-path hit in main
+def test_main_cli_cache_fast_path_and_parser_fallback(capsys):
+    """Verifies main application logic respects cache shortcuts and handles fallback failures."""
+    # Fast-path hit in main
     with (
         patch("sys.argv", ["pdftl", "cat", ""]),
         patch("pdftl.cli.complete.simple_cache_key", return_value="k"),
@@ -250,47 +259,44 @@ def test_main_and_parser_failures(capsys):
         main()
         assert "--opt" in capsys.readouterr().out
 
-    # Line 372: Parser failure path in main
+    # Parser failure path in main
     with (
         patch("sys.argv", ["pdftl", "cat", ""]),
         patch("pdftl.cli.complete.simple_cache_key", return_value=None),
         patch("pdftl.cli.complete.get_parser", return_value=None),
     ):
-        main()  # Should return early at line 372
+        main()  # Should return early
 
 
-def test_directory_iteration_hit():
-    """Hits lines 233-234: Finding a newer critical directory."""
+def test_staleness_invalidation_via_critical_directory():
+    """Ensure cache invalidates properly when iterating through specific critical folders."""
     from pdftl.cli.complete import is_package_newer_than_cache
 
     cache_file = "fake.cache"
 
-    # We need a sequence of mtimes:
-    # 1. cache_file (1000)
-    # 2. package_root (500)
-    # 3. First critical dir (2000) -> This triggers lines 233-234
+    # Sequence of mtimes designed to trigger specific invalidation thresholds
     with patch("os.path.exists", return_value=True):
         with patch("os.path.getmtime", side_effect=[1000, 500, 2000]):
             assert is_package_newer_than_cache(cache_file) is True
 
 
-def test_nt_path_handling_hit():
-    """Hits line 217: Windows APPDATA path resolution."""
+def test_windows_appdata_stale_cache_resolution():
+    """Verify script logic correctly navigates Windows APPDATA structures during staleness checks."""
     from pdftl.cli.complete import is_package_newer_than_cache
 
-    # Force os.name to 'nt' to enter the branch at 217
+    # Force os.name to 'nt' to enter Windows path handling
     with (
         patch("os.name", "nt"),
         patch.dict("os.environ", {"APPDATA": "C:\\Users\\Test\\AppData"}),
         patch("os.path.exists", return_value=True),
         patch("os.path.getmtime", return_value=100),
     ):
-        # We don't care about the result, just hitting the line
+        # Result not needed, just confirming the target block executes safely
         is_package_newer_than_cache("fake.cache")
 
 
-def test_is_package_newer_than_cache_logic_extended_final(tmp_path):
-    """Hits lines 238-239: Script itself is newer than cache."""
+def test_cache_invalidates_when_script_is_modified(tmp_path):
+    """Verify that updates strictly to the executing script reliably invalidate the cache."""
     from pdftl.cli.complete import _cache_check_results, is_package_newer_than_cache
 
     # 1. Setup a dummy cache file
@@ -301,32 +307,23 @@ def test_is_package_newer_than_cache_logic_extended_final(tmp_path):
     # 2. Reset global state
     _cache_check_results.clear()
 
-    # 3. We use a generator for side_effect to avoid counting exactly
-    # how many dirs are in the loop.
-    # It returns 1000 (old) forever, UNTIL the very last call, which is 5000 (new).
+    # 3. Mtime mock generator to simulate an updated script file against an older cache
     def mtime_mock(path):
-        # If the path is this test file or the completion script, it's 'new'
-        # This ensures line 237 evaluates to True
         if "complete.py" in str(path) or "__file__" in str(path):
             return 5000
-        # For the cache file itself (the first call), return a middle value
         if "cache.bin" in str(path):
             return 1000
-        # For everything else (root, critical dirs), return 'old'
         return 500
 
     with (
         patch("os.path.exists", return_value=True),
         patch("os.path.getmtime", side_effect=mtime_mock),
     ):
-        # This will walk through the loop (returning 500),
-        # reach line 237, get 5000, and hit 238-239.
         assert is_package_newer_than_cache(cache_file) is True
 
 
-def test_script_itself_is_newer():
-    """Hits lines 238-239 by ensuring the script mtime is always the winner."""
-
+def test_script_modification_takes_precedence_in_cache_checks():
+    """Ensure that the local script file's modification time unconditionally supersedes stale caches."""
     from pdftl.cli.complete import _cache_check_results, is_package_newer_than_cache
 
     _cache_check_results.clear()
@@ -339,12 +336,9 @@ def test_script_itself_is_newer():
         if path == cache_file:
             return 1000
 
-        # If the code is checking the script itself (Line 237)
-        # We check for 'complete.py' in the path to be safe
         if "complete.py" in path or path.endswith(".py") or path.endswith(".pyc"):
             return 5000
 
-        # Everything else (package root, directories)
         return 500
 
     with (
@@ -353,7 +347,6 @@ def test_script_itself_is_newer():
     ):
         result = is_package_newer_than_cache(cache_file)
 
-        # If this still fails, the pdb below will show us what paths were checked
         if not result:
             import pdb
 

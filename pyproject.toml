@@ -49,14 +49,16 @@ delete-blank = ["numpy"]
 diff-text = ["diff-match-patch", "pypdfium2"]
 dump-tables = ["tablers"]
 dump-text = ["pypdfium2"]
+export-fonts = ["fonttools>=4.0,<5.0"]
 flatten = ["pypdfium2"]
 highlight = ["pypdfium2"]
+import-fonts = ["fonttools>=4.0,<5.0"]
 modify-images = ["numpy"]
 optimize-images = ["ocrmypdf"]
 replacement-font = ["fonttools>=4.0,<5.0"]
+shell-completion = ["lark", "cloudpickle"]
 signing = ["pyhanko"]
 simplify-vectors = ["numpy", "numba"]
-shell-completion = ["lark", "cloudpickle"]
 tag = ["opendataloader_pdf"]
 yaml-bookmarks = ["pyyaml"]
 
@@ -69,14 +71,16 @@ extras = [
     "pdftl[diff-text]",
     "pdftl[dump-tables]",
     "pdftl[dump-text]",
+    "pdftl[export-fonts]",
     "pdftl[flatten]",
     "pdftl[highlight]",
+    "pdftl[import-fonts]",
     "pdftl[modify-images]",
-    "pdftl[simplify-vectors]",
     "pdftl[optimize-images]",
     "pdftl[replacement-font]",
-    "pdftl[signing]",
     "pdftl[shell-completion]",
+    "pdftl[signing]",
+    "pdftl[simplify-vectors]",
     "pdftl[tag]",
     "pdftl[yaml-bookmarks]",
 ]

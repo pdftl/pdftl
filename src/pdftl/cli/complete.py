@@ -60,12 +60,14 @@ HARDCODED_KEYWORDS = {
     "dump_tables",
     "dump_tags",
     "dump_text",
+    "export_fonts",
     "export_images",
     "fill_form",
     "filter",
     "generate_fdf",
     "grep",
     "highlight",
+    "import_fonts",
     "import_images",
     "import_streams",
     "inject",
@@ -279,6 +281,43 @@ def get_parser():
     return rebuild_cache()
 
 
+def _resolve_dynamic_token(
+    name: str, parser, terminal_lookup: dict | None
+) -> tuple[list[str], dict | None]:
+    """Resolves dynamic grammar terminal node names,
+    lazily building the lookup dict only when required."""
+    # Fast path for static magic strings
+    if name == "PDF_PATH":
+        return ["__PDF_FILE__"], terminal_lookup
+    if name == "FILE_PATH":
+        return ["__FILE__"], terminal_lookup
+    if name == "CHAIN_SEP":
+        return ["---"], terminal_lookup
+
+    # Lazy dictionary evaluation
+    if terminal_lookup is None and parser:
+        terminal_lookup = {t.name: t for t in parser.terminals}
+
+    if not terminal_lookup:
+        return [], terminal_lookup
+
+    if name == "HELP_SUB_KW":
+        t = terminal_lookup.get("HELP_SUB_KW")
+        if t:
+            # This extracts "help", "sign", etc. from the Lark terminal pattern
+            options = t.pattern.value[3:-1].split("|")
+            return [opt.strip('" ') for opt in options], terminal_lookup
+    elif name.startswith("KW_"):
+        # This handles dynamic registry operations/options
+        t = terminal_lookup.get(name)
+        if t:
+            # Clean up the literal (remove quotes)
+            val = t.pattern.value.strip('"').strip("'")
+            return [val], terminal_lookup
+
+    return [], terminal_lookup
+
+
 def resolve_candidates(allowed_tokens, parser):
     candidates = set()
 
@@ -298,34 +337,15 @@ def resolve_candidates(allowed_tokens, parser):
         "VERSION_FLAG": "--version",
         "DEBUG_FLAG": "--debug",
     }
+
     terminal_lookup = None
+
     for name in allowed_tokens:
         if name in literal_map:
             candidates.add(literal_map[name])
         else:
-            if terminal_lookup is None:
-                terminal_lookup = {t.name: t for t in parser.terminals}
-            if name == "HELP_SUB_KW":
-                # O(1) lookup
-                t = terminal_lookup.get("HELP_SUB_KW")
-                if t:
-                    # This extracts "help", "sign", etc. from the Lark terminal pattern
-                    options = t.pattern.value[3:-1].split("|")
-                    candidates.update(opt.strip('" ') for opt in options)
-            elif name == "PDF_PATH":
-                candidates.add("__PDF_FILE__")
-            elif name == "FILE_PATH":
-                candidates.add("__FILE__")
-            elif name == "CHAIN_SEP":
-                candidates.add("---")
-            elif name.startswith("KW_"):
-                # This handles dynamic registry operations/options
-                # It tries to find the literal string Lark is looking for
-                t = terminal_lookup.get(name)
-                if t:
-                    # Clean up the literal (remove quotes)
-                    val = t.pattern.value.strip('"').strip("'")
-                    candidates.add(val)
+            resolved, terminal_lookup = _resolve_dynamic_token(name, parser, terminal_lookup)
+            candidates.update(resolved)
 
     return candidates
 

@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -408,8 +408,44 @@ def assert_dump_output(capsys):
     return _check
 
 
+# @pytest.fixture
+# def clean_registry():
+#     if hasattr(registry, "operations"):
+#         registry.operations.clear()
+#     if hasattr(registry, "options"):
+#         registry.options.clear()
+#     if hasattr(registry, "help_topics"):
+#         registry.help_topics.clear()
+
+#     import pdftl.registry_init
+
+#     if hasattr(pdftl.registry_init, "_initialized"):
+#         pdftl.registry_init._initialized = False
+
+#     for mod_name in list(sys.modules.keys()):
+#         if mod_name.startswith(("pdftl.operations.", "pdftl.fonts.", "pdftl.utils.")):
+#             with suppress(ImportError):
+#                 importlib.reload(sys.modules[mod_name])
+
+#     pdftl.registry_init.initialize_registry()
+#     return registry
+
+
 @pytest.fixture
 def clean_registry():
+    """
+    Reset the operation/option/help-topic registry and re-run discovery.
+
+    IMPORTANT: This must NOT use importlib.reload() on already-imported
+    application modules. Reloading rebuilds every class defined at module
+    level as a brand-new object, silently breaking isinstance() checks for
+    any test module that imported those classes directly before the reload
+    ran (see: SimplifiedPath / Path isinstance failures, 2026-07-02 postmortem).
+    Clearing the registry + re-invoking initialize_registry() is sufficient:
+    _discover_modules() uses importlib.import_module(), which returns the
+    cached module/class objects and simply re-executes registration
+    decorators against the existing registry.
+    """
     if hasattr(registry, "operations"):
         registry.operations.clear()
     if hasattr(registry, "options"):
@@ -419,13 +455,8 @@ def clean_registry():
 
     import pdftl.registry_init
 
-    if hasattr(pdftl.registry_init, "_initialized"):
-        pdftl.registry_init._initialized = False
-
-    for mod_name in list(sys.modules.keys()):
-        if mod_name.startswith(("pdftl.operations.", "pdftl.fonts.", "pdftl.utils.")):
-            with suppress(ImportError):
-                importlib.reload(sys.modules[mod_name])
+    if hasattr(pdftl.registry_init.initialize_registry, "initialized"):
+        delattr(pdftl.registry_init.initialize_registry, "initialized")
 
     pdftl.registry_init.initialize_registry()
     return registry
@@ -494,6 +525,47 @@ def clean_logging_state():
     pdftl_logger.propagate = True
     pdftl_logger.setLevel(logging.NOTSET)
     yield
+
+
+@contextmanager
+def allow_pdftl_reload():
+    """
+    Explicit, reviewed opt-out for the reload guard.
+
+    Use only when you've confirmed no other already-imported module holds
+    a direct reference to a class/function defined in the module being
+    reloaded — otherwise you'll reintroduce the isinstance()-splitting bug
+    the guard exists to catch. See postmortem 2026-07-02.
+    """
+    guarded_reload._allowed = True
+    try:
+        yield
+    finally:
+        guarded_reload._allowed = False
+
+
+def guarded_reload(module):
+    mod_name = getattr(module, "__name__", "")
+    if (mod_name.startswith("pdftl.") or mod_name == "pdftl") and not getattr(
+        guarded_reload, "_allowed", False
+    ):
+        raise RuntimeError(
+            f"Blocked importlib.reload({mod_name!r}). Reloading pdftl "
+            "modules rebuilds their classes as new objects and silently "
+            "breaks isinstance() checks for any test module holding a "
+            "pre-reload reference (see 2026-07-02 postmortem). Wrap this "
+            "call in `with allow_pdftl_reload():` after confirming it's safe."
+        )
+    return _real_reload(module)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _forbid_module_reload_of_pdftl():
+    global _real_reload
+    _real_reload = importlib.reload
+    importlib.reload = guarded_reload
+    yield
+    importlib.reload = _real_reload
 
 
 @pytest.fixture
