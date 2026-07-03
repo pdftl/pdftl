@@ -1,4 +1,5 @@
-import importlib
+# tests/operations/test_optimize_images_complete.py
+
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -7,9 +8,6 @@ import pytest
 # Import the optimize_images module for testing
 import pdftl.operations.optimize_images as optimize_images_module
 from pdftl.exceptions import InvalidArgumentError, PackageError
-
-
-from tests.conftest import allow_pdftl_reload
 
 # --- 1. Parameter Parsing Tests ---
 
@@ -105,11 +103,10 @@ def test_optimize_images_success(two_page_pdf):
     mock_lib.DEFAULT_PNG_QUALITY = 0
     mock_lib.extract_images_generic.return_value = ([], [])
 
+    # optimize_images_pdf() imports everything from ocrmypdf.optimize inside its
+    # own function body on every call, so patching sys.modules is enough on its
+    # own - no reload of optimize_images_module needed.
     with patch.dict(sys.modules, {"ocrmypdf": MagicMock(), "ocrmypdf.optimize": mock_lib}):
-        # Reload to hit the 'try' block successfully
-        with allow_pdftl_reload():
-            importlib.reload(optimize_images_module)
-
         import pikepdf
 
         with pikepdf.open(two_page_pdf) as pdf:

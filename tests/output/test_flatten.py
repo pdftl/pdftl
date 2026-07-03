@@ -1,4 +1,5 @@
-import importlib
+# tests/output/test_flatten.py
+
 import logging
 import sys
 from unittest.mock import MagicMock, patch
@@ -8,15 +9,13 @@ import pytest
 
 from pdftl.output import flatten as flatten_module
 
-from tests.conftest import allow_pdftl_reload
-
 
 @pytest.fixture
 def fresh_flatten_module():
     """
-    Sanitize the module and its logger to ensure isolation.
+    Sanitize the module's loggers to ensure isolation between tests.
     """
-    # 1. Aggressive Logger Reset
+    # Aggressive Logger Reset
     #    Target both the specific module logger AND the package parent.
     #    If 'pdftl' parent logger has propagate=False, child logs die there
     #    and never reach the caplog (which watches Root).
@@ -29,15 +28,8 @@ def fresh_flatten_module():
         logger = logging.getLogger(name)
         logger.setLevel(logging.NOTSET)
         logger.propagate = True  # FORCE propagation to root
-        # Optional: Remove handlers that might be swallowing records
-        # logger.handlers.clear()
 
-    # 2. Reload the module (Logic Fix)
-    with allow_pdftl_reload():
-        importlib.reload(flatten_module)
     yield flatten_module
-    with allow_pdftl_reload():
-        importlib.reload(flatten_module)
 
 
 def test_flatten_fallback_when_pypdfium_missing(mock_pdf, fresh_flatten_module, caplog):
@@ -50,10 +42,9 @@ def test_flatten_fallback_when_pypdfium_missing(mock_pdf, fresh_flatten_module, 
     # Explicitly capture logs from the specific logger to avoid root logger noise/issues
     caplog.set_level(logging.DEBUG, logger="pdftl.output.flatten")
 
+    # flatten_pdf() imports pypdfium2 locally on every call (see flatten.py),
+    # so patching sys.modules is all that's needed - no reload required.
     with patch.dict(sys.modules, {"pypdfium2": None}):
-        with allow_pdftl_reload():
-            importlib.reload(fresh_flatten_module)
-
         fresh_flatten_module.flatten_pdf(mock_pdf)
 
         # Check records directly if .text is proving flaky
@@ -70,13 +61,9 @@ def test_flatten_uses_renderer_if_available(fresh_flatten_module):
     mock_pdfium_doc = mock_pdfium_mod.PdfDocument.return_value
     mock_pikepdf = MagicMock(spec=pikepdf.Pdf)
 
-    # Patch pypdfium2 to be our mock
+    # Patch pypdfium2 to be our mock; flatten_pdf()'s local import picks this up directly.
     with patch.dict(sys.modules, {"pypdfium2": mock_pdfium_mod, "pypdfium2.raw": MagicMock()}):
         with patch("pikepdf.Pdf.open") as mock_pikepdf_open:
-            # Reload so the module imports our mock_pdfium_mod
-            with allow_pdftl_reload():
-                importlib.reload(fresh_flatten_module)
-
             fresh_flatten_module.flatten_pdf(mock_pikepdf)
 
             # Verify renderer usage
@@ -93,9 +80,6 @@ def test_flatten_pypdfium2_runtime_error(mock_pdf, caplog, fresh_flatten_module)
     mock_pypdfium.PdfDocument.side_effect = RuntimeError("PDFium exploded")
 
     with patch.dict(sys.modules, {"pypdfium2": mock_pypdfium, "pypdfium2.raw": MagicMock()}):
-        with allow_pdftl_reload():
-            importlib.reload(fresh_flatten_module)
-
         fresh_flatten_module.flatten_pdf(mock_pdf)
 
         assert "pypdfium2 flattening failed" in caplog.text
@@ -111,9 +95,6 @@ def test_flatten_appearance_generation_error(mock_pdf, caplog, fresh_flatten_mod
 
     # Ensure we are in fallback mode (no pypdfium)
     with patch.dict(sys.modules, {"pypdfium2": None}):
-        with allow_pdftl_reload():
-            importlib.reload(fresh_flatten_module)
-
         fresh_flatten_module.flatten_pdf(mock_pdf)
 
         assert "Could not generate appearance streams" in caplog.text
@@ -153,9 +134,6 @@ def test_flatten_pypdfium2_bug_fallback(mock_pdf, fresh_flatten_module):
         "sys.modules", {"pypdfium2": mock_pypdfium, "pypdfium2.raw": mock_pypdfium_raw}
     ):
         with patch("pikepdf.Pdf.open", return_value=mock_pdf):
-            with allow_pdftl_reload():
-                importlib.reload(fresh_flatten_module)
-
             # This should NOT raise an exception, because the fallback catches it
             fresh_flatten_module.flatten_pdf(mock_pdf)
 
@@ -194,6 +172,4 @@ def test_flatten_pypdfium2_other_runtime_error(mock_pdf, fresh_flatten_module):
         "sys.modules", {"pypdfium2": mock_pypdfium, "pypdfium2.raw": mock_pypdfium_raw}
     ):
         with patch("pikepdf.Pdf.open", return_value=mock_pdf):
-            with allow_pdftl_reload():
-                importlib.reload(fresh_flatten_module)
             fresh_flatten_module.flatten_pdf(mock_pdf)

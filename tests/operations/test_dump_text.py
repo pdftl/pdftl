@@ -1,11 +1,12 @@
-import importlib
+# tests/operations/test_dump_text.py
+
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+import pdftl.operations.dump_text
 from pdftl.exceptions import InvalidArgumentError
-from tests.conftest import allow_pdftl_reload
 
 
 @pytest.fixture
@@ -17,25 +18,16 @@ def mock_pdfium():
 
 def test_dump_text_missing_dependency(mock_pdfium):
     """Test missing dependency error."""
+    # dump_text() calls ensure_dependencies() and imports pypdfium2 fresh on
+    # every invocation, so patching sys.modules is enough - no reload needed.
     with patch.dict(sys.modules, {"pypdfium2": None}):
-        import pdftl.operations.dump_text
-
-        with allow_pdftl_reload():
-            importlib.reload(pdftl.operations.dump_text)
-
         with pytest.raises(InvalidArgumentError, match="requires pypdfium2"):
             pdftl.operations.dump_text.dump_text("dummy.pdf", "passwd123")
 
 
 def test_dump_text_password_none(mock_pdfium):
     """Test None password handling."""
-    # Reload with mock success
     with patch.dict(sys.modules, {"pypdfium2": mock_pdfium}):
-        import pdftl.operations.dump_text
-
-        with allow_pdftl_reload():
-            importlib.reload(pdftl.operations.dump_text)
-
         with patch(
             "pdftl.operations.dump_text._extract_text_from_pdf", return_value=[]
         ) as mock_extract:
@@ -57,11 +49,6 @@ def test_dump_text_real_iteration(two_page_pdf, mock_pdfium):
     mock_pdf.__iter__.return_value = iter([mock_page])
 
     with patch.dict(sys.modules, {"pypdfium2": mock_pdfium}):
-        import pdftl.operations.dump_text
-
-        with allow_pdftl_reload():
-            importlib.reload(pdftl.operations.dump_text)
-
         with patch("pypdfium2.PdfDocument") as MockDoc:
             MockDoc.return_value.__enter__.return_value = mock_pdf
 

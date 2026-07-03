@@ -1,6 +1,5 @@
 # tests/operations/test_add_text.py
 
-import importlib
 import io
 import logging
 import sys
@@ -13,8 +12,6 @@ from pikepdf import Array, Name, Pdf, Rectangle
 
 import pdftl.core.constants as c
 from pdftl.exceptions import InvalidArgumentError
-
-from tests.conftest import allow_pdftl_reload
 
 # --- Local Imports ---
 # We import the module to reload it during cleanup
@@ -281,6 +278,12 @@ class TestAddTextMissingDependency(unittest.TestCase):
     Isolated tests for when reportlab is missing.
     """
 
+    @pytest.fixture(autouse=True)
+    def _inject_monkeypatch(self, monkeypatch):
+        # unittest.TestCase methods can't take pytest fixtures as parameters
+        # directly; this autouse fixture stashes monkeypatch on self instead.
+        self.monkeypatch = monkeypatch
+
     def setUp(self):
         self.pdf = Pdf.new()
         self.pdf.add_blank_page(page_size=(100, 100))
@@ -295,23 +298,19 @@ class TestAddTextMissingDependency(unittest.TestCase):
     def tearDown(self):
         self.patch_parser.stop()
         self.pdf.close()
-
-        # --- AGGRESSIVE CLEANUP ---
-        # We MUST clear the module cache and reload to prevent
-        # the "Poison Pill" from leaking into other tests.
-
-        # 1. Remove the poisoned helper module
-        if "pdftl.operations.helpers.text_drawer" in sys.modules:
-            del sys.modules["pdftl.operations.helpers.text_drawer"]
-
-        # 2. Reload the orchestrator so it forgets the poisoned class
-        if "pdftl.operations.add_text" in sys.modules:
-            with allow_pdftl_reload():
-                importlib.reload(sys.modules["pdftl.operations.add_text"])
+        # No manual sys.modules cleanup needed - monkeypatch (used in the test
+        # below) automatically reverts both the reportlab poison pill and the
+        # text_drawer eviction, restoring the real cached module afterward.
 
     def test_missing_reportlab_raises_error(self):
         """
         Simulates missing reportlab by poisoning sys.modules.
+
+        reportlab is lazily imported for performance: text_drawer.py has no
+        top-level `import reportlab`, and TextDrawer.__init__() calls
+        ensure_dependencies() fresh on every instantiation. add_text_pdf()
+        constructs a new TextDrawer on every call, so there's nothing cached
+        to evict - poisoning sys.modules right before the call is enough.
         """
         # 1. Define Poison Pill (block reportlab completely)
         poison_pill = {"reportlab": None}
@@ -319,28 +318,13 @@ class TestAddTextMissingDependency(unittest.TestCase):
             if k.startswith("reportlab"):
                 poison_pill[k] = None
 
-        # 2. Apply Poison
-        with patch.dict(sys.modules, poison_pill):
-            # 3. Remove text_drawer from cache so it MUST re-import
-            #    (and fail to find reportlab)
-            if "pdftl.operations.helpers.text_drawer" in sys.modules:
-                del sys.modules["pdftl.operations.helpers.text_drawer"]
+        # 2. Apply Poison (monkeypatch reverts each entry automatically at teardown)
+        for k, v in poison_pill.items():
+            self.monkeypatch.setitem(sys.modules, k, v)
 
-            # 4. Reload orchestrator to force it to import the new (dummy) drawer
-            if "pdftl.operations.add_text" in sys.modules:
-                # It exists? Force it to refresh (so it hits the poison)
-                module_obj = sys.modules["pdftl.operations.add_text"]
-                with allow_pdftl_reload():
-                    importlib.reload(module_obj)
-            else:
-                # It was wiped? Just import it (it will hit the poison naturally)
-                pass
-
-            # 5. Run Command
-            from pdftl.exceptions import InvalidArgumentError as CurrentError
-
-            with pytest.raises(CurrentError):
-                add_text_pdf(self.pdf, ["dummy"])
+        # 3. Run Command
+        with pytest.raises(InvalidArgumentError):
+            add_text_pdf(self.pdf, ["dummy"])
 
 
 def test_add_text_sequence_counter_stamping():

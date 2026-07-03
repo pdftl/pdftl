@@ -408,29 +408,6 @@ def assert_dump_output(capsys):
     return _check
 
 
-# @pytest.fixture
-# def clean_registry():
-#     if hasattr(registry, "operations"):
-#         registry.operations.clear()
-#     if hasattr(registry, "options"):
-#         registry.options.clear()
-#     if hasattr(registry, "help_topics"):
-#         registry.help_topics.clear()
-
-#     import pdftl.registry_init
-
-#     if hasattr(pdftl.registry_init, "_initialized"):
-#         pdftl.registry_init._initialized = False
-
-#     for mod_name in list(sys.modules.keys()):
-#         if mod_name.startswith(("pdftl.operations.", "pdftl.fonts.", "pdftl.utils.")):
-#             with suppress(ImportError):
-#                 importlib.reload(sys.modules[mod_name])
-
-#     pdftl.registry_init.initialize_registry()
-#     return registry
-
-
 @pytest.fixture
 def clean_registry():
     """
