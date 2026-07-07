@@ -72,6 +72,21 @@ It also carries a top-level `width_sync_mode` field (default `auto`) that
 controls how `import_fonts` reconciles width edits back into the PDF — see
 `import_fonts` help for the available modes.
 
+Beyond widths and ToUnicode, the sidecar also carries, when applicable:
+  - A `descriptor` block with the font's /FontDescriptor properties (FontName,
+    Flags, FontBBox, Ascent/Descent, StemV, Panose, etc).
+  - `differences` / `base_encoding`, mirroring a Simple font's /Encoding.
+  - `encoding_cmap`, recording whether a Type0 font's /Encoding is
+    /Identity-H or /Identity-V.
+  - `cid_to_gid_map`, either `"Identity"` or a reference to a separate
+    `font_{obj_id}_{gen_id}_{name}.cid2gid.json` sidecar for an explicit
+    /CIDToGIDMap table.
+
+Type 3 fonts have no font binary at all: their glyph procedures are extracted
+instead into a `font_{obj_id}_{gen_id}_{name}.charprocs` text file (one block
+per glyph), with any embedded inline bitmap images pulled out losslessly as
+sibling TIFF files.
+
 ### Arguments
 
 * `<directory>`: **(Required)** The directory where the extracted font files will be saved.
@@ -110,9 +125,20 @@ It automatically handles:
   - Binary Font stream injection if MD5 hashes differ (safe skip on unmodified files).
   - Character metrics updates based on the 'width_sync_mode' parameter.
   - Re-compilation of sidecar ToUnicode JSON maps back to compliant PostScript CMaps.
+  - /FontDescriptor property edits from the sidecar's `descriptor` block.
+  - /CIDToGIDMap restoration, from either `"Identity"` or an explicit
+    `.cid2gid.json` sidecar.
+  - Type 3 glyph procedure reconstruction (including inline images) from a
+    `.charprocs` file.
 
 If both `.json` and `.ps` files exist for a given font's /ToUnicode map, an error is
 raised to prevent ambiguity. The user must delete or rename one of them first.
+
+`encoding_cmap` edits are limited: the only supported change is switching a
+Type0 font's /Encoding between /Identity-H and /Identity-V. Any other value
+written into `encoding_cmap` is rejected with a warning, and /Encoding is left
+untouched — there is no general mechanism here for re-encoding into an
+arbitrary CMap.
 
 ### Width Sync Modes
 
@@ -137,6 +163,13 @@ edits:
 
 `patch_font_metrics` and `squash_font_vectors` require the embedded font file to
 be present in the directory; without it, no width sync occurs for that font.
+
+For both of these modes, the in-memory binary edit is only ever best-effort:
+if it can't be applied (an unresolvable CID-to-GID mapping, no character
+codes in the font actually matched, or a malformed/unreadable font program),
+`import_fonts` still writes the sidecar's `width.pdf` values into /Widths or
+/W directly, so a requested width edit is never silently dropped even when
+the font program itself couldn't be patched.
 
 ### Format-Specific Limitations
 
