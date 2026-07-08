@@ -1,3 +1,5 @@
+# tests/operations/test_style_text.py
+
 import pytest
 import pikepdf
 from unittest.mock import MagicMock, patch, call
@@ -70,7 +72,7 @@ def test_parse_style_text_args_empty_parens():
 
 
 # ==============================================================================
-# 2. Tests for _build_replacer
+# 2. Tests for _build_replacer & Intent Resolution
 # ==============================================================================
 
 
@@ -85,7 +87,8 @@ def test_build_replacer_absolute_stroke():
     assert r is not None
     assert r.stroke_width == 1.5
     assert r.stroke_width_type == "absolute"
-    assert r.tr_mode == 2
+    assert r.has_stroke_intent is True
+    assert r.has_fill_intent is False
 
 
 def test_build_replacer_percentage_stroke():
@@ -93,7 +96,7 @@ def test_build_replacer_percentage_stroke():
     assert r is not None
     assert r.stroke_width == 2.0
     assert r.stroke_width_type == "percentage"
-    assert r.tr_mode == 2
+    assert r.has_stroke_intent is True
 
 
 def test_build_replacer_stroke_color_defaults_stroke_width():
@@ -102,11 +105,13 @@ def test_build_replacer_stroke_color_defaults_stroke_width():
     assert r is not None
     assert r.stroke_width == 0.5
     assert r.stroke_color == [1.0, 0.0, 0.0]
-    assert r.tr_mode == 2
+    assert r.has_stroke_intent is True
 
 
 def test_build_replacer_color_sets_fill_and_stroke():
     r = _build_replacer(MagicMock(), {"stroke": "0.5", "color": "0 0 1"})
+    assert r.has_fill_intent is True
+    assert r.has_stroke_intent is True
     assert r.fill_color == [0.0, 0.0, 1.0]
     assert r.stroke_color == [0.0, 0.0, 1.0]
 
@@ -115,6 +120,8 @@ def test_build_replacer_fill_and_stroke_separate():
     r = _build_replacer(
         MagicMock(), {"stroke": "0.5", "fill_color": "1 0 0", "stroke_color": "0 1 0"}
     )
+    assert r.has_fill_intent is True
+    assert r.has_stroke_intent is True
     assert r.fill_color == [1.0, 0.0, 0.0]
     assert r.stroke_color == [0.0, 1.0, 0.0]
 
@@ -127,6 +134,41 @@ def test_build_replacer_invalid_stroke_raises():
 def test_build_replacer_negative_stroke_raises():
     with pytest.raises(InvalidArgumentError):
         _build_replacer(MagicMock(), {"stroke": "-1.5"})
+
+
+def test_build_replacer_fill_color_only_sets_intent_correctly():
+    """Providing only fill_color identifies fill intent without stroke intent."""
+    r = _build_replacer(MagicMock(), {"fill_color": "1 0 0"})
+    assert r is not None
+    assert r.fill_color == [1.0, 0.0, 0.0]
+    assert r.has_fill_intent is True
+    assert r.has_stroke_intent is False
+    assert r._get_target_tr_mode(3) == 0  # Tr 3 (invisible) becomes Tr 0 (filled)
+    assert r._get_target_tr_mode(2) == 2  # Tr 2 (fill+stroke) remains Tr 2
+
+
+def test_target_tr_mode_mutation_matrix():
+    """Explicitly verify the mutation matrix behaviors for Tr states."""
+    # Test fill intent isolated
+    r_fill = TextStrokeReplaceContentStream(pdf=MagicMock(), has_fill_intent=True)
+    assert r_fill._get_target_tr_mode(0) == 0
+    assert r_fill._get_target_tr_mode(1) == 2
+    assert r_fill._get_target_tr_mode(2) == 2
+    assert r_fill._get_target_tr_mode(3) == 0
+
+    # Test stroke intent isolated
+    r_stroke = TextStrokeReplaceContentStream(pdf=MagicMock(), has_stroke_intent=True)
+    assert r_stroke._get_target_tr_mode(0) == 2
+    assert r_stroke._get_target_tr_mode(1) == 1
+    assert r_stroke._get_target_tr_mode(2) == 2
+    assert r_stroke._get_target_tr_mode(3) == 1
+
+    # Test compound intents (both)
+    r_both = TextStrokeReplaceContentStream(
+        pdf=MagicMock(), has_fill_intent=True, has_stroke_intent=True
+    )
+    assert r_both._get_target_tr_mode(0) == 2
+    assert r_both._get_target_tr_mode(3) == 2
 
 
 # ==============================================================================
@@ -160,7 +202,8 @@ def test_style_text_in_content_streams_with_expanded_args():
         assert page_spec == "1-2"
         assert replacer.stroke_width == 1.5
         assert replacer.fill_color == [0.0, 0.0, 1.0]
-        assert replacer.tr_mode == 2
+        assert replacer.has_fill_intent is True
+        assert replacer.has_stroke_intent is True
 
 
 def test_style_text_in_content_streams_multiple_specs():
@@ -247,11 +290,12 @@ def base_replacer():
     mock_pdf = MagicMock()
     replacer = TextStrokeReplaceContentStream(
         pdf=mock_pdf,
+        has_fill_intent=True,
+        has_stroke_intent=True,
         fill_color=[0.1, 0.2, 0.3],
         stroke_color=[0.4, 0.5, 0.6],
         stroke_width=2.0,
         stroke_width_type="absolute",
-        tr_mode=2,
     )
     return replacer
 
@@ -303,13 +347,18 @@ def test_get_absolute_stroke_width(base_replacer):
 def test_state_matches_desired_granularity():
     """Verify specific branch returns when target states do or do not match."""
     replacer = TextStrokeReplaceContentStream(
-        pdf=MagicMock(), stroke_width=1.0, stroke_color=[1, 1, 1], fill_color=[0, 0, 0], tr_mode=2
+        pdf=MagicMock(),
+        has_fill_intent=True,
+        has_stroke_intent=True,
+        stroke_width=1.0,
+        stroke_color=[1, 1, 1],
+        fill_color=[0, 0, 0],
     )
 
     assert (
         replacer._state_matches_desired(
             {
-                "render_mode": 0,
+                "render_mode": 0,  # Will target Tr 2
                 "stroke_width": 1.0,
                 "stroke_color": [1, 1, 1],
                 "fill_color": [0, 0, 0],
@@ -381,7 +430,7 @@ def test_force_style_state_injection(base_replacer):
     assert ([0.1, 0.2, 0.3], "rg") in new_instructions
     assert ([0.4, 0.5, 0.6], "RG") in new_instructions
     assert ([2.0], "w") in new_instructions
-    assert ([2], "Tr") in new_instructions
+    assert ([2], "Tr") in new_instructions  # Based on Tr 0 -> Tr 2 mutation
 
 
 # ==============================================================================
@@ -432,15 +481,20 @@ def test_process_op_color_spaces(base_replacer):
 def test_update_state_full_coverage():
     """Verify _update_state updates all fields inside the state map."""
     replacer = TextStrokeReplaceContentStream(
-        pdf=MagicMock(), fill_color=[0.1], stroke_color=[0.2], stroke_width=1.5, tr_mode=3
+        pdf=MagicMock(),
+        has_fill_intent=True,
+        has_stroke_intent=True,
+        fill_color=[0.1],
+        stroke_color=[0.2],
+        stroke_width=1.5,
     )
-    state = {"font_size": 12.0}
+    state = {"font_size": 12.0, "render_mode": 0}
     replacer._update_state(state)
 
     assert state["fill_color"] == [0.1]
     assert state["stroke_color"] == [0.2]
     assert state["stroke_width"] == 1.5
-    assert state["render_mode"] == 3
+    assert state["render_mode"] == 2  # State should mutate 0 -> 2
 
 
 def test_process_op_text_triggering(base_replacer):
@@ -495,10 +549,10 @@ def test_apply_single_stream_and_processed_filtering_real_objects():
 
         replacer = TextStrokeReplaceContentStream(
             pdf=mock_pdf_wrapper,
+            has_stroke_intent=True,
             fill_color=[0, 0, 0],
             stroke_color=[1, 1, 1],
             stroke_width=1.0,
-            tr_mode=2,
         )
 
         stream_objgen = contents.objgen
@@ -535,10 +589,11 @@ def test_apply_page_with_multiple_streams_real_objects():
 
         replacer = TextStrokeReplaceContentStream(
             pdf=mock_pdf_wrapper,
+            has_fill_intent=True,
+            has_stroke_intent=True,
             fill_color=[0, 0, 1],
             stroke_color=[1, 0, 0],
             stroke_width=2.0,
-            tr_mode=2,
         )
 
         replacer.apply(1)
@@ -633,14 +688,13 @@ def test_process_op_named_colorspace_marks_stroke_unknown(base_replacer):
     assert state["stroke_color"] is None, "SC should mark stroke_color unknown"
 
 
-def test_process_op_named_colorspace_forces_injection_before_text(base_replacer):
+def test_process_op_named_colorspace_forces_injection_before_text():
     """After cs/scn, _state_matches_desired returns False even if the desired
     fill_color matches the PDF default, because state fill_color is now None.
     This ensures text following a named colorspace gets the fill override injected."""
-    # base_replacer has fill_color=[0.1, 0.2, 0.3] so None != that → injection fires.
-    # Use a replacer whose fill matches the PDF default to confirm None still triggers.
     replacer = TextStrokeReplaceContentStream(
         pdf=MagicMock(),
+        has_fill_intent=True,
         fill_color=[0.0, 0.0, 0.0],  # matches PDF default
     )
     state = {
@@ -659,3 +713,265 @@ def test_process_op_named_colorspace_forces_injection_before_text(base_replacer)
     replacer._process_op("cs", [], state, [], [])
     assert state["fill_color"] is None
     assert replacer._state_matches_desired(state) is False
+
+
+def test_fill_only_intent_does_not_touch_existing_stroke():
+    """Regression test: when only fill_color is requested (no stroke intent),
+    and the current text is already Tr 2 (fill+stroke), the existing stroke_color
+    and stroke_width must be left untouched. Only fill_color should be affected.
+
+    This guards against the stroke branches in _state_matches_desired,
+    _force_style_state, and _update_state firing whenever target_tr_mode
+    happens to land in (1, 2), regardless of has_stroke_intent.
+    """
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=True,
+        has_stroke_intent=False,
+        fill_color=[0.9, 0.9, 0.9],
+        # stroke_color/stroke_width may still be populated by _build_replacer's
+        # fallback logic even though the user never asked to touch stroke.
+        stroke_color=[0.0, 0.0, 0.0],
+        stroke_width=0.5,
+        stroke_width_type="absolute",
+    )
+
+    state = {
+        "render_mode": 2,  # already fill+stroke
+        "fill_color": [0.1, 0.2, 0.3],
+        "stroke_color": [0.4, 0.5, 0.6],  # pre-existing, deliberately different
+        "stroke_width": 3.0,  # pre-existing, deliberately different
+        "font_size": 12.0,
+    }
+
+    # Sanity: fill differs so state should NOT already match desired.
+    assert replacer._state_matches_desired(state) is False
+
+    new_instructions = []
+    replacer._force_style_state(new_instructions, state)
+
+    # Fill color change should be injected.
+    assert ([0.9, 0.9, 0.9], "rg") in new_instructions
+
+    # Stroke color/width must NOT be touched — no stroke intent was expressed.
+    assert ([0.4, 0.5, 0.6], "RG") not in new_instructions
+    assert ([0.0, 0.0, 0.0], "RG") not in new_instructions
+    assert ([3.0], "w") not in new_instructions
+    assert ([0.5], "w") not in new_instructions
+
+    replacer._update_state(state)
+
+    # State's stroke fields should remain exactly as they were before.
+    assert state["stroke_color"] == [0.4, 0.5, 0.6]
+    assert state["stroke_width"] == 3.0
+    # Fill should have updated, render_mode stays 2.
+    assert state["fill_color"] == [0.9, 0.9, 0.9]
+    assert state["render_mode"] == 2
+
+
+# ==============================================================================
+# Additional coverage: stroke-only intent, symmetric state matching,
+# and Tr-mode transitions from modes 1 and 3
+# ==============================================================================
+
+
+def test_stroke_only_intent_does_not_touch_existing_fill():
+    """Mirror of the fill-only regression test: when only stroke_color/width
+    is requested (no fill intent), pre-existing fill_color in state must be
+    left completely untouched, even though target_tr_mode may land on 1 or 2.
+    """
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=False,
+        has_stroke_intent=True,
+        fill_color=None,
+        stroke_color=[0.9, 0.1, 0.1],
+        stroke_width=1.25,
+        stroke_width_type="absolute",
+    )
+
+    state = {
+        "render_mode": 0,  # currently filled only; stroke intent -> Tr 2
+        "fill_color": [0.2, 0.3, 0.4],  # pre-existing, must not change
+        "stroke_color": [0.0, 0.0, 0.0],
+        "stroke_width": 0.0,
+        "font_size": 10.0,
+    }
+
+    assert replacer._state_matches_desired(state) is False
+
+    new_instructions = []
+    replacer._force_style_state(new_instructions, state)
+
+    # Stroke changes should be injected.
+    assert ([0.9, 0.1, 0.1], "RG") in new_instructions
+    assert ([1.25], "w") in new_instructions
+    assert ([2], "Tr") in new_instructions
+
+    # Fill must NOT be touched — no fill intent expressed.
+    assert ([0.2, 0.3, 0.4], "rg") not in new_instructions
+    assert not any(instr[1] == "rg" for instr in new_instructions)
+
+    replacer._update_state(state)
+
+    assert state["fill_color"] == [0.2, 0.3, 0.4]  # untouched
+    assert state["stroke_color"] == [0.9, 0.1, 0.1]
+    assert state["stroke_width"] == 1.25
+    assert state["render_mode"] == 2
+
+
+def test_state_matches_desired_true_when_only_relevant_intent_matches():
+    """If only fill intent is set and fill already matches, the state should
+    be considered matching regardless of any differing stroke values —
+    proving _state_matches_desired doesn't spuriously key off stroke state
+    when has_stroke_intent is False."""
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=True,
+        has_stroke_intent=False,
+        fill_color=[0.5, 0.5, 0.5],
+        stroke_color=[0.0, 0.0, 0.0],  # fallback value, irrelevant here
+        stroke_width=0.5,
+    )
+
+    state = {
+        "render_mode": 2,  # fill intent alone keeps Tr 2 at Tr 2
+        "fill_color": [0.5, 0.5, 0.5],  # matches
+        "stroke_color": [0.9, 0.9, 0.9],  # deliberately different
+        "stroke_width": 9.0,  # deliberately different
+        "font_size": 12.0,
+    }
+
+    assert replacer._state_matches_desired(state) is True
+
+    # Symmetric case: only stroke intent, stroke matches, fill differs.
+    replacer2 = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=False,
+        has_stroke_intent=True,
+        fill_color=None,
+        stroke_color=[0.2, 0.2, 0.2],
+        stroke_width=0.75,
+    )
+    state2 = {
+        "render_mode": 2,
+        "fill_color": [0.1, 0.1, 0.1],  # irrelevant, differs
+        "stroke_color": [0.2, 0.2, 0.2],  # matches
+        "stroke_width": 0.75,  # matches
+        "font_size": 12.0,
+    }
+    assert replacer2._state_matches_desired(state2) is True
+
+
+def test_fill_intent_from_invisible_mode_3():
+    """Tr 3 (invisible) + fill intent only -> target Tr 0. Stroke branch must
+    not fire even though state's current render_mode is not 0/2."""
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=True,
+        has_stroke_intent=False,
+        fill_color=[0.7, 0.1, 0.1],
+        stroke_color=[0.0, 0.0, 0.0],
+        stroke_width=0.5,
+    )
+
+    state = {
+        "render_mode": 3,
+        "fill_color": [1.0, 1.0, 1.0],
+        "stroke_color": [1.0, 1.0, 1.0],
+        "stroke_width": 4.0,
+        "font_size": 12.0,
+    }
+
+    assert replacer._get_target_tr_mode(state["render_mode"]) == 0
+    assert replacer._state_matches_desired(state) is False
+
+    new_instructions = []
+    replacer._force_style_state(new_instructions, state)
+
+    assert ([0.7, 0.1, 0.1], "rg") in new_instructions
+    assert ([0], "Tr") in new_instructions
+    # No stroke instructions injected.
+    assert not any(instr[1] in ("RG", "w") for instr in new_instructions)
+
+    replacer._update_state(state)
+    assert state["render_mode"] == 0
+    assert state["fill_color"] == [0.7, 0.1, 0.1]
+    # Stroke state left exactly as it was.
+    assert state["stroke_color"] == [1.0, 1.0, 1.0]
+    assert state["stroke_width"] == 4.0
+
+
+def test_stroke_intent_from_invisible_mode_3():
+    """Tr 3 (invisible) + stroke intent only -> target Tr 1 (stroke only,
+    not Tr 2), per the mutation matrix."""
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=False,
+        has_stroke_intent=True,
+        fill_color=None,
+        stroke_color=[0.0, 1.0, 0.0],
+        stroke_width=1.0,
+    )
+
+    state = {
+        "render_mode": 3,
+        "fill_color": [1.0, 1.0, 1.0],
+        "stroke_color": [0.0, 0.0, 0.0],
+        "stroke_width": 0.0,
+        "font_size": 12.0,
+    }
+
+    assert replacer._get_target_tr_mode(state["render_mode"]) == 1
+    assert replacer._state_matches_desired(state) is False
+
+    new_instructions = []
+    replacer._force_style_state(new_instructions, state)
+
+    assert ([0.0, 1.0, 0.0], "RG") in new_instructions
+    assert ([1.0], "w") in new_instructions
+    assert ([1], "Tr") in new_instructions
+    assert not any(instr[1] == "rg" for instr in new_instructions)
+
+    replacer._update_state(state)
+    assert state["render_mode"] == 1
+    assert state["stroke_color"] == [0.0, 1.0, 0.0]
+    assert state["stroke_width"] == 1.0
+    assert state["fill_color"] == [1.0, 1.0, 1.0]  # untouched
+
+
+def test_fill_intent_from_stroke_only_mode_1():
+    """Tr 1 (stroke only) + fill intent only -> target Tr 2 (per matrix,
+    fill map sends 1 -> 2), adding a fill without disturbing existing stroke."""
+    replacer = TextStrokeReplaceContentStream(
+        pdf=MagicMock(),
+        has_fill_intent=True,
+        has_stroke_intent=False,
+        fill_color=[0.3, 0.3, 0.9],
+        stroke_color=[0.0, 0.0, 0.0],
+        stroke_width=0.5,
+    )
+
+    state = {
+        "render_mode": 1,
+        "fill_color": [1.0, 1.0, 1.0],
+        "stroke_color": [0.4, 0.4, 0.4],
+        "stroke_width": 2.5,
+        "font_size": 12.0,
+    }
+
+    assert replacer._get_target_tr_mode(state["render_mode"]) == 2
+
+    new_instructions = []
+    replacer._force_style_state(new_instructions, state)
+
+    assert ([0.3, 0.3, 0.9], "rg") in new_instructions
+    assert ([2], "Tr") in new_instructions
+    # Existing stroke must be left alone since has_stroke_intent is False.
+    assert not any(instr[1] in ("RG", "w") for instr in new_instructions)
+
+    replacer._update_state(state)
+    assert state["render_mode"] == 2
+    assert state["fill_color"] == [0.3, 0.3, 0.9]
+    assert state["stroke_color"] == [0.4, 0.4, 0.4]
+    assert state["stroke_width"] == 2.5

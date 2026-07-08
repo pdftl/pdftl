@@ -26,17 +26,19 @@ logger = logging.getLogger(__name__)
 
 _STYLE_TEXT_LONG_DESC = """
 
-The `style_text` operation converts all filled text (Tr 0)
-into filled and stroked text (Tr 2) and applies a user-defined
-stroke width. Page ranges can be specified using `<pages>`.
-The default page range is all pages.
+The `style_text` operation updates text styling based on the provided parameters.
+It adjusts the underlying text rendering mode (Tr) to accommodate the requested
+changes. For example, setting a color on invisible text makes it visible filled
+text (Tr 0), and setting a stroke color adds an outline without removing the
+existing fill (Tr 2).
+
+Page ranges can be specified using `<pages>`. The default page range is all pages.
 
 **Key=val options:**
 
 * `stroke=<float|percent>`  The width of the text outline. May be an absolute value (e.g. 0.5)
-or a percentage of the current font size (e.g. 2%). Defaults to 0.5
-if stroke_color is set, otherwise text outlines are not altered.
-* `color=<r g b>` Set both fill and stroke colour (floats 0.0–1.0 separated by spaces).
+or a percentage of the current font size (e.g. 2%). Defaults to 0.5 if stroke_color is set.
+* `color=<r g b>` Set both fill and stroke fallback colour (floats 0.0–1.0 separated by spaces).
 * `fill_color=<r g b>` Set fill colour only.
 * `stroke_color=<r g b>` Set stroke colour only.
 
@@ -98,7 +100,7 @@ _ALLOWED_KEYS = ["stroke", "color", "fill_color", "stroke_color"]
 )
 def style_text_in_content_streams(pdf, args) -> OpResult:
     """
-    Apply text strokes in page content streams.
+    Apply text styles in page content streams.
     """
     if not args:
         args = []
@@ -114,17 +116,7 @@ def style_text_in_content_streams(pdf, args) -> OpResult:
 
 
 def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
-    """
-    Parse args into a list of (page_spec, style_kwargs) pairs.
-
-    Accepts two forms:
-      - Parenthesized:  ``['1-3(stroke=0.5,color=0,0,0)', '4-end(stroke=2%)']``
-        (produced by OPERATION_ARGS_EXPANDED from explicit spec(args) input)
-      - Plain shorthand already expanded by the framework:
-        ``['(stroke=0.5,color=0,0,0)']`` or ``['1-3(stroke=0.5)']``
-    """
     if not args:
-        # No args at all: apply defaults to all pages
         return [("-", {})]
 
     results = []
@@ -132,7 +124,6 @@ def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
         if "(" in arg:
             page_spec, _, rest = arg.partition("(")
             content = rest.rstrip(")")
-            # content is a comma-separated key=val string; feed as a list of tokens
             tokens = [t.strip() for t in content.split(",") if t.strip()]
             kwargs = parse_keyval_list(
                 tokens,
@@ -140,8 +131,6 @@ def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
                 context="style_text",
             )
         else:
-            # Shouldn't normally reach here after OPERATION_ARGS_EXPANDED, but
-            # handle gracefully: treat the whole token as a page spec with no opts.
             page_spec = arg
             kwargs = {}
 
@@ -154,65 +143,33 @@ def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
 def _build_replacer(pdf, parsed_kwargs: dict) -> "TextStrokeReplaceContentStream | None":
     stroke_width, stroke_width_type = _parse_stroke_width(parsed_kwargs)
 
-    # Extract colors directly from user input
     color = _get_color_or_raise(parsed_kwargs, "color")
     fill_color = _get_color_or_raise(parsed_kwargs, "fill_color")
     stroke_color = _get_color_or_raise(parsed_kwargs, "stroke_color")
 
-    # Resolve the natural logic for text rendering mode and defaults
-    tr_mode, fill_color, stroke_color, stroke_width = _resolve_text_style_intent(
-        parsed_kwargs, stroke_width, color, fill_color, stroke_color
-    )
+    has_fill_intent = (color is not None) or (fill_color is not None)
+    has_stroke_intent = (parsed_kwargs.get("stroke") is not None) or (stroke_color is not None)
 
-    if all(v is None for v in (stroke_width, fill_color, stroke_color, tr_mode)):
+    if not has_fill_intent and not has_stroke_intent:
         return None
 
-    replacer_args = {"stroke_width_type": stroke_width_type}
-    if stroke_width is not None:
-        replacer_args["stroke_width"] = stroke_width
-    if stroke_color is not None:
-        replacer_args["stroke_color"] = stroke_color
-    if fill_color is not None:
-        replacer_args["fill_color"] = fill_color
-    if tr_mode is not None:
-        replacer_args["tr_mode"] = tr_mode
+    # Resolve fallbacks to pass concrete data to the replacer
+    final_fill_color = fill_color or color
+    final_stroke_color = stroke_color or color or fill_color or [0.0, 0.0, 0.0]
+    final_stroke_width = stroke_width if stroke_width is not None else 0.5
 
-    logger.debug("replacer_args=%s", replacer_args)
-    return TextStrokeReplaceContentStream(pdf, **replacer_args)
-
-
-def _resolve_text_style_intent(parsed_kwargs, stroke_width, color, fill_color, stroke_color):
-    """
-    Determines the target Tr mode and applies smart defaults based on user intent.
-    Ensures 'color=' doesn't accidentally force a stroke outline, and color shifts
-    do not alter existing strokes or hit 1-px rendering bugs with stroke_width=0.
-    """
-    has_explicit_stroke = parsed_kwargs.get("stroke") is not None
-    has_explicit_stroke_color = stroke_color is not None
-
-    # Apply 'color' shorthand safely
-    if color is not None:
-        if fill_color is None:
-            fill_color = color
-        if stroke_color is None and (has_explicit_stroke or has_explicit_stroke_color):
-            stroke_color = color
-
-    # Evaluate rendering mode intent: Only force Tr 2 if they asked for an outline.
-    if has_explicit_stroke or has_explicit_stroke_color:
-        tr_mode = 2  # Fill and stroke text
-        if stroke_width is None:
-            stroke_width = 0.5
-        if stroke_color is None:
-            stroke_color = fill_color or color or [0.0, 0.0, 0.0]
-    else:
-        # Keep tr_mode None to preserve the stream's existing rendering mode (e.g. Tr 0)
-        tr_mode = None
-
-    return tr_mode, fill_color, stroke_color, stroke_width
+    return TextStrokeReplaceContentStream(
+        pdf=pdf,
+        has_fill_intent=has_fill_intent,
+        has_stroke_intent=has_stroke_intent,
+        fill_color=final_fill_color,
+        stroke_color=final_stroke_color,
+        stroke_width=final_stroke_width,
+        stroke_width_type=stroke_width_type,
+    )
 
 
 def _parse_stroke_width(parsed_kwargs: dict) -> tuple[float | None, str]:
-    """Helper to cleanly parse the stroke string and type."""
     stroke_width = None
     stroke_width_type = "absolute"
     sw = parsed_kwargs.get("stroke", None)
@@ -257,14 +214,15 @@ def _get_color_or_raise(data, key):
 
 @dataclass
 class TextStrokeReplaceContentStream:
-    """A replacer for PDF content streams to enforce text strokes"""
+    """A replacer for PDF content streams to enforce text styles dynamically"""
 
     pdf: "Pdf"
+    has_fill_intent: bool = False
+    has_stroke_intent: bool = False
     fill_color: list[float] | None = None
     stroke_color: list[float] | None = None
     stroke_width: float | None = None
     stroke_width_type: str = "absolute"
-    tr_mode: int | None = None
 
     _processed: set = field(default_factory=set, repr=False, compare=False)
     _pikepdf: "pikepdf_t | None" = field(default=None, init=False, repr=False, compare=False)
@@ -277,9 +235,6 @@ class TextStrokeReplaceContentStream:
             self._pikepdf = pikepdf
         return self._pikepdf
 
-    # -------------------------
-    # main entry
-    # -------------------------
     def apply(self, page_num: int):
         page = self.pdf.pages[page_num - 1]
 
@@ -287,11 +242,6 @@ class TextStrokeReplaceContentStream:
         if contents is None:
             return
 
-        # Coalesce array of streams into one before parsing — the PDF spec requires
-        # readers to concatenate Contents arrays before parsing, but pikepdf's
-        # parse_content_stream operates per-stream and silently drops operands at
-        # stream boundaries (e.g. a [ ... ] array whose TJ operator is in the next
-        # stream), causing data loss in the output.
         pikepdf_page = self.pikepdf.Page(page)
         pikepdf_page.contents_coalesce()
 
@@ -307,9 +257,6 @@ class TextStrokeReplaceContentStream:
         if "/Resources" in page:
             self._process_resources(page.Resources)
 
-    # -------------------------
-    # XObject recursion
-    # -------------------------
     def _process_resources(self, resources):
         if "/XObject" not in resources:
             return
@@ -326,14 +273,7 @@ class TextStrokeReplaceContentStream:
 
                 if "/Resources" in xobj:
                     self._process_resources(xobj.Resources)
-            # Non-Form XObjects (images, PostScript fragments, etc.) contain no
-            # text operators so there is nothing to restyle. We intentionally do
-            # not add them to _processed so that other pages sharing the same
-            # image object are not silently skipped.
 
-    # -------------------------
-    # color helpers
-    # -------------------------
     def _color_instruction(self, operands, fill_or_stroke="fill"):
         if len(operands) == 1:
             op, instr = list(operands), "g"
@@ -369,39 +309,58 @@ class TextStrokeReplaceContentStream:
             return font_size * self.stroke_width / 100
         return self.stroke_width
 
+    def _get_target_tr_mode(self, current_mode: int) -> int:
+        """Determines the target Tr mode dynamically based on the current state."""
+        target = current_mode
+        if self.has_fill_intent:
+            target = {0: 0, 1: 2, 2: 2, 3: 0}.get(target, target)
+        if self.has_stroke_intent:
+            target = {0: 2, 1: 1, 2: 2, 3: 1}.get(target, target)
+        return target
+
     def _state_matches_desired(self, state):
-        """Return True if all non-None desired values are already in current state."""
-        if self.tr_mode is not None and state["render_mode"] != self.tr_mode:
+        target_tr_mode = self._get_target_tr_mode(state["render_mode"])
+        if state["render_mode"] != target_tr_mode:
             return False
-        current_stroke_width = state["stroke_width"]
+
         if (
-            self.stroke_width is not None
-            and current_stroke_width != self._get_absolute_stroke_width(state)
+            self.has_fill_intent
+            and self.fill_color is not None
+            and state["fill_color"] != self.fill_color
         ):
             return False
-        if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
-            return False
-        if self.fill_color is not None and state["fill_color"] != self.fill_color:
-            return False
+
+        if self.has_stroke_intent and target_tr_mode in (1, 2):
+            if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
+                return False
+            if self.stroke_width is not None and state[
+                "stroke_width"
+            ] != self._get_absolute_stroke_width(state):
+                return False
+
         return True
 
     def _force_style_state(self, new_instructions, state):
-        if self.fill_color is not None and state["fill_color"] != self.fill_color:
-            new_instructions.append(self._color_instruction(self.fill_color, "fill"))
-        if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
-            new_instructions.append(self._color_instruction(self.stroke_color, "stroke"))
-        abs_stroke_width = self._get_absolute_stroke_width(state)
-        if self.stroke_width is not None and state["stroke_width"] != abs_stroke_width:
-            logger.debug(
-                "state[stroke_width]=%s, target=%s", state["stroke_width"], abs_stroke_width
-            )
-            new_instructions.append(([abs_stroke_width], "w"))
-        if self.tr_mode is not None and state["render_mode"] != self.tr_mode:
-            new_instructions.append(([self.tr_mode], "Tr"))
+        target_tr_mode = self._get_target_tr_mode(state["render_mode"])
 
-    # -------------------------
-    # instruction transformer
-    # -------------------------
+        if (
+            self.has_fill_intent
+            and self.fill_color is not None
+            and state["fill_color"] != self.fill_color
+        ):
+            new_instructions.append(self._color_instruction(self.fill_color, "fill"))
+
+        if self.has_stroke_intent and target_tr_mode in (1, 2):
+            if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
+                new_instructions.append(self._color_instruction(self.stroke_color, "stroke"))
+
+            abs_stroke_width = self._get_absolute_stroke_width(state)
+            if self.stroke_width is not None and state["stroke_width"] != abs_stroke_width:
+                new_instructions.append(([abs_stroke_width], "w"))
+
+        if state["render_mode"] != target_tr_mode:
+            new_instructions.append(([target_tr_mode], "Tr"))
+
     def _process_instructions(self, instructions):
         new_instructions = []
         stack = []
@@ -453,12 +412,15 @@ class TextStrokeReplaceContentStream:
             self._update_state(state)
 
     def _update_state(self, state):
-        # Update state to reflect what we just injected
-        if self.fill_color is not None:
+        target_tr_mode = self._get_target_tr_mode(state["render_mode"])
+
+        if self.has_fill_intent and self.fill_color is not None:
             state["fill_color"] = list(self.fill_color)
-        if self.stroke_color is not None:
-            state["stroke_color"] = list(self.stroke_color)
-        if self.stroke_width is not None:
-            state["stroke_width"] = self._get_absolute_stroke_width(state)
-        if self.tr_mode is not None:
-            state["render_mode"] = self.tr_mode
+
+        if self.has_stroke_intent and target_tr_mode in (1, 2):
+            if self.stroke_color is not None:
+                state["stroke_color"] = list(self.stroke_color)
+            if self.stroke_width is not None:
+                state["stroke_width"] = self._get_absolute_stroke_width(state)
+
+        state["render_mode"] = target_tr_mode
