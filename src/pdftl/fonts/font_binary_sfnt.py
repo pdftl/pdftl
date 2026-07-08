@@ -361,6 +361,57 @@ def _patch_single_cid_metric(
     return True
 
 
+def _patch_single_cff_native_cid_metric(
+    topdict: Any,
+    hmtx: Any,
+    glyph_order: list,
+    hex_cid: str,
+    pdf_widths: dict[str, float],
+    scale: float,
+    resolve_cff_cid_to_gid: Any,
+) -> bool:
+    """Patches a single CID's advance width for a `cff_native` (CIDFontType0C)
+    font, resolved via the CFF's own ROS/charset mechanism rather than GID."""
+    try:
+        cid = int(hex_cid, 16)
+    except ValueError:
+        return False
+    gid = resolve_cff_cid_to_gid(topdict, cid)
+    if gid is None:
+        return False
+    gname = _resolve_cid_glyph_name(glyph_order, gid)
+    if gname is None:
+        return False
+    try:
+        current_metric = hmtx[gname]
+    except KeyError:
+        return False
+    hmtx[gname] = (int(round(pdf_widths[hex_cid] * scale)), current_metric[1])
+    return True
+
+
+def _patch_cid_metrics_cff_native(
+    tt: Any, hmtx: Any, glyph_order: list, pdf_widths: dict[str, float], scale: float
+) -> bool:
+    """Patches CID-keyed advance widths for a `cff_native` (CIDFontType0C)
+    font -- see _patch_cid_metrics' `cid_to_gid_map == "cff_native"` docstring
+    note for why this resolves CID->GID via the CFF's own ROS/charset
+    mechanism rather than via any /CIDToGIDMap."""
+    if "CFF " not in tt:
+        return False
+    from pdftl.fonts.cff_binary_utils import _resolve_cff_cid_to_gid
+
+    cff = tt["CFF "].cff
+    topdict = cff[cff.fontNames[0]]
+    patched_any = False
+    for hex_cid in pdf_widths:
+        if _patch_single_cff_native_cid_metric(
+            topdict, hmtx, glyph_order, hex_cid, pdf_widths, scale, _resolve_cff_cid_to_gid
+        ):
+            patched_any = True
+    return patched_any
+
+
 def _patch_cid_metrics(
     tt: Any,
     hmtx: Any,
@@ -370,38 +421,15 @@ def _patch_cid_metrics(
 ) -> bool:
     """Patches advance widths for a CID-keyed (Type0/CIDFontType2) font."""
     glyph_order = tt.getGlyphOrder()
-    patched_any = False
 
     if cid_to_gid_map == "cff_native":
         # A CIDFontType0C (CFF-based) CIDFont has no /CIDToGIDMap at all
         # (ISO 32000-2 Table 115 restricts it to Type 2 CIDFonts) --
         # resolve CID -> GID via the CFF's own ROS/charset mechanism
         # instead, matching cff_binary_utils._patch_cid_widths.
-        if "CFF " not in tt:
-            return False
-        from pdftl.fonts.cff_binary_utils import _resolve_cff_cid_to_gid
+        return _patch_cid_metrics_cff_native(tt, hmtx, glyph_order, pdf_widths, scale)
 
-        cff = tt["CFF "].cff
-        topdict = cff[cff.fontNames[0]]
-        for hex_cid in pdf_widths:
-            try:
-                cid = int(hex_cid, 16)
-            except ValueError:
-                continue
-            gid = _resolve_cff_cid_to_gid(topdict, cid)
-            if gid is None:
-                continue
-            gname = _resolve_cid_glyph_name(glyph_order, gid)
-            if gname is None:
-                continue
-            try:
-                current_metric = hmtx[gname]
-            except KeyError:
-                continue
-            hmtx[gname] = (int(round(pdf_widths[hex_cid] * scale)), current_metric[1])
-            patched_any = True
-        return patched_any
-
+    patched_any = False
     for hex_cid in pdf_widths:
         try:
             cid = int(hex_cid, 16)

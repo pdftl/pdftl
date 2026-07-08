@@ -159,6 +159,57 @@ def _rekey_simple_font_widths_if_needed(
     )
 
 
+def _resolve_cid_to_gid_if_type0(
+    font_obj: Any, font_entry: dict, out_dir: Path, is_type0: bool
+) -> tuple[dict[int, int] | str | None, bool]:
+    """
+    Resolves the CID->GID mapping for auto width-sync, only if the font is
+    Type0. Returns (cid_to_gid_map, ok); ok=False means the mapping could
+    not be resolved and a warning has already been logged -- the caller
+    must abort automatic sync for this font entirely (see
+    _resolve_cid_to_gid_for_sync's docstring for why guessing is unsafe).
+    """
+    if not is_type0:
+        return None, True
+
+    cid_to_gid_map = _resolve_cid_to_gid_for_sync(font_obj, font_entry, out_dir)
+    if cid_to_gid_map is None:
+        logger.warning(
+            "Could not resolve CID->GID mapping for %s; skipping automatic width sync.",
+            font_entry.get("base_font", ""),
+        )
+        return None, False
+    return cid_to_gid_map, True
+
+
+def _load_and_rekey_widths_for_sync(
+    filepath: Path,
+    font_entry: dict,
+    cid_to_gid_map: dict[int, int] | str | None,
+    is_type0: bool,
+) -> dict[str, float] | None:
+    """Reads widths from the font's binary and, for non-Type0 formats whose
+    binary has no PDF-code-indexed table of its own (bare CFF / Type 1),
+    rekeys them from glyph-name to hex-PDF-code -- see
+    _rekey_simple_font_widths_if_needed's docstring. Returns None if no
+    widths were read, or if rekeying leaves nothing usable."""
+    widths_map = _fih.get_font_widths_from_file(
+        filepath,
+        cid_to_gid_map=cid_to_gid_map,
+        embedded_format=font_entry.get("embedded_format"),
+        base_font=font_entry.get("base_font", ""),
+    )
+    if not widths_map:
+        return None
+
+    if not is_type0:
+        widths_map = _rekey_simple_font_widths_if_needed(widths_map, font_entry)
+        if not widths_map:
+            return None
+
+    return widths_map
+
+
 def _auto_sync_widths_from_font(font_obj: Any, font_entry: dict, out_dir: Path, pikepdf) -> bool:
     """Loads the manually modified font using fontTools and auto-syncs widths to the PDF."""
     try:
@@ -179,33 +230,16 @@ def _auto_sync_widths_from_font(font_obj: Any, font_entry: dict, out_dir: Path, 
         return False
 
     is_type0 = hasattr(font_obj, "get") and str(font_obj.get("/Subtype", "")) == "/Type0"
-    cid_to_gid_map = None
-    if is_type0:
-        cid_to_gid_map = _resolve_cid_to_gid_for_sync(font_obj, font_entry, out_dir)
-        if cid_to_gid_map is None:
-            logger.warning(
-                "Could not resolve CID->GID mapping for %s; skipping automatic width sync.",
-                font_entry.get("base_font", ""),
-            )
-            return False
-
-    embedded_format = font_entry.get("embedded_format")
-    base_font = font_entry.get("base_font", "")
+    cid_to_gid_map, ok = _resolve_cid_to_gid_if_type0(font_obj, font_entry, out_dir, is_type0)
+    if not ok:
+        return False
 
     try:
-        widths_map = _fih.get_font_widths_from_file(
-            filepath,
-            cid_to_gid_map=cid_to_gid_map,
-            embedded_format=embedded_format,
-            base_font=base_font,
+        widths_map = _load_and_rekey_widths_for_sync(
+            filepath, font_entry, cid_to_gid_map, is_type0
         )
         if not widths_map:
             return False
-
-        if not is_type0:
-            widths_map = _rekey_simple_font_widths_if_needed(widths_map, font_entry)
-            if not widths_map:
-                return False
 
         _fih.update_font_widths(font_obj, widths_map, pikepdf)
         logger.info(
