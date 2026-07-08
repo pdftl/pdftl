@@ -6,11 +6,12 @@
 
 """Main CLI entry point and helper methods"""
 
-import difflib
 import logging
 import os
 import sys
 
+from pdftl.cli.args_loader import expand_args
+from pdftl.cli.completion_setup import completion_setup
 from pdftl.cli.constants import (
     COMPLETION_FLAGS,
     DEBUG_FLAGS,
@@ -18,6 +19,15 @@ from pdftl.cli.constants import (
     VERBOSE_FLAGS,
     VERSION_FLAGS,
 )
+from pdftl.cli.help import (
+    TAG_PREFIX,
+    find_image_mod_topic_command,
+    find_operator_topic_command,
+    find_option_topic_command,
+    find_special_topic_command,
+    print_help,
+)
+from pdftl.cli.help_version import print_version
 from pdftl.cli.parser import (
     parse_cli_stage,
     parse_options_and_specs,
@@ -26,7 +36,7 @@ from pdftl.cli.parser import (
 from pdftl.cli.pipeline import PipelineManager
 from pdftl.cli.whoami import ISSUES, WHOAMI
 from pdftl.core.registry import register_option
-from pdftl.exceptions import OperationError, PackageError, UserCommandLineError, PdftlOutputError
+from pdftl.exceptions import OperationError, PackageError, PdftlOutputError, UserCommandLineError
 from pdftl.registry_init import initialize_registry
 from pdftl.utils.user_input import UserInputContext, get_input
 
@@ -38,18 +48,63 @@ def _verbose_option():
     pass
 
 
+def _setup_logging(cli_args):
+    """Configure standard logging levels and handlers early based on flags."""
+    debug = any(arg in DEBUG_FLAGS for arg in cli_args)
+    verbose = debug or any(arg in VERBOSE_FLAGS for arg in cli_args)
+    level = logging.DEBUG if debug else logging.INFO if verbose else logging.WARN
+
+    if debug:
+        log_format = "[%(levelname)s]%(filename)s:%(funcName)s:%(lineno)d: %(message)s"
+    else:
+        log_format = f"[{WHOAMI}] %(message)s"
+
+    # Only configure basicConfig if no handlers exist. This prevents duplicate
+    # formatting in production and respects pytest's captured log handlers in testing.
+    if not logging.getLogger().hasHandlers():
+        if debug:
+            from rich.logging import RichHandler
+
+            logging.basicConfig(level=logging.WARN, format=log_format, handlers=[RichHandler()])
+        else:
+            logging.basicConfig(level=logging.WARN, format=log_format)
+
+    # Allow logs to propagate naturally to the root logger where they are handled
+    logging.getLogger("pdftl").setLevel(level)
+
+
 def main(argv=None):
     """Main entry point for the command-line interface."""
     if argv is None:
         argv = sys.argv
 
+    raw_args = argv[1:]
+
+    # Configure logging early based on raw arguments so parser and pre-processor
+    # logs (such as recursive expansions) are visible.
+    _setup_logging(raw_args)
+
     try:
-        found_flags, args_for_parsing = _get_flags_and_setup_logging(argv[1:])
-    except UserCommandLineError as e:
-        return _handle_error_from_main(e, False)
+        expansions = []
+        expanded_args = expand_args(raw_args, expansions=expansions)
+        found_flags, args_for_parsing = _get_flags_and_setup_logging(expanded_args)
+
+        if expansions:
+            for item in expansions:
+                logger.info("Successfully loaded arguments from: %s", item)
+
+        if "--args" in raw_args:
+            import shlex
+
+            expanded_cmd = " ".join(shlex.quote(arg) for arg in expanded_args)
+            logger.info("Expanded command line: %s %s", WHOAMI, expanded_cmd)
+
+    except (UserCommandLineError, PackageError) as e:
+        debug = any(arg in DEBUG_FLAGS for arg in raw_args)
+        return _handle_error_from_main(e, debug)
 
     initialize_registry()
-    if (ret := _handle_special_flags(argv[1:])) is not None:
+    if (ret := _handle_special_flags(expanded_args)) is not None:
         return ret
 
     if not args_for_parsing:
@@ -121,6 +176,8 @@ def _handle_error_from_main(e, debug):
 
 
 def _prepare_pipeline_from_remaining_args(args_for_parsing):
+    import getpass
+
     logger.debug("args_for_parsing=%s", args_for_parsing)
     stages_args = split_args_by_separator(args_for_parsing)
     logger.debug("stages_args=%s", stages_args)
@@ -146,8 +203,6 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
             "No pipeline stages found.\n Did you forget an operation?  Hint: pdftl help operations"
         )
 
-    import getpass
-
     input_context = UserInputContext(get_input=get_input, get_pass=getpass.getpass)
     # We no longer pass global_options; all options are encapsulated within their specific stages.
     return PipelineManager(parsed_stages, input_context)
@@ -155,8 +210,6 @@ def _prepare_pipeline_from_remaining_args(args_for_parsing):
 
 def _print_help_and_chill(command, raw=False):
     """Prints the relevant help topic and exits the program."""
-    from pdftl.cli.help import print_help
-
     print_help(command=command, dest=sys.stdout, raw=raw)
     return 0
 
@@ -166,14 +219,6 @@ def _find_help_command(cli_args):
     Determines the specific help command based on CLI arguments.
     It searches topics in a specific order: special, operator, then option.
     """
-    from pdftl.cli.help import (
-        TAG_PREFIX,
-        find_operator_topic_command,
-        find_option_topic_command,
-        find_special_topic_command,
-        find_image_mod_topic_command,
-    )
-
     tag_queries = [arg for arg in cli_args if arg.startswith(TAG_PREFIX)]
     help_topics = [arg for arg in cli_args if arg not in HELP_FLAGS]
     first_topic = help_topics[0].lower() if help_topics else None
@@ -190,9 +235,7 @@ def _find_help_command(cli_args):
 
 
 def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
-    """Initializes the root logger based on quiet and/or verbose
-    flags. Returns the verbose flag and a list of remaining
-    arguments, with all verbose flags removed."""
+    """Initializes standard logging and filters flags."""
     found_flags = set()
 
     debug = any(arg in DEBUG_FLAGS for arg in cli_args)
@@ -201,24 +244,11 @@ def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
     verbose = debug or any(arg in VERBOSE_FLAGS for arg in cli_args)
     if verbose:
         found_flags.add("verbose")
-    level = logging.DEBUG if debug else logging.INFO if verbose else logging.WARN
 
-    # Use a simpler format for info, detailed format for debug
-    if debug:
-        log_format = "[%(levelname)s]%(filename)s:%(funcName)s:%(lineno)d: %(message)s"
-    else:
-        log_format = f"[{WHOAMI}] %(message)s"
+    # Re-apply standard logging configuration in case arguments loaded from files
+    # changed the debug or verbose level post-initialization.
+    _setup_logging(cli_args)
 
-    # Configure the root logger and the pdftl-specific loggers
-    if debug:
-        from rich.logging import RichHandler
-
-        logging.basicConfig(format=log_format, handlers=[RichHandler()])
-    else:
-        # avoid importing rich.logging this way
-        logging.basicConfig(format=log_format)
-
-    logging.getLogger("pdftl").setLevel(level)
     flags_to_remove = VERBOSE_FLAGS.union(DEBUG_FLAGS)
     remaining_args = [x for x in cli_args if x not in flags_to_remove]
     _check_remaining_args_or_raise(remaining_args)
@@ -226,6 +256,8 @@ def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
 
 
 def _check_remaining_args_or_raise(remaining_args):
+    import difflib
+
     all_known_flaglike = DEBUG_FLAGS.union(
         COMPLETION_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS, {"-", "---"}
     )
@@ -245,8 +277,6 @@ def _handle_special_flags(nonverbose_cli_args):
     And also --completion
     """
     if any(arg in VERSION_FLAGS for arg in nonverbose_cli_args):
-        from pdftl.cli.help_version import print_version
-
         print_version()
         return 0
 
@@ -269,8 +299,6 @@ def _handle_special_flags(nonverbose_cli_args):
 
 def _handle_completion_arg(shell):
     try:
-        from pdftl.cli.completion_setup import completion_setup
-
         return completion_setup(shell)
     except NotImplementedError as e:
         print(f"Error: {e}", file=sys.stderr)

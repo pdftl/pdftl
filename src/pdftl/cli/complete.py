@@ -13,7 +13,7 @@ import pickle
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "8"
+GRAMMAR_VERSION = "9"
 
 HARDCODED_KEYWORDS = {
     "EACH",
@@ -336,6 +336,7 @@ def resolve_candidates(allowed_tokens, parser):
         "COMP_PWSH": "powershell",
         "VERSION_FLAG": "--version",
         "DEBUG_FLAG": "--debug",
+        "ARGS_FLAG": "--args",
     }
 
     terminal_lookup = None

@@ -38,3 +38,47 @@ def test_file_triggers():
 
     assert "__PDF_FILE__" in candidates
     assert "help" in candidates
+
+
+def test_args_flag_offered_at_start():
+    """--args should be a candidate at the very beginning of a command."""
+    from pdftl.cli.complete import rebuild_cache, resolve_candidates
+
+    parser = rebuild_cache()
+
+    try:
+        parser.parse("\x01")
+    except Exception as e:
+        allowed = getattr(e, "allowed", getattr(e, "expected", set()))
+        candidates = resolve_candidates(allowed, parser)
+        assert "--args" in candidates
+
+
+def test_file_path_offered_after_args_flag():
+    """After '--args ', only __FILE__ should be offered (no keywords, no __PDF_FILE__)."""
+    from pdftl.cli.complete import rebuild_cache, resolve_candidates
+    from lark.exceptions import UnexpectedCharacters, UnexpectedToken, UnexpectedEOF
+
+    parser = rebuild_cache()
+
+    try:
+        parser.parse("--args \x01")
+        assert False, "expected a parse error"
+    except (UnexpectedCharacters, UnexpectedToken, UnexpectedEOF) as e:
+        allowed = getattr(e, "allowed", getattr(e, "expected", set()))
+        candidates = resolve_candidates(allowed, parser)
+        assert candidates == {"__FILE__"}
+
+
+def test_args_flag_not_offered_mid_input_section():
+    from pdftl.cli.complete import rebuild_cache, resolve_candidates
+
+    parser = rebuild_cache()
+
+    try:
+        parser.parse("t.pdf \x01")
+    except Exception as e:
+        allowed = getattr(e, "allowed", getattr(e, "expected", set()))
+        candidates = resolve_candidates(allowed, parser)
+        assert "__PDF_FILE__" in candidates
+        assert "--args" not in candidates  # global_flag unreachable before any option

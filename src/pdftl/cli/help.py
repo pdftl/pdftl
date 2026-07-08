@@ -380,6 +380,7 @@ def _print_help_core(command=None, dest=None, raw=False):
             "page_specs",
             "pipeline",
             "shell_completion",
+            "args",
             "help",
         ]
         _print_multiple_topics(all_topics, hprint, dest, raw)

@@ -353,3 +353,17 @@ def test_script_modification_takes_precedence_in_cache_checks():
             pdb.set_trace()
 
         assert result is True
+
+
+def test_resolve_candidates_includes_args_flag_literal():
+    """Regression: ARGS_FLAG must resolve to the literal '--args' string."""
+    mock_parser = MagicMock()
+    candidates = resolve_candidates({"ARGS_FLAG"}, mock_parser)
+    assert "--args" in candidates
+
+
+def test_resolve_candidates_args_flag_and_file_path_together():
+    """Simulate the state just after '--args' is typed: only FILE_PATH should be offered."""
+    mock_parser = MagicMock()
+    candidates = resolve_candidates({"FILE_PATH"}, mock_parser)
+    assert candidates == {"__FILE__"}

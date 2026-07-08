@@ -13,7 +13,7 @@ from pdftl.registry_init import initialize_registry
 
 # ============================== IMPORTANT ====================================
 # bump this if grammar output changes, both here and in src/pdf/cli/complete.py
-GRAMMAR_VERSION = "8"
+GRAMMAR_VERSION = "9"
 # =============================================================================
 
 
@@ -101,8 +101,9 @@ class GrammarBuilder:
 
             help_cmd: HELP_KW | HELP_FLAG
             help_topic: HELP_SUB_KW | operation | CHAIN_SEP
-            global_flag: comp_cmd | VERSION_FLAG | DEBUG_FLAG
+            global_flag: comp_cmd | VERSION_FLAG | DEBUG_FLAG | args_flag
             !comp_cmd: COMP_FLAG (COMP_BASH | COMP_ZSH | COMP_PWSH)
+            !args_flag: ARGS_FLAG FILE_PATH
 
             COMP_FLAG.10: "--completion"
             COMP_BASH: "bash"
@@ -113,6 +114,7 @@ class GrammarBuilder:
             HELP_FLAG.10: "--help"
             VERSION_FLAG.10: "--version"
             DEBUG_FLAG.10: "--debug"
+            ARGS_FLAG.10: "--args"
             HELP_SUB_KW.10: {help_topics_str}
 
             # --- PIPELINE STRUCTURE ---

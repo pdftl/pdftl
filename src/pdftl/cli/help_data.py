@@ -29,6 +29,7 @@ Core dependencies:
 SYNOPSIS_TEMPLATE = """
 {whoami} <input>... <operation> [<option...>]
 {whoami} <input>... <operation> [<option...>] --- [<input>...] <operation>... [<option...>] ...
+{whoami} --args <file.yml>
 {whoami} help [<operation> | <option>]
 {whoami} help [{special_help_topics}]
 {whoami} --completion  (bash | zsh | powershell)
@@ -45,6 +46,15 @@ SYNOPSIS_TEMPLATE = """
 SPECIAL_HELP_TOPICS_MAP = OrderedDict(
     [
         (("help", "--help"), "help"),
+        (
+            (
+                "args",
+                "--args",
+                "arguments",
+                "loading arguments",
+            ),
+            "args",
+        ),
         (
             (
                 "sign",

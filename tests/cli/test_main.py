@@ -1,6 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # tests/cli/test_main.py
 
 import io
+import logging
 import os
 import sys
 import types
@@ -8,8 +13,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.cli import help as helpmod
-from pdftl.cli import help_version as helpvermod
 from pdftl.cli import main as mainmod
 from pdftl.cli.constants import DEBUG_FLAGS, HELP_FLAGS, VERBOSE_FLAGS, VERSION_FLAGS
 from pdftl.cli.main import _prepare_pipeline_from_remaining_args, _verbose_option
@@ -18,42 +21,49 @@ from pdftl.exceptions import OperationError, UserCommandLineError
 
 
 @pytest.fixture(autouse=True)
-def patch_main_help_functions(monkeypatch):
-    """Patch the functions actually used by main.py."""
-    monkeypatch.setattr("pdftl.cli.help.print_help", MagicMock())
-    monkeypatch.setattr("pdftl.cli.help_version.print_version", MagicMock())
-    monkeypatch.setattr(
-        "pdftl.cli.help.find_special_topic_command",
-        lambda x: "special" if x == "special" else None,
-    )
-    monkeypatch.setattr(
-        "pdftl.cli.help.find_operator_topic_command",
-        lambda x: "operator" if "op" in x else None,
-    )
-    monkeypatch.setattr(
-        "pdftl.cli.help.find_option_topic_command",
-        lambda x: "option" if "opt" in x else None,
-    )
+def _isolate_logging_state():
+    """Prevent tests that call real main()/_setup_logging() from leaking
+    root logger handlers or the 'pdftl' logger's level into other tests.
+    Without this, test order can silently change which tests pass/fail."""
+    root_logger = logging.getLogger()
+    pdftl_logger = logging.getLogger("pdftl")
+    original_handlers = list(root_logger.handlers)
+    original_root_level = root_logger.level
+    original_pdftl_level = pdftl_logger.level
+    try:
+        yield
+    finally:
+        root_logger.handlers.clear()
+        for h in original_handlers:
+            root_logger.addHandler(h)
+        root_logger.setLevel(original_root_level)
+        pdftl_logger.setLevel(original_pdftl_level)
 
 
 @pytest.fixture(autouse=True)
 def patch_help_functions(monkeypatch):
     """Patch help functions so print_help/print_version can be monitored."""
-    monkeypatch.setattr(helpmod, "print_help", MagicMock())
-    monkeypatch.setattr(helpvermod, "print_version", MagicMock())
-    # Patch find_* functions to simple return values for testing _find_help_command
+    monkeypatch.setattr(mainmod, "print_help", MagicMock())
+    monkeypatch.setattr(mainmod, "print_version", MagicMock())
     monkeypatch.setattr(
-        helpmod,
+        mainmod,
         "find_special_topic_command",
         lambda x: "special" if x == "special" else None,
     )
     monkeypatch.setattr(
-        helpmod,
+        mainmod,
         "find_operator_topic_command",
-        lambda x: "operator" if "op" in x else None,
+        lambda x: "operator" if x and "op" in x else None,
     )
     monkeypatch.setattr(
-        helpmod, "find_option_topic_command", lambda x: "option" if "opt" in x else None
+        mainmod,
+        "find_option_topic_command",
+        lambda x: "option" if x and "opt" in x else None,
+    )
+    monkeypatch.setattr(
+        mainmod,
+        "find_image_mod_topic_command",
+        lambda x: "image_mod" if x and "mod" in x else None,
     )
 
 
@@ -61,6 +71,29 @@ class StopExecution(Exception):
     """Custom exception to halt execution post-mock-call."""
 
     pass
+
+
+def test_setup_logging_no_handlers_debug_and_normal():
+    """Covers early logging execution fallback blocks where root logger has no handlers."""
+    from pdftl.cli.main import _setup_logging
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+
+    with patch("logging.basicConfig") as mock_basic:
+        _setup_logging(["--debug"])
+        mock_basic.assert_called_once()
+        # Verify RichHandler was passed
+        call_args = mock_basic.call_args[1]
+        assert "handlers" in call_args
+
+    root_logger.handlers.clear()
+
+    with patch("logging.basicConfig") as mock_basic:
+        _setup_logging([])
+        mock_basic.assert_called_once()
+        call_args = mock_basic.call_args[1]
+        assert "handlers" not in call_args
 
 
 def test_find_help_command_order():
@@ -90,18 +123,18 @@ def test_handle_special_flags_calls(monkeypatch):
 
     # 1. Version flag triggers print_version and STILL exits (based on your diff not changing that block)
     mainmod._handle_special_flags(list(VERSION_FLAGS))
-    helpvermod.print_version.assert_called_once()
+    mainmod.print_version.assert_called_once()
     fake_sys.exit.assert_not_called()
 
     # Reset mocks
-    helpvermod.print_version.reset_mock()
-    helpmod.print_help.reset_mock()
+    mainmod.print_version.reset_mock()
+    mainmod.print_help.reset_mock()
     fake_sys.exit.reset_mock()
 
     # 2. Help flag triggers print_help and RETURNS 0 (Changed behavior)
     ret_code = mainmod._handle_special_flags(list(HELP_FLAGS))
 
-    helpmod.print_help.assert_called_once()
+    mainmod.print_help.assert_called_once()
     assert ret_code == 0
     fake_sys.exit.assert_not_called()
 
@@ -112,7 +145,7 @@ def test_print_help_returns_zero(monkeypatch):
 
     ret_code = mainmod._print_help_and_chill("somecmd")
 
-    helpmod.print_help.assert_called_once_with(
+    mainmod.print_help.assert_called_once_with(
         command="somecmd",
         dest=fake_sys.stdout,
         raw=False,
@@ -227,7 +260,7 @@ def test_main_as_script():
 
 
 def test_main_execution_block():
-    """Triggers line 180: The __main__ block (via manual import/execution)."""
+    """Triggers the __main__ block (via manual import/execution)."""
     with patch("pdftl.cli.main.main"):
         # This simulates the behavior of running the script directly
         # We can't easily trigger the actual __name__ check without a subprocess,
@@ -237,7 +270,7 @@ def test_main_execution_block():
 
 
 def test_prepare_pipeline_no_stages(monkeypatch):
-    """Triggers line 86: No pipeline stages found."""
+    """No pipeline stages found."""
     # 1. Capture stderr so it doesn't leak to the console
     fake_stderr = io.StringIO()
     fake_sys = types.SimpleNamespace(argv=["pdftl", "input.pdf"], stderr=fake_stderr)
@@ -257,7 +290,7 @@ def test_prepare_pipeline_no_stages(monkeypatch):
 
 
 def test_main_debug_reraise():
-    """Hits line 52 by ensuring debug is in found_flags when an error occurs."""
+    """Ensures debug is in found_flags when an error occurs."""
     from pdftl.cli.main import main
 
     # Mocking _prepare_pipeline to raise an error
@@ -270,7 +303,7 @@ def test_main_debug_reraise():
 
 
 def test_main_uses_sys_argv_if_none_provided():
-    """Hits line 37 by calling main() without arguments."""
+    """Calling main() without arguments."""
     with patch.object(sys, "argv", ["pdftl", "--help"]):
         # Add side_effect=SystemExit here
         with patch("pdftl.cli.main._handle_special_flags", side_effect=SystemExit) as mock_special:
@@ -285,7 +318,7 @@ def test_main_uses_sys_argv_if_none_provided():
 
 def test_main_special_flags_returns_early(mocker):
     """
-    Covers line 42: if (ret := _handle_special_flags(argv[1:])) is not None: return ret
+    if (ret := _handle_special_flags(argv[1:])) is not None: return ret
     """
     # Mock sys.argv to simulate a help command
     mocker.patch.object(sys, "argv", ["pdftl", "help"])
@@ -303,7 +336,7 @@ def test_main_special_flags_returns_early(mocker):
 
 def test_main_operation_error_exit_code(mocker, capfd):
     """
-    Covers line 59: if isinstance(e, OperationError): return 3
+    if isinstance(e, OperationError): return 3
     """
     # Mock sys.argv with valid args to get past flag checks
     mocker.patch.object(sys, "argv", ["pdftl", "input.pdf", "rotate", "90"])
@@ -337,24 +370,26 @@ def test_main_operation_error_exit_code(mocker, capfd):
 
 
 def test_cli_handles_completion_flag():
-    # Test --completion without shell (should show help)
-    with patch("sys.stdout", new_callable=io.StringIO):
-        cli_main(["--completion"])
+    # Test --completion without shell
+    with patch("pdftl.cli.main.completion_setup") as mock_setup:
+        mock_setup.return_value = 0
+        cli_main(["pdftl", "--completion"])
+        mock_setup.assert_called_once_with(None)
 
     # Test --completion=bash
-    with patch("pdftl.cli.completion_setup.completion_setup") as mock_setup:
+    with patch("pdftl.cli.main.completion_setup") as mock_setup:
         # Mocking the return value is crucial for main()'s logic
         mock_setup.return_value = 0
 
         # ACT
-        cli_main(["pdftl.exe", "--completion", "bash"])
+        cli_main(["pdftl", "--completion", "bash"])
 
         # ASSERT
         assert mock_setup.called, "The mock was never called!"
         mock_setup.assert_called_once_with("bash")
 
 
-def test_main_completion_auto_detect_success():
+def test_main_completion_auto_detect_success(capsys):
     """Targets: Bare --completion without shell, successful auto-detection."""
     # Mock the infer logic to simulate finding a shell, and mock the script output
     with (
@@ -369,6 +404,10 @@ def test_main_completion_auto_detect_success():
 
         # ASSERT: It should succeed and return 0
         assert result == 0
+
+        # Intercept output to keep test logs pristine
+        captured = capsys.readouterr()
+        assert "echo 'bash code'" in captured.out
 
 
 def test_main_completion_auto_detect_failure(capsys):
@@ -386,20 +425,27 @@ def test_main_completion_auto_detect_failure(capsys):
         assert "Please specify it explicitly" in captured.err
 
 
-def test_main_completion_not_implemented():
-    """Targets lines 204-206: Handling unsupported shells."""
-    with patch("sys.stderr", new_callable=io.StringIO) as mock_err:
-        # ACT: Call main with the unsupported shell
-        result = cli_main(["pdftl", "--completion", "fish"])
+def test_main_completion_not_implemented_error(monkeypatch):
+    """Verifies that a NotImplementedError from completion_setup is cleanly handled."""
+    from pdftl.cli.main import main
 
-        assert result == 1
-        assert "Error: Shell completion for 'fish' is not available" in mock_err.getvalue()
+    monkeypatch.setattr(
+        "pdftl.cli.main.completion_setup",
+        MagicMock(side_effect=NotImplementedError("Shell not supported")),
+    )
+
+    fake_sys = types.SimpleNamespace(exit=MagicMock(), stderr=io.StringIO())
+    monkeypatch.setattr(mainmod, "sys", fake_sys)
+
+    ret = main(["pdftl", "--completion", "fish"])
+    assert ret == 1
+    assert "Error: Shell not supported" in fake_sys.stderr.getvalue()
 
 
 def test_main_success_return_zero():
     """Targets line 49: Successful execution returns 0."""
     # We mock PipelineManager to prevent it from actually running a real pipeline
-    # We patch it in pdftl.cli.main where it is imported/used
+    # We patch it where it is imported in the source code
     with patch("pdftl.cli.main.PipelineManager") as mock_manager:
         # Configure the mock to return an object that has a run() method
         mock_instance = mock_manager.return_value
@@ -410,16 +456,17 @@ def test_main_success_return_zero():
         # (Assuming 'info' is a registered operation)
         with patch("pdftl.cli.main.parse_options_and_specs", return_value=([], {})):
             with patch("pdftl.cli.main.parse_cli_stage", return_value=MagicMock()):
-                # ACT: Provide an argument that passes through to _prepare_pipeline
-                result = cli_main(["pdftl", "info"])
+                with patch("pdftl.cli.main._validate_inputs_exist"):
+                    # ACT: Provide an argument that passes through to _prepare_pipeline
+                    result = cli_main(["pdftl", "info"])
 
-                # ASSERT
-                assert result == 0
-                assert mock_instance.run.called
+                    # ASSERT
+                    assert result == 0
+                    assert mock_instance.run.called
 
 
 def test_main_handles_error_before_registry_init(capsys):
-    """Lines 47-48: UserCommandLineError from _get_flags_and_setup_logging is handled."""
+    """UserCommandLineError from _get_flags_and_setup_logging is handled."""
     from pdftl.cli.main import main
 
     result = main(["pdftl", "--hlp"])
@@ -429,8 +476,95 @@ def test_main_handles_error_before_registry_init(capsys):
     assert "Did you mean '--help'" in captured.err
 
 
+def test_main_package_error_returns_cleanly(monkeypatch):
+    """Verifies that dependency errors during argument expansion trigger a clean failure."""
+    from pdftl.exceptions import InvalidArgumentError
+
+    monkeypatch.setattr(
+        mainmod,
+        "expand_args",
+        MagicMock(side_effect=InvalidArgumentError("Missing PyYAML dependency")),
+    )
+    fake_sys = types.SimpleNamespace(exit=MagicMock(), stderr=io.StringIO())
+    monkeypatch.setattr(mainmod, "sys", fake_sys)
+
+    ret_code = mainmod.main(["pdftl", "--args", "foo.yml"])
+    assert ret_code == 1
+    assert "Missing PyYAML dependency" in fake_sys.stderr.getvalue()
+
+
+def test_main_logs_expanded_args(monkeypatch, caplog):
+    """Verifies that the expanded arguments are correctly logged."""
+    verbose_flag = next(iter(VERBOSE_FLAGS))
+
+    monkeypatch.setattr(mainmod, "expand_args", lambda args, **kwargs: ["--help"])
+    monkeypatch.setattr(mainmod, "_get_flags_and_setup_logging", lambda args: (set(), ["--help"]))
+    monkeypatch.setattr(mainmod, "_handle_special_flags", lambda args: 0)
+
+    # Need a real verbose flag in raw sys.argv to enable INFO-level captures
+    fake_sys = types.SimpleNamespace(
+        exit=MagicMock(), argv=["pdftl", "--args", "foo.yml", verbose_flag]
+    )
+    monkeypatch.setattr(mainmod, "sys", fake_sys)
+
+    with caplog.at_level(logging.INFO, logger="pdftl"):
+        cli_main(fake_sys.argv)
+
+    assert "Expanded command line:" in caplog.text
+    assert "--help" in caplog.text
+
+
+def test_main_logs_each_argument_file(monkeypatch, caplog):
+    """Verifies that every loaded argument file is logged sequentially."""
+    verbose_flag = next(iter(VERBOSE_FLAGS))
+
+    # Real expand_args logic with a dummy mock for load_yaml_args
+    monkeypatch.setattr("pdftl.cli.args_loader.load_yaml_args", lambda path: ["--help"])
+    monkeypatch.setattr(mainmod, "_get_flags_and_setup_logging", lambda args: (set(), ["--help"]))
+    monkeypatch.setattr(mainmod, "_handle_special_flags", lambda args: 0)
+
+    fake_sys = types.SimpleNamespace(
+        exit=MagicMock(), argv=["pdftl", "--args", "foo.yml", verbose_flag]
+    )
+    monkeypatch.setattr(mainmod, "sys", fake_sys)
+
+    with caplog.at_level(logging.INFO, logger="pdftl"):
+        cli_main(fake_sys.argv)
+
+    assert "Successfully loaded arguments from: foo.yml" in caplog.text
+    assert "Expanded command line:" in caplog.text
+
+
+def test_main_logs_nested_argument_files(monkeypatch, caplog):
+    """Verifies that nested argument files log sequentially."""
+    verbose_flag = next(iter(VERBOSE_FLAGS))
+
+    # Mock expand_args to return nested expansions
+    monkeypatch.setattr(
+        mainmod,
+        "expand_args",
+        lambda args, expansions=None: (
+            expansions.extend(["parent.yml", "child.yml"]) if expansions is not None else None
+        )
+        or ["--help"],
+    )
+    monkeypatch.setattr(mainmod, "_get_flags_and_setup_logging", lambda args: (set(), ["--help"]))
+    monkeypatch.setattr(mainmod, "_handle_special_flags", lambda args: 0)
+
+    fake_sys = types.SimpleNamespace(
+        exit=MagicMock(), argv=["pdftl", "--args", "parent.yml", verbose_flag]
+    )
+    monkeypatch.setattr(mainmod, "sys", fake_sys)
+
+    with caplog.at_level(logging.INFO, logger="pdftl"):
+        cli_main(fake_sys.argv)
+
+    assert "Successfully loaded arguments from: parent.yml" in caplog.text
+    assert "Successfully loaded arguments from: child.yml" in caplog.text
+
+
 def test_check_remaining_args_unknown_flag_no_match():
-    """Lines 195-200: Unknown flag with no close match raises UserCommandLineError."""
+    """Unknown flag with no close match raises UserCommandLineError."""
     from pdftl.cli.main import _check_remaining_args_or_raise
     from pdftl.exceptions import UserCommandLineError
 
@@ -439,7 +573,7 @@ def test_check_remaining_args_unknown_flag_no_match():
 
 
 def test_check_remaining_args_unknown_flag_with_suggestion():
-    """Lines 195-200: Unknown flag with close match suggests correction."""
+    """Unknown flag with close match suggests correction."""
     from pdftl.cli.main import _check_remaining_args_or_raise
     from pdftl.exceptions import UserCommandLineError
 
@@ -448,7 +582,7 @@ def test_check_remaining_args_unknown_flag_with_suggestion():
 
 
 def test_check_remaining_args_known_flags_pass():
-    """Lines 195-200: Known flags do not raise."""
+    """Known flags do not raise."""
     from pdftl.cli.main import _check_remaining_args_or_raise
 
     # Should not raise
@@ -456,7 +590,7 @@ def test_check_remaining_args_known_flags_pass():
 
 
 def test_check_remaining_args_non_flag_args_ignored():
-    """Lines 195-200: Non-flag args (filenames etc) are not checked."""
+    """Non-flag args (filenames etc) are not checked."""
     from pdftl.cli.main import _check_remaining_args_or_raise
 
     # Should not raise - these don't start with --
@@ -521,11 +655,16 @@ def test_main_integration_broken_pipe(tmp_path):
     # Pass real arguments so main() executes all setup and validation blocks naturally
     test_args = ["pdftl", "cat", str(dummy_pdf), "output", "-"]
 
+    # By mocking the sys.stdout object entirely, this test guarantees
+    # cross-platform Windows compatibility (and pytest-xdist safety).
+    mock_stdout = MagicMock()
+    mock_stdout.fileno.return_value = 1
+
     with (
         patch("pdftl.cli.pipeline.PipelineManager.run") as mock_run,
         patch("os.open", return_value=999) as mock_os_open,
         patch("os.dup2") as mock_os_dup2,
-        patch("sys.stdout.fileno", return_value=1),
+        patch("sys.stdout", mock_stdout),
     ):
         # Force the actual pipeline to throw the error
         mock_run.side_effect = BrokenPipeError

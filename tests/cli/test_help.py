@@ -1,3 +1,9 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# tests/cli/test_help.py
+
 import builtins
 import importlib
 import importlib.metadata
@@ -51,6 +57,7 @@ def patch_environment(monkeypatch, tmp_path):
                 "encrypt_aes256": {"desc": "AES256", "type": "flag"},
             }
             self.help_topics = {"foo": MagicMock()}
+            self.image_modifiers = {"test_mod": {}}
 
         def __getitem__(self, key):
             if key in ("operations", "options"):
@@ -230,6 +237,12 @@ def test_find_option_topic_command(patch_environment):
     assert helpmod.find_option_topic_command(["output"]) == "output"
 
 
+def test_find_image_mod_topic_command(patch_environment):
+    assert helpmod.find_image_mod_topic_command(["mod:test_mod"]) == "test_mod"
+    assert helpmod.find_image_mod_topic_command(["test_mod"]) == "test_mod"
+    assert helpmod.find_image_mod_topic_command(["unknown"]) is None
+
+
 ##################################################
 
 
@@ -378,9 +391,7 @@ class TestHelpLogicEdgeCases(unittest.TestCase):
         logging.getLogger("markdown_it").setLevel(logging.WARNING)
 
     def test_format_examples_grouping(self):
-        """
-        Covers line 115: Multiple examples for the same topic.
-        """
+        """Verifies multiple examples for the same topic are grouped sequentially."""
         examples = [
             HelpExample(topic="foo", desc="d1", cmd="c1"),
             HelpExample(topic="foo", desc="d2", cmd="c2"),
@@ -394,14 +405,14 @@ class TestHelpLogicEdgeCases(unittest.TestCase):
         self.assertIn("Example for '`bar`'", output)  # Resets for new topic
 
     def test_print_topic_help_caller_source(self):
-        """Covers line 166: Printing the 'Source: ...' line."""
+        """Verifies the caller source module is printed when available."""
         mock_hprint = MagicMock()
         topic_data = {"desc": "Test desc", "caller": "my_plugin_module"}
         helpmod._print_topic_help(mock_hprint, topic_data, "test_topic")
         mock_hprint.assert_any_call("\n*Source: my_plugin_module*")
 
     def test_find_special_topic_none(self):
-        """Covers line 372: Early exit when topic is None."""
+        """Verifies searching for a None topic safely returns None."""
         self.assertIsNone(helpmod.find_special_topic_command(None))
 
 
@@ -411,9 +422,7 @@ class TestHelpRichRendering(unittest.TestCase):
         logging.getLogger("markdown_it").setLevel(logging.WARNING)
 
     def test_render_to_file_triggers_rich_logic(self):
-        """
-        Covers 313-316 (File console) and 260-300 (Rich objects).
-        """
+        """Verifies rendering help to a file creates a specific Console and outputs Rich formatting."""
         buffer = io.StringIO()
         # This will now pass if you applied the 'from rich.console import Console' fix
         helpmod.print_help(command=None, dest=buffer, raw=False)
@@ -427,7 +436,7 @@ class TestHelpRichRendering(unittest.TestCase):
 
     @patch("pdftl.cli.help.get_console")
     def test_rich_object_internals(self, mock_get_console):
-        """Covers 310, 297, 293-294."""
+        """Verifies the internal Rich formatting constructs panels safely."""
         mock_console_instance = MagicMock()
         mock_get_console.return_value = mock_console_instance
 
@@ -471,6 +480,12 @@ def test_print_help_recursion_depth(monkeypatch, mock_tty):
 
 
 def test_help_help_topic_execution():
-    """Covers the pass statement in the dummy docstring function."""
-    # It does nothing, but calling it hits line 449
+    """Verifies the help docstring function executes without error."""
     help_module._help_help_topic()
+
+
+def test_args_help_topic_execution():
+    """Verifies the args docstring function executes without error."""
+    from pdftl.cli.args_loader import _args_help_topic
+
+    _args_help_topic()

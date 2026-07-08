@@ -35,3 +35,31 @@ def test_grammar_builder_empty_registry():
             # Check for the 'noop' fallback strings
             assert '!operation: "noop"' in grammar
             assert '!option: "noop"' in grammar
+
+
+def test_args_flag_is_reachable_from_global_flag():
+    """
+    Regression test: args_flag was previously defined but never referenced
+    by global_flag, making it dead grammar. Ensure the built grammar string
+    actually wires it in.
+    """
+    builder = GrammarBuilder()
+    grammar = builder.build()
+
+    # Find the global_flag rule line and confirm args_flag is one of its alternatives
+    global_flag_line = next(
+        line for line in grammar.splitlines() if line.strip().startswith("global_flag:")
+    )
+    assert "args_flag" in global_flag_line
+
+
+def test_args_flag_parses_successfully():
+    """End-to-end: the built grammar should actually accept '--args <file>' as input."""
+    from lark import Lark
+
+    builder = GrammarBuilder()
+    grammar_str = builder.build()
+    parser = Lark(grammar_str, parser="earley")
+
+    # Should not raise
+    parser.parse("--args foo.yml t.pdf")
