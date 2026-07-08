@@ -46,6 +46,7 @@ _ALLOWED_KEYS = {
     "min_points",
     "max_error_scale",
     "pages",
+    "coalesce_strokes",
 }
 
 
@@ -135,6 +136,11 @@ cannot be performed safely, the original path is preserved unchanged.
 **`lines`** (bool, default: `true`)
 
 * Enable Ramer-Douglas-Peucker simplification for linear paths.
+
+**`coalesce_strokes`** (bool, default: `true`)
+
+* Automatically merge shattered/fragmented continuous strokes into single paths
+  before simplification, smoothing over minor line width (`w`) fluctuations.
 
 **`clip_paths`** (bool, default: `false`)
 
@@ -249,6 +255,7 @@ def _build_config(kw: dict[str, str]) -> SimplifyConfig:
         clip_paths=_bool("clip_paths", False),
         min_points=_int("min_points", 4),
         max_error_scale=_float("max_error_scale", 4.0),
+        coalesce_strokes=_bool("coalesce_strokes", True),
     )
 
 

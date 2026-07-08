@@ -59,6 +59,7 @@ class TestBuildConfig:
         assert config.clip_paths is False
         assert config.min_points == 4
         assert config.max_error_scale == pytest.approx(4.0)
+        assert config.coalesce_strokes is True
 
     def test_tolerance_parsed(self):
         config = _build_config({"tolerance": "0.5"})
@@ -83,6 +84,10 @@ class TestBuildConfig:
     def test_curves_false_variants(self):
         for val in ("false", "0", "no"):
             assert _build_config({"curves": val}).curves is False
+
+    def test_coalesce_strokes_parsed(self):
+        config = _build_config({"coalesce_strokes": "false"})
+        assert config.coalesce_strokes is False
 
     def test_bool_invalid_raises(self):
         with pytest.raises(InvalidArgumentError, match="true or false"):

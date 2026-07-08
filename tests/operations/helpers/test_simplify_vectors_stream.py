@@ -9,8 +9,8 @@ pikepdf dependency needed for most tests.
 
 import pytest
 
-from pdftl.operations.helpers.simplify_vectors_stream import segment, serialize
-from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig
+from pdftl.operations.helpers.simplify_vectors_stream import segment, serialize, _connects
+from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig, Subpath
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +31,7 @@ def _default_config(**kwargs):
         clip_paths=False,
         min_points=4,
         max_error_scale=4.0,
+        coalesce_strokes=True,
     )
     defaults.update(kwargs)
     return SimplifyConfig(**defaults)
@@ -287,6 +288,42 @@ class TestSegmentGraphicsState:
         assert len(paths) == 1
         assert paths[0].paint_op is None  # interrupted, no paint op
 
+    def test_Q_op_mid_path_flushes_with_no_paint_op(self):
+        # A Q state restoration mid-path is unusual and should flush the path
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("Q"),
+        ]
+        result = segment(instrs, _default_config())
+        paths = _paths_from(result)
+        assert len(paths) == 1
+        assert paths[0].paint_op is None
+
+    def test_cm_op_mid_path_flushes_with_no_paint_op(self):
+        # A transform update mid-path is unusual and should flush the path
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("cm", 1.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        ]
+        result = segment(instrs, _default_config())
+        paths = _paths_from(result)
+        assert len(paths) == 1
+        assert paths[0].paint_op is None
+
+    def test_w_op_mid_path_flushes_with_no_paint_op(self):
+        # A width adjustment mid-path is unusual and should flush the path
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("w", 2.0),
+        ]
+        result = segment(instrs, _default_config())
+        paths = _paths_from(result)
+        assert len(paths) == 1
+        assert paths[0].paint_op is None
+
     def test_q_Q_ctm_restore(self):
         instrs = [
             _op("q"),
@@ -334,6 +371,196 @@ class TestSegmentFallback:
         r1 = segment(instrs, _default_config())
         r2 = segment(instrs, _default_config())
         assert len(_paths_from(r1)) == len(_paths_from(r2))
+
+
+# ---------------------------------------------------------------------------
+# segment() — coalescing strokes
+# ---------------------------------------------------------------------------
+
+
+class TestSegmentCoalesceStrokes:
+    def test_coalesces_simple_strokes(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        paths = _paths_from(result)
+        assert len(paths) == 1
+        assert len(paths[0].subpaths[0].points) == 3
+        assert paths[0].subpaths[0].original_op_count == 3
+
+    def test_coalesces_with_intermediate_w(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("w", 1.0),
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+            _op("w", 1.05),  # Spread is 0.05. max(0.05, 0.10) = 0.10 -> allowed
+            _op("m", 2.0, 0.0),
+            _op("l", 3.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        paths = _paths_from(result)
+        assert len(paths) == 1
+        ops = _ops_from(result)
+        # We expect initial avg 'w' (1.025) and the final 'w' (1.05) state
+        assert ops == ["w", "w"]
+
+    def test_coalesce_breaks_chain_on_high_width_variance(self):
+        """Breaks grouping when width variance exceeds absolute or percentage boundaries."""
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("w", 1.0),
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+            _op("w", 1.2),  # Spread is 0.2. max(0.05, 0.1) = 0.1. 0.2 > 0.1 -> chain break!
+            _op("m", 2.0, 0.0),
+            _op("l", 3.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        paths = _paths_from(result)
+        # Variance exceeded our 10% tolerance; splits into two groups
+        assert len(paths) == 2
+
+    def test_no_coalesce_if_not_connected(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("m", 1.5, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        paths = _paths_from(result)
+        assert len(paths) == 2
+
+    def test_coalesce_disabled_by_config(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=False))
+        paths = _paths_from(result)
+        assert len(paths) == 2
+
+    def test_ignores_non_stroke_paths(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("f"),  # Fill path
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),  # Stroke path
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        paths = _paths_from(result)
+        assert len(paths) == 2
+
+    def test_handles_malformed_w_ops_gracefully(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("w"),  # Malformed: Empty operands
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+            _op("w", "bad_float"),  # Malformed: String where float is expected
+            _op("m", 2.0, 0.0),
+            _op("l", 3.0, 0.0),
+            _op("S"),
+        ]
+        # Must catch internal indexing/value exceptions and fallback safely
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        assert len(_paths_from(result)) == 1
+
+    def test_omits_redundant_final_w(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("w", 1.0),
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+            _op("w", 1.0),  # Exact same width as average
+            _op("m", 2.0, 0.0),
+            _op("l", 3.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        ops = _ops_from(result)
+        assert ops == ["w"]  # Only initial avg 'w' emitted, final is elided safely
+
+    def test_coalesce_multi_subpath_path(self):
+        """Coerces multiple subpaths into the merged struct when connected correctly."""
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            # Next path seamlessly connects, but introduces an additional subpath to merge loop
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("m", 3.0, 0.0),
+            _op("l", 4.0, 0.0),
+            _op("S"),
+        ]
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        paths = _paths_from(result)
+        assert len(paths) == 1
+        assert len(paths[0].subpaths) == 2
+
+    def test_final_w_exception_handling(self):
+        """Ensures exception boundaries are protected when floating conversion fails on comparison checks."""
+
+        class _EvilFloat:
+            def __init__(self, val):
+                self.val = float(val)
+                self.calls = 0
+
+            def __float__(self):
+                self.calls += 1
+                # 1. _Segmenter calls it inside graphics state updates
+                # 2. _coalesce_strokes variance check calls it
+                # 3. _merge_stroke_group average check calls it
+                # 4. _coalesce_strokes abs() diff check calls it
+                if self.calls == 4:
+                    raise ValueError("Simulated parsing crash on final check")
+                return self.val
+
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("w", _EvilFloat(1.05)),  # Within tolerance of the default 1.0 width
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+        ]
+
+        result = segment(instrs, _default_config(coalesce_strokes=True))
+        ops = _ops_from(result)
+
+        # Hits the except block safely appending final_w.
+        assert ops == ["w", "w"]
 
 
 # ---------------------------------------------------------------------------
@@ -414,25 +641,55 @@ class TestSerialize:
 
 
 # ---------------------------------------------------------------------------
-# Additions — append to tests/operations/helpers/test_simplify_vectors_stream.py
+# Internal Coalesce Checks
 # ---------------------------------------------------------------------------
-# Targets:
-#   line  90-91  _handle_gs: `if self._current_path_ops` guard NOT taken
-#                (gs op arrives with no pending path — normal case)
-#   line  104    _handle_clipping else-branch: W/W* with no pending path
-#   line  160    _handle_cubic guard: c without prior m
-#   line  170    _handle_cubic_implicit_p1 guard: v without prior m
-#   line  179    _handle_cubic_implicit_p3 guard: y without prior m
+
+
+class TestCoalesceInternals:
+    def test_connects_guard_clauses(self):
+        # Short circuits gracefully if either path has no subpaths
+        p1 = Path(subpaths=[], paint_op="S", original_instructions=[])
+        p2 = Path(
+            subpaths=[Subpath(points=[(0.0, 0.0)], original_op_count=1)],
+            paint_op="S",
+            original_instructions=[],
+        )
+        assert not _connects(p1, p2)
+        assert not _connects(p2, p1)
+
+        # Short circuits gracefully if subpaths lack point data
+        p3 = Path(
+            subpaths=[Subpath(points=[], original_op_count=1)],
+            paint_op="S",
+            original_instructions=[],
+        )
+        assert not _connects(p2, p3)
+        assert not _connects(p3, p2)
+
+    def test_collect_stroke_group_seeds_from_missing_state_snapshot(self):
+        """If state_snapshot is missing or malformed, fall back to permissive sentinels
+        rather than crashing on the seed step."""
+        from pdftl.operations.helpers.simplify_vectors_stream import _collect_stroke_group
+
+        p1 = Path(
+            subpaths=[Subpath(points=[(0.0, 0.0), (1.0, 0.0)], original_op_count=2)],
+            paint_op="S",
+            original_instructions=[],
+            state_snapshot=None,  # malformed / missing
+        )
+        group_paths, group_widths, j = _collect_stroke_group([p1], 0, 1)
+        assert group_paths == [p1]
+        assert group_widths == []
+        assert j == 1
+
+
+# ---------------------------------------------------------------------------
+# Graphics State and Fallback Tests (Verification of Segmenter State Machine)
 # ---------------------------------------------------------------------------
 
 
 class TestGsOpWithNoPendingPath:
-    """
-    Lines 90-91: the `if self._current_path_ops:` block inside _handle_gs is
-    only entered when a gs operator interrupts an in-progress path.  When no
-    path is in progress the guard is False and the flush is skipped — that
-    else-branch (fall-through) is the normal case and was not previously hit.
-    """
+    """Verifies that handlers are clean when graphics state operators arrive on empty boundaries."""
 
     def test_q_Q_at_stream_start_produces_no_path(self):
         instrs = [_op("q"), _op("Q")]
@@ -454,10 +711,7 @@ class TestGsOpWithNoPendingPath:
 
 
 class TestClippingOpWithNoPendingPath:
-    """
-    Line 104: the else-branch of _handle_clipping, reached when W/W* arrives
-    outside of an in-progress path.  The operator is emitted as a pass-through.
-    """
+    """Verifies behavior when clipping modifiers arrive outside of an active vector run."""
 
     def test_W_without_path_is_passthrough(self):
         instrs = [_op("W")]
@@ -473,13 +727,7 @@ class TestClippingOpWithNoPendingPath:
 
 
 class TestBezierOpsWithoutPriorM:
-    """
-    Lines 160, 170, 179: _handle_cubic / _handle_cubic_implicit_p1 /
-    _handle_cubic_implicit_p3 all start with `if not self._current_pts: return`
-    to guard against an operator that appears before any 'm'.  The operator is
-    still appended to _current_path_ops so the original stream stays intact,
-    but no sampling occurs.
-    """
+    """Verifies that curves arriving before any 'move' operators do not crash and handle state safely."""
 
     def test_c_without_m_does_not_raise(self):
         instrs = [_op("c", 0.5, 1.0, 1.5, 1.0, 2.0, 0.0), _op("S")]
@@ -498,7 +746,7 @@ class TestBezierOpsWithoutPriorM:
         assert result is not None
 
     def test_l_without_m_does_not_add_point(self):
-        # line 116: `if self._current_pts:` guard — l before m is silently ignored
+        # Line creation before move is silently ignored
         instrs = [_op("l", 1.0, 0.0), _op("S")]
         result = segment(instrs, _default_config())
         assert result is not None

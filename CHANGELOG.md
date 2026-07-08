@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `--args <file.yml>` argument insertion
 
+- `coalesce_strokes` option added to `simplify_vectors`
+
 ### Fixed
 
 - `style_text` now adapts Tr (text rendering mode) better to user parameters

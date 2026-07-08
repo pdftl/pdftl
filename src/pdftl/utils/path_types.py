@@ -131,6 +131,7 @@ class SimplifyConfig:
         clip_paths:       Whether to simplify clipping paths (W / W*).
         min_points:       Minimum subpath length before simplification is tried.
         max_error_scale:  Reparameterization abandonment threshold multiplier.
+        coalesce_strokes: Whether to merge visually contiguous ink strokes.
     """
 
     tolerance: float = 0.15
@@ -139,3 +140,4 @@ class SimplifyConfig:
     clip_paths: bool = False
     min_points: int = 4
     max_error_scale: float = 4.0
+    coalesce_strokes: bool = True
