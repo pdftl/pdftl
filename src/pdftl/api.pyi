@@ -264,6 +264,13 @@ def dump_layers(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def dump_raw_gids(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    password: Optional[str] = ...,
+    output: Optional[str] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+) -> pikepdf.Pdf: ...
 def dump_signatures(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     password: Optional[str] = ...,
@@ -302,6 +309,13 @@ def dump_text(
     run_cli_hook: bool = False,
     full_result: bool = False,
 ) -> pikepdf.Pdf: ...
+def embed_fonts(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def export_fonts(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -327,6 +341,13 @@ def fill_form(
 ) -> pikepdf.Pdf: ...
 def filter(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def font_table(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
     run_cli_hook: bool = False,
     full_result: bool = False,
     password: Optional[str] = None,

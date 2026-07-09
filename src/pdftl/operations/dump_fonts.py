@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 # src/pdftl/operations/dump_fonts.py
 
 """Dump information about embedded and referenced fonts in a PDF file"""
@@ -30,6 +34,8 @@ Outputs a normalized JSON object grouping fonts by their internal object IDs, in
 * **name**: Raw PostScript name of the font exactly as it appears in the PDF (including subset
   prefix)
 * **base_font**: Cleaned PostScript name of the font (e.g., Helvetica-Bold)
+* **descriptor_font**: The declared PostScript name natively stored within the /FontDescriptor
+  (can help expose mismatched system font substitutions).
 * **subtype**: The layout design specification style (e.g., TrueType, Type0, Type1, Type3)
 * **is_embedded**: Boolean indicating if the binary font asset stream exists inside the PDF
 * **font_bytes**: Actual compressed payload size of the embedded stream in bytes (0 if un-embedded)
@@ -92,6 +98,7 @@ def _extract_font_info(pdf: "pikepdf.Pdf", specs: list | None = None) -> dict:
             aggregated_fonts[f_id] = {
                 "name": font["name"],
                 "base_font": font["base_font"],
+                "descriptor_font": font.get("descriptor_font", ""),
                 "subtype": font["subtype"],
                 "is_embedded": font["is_embedded"],
                 "font_bytes": font["font_bytes"],

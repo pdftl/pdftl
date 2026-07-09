@@ -243,6 +243,7 @@ See the [**API Tutorial**][4] for more details.
 | [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html)                     | Extract tables to JSON, CSV, or Markdown                        |
 | [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html)                         | Inspect the PDF structure tree and reading order                |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
+| [`embed_fonts`](https://pdftl.readthedocs.io/en/latest/operations/embed_fonts.html)                     | Automatically locate and embed missing system fonts             |
 | [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html)                   | Export fonts and a JSON manifest for external editing           |
 | [`export_images`](https://pdftl.readthedocs.io/en/latest/operations/export_images.html)                 | Export images and a JSON manifest for external editing          |
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |

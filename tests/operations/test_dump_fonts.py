@@ -1,3 +1,9 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# tests/operations/test_dump_fonts.py
+
 import json
 from io import StringIO
 from unittest.mock import MagicMock, patch
@@ -13,6 +19,7 @@ def make_font(resource_name, base_font, obj_id):
         "name": f"/{base_font}",
         "resource_name": resource_name,
         "base_font": base_font,
+        "descriptor_font": "",
         "subtype": "Type 1",
         "is_embedded": False,
         "font_bytes": 0,

@@ -1,3 +1,9 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# tests/fonts/test_font_extraction_utils.py
+
 """Tests for pdftl.fonts.font_extraction_utils using real pikepdf objects."""
 
 import pikepdf
@@ -226,6 +232,7 @@ class TestProcessSingleFont:
         assert result["base_font"] == "Arial"
         assert result["subtype"] == "Type 1"
         assert result["resource_name"] == "F1"
+        assert result["descriptor_font"] == ""
 
     def test_subset_font(self):
         obj = pikepdf.Dictionary(
@@ -255,7 +262,7 @@ class TestProcessSingleFont:
         ff3 = doc.make_stream(b"")
         ff3.Subtype = pikepdf.Name("/Type1C")
 
-        desc = pikepdf.Dictionary({"/FontFile3": ff3})
+        desc = pikepdf.Dictionary({"/FontFile3": ff3, "/FontName": pikepdf.Name("/DescFont")})
         obj = pikepdf.Dictionary(
             {
                 "/BaseFont": pikepdf.Name("/MyFont"),
@@ -265,6 +272,7 @@ class TestProcessSingleFont:
         )
         result = process_single_font("/F1", obj)
         assert result["subtype"] == "Type 1C"
+        assert result["descriptor_font"] == "DescFont"
 
     def test_no_basefont_returns_none_name(self):
         obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type1")})
@@ -304,7 +312,7 @@ class TestProcessSingleFont:
         assert result["subtype"] == "CID Type 0C"
 
     def test_process_single_font_type3(self):
-        """Test line 225: Exact mapping for Type 3 fonts."""
+        """Exact mapping for Type 3 fonts."""
         obj = pikepdf.Dictionary(
             {"/BaseFont": pikepdf.Name("/MyType3Font"), "/Subtype": pikepdf.Name("/Type3")}
         )
@@ -312,13 +320,13 @@ class TestProcessSingleFont:
         assert result["subtype"] == "Type 3"
 
     def test_process_single_font_cidfonttype0(self):
-        """Test line 227: Exact mapping for CIDFontType0 fonts."""
+        """Exact mapping for CIDFontType0 fonts."""
         obj = pikepdf.Dictionary(
             {
                 "/BaseFont": pikepdf.Name("/MyCIDFont"),
                 "/Subtype": pikepdf.Name("/CIDFontType0"),
                 # By intentionally omitting a /FontDescriptor, it skips the Type 0C
-                # refinement block and natively hits line 226/227.
+                # refinement block and natively relies on the basic subtype parsing.
             }
         )
         result = process_single_font("/F1", obj)
@@ -545,7 +553,7 @@ class TestExtractDocumentFonts:
     # === Append to TestGetEncodingName ===
 
     def test_dict_base_encoding_bracket_access(self):
-        """Test line 144: dictionary bracket fallback for BaseEncoding."""
+        """dictionary bracket fallback for BaseEncoding."""
 
         class MockEnc(dict):
             pass  # Lacks .BaseEncoding attribute naturally
@@ -554,7 +562,7 @@ class TestExtractDocumentFonts:
         assert get_encoding_name(obj) == "MacRoman"
 
     def test_enc_str_encoding_suffix(self):
-        """Test line 153: stripping 'Encoding' from string representation."""
+        """stripping 'Encoding' from string representation."""
 
         class MockFontDict(dict):
             @property
@@ -567,7 +575,7 @@ class TestExtractDocumentFonts:
     # === Append to TestExtractDocumentFonts ===
 
     def test_crawl_resources_none(self):
-        """Test line 257: Return safely when resources resolve to None."""
+        """Return safely when resources resolve to None."""
 
         class PageWithNoneRes(dict):
             @property
@@ -580,7 +588,7 @@ class TestExtractDocumentFonts:
         assert extract_document_fonts(Doc()) == []
 
     def test_font_resources_nested_crawl(self):
-        """Test line 268: /Resources contained strictly inside a /Font dict."""
+        """/Resources contained strictly inside a /Font dict."""
         doc = pikepdf.Pdf.new()
         doc.add_blank_page()
 
@@ -592,7 +600,7 @@ class TestExtractDocumentFonts:
 
             @property
             def Resources(self):
-                return None  # Triggers line 257 recursively
+                return None  # Triggers fallback base crawl exception recursively
 
         res_font = NestedResFont({"/BaseFont": "/Arial", "/Subtype": "/Type1", "/Resources": True})
 
@@ -605,7 +613,7 @@ class TestExtractDocumentFonts:
         extract_document_fonts(doc)
 
     def test_extract_doc_fonts_seen_font_ids(self):
-        """Test line 275: Deduping Font object_id that was previously crawled via ExtGState."""
+        """Deduping Font object_id that was previously crawled via ExtGState."""
         doc = pikepdf.Pdf.new()
         doc.add_blank_page()
 
@@ -621,7 +629,7 @@ class TestExtractDocumentFonts:
             )
         )
 
-        # Putting it in both lists guarantees obj_id is evaluated at line 275 for /Font
+        # Putting it in both lists guarantees obj_id is evaluated at deduplication points for /Font
         # since it's an indirect object skipped by dictionary id logic.
         doc.pages[0].Resources = pikepdf.Dictionary(
             {
@@ -634,7 +642,7 @@ class TestExtractDocumentFonts:
         assert len(result) == 1
 
     def test_xobject_dedup(self):
-        """Test line 286: Skipping previously seen XObjects dict IDs."""
+        """Skipping previously seen XObjects dict IDs."""
         doc = pikepdf.Pdf.new()
         doc.add_blank_page()
         xobj = doc.make_indirect(
@@ -648,7 +656,7 @@ class TestExtractDocumentFonts:
         assert extract_document_fonts(doc) == []
 
     def test_pattern_dedup(self):
-        """Test line 299: Skipping previously seen Pattern dict IDs."""
+        """Skipping previously seen Pattern dict IDs."""
         doc = pikepdf.Pdf.new()
         doc.add_blank_page()
         pat = doc.make_indirect(
@@ -662,7 +670,7 @@ class TestExtractDocumentFonts:
         assert extract_document_fonts(doc) == []
 
     def test_extgstate_dedup(self):
-        """Test line 312: Skipping previously seen ExtGState dict IDs."""
+        """Skipping previously seen ExtGState dict IDs."""
         doc = pikepdf.Pdf.new()
         doc.add_blank_page()
         gs = doc.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState")}))
@@ -672,7 +680,7 @@ class TestExtractDocumentFonts:
         assert extract_document_fonts(doc) == []
 
     def test_font_exceptions_lines(self):
-        """Test lines 278-279: Swallow errors processing malformed /Font items."""
+        """Swallow errors processing malformed /Font items."""
 
         class Res(dict):
             @property
@@ -692,7 +700,7 @@ class TestExtractDocumentFonts:
         assert extract_document_fonts(doc) == []
 
     def test_extgstate_font_exception(self):
-        """Test lines 328-329: Swallow errors processing malformed ExtGState Font Arrays."""
+        """Swallow errors processing malformed ExtGState Font Arrays."""
 
         class BadGS(dict):
             @property
@@ -717,7 +725,7 @@ class TestExtractDocumentFonts:
         assert extract_document_fonts(doc) == []
 
     def test_page_exception(self):
-        """Test lines 364-365: Swallow errors processing unreadable Page data structure."""
+        """Swallow errors processing unreadable Page data structure."""
 
         class BadPage(dict):
             @property
@@ -730,7 +738,7 @@ class TestExtractDocumentFonts:
 
 class TestFontExtractionCoverage:
     def test_type1c_subtype_exception(self):
-        """Test lines 200-201: Swallow Type/Attribute exceptions accessing FontFile3 properties."""
+        """Swallow Type/Attribute exceptions accessing FontFile3 properties."""
 
         class MockFontDict(dict):
             @property
@@ -745,7 +753,7 @@ class TestFontExtractionCoverage:
         assert result["subtype"] == "Type 1"
 
     def test_enc_exception(self):
-        """Test lines 154-155: gracefully handling unreadable Encoding traits."""
+        """Gracefully handling unreadable Encoding traits."""
 
         class BadStrEnc:
             def __str__(self):
@@ -761,7 +769,7 @@ class TestFontExtractionCoverage:
         assert get_encoding_name(obj) == "Unknown"
 
     def test_dict_base_encoding_bracket_access(self):
-        """Test line 144: dictionary bracket fallback for BaseEncoding."""
+        """Dictionary bracket fallback for BaseEncoding."""
 
         class MockFontDict(dict):
             @property
@@ -773,7 +781,7 @@ class TestFontExtractionCoverage:
         assert get_encoding_name(obj) == "MacRoman"
 
     def test_font_resources_nested_crawl(self):
-        """Test line 268: /Resources contained strictly inside a /Font dict."""
+        """/Resources contained strictly inside a /Font dict."""
 
         class NestedResFont(dict):
             @property
@@ -800,7 +808,7 @@ class TestFontExtractionCoverage:
         extract_document_fonts(MockDoc())
 
     def test_extract_doc_fonts_seen_font_ids_via_pages(self):
-        """Test line 275: Deduping Font object_id previously crawled via ExtGState on another page."""
+        """Deduping Font object_id previously crawled via ExtGState on another page."""
 
         class MockFont(dict):
             @property
@@ -842,12 +850,12 @@ class TestFontExtractionCoverage:
             pages = [Page1({"/Resources": True}), Page2({"/Resources": True})]
 
         # Page 1 ExtGState logs object 999 into seen_font_ids
-        # Page 2 /Font logs object 999 into seen_dict_ids, natively triggering the line 275 dedup skip
+        # Page 2 /Font logs object 999 into seen_dict_ids, natively triggering the dedup skip
         result = extract_document_fonts(MockDoc())
         assert len(result) == 1
 
     def test_crawl_fonts_with_list_font_obj(self):
-        """Test line 318: font_obj lacks .get(), causing _process_and_store_font to return early."""
+        """Font_obj lacks .get(), causing _process_and_store_font to return early."""
 
         class MockFontRes(dict):
             @property
@@ -868,7 +876,7 @@ class TestFontExtractionCoverage:
         assert extract_document_fonts(MockDoc()) == []
 
     def test_crawl_annots_ap_state_without_get(self):
-        """Test line 408: ap_state lacks a .get() method, causing early return."""
+        """Ap_state lacks a .get() method, causing early return."""
 
         class MockAnnot(dict):
             @property
@@ -886,3 +894,19 @@ class TestFontExtractionCoverage:
 
         # Gracefully skips the annotation appearance loop
         assert extract_document_fonts(MockDoc()) == []
+
+    def test_process_single_font_returns_none_when_unwrapped_is_invalid_type(self, monkeypatch):
+        """Ensures process_single_font returns None if the unwrapped physical font
+        object resolves to an invalid type such as a PDF Name instead of a dictionary or stream.
+        """
+        parent_obj = pikepdf.Dictionary()
+
+        # Unwrap to an unsupported type to verify the defensive fallback pathway
+        import pdftl.fonts.font_extraction_utils as feu
+
+        monkeypatch.setattr(
+            feu, "_unwrap_physical_font", lambda obj: pikepdf.Name("/InvalidPhysicalObjType")
+        )
+
+        result = process_single_font("F1", parent_obj)
+        assert result is None

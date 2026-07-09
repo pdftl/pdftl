@@ -236,16 +236,26 @@ def _refine_subtype(subtype_raw: str, physical_obj: Any) -> str:
 
 def process_single_font(font_key: str, parent_obj: Any) -> dict[str, Any] | None:
     """Parses a single font object, extracting exact metadata matching Poppler's pdffonts."""
-    if not hasattr(parent_obj, "get"):
+    import pikepdf
+
+    if not isinstance(parent_obj, (dict, pikepdf.Dictionary, pikepdf.Stream)):
         return None
 
     physical_obj = _unwrap_physical_font(parent_obj)
+    if not isinstance(physical_obj, (dict, pikepdf.Dictionary, pikepdf.Stream)):
+        return None
+
     raw_name, clean_font_name, is_subset = _resolve_font_name(physical_obj, parent_obj)
 
     subtype_raw = str(physical_obj.get("/Subtype", "Unknown")).lstrip("/")
     subtype = _refine_subtype(subtype_raw, physical_obj)
 
     is_embedded, font_bytes, traits, metrics = get_font_properties(physical_obj)
+
+    descriptor = find_font_descriptor(physical_obj)
+    descriptor_name = ""
+    if descriptor and "/FontName" in descriptor:
+        descriptor_name = str(descriptor["/FontName"]).lstrip("/")
 
     obj_id = parent_obj.objgen[0] if hasattr(parent_obj, "objgen") and parent_obj.objgen else None
 
@@ -256,6 +266,7 @@ def process_single_font(font_key: str, parent_obj: Any) -> dict[str, Any] | None
         "name": raw_name,
         "resource_name": str(font_key).lstrip("/"),
         "base_font": clean_font_name,
+        "descriptor_font": descriptor_name,
         "subtype": subtype,
         "is_embedded": is_embedded,
         "font_bytes": font_bytes,
