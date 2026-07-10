@@ -18,9 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `coalesce_strokes` option added to `simplify_vectors`
 
-### Fixed
+### Changed
 
 - `style_text` now adapts Tr (text rendering mode) better to user parameters
+
+### Fixed
+
+- `dump_signatures` now correctly reports pyhanko's valid/invalid status
 
 ## [0.24.0] - 2026-07-07
 

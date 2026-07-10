@@ -32,7 +32,9 @@ engines.
 * `SignatureFieldName`: The name of the signature field.
 * `SignatureSigner`: Common Name (CN) of the signer.
 * `SignatureHashAlgorithm`: e.g., sha256.
-* `SignatureIntegrity`: VALID or INVALID (mathematical hash check).
+* `SignatureIntegrity`: VALID or INVALID.
+  Requires both that the document bytes are untouched since signing (digest match), and that
+  the cryptographic signature verifies against the embedded certificate's public key.
 * `SignerTrusted`: True or False (whether the certificate is trusted).
 * `TrustProblem`: Detailed reason if the signer is untrusted.
 * `SignatureCoverage`: ENTIRE_FILE, REVISION_ONLY, or PARTIAL.
@@ -147,8 +149,14 @@ def _print_signature_stanza(sig_data, out):
     print(f"SignatureSigner: {sig_data.get('signer')}", file=out)
     print(f"SignatureHashAlgorithm: {sig_data.get('hash_algorithm')}", file=out)
 
-    # Mathematical Integrity
-    integrity = "VALID" if sig_data.get("is_intact") else "INVALID"
+    # Mathematical Integrity: both the byte-range digest must match (intact)
+    # AND the PKCS#1 signature must cryptographically verify against the
+    # embedded certificate's public key (valid). "intact" alone only proves
+    # the document wasn't altered after signing -- it does NOT prove the
+    # signature was produced by the claimed key/cert pair.
+    integrity = (
+        "VALID" if sig_data.get("is_intact") and sig_data.get("is_signature_valid") else "INVALID"
+    )
     print(f"SignatureIntegrity: {integrity}", file=out)
 
     # Trust Identity
@@ -280,6 +288,7 @@ def _extract_signature_info(sig, status) -> dict:
         "signer": signer_name,
         "hash_algorithm": getattr(status, "md_algorithm", "Unknown"),
         "is_intact": getattr(status, "intact", False),
+        "is_signature_valid": getattr(status, "valid", False),
         "is_trusted": is_trusted,
         "trust_problem": trust_problem_name,
         "coverage": status.coverage.name if getattr(status, "coverage", None) else "UNKNOWN_NONE",

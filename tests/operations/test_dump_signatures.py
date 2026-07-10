@@ -466,3 +466,31 @@ def test_signature_no_timestamp_handled_correctly():
     # 4. Verify the caller correctly ignored the None value
     assert "SignatureBegin" in output_text  # Ensure it actually printed the stanza
     assert "SignatureTimestamp" not in output_text  # Ensure the timestamp line was safely skipped
+
+
+def test_dump_signatures_intact_but_not_cryptographically_valid(signed_pdf_path):
+    """
+    Regression test: a signature can be 'intact' (digest matches) while
+    still being cryptographically unsound (signed with a key that doesn't
+    match the embedded certificate). SignatureIntegrity must report INVALID
+    in this case, not VALID.
+    """
+    from pdftl.operations.dump_signatures import dump_signatures, dump_signatures_cli_hook
+    import io
+    from unittest.mock import MagicMock, patch
+
+    mock_status = MagicMock()
+    mock_status.intact = True
+    mock_status.valid = False  # digest matched, but signature doesn't verify against cert
+    mock_status.md_algorithm = "sha256"
+    mock_status.coverage.name = "ENTIRE_FILE"
+    mock_status.signing_cert.subject.native = {"common_name": "Mismatched Key Signer"}
+    mock_status.diff_result = "NONE"
+
+    with patch("pyhanko.sign.validation.validate_pdf_signature", return_value=mock_status):
+        with patch("pdftl.operations.dump_signatures.smart_open") as mock_open:
+            output = io.StringIO()
+            mock_open.return_value.__enter__.return_value = output
+            result = dump_signatures(signed_pdf_path, None, None)
+            dump_signatures_cli_hook(result, None, None)
+            assert "SignatureIntegrity: INVALID" in output.getvalue()
