@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `render` now initializes forms, so that they are properly rendered
+
 - `dump_signatures` now correctly reports pyhanko's valid/invalid status
 
 ## [0.24.0] - 2026-07-07

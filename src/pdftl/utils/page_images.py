@@ -36,6 +36,7 @@ def render_page_to_pil(pdf, page_index: int, dpi: float):
     ui_pdf = None
     try:
         ui_pdf = pdfium.PdfDocument(pdf_buffer)
+        ui_pdf.init_forms()
         scale = dpi / 72.0
         page = ui_pdf[page_index]
         bitmap = page.render(scale=scale)
@@ -67,6 +68,7 @@ def iter_pages_as_pil(pdf, dpi: float, page_indices: list[int] | None = None):
     ui_pdf = None
     try:
         ui_pdf = pdfium.PdfDocument(pdf_buffer)
+        ui_pdf.init_forms()
         scale = dpi / 72.0
 
         # Determine the sequence of pages to iterate over
