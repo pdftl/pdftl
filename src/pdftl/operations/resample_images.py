@@ -28,6 +28,7 @@ from pdftl.operations.helpers.image_processor import (
 from pdftl.utils.images import extract_pdf_images
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -268,7 +269,7 @@ def _prepare_image_for_worker(
     try:
         is_bitonal = bool(xobj.get("/ImageMask") or int(xobj.get("/BitsPerComponent", 8)) == 1)
         pdf_img = PdfImage(xobj)
-        pil_img = pdf_img.as_pil_image()
+        pil_img = as_pil_image_compat(pdf_img)
         ensure_thread_safe(pil_img)
 
         if pil_img.mode not in _SAFE_PIL_MODES and not force:
@@ -283,7 +284,7 @@ def _prepare_image_for_worker(
         smask_xobj = xobj.get("/SMask")
         smask_pil = None
         if smask_xobj and isinstance(smask_xobj, pikepdf.Stream):
-            smask_pil = PdfImage(smask_xobj).as_pil_image().convert("L")
+            smask_pil = as_pil_image_compat(PdfImage(smask_xobj)).convert("L")
             ensure_thread_safe(smask_pil)
         else:
             smask_xobj = None

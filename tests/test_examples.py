@@ -62,6 +62,7 @@ def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_d
     # Create a completely fresh workspace for this specific test run
 
     examples_files_dir = tmp_path / ".." / "example_filescurrent"
+    pdfs_dir = assets_dir / ".." / "files" / "pdfs"
 
     work_dir = tmp_path / "work_area"
     work_dir.mkdir()
@@ -85,6 +86,7 @@ def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_d
 
         # 3. Copy specific assets from tests/assets
         _copy_helper(setup_data, "copy_assets", assets_dir, work_dir)
+        _copy_helper(setup_data, "copy_pdfs", pdfs_dir, work_dir)
         _copy_helper(setup_data, "copy_images", examples_files_dir, work_dir)
 
     # --- Step 1: Prepare Arguments ---

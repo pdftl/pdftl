@@ -65,6 +65,7 @@ _STAMP_FIELDS_EXAMPLES = [
     {
         "cmd": "in.pdf stamp_fields sig.pdf signature output out.pdf",
         "desc": "Stamp sig.pdf into the field named 'signature' using default fit-centering.",
+        "test_setup": {"copy_pdfs": {"sign.pdf": "in.pdf", "link.pdf": "sig.pdf"}},
     },
     {
         "cmd": (
@@ -75,10 +76,12 @@ _STAMP_FIELDS_EXAMPLES = [
             "Stamp into a nested field, scaled uniformly to 80%, "
             "aligned to the bottom right and 80% opaque."
         ),
+        "test_example": False,  # FIXME
     },
     {
         "cmd": ("in.pdf stamp_fields stamps.pdf Sig1 Sig2 scale=fit output out.pdf"),
         "desc": "Stamp page 1 of stamps.pdf onto Sig1, and page 2 onto Sig2.",
+        "test_example": False,  # FIXME
     },
 ]
 

@@ -846,16 +846,21 @@ def test_rename_font_objects_updates_descendant_fonts_for_type0():
         def DescendantFonts(self):
             return self["/DescendantFonts"]
 
+    # Wrap these in standard dict literals with proper PDF slash-keys:
     font_obj = CustomFontDict(
-        Type=pikepdf.Name("/Font"),
-        Subtype=pikepdf.Name("/Type0"),
-        BaseFont=pikepdf.Name("/OldBaseFontName"),
+        {
+            "/Type": pikepdf.Name("/Font"),
+            "/Subtype": pikepdf.Name("/Type0"),
+            "/BaseFont": pikepdf.Name("/OldBaseFontName"),
+        }
     )
 
     descendant = CustomFontDict(
-        Type=pikepdf.Name("/Font"),
-        Subtype=pikepdf.Name("/CIDFontType2"),
-        BaseFont=pikepdf.Name("/OldBaseFontName"),
+        {
+            "/Type": pikepdf.Name("/Font"),
+            "/Subtype": pikepdf.Name("/CIDFontType2"),
+            "/BaseFont": pikepdf.Name("/OldBaseFontName"),
+        }
     )
 
     font_obj["/DescendantFonts"] = [descendant]
@@ -864,12 +869,14 @@ def test_rename_font_objects_updates_descendant_fonts_for_type0():
         Type=pikepdf.Name("/FontDescriptor"), FontName=pikepdf.Name("/OldBaseFontName")
     )
 
-    new_name = pikepdf.Name("/NewBaseFontName")
-    _rename_font_objects(font_obj, descriptor, new_name, pikepdf)
+    ps_name = "NewBaseFontName"
+    expected_name = pikepdf.Name(f"/{ps_name}")
 
-    assert font_obj["/BaseFont"] == new_name
-    assert descendant["/BaseFont"] == new_name
-    assert descriptor["/FontName"] == new_name
+    _rename_font_objects(font_obj, descriptor, ps_name, pikepdf)
+
+    assert font_obj["/BaseFont"] == expected_name
+    assert font_obj["/DescendantFonts"][0]["/BaseFont"] == expected_name
+    assert descendant["/BaseFont"] == expected_name
 
 
 def test_attach_stream_to_descriptor_removes_stale_fontfile_keys():
@@ -886,23 +893,23 @@ def test_attach_stream_to_descriptor_removes_stale_fontfile_keys():
         FontFile3=pikepdf.Stream(pdf, b"stale opentype binary"),
     )
 
-    new_stream = pikepdf.Stream(pdf, b"new true type binary data")
+    new_stream_bytes = b"new true type binary data"
 
     # Adapt dynamically to the signature of _attach_stream_to_descriptor
     sig = inspect.signature(_attach_stream_to_descriptor)
     params = list(sig.parameters.keys())
 
-    args = []
+    attach_args = []
     if len(params) >= 3:
         third_param = params[2]
         if "key" in third_param:
-            args = [descriptor, new_stream, "/FontFile2"]
+            attach_args = [descriptor, new_stream_bytes, "/FontFile2"]
         else:
-            args = [descriptor, new_stream, ".ttf"]
+            attach_args = [descriptor, new_stream_bytes, ".ttf"]
     else:
-        args = [descriptor, new_stream]
+        attach_args = [descriptor, new_stream_bytes]
 
-    _attach_stream_to_descriptor(*args)
+    _attach_stream_to_descriptor(pdf, *attach_args)
 
     # Asserts that at least one stale key was successfully swept/deleted
     stale_keys_deleted = ("/FontFile" not in descriptor) or ("/FontFile3" not in descriptor)

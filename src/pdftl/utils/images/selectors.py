@@ -2,6 +2,8 @@ import io
 import logging
 from typing import TYPE_CHECKING
 
+from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
+
 if TYPE_CHECKING:
     from PIL import Image
 
@@ -19,7 +21,7 @@ def extract_to_pil(xobj) -> "Image.Image | None":
     # Block A: Attempt high-level extraction
     try:
         pdf_img = pikepdf.PdfImage(xobj)
-        return pdf_img.as_pil_image()
+        return as_pil_image_compat(pdf_img)
     except (
         pikepdf.PdfError,
         pikepdf.DataDecodingError,

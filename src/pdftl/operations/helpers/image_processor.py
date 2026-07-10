@@ -118,7 +118,7 @@ def encode_and_update_pdf_image(ctx: Any, pil_img: Any, quality: int) -> None:
     ctx.xobj.ColorSpace = cs
     ctx.xobj.BitsPerComponent = bpc
 
-    logger.debug("pik_img.mode=%s, ctx=%s", pil_img.mode, ctx)
+    # logger.debug("pik_img.mode=%s, ctx=%s", pil_img.mode, ctx)
 
     # 3. Read the original filter schema
     filters = ctx.xobj.get("/Filter")

@@ -22,6 +22,7 @@ from pdftl.operations.helpers.image_processor import (
 from pdftl.operations.parsers.modify_images_parser import parse_modify_images_args
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ def _build_callbacks(
 
         try:
             pdf_img = PdfImage(xobj)
-            pil_img = pdf_img.as_pil_image()
+            pil_img = as_pil_image_compat(pdf_img)
             ensure_thread_safe(pil_img)
         except (pikepdf.PdfError, ValueError) as err:
             logger.warning(
