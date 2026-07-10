@@ -94,6 +94,7 @@ HARDCODED_KEYWORDS = {
     "shuffle",
     "simplify_vectors",
     "stamp",
+    "stamp_fields",
     "style_text",
     "tag",
     "unpack_files",

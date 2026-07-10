@@ -277,6 +277,7 @@ See the [**API Tutorial**][4] for more details.
 | [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |
 | [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html)           | Reduce vector path complexity                                   |
 | [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |
+| [`stamp_fields`](https://pdftl.readthedocs.io/en/latest/operations/stamp_fields.html)                   | Stamp PDF content into form fields                              |
 | [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html)                       | Change appearance of text                                       |
 | [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html)                                     | Auto-tag a PDF for accessibility using OpenDataLoader           |
 | [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                                         |

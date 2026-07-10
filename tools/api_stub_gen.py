@@ -72,6 +72,8 @@ def generate():
     ]
 
     for name, op_data in sorted(registry.operations.items()):
+        if getattr(op_data, "caller", "").startswith("pdftl.external."):
+            continue
         args_meta = getattr(op_data, "args", ([], {}, {}))
 
         # Track names for this specific function to prevent duplicates
