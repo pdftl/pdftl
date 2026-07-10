@@ -9,9 +9,10 @@
 import io
 import logging
 import os
+import contextlib
 
 from pdftl.core.registry import register_help_topic, register_option
-from pdftl.exceptions import UserCommandLineError
+from pdftl.exceptions import PdftlOutputError, UserCommandLineError
 from pdftl.utils.dependencies import ensure_dependencies
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
 
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     from pyhanko.sign import signers
+    from pyhanko.stamp import NoOpStampStyle
 
     # 1. Correctly extract the Encryption object
     enc_obj = save_opts.get("encryption")
@@ -43,7 +45,9 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
     buffer.seek(0)
 
     # Verify the buffer
-    if b"/Encrypt" in buffer.read(4096):
+    header = buffer.read(4096)
+    buffer.seek(0)
+    if b"/Encrypt" in header:
         logger.debug("SUCCESS: Buffer is now encrypted.")
     else:
         logger.debug("ERROR: Buffer still missing /Encrypt. Check if pdf object is modified.")
@@ -61,20 +65,30 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
     key_and_cert = (sign_cfg["key"], sign_cfg["cert"])
     key_passphrase = sign_cfg["passphrase"].encode() if sign_cfg["passphrase"] else None
 
-    # (Logger logic omitted for brevity, but keep it if you prefer)
     cms_signer = signers.SimpleSigner.load(*key_and_cert, key_passphrase=key_passphrase)
     if cms_signer is None:
         raise UserCommandLineError("Failed to load signing key and certificate.")
 
     # 5. Apply Signature
     requested_field = sign_cfg["field"] or "Signature1"
-    with open(output_filename, "wb") as out_file:
-        signers.sign_pdf(
-            w,
-            signers.PdfSignatureMetadata(field_name=requested_field),
-            signer=cms_signer,
-            output=out_file,
-        )
+
+    from pyhanko.sign.general import SigningError
+
+    pdf_signer = signers.PdfSigner(
+        signers.PdfSignatureMetadata(field_name=requested_field),
+        signer=cms_signer,
+        stamp_style=NoOpStampStyle(),
+    )
+
+    try:
+        with open(output_filename, "wb") as out_file:
+            pdf_signer.sign_pdf(w, output=out_file)
+    except SigningError as exc:
+        # Don't leave a truncated/partial file behind at the user's
+        # requested output path if signing fails partway through.
+        with contextlib.suppress(OSError):
+            os.remove(output_filename)
+        raise PdftlOutputError(f"Signing failed: {exc}") from exc
 
 
 def parse_sign_options(options, input_context):
@@ -114,7 +128,7 @@ def parse_sign_options(options, input_context):
     tags=["security", "signatures"],
 )
 def _sign_key_option():
-    pass
+    pass  # pragma: no cover
 
 
 @register_option(
@@ -126,7 +140,7 @@ def _sign_key_option():
     tags=["security", "signatures"],
 )
 def _sign_cert_option():
-    pass
+    pass  # pragma: no cover
 
 
 @register_option(
@@ -136,7 +150,7 @@ def _sign_cert_option():
     tags=["security", "signatures"],
 )
 def _sign_field_option():
-    pass
+    pass  # pragma: no cover
 
 
 @register_option(
@@ -149,7 +163,7 @@ def _sign_field_option():
     tags=["security", "signatures"],
 )
 def _sign_pass_env_option():
-    pass
+    pass  # pragma: no cover
 
 
 @register_option(
@@ -159,7 +173,7 @@ def _sign_pass_env_option():
     tags=["security", "signatures"],
 )
 def _sign_pass_prompt_option():
-    pass
+    pass  # pragma: no cover
 
 
 @register_help_topic(
