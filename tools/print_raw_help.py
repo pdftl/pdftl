@@ -2,6 +2,8 @@
 
 import sys
 
+sys.argv[0] = "pdftl"  # hack in correct name
+
 import pdftl
 
 pdftl.registry_init.initialize_registry()
