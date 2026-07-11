@@ -195,7 +195,7 @@ class TestResolveGsExtras:
         result = _resolve_gs_extras(["/GS0", "gs"], resources)
         assert "fill-alpha: 0.5" in result
         assert "stroke-alpha: 0.8" in result
-        assert "blend: /Multiply" in result
+        assert "blend: Multiply" in result
 
     def test_only_ca(self, pdf):
         resources = make_gs_resources(pdf, "/GS0", ca=1.0)
@@ -213,7 +213,7 @@ class TestResolveGsExtras:
     def test_only_BM(self, pdf):
         resources = make_gs_resources(pdf, "/GS0", BM="/Screen")
         result = _resolve_gs_extras(["/GS0", "gs"], resources)
-        assert any("blend: /Screen" in s for s in result)
+        assert any("blend: Screen" in s for s in result)
 
     def test_no_fields_returns_empty_list(self, pdf):
         resources = make_gs_resources(pdf, "/GS0")
@@ -240,6 +240,11 @@ class TestResolveGsExtras:
                 raise AttributeError("boom")
 
         assert _resolve_gs_extras(["/GS0", "gs"], Broken()) == []
+
+    def test_unrecognized_blend_mode_falls_back_to_raw_name(self, pdf):
+        resources = make_gs_resources(pdf, "/GS0", BM="/CustomBlend")
+        result = _resolve_gs_extras(["/GS0", "gs"], resources)
+        assert any("blend: /CustomBlend" in s for s in result)
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +422,7 @@ class TestAnnotateStream:
         resources = make_gs_resources(pdf, "/GS0", ca=0.5, BM="/Multiply")
         result = annotate_stream(b"/GS0 gs\n", resources=resources)
         assert b"fill-alpha: 0.5" in result
-        assert b"blend: /Multiply" in result
+        assert b"blend: Multiply" in result
 
     def test_do_resource_lookup(self, pdf):
         resources = make_xobj_resources(pdf, "/Fm0", "/Form")

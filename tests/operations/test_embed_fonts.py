@@ -914,3 +914,45 @@ def test_attach_stream_to_descriptor_removes_stale_fontfile_keys():
     # Asserts that at least one stale key was successfully swept/deleted
     stale_keys_deleted = ("/FontFile" not in descriptor) or ("/FontFile3" not in descriptor)
     assert stale_keys_deleted
+
+
+def test_embed_fonts_rename_skipped_when_ps_name_unresolvable(tmp_path):
+    """Verifies that requesting rename on a font with an unresolvable/unrecognized
+    binary format skips renaming cleanly, leaving original BaseFont untouched."""
+    pdf = pikepdf.Pdf.new()
+    desc = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/Helvetica"),
+            }
+        )
+    )
+    font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/TrueType"),
+                "/BaseFont": pikepdf.Name("/Helvetica"),
+                "/FontDescriptor": desc,
+            }
+        )
+    )
+    pdf.add_blank_page().Resources = pikepdf.Dictionary(
+        {"/Font": pikepdf.Dictionary({"/F1": font})}
+    )
+
+    # Unrecognized extension means _extract_ps_name returns None,
+    # so _maybe_rename_font should bail before touching BaseFont/FontName.
+    fake_sys_path = tmp_path / "Helvetica.unknown_extension"
+    fake_sys_path.write_bytes(b"arbitrary font bytes")
+
+    with patch(
+        "pdftl.operations.embed_fonts.resolve_system_font_path", return_value=str(fake_sys_path)
+    ):
+        res = embed_fonts(pdf, ["rename"])
+
+    assert res.success is True
+    # Rename was requested but ps_name could not be resolved, so names are unchanged
+    assert str(font["/BaseFont"]) == "/Helvetica"
+    assert str(desc["/FontName"]) == "/Helvetica"

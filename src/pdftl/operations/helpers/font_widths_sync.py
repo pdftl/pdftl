@@ -271,7 +271,7 @@ def _read_sync_mode(font_entry: dict, out_dir: Path) -> tuple[str, Path | None]:
                 with open(json_path, encoding="utf-8") as f:
                     sync_mode = json.load(f).get("width_sync_mode", "auto")
             except (OSError, ValueError, TypeError, KeyError):
-                pass
+                pass  # sidecar json missing/unreadable/malformed; use default sync_mode
     return sync_mode, json_path
 
 

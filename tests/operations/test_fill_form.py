@@ -31,9 +31,10 @@ def test_fill_form_prompt(pdf, tmp_path):
     fdf.Root.FDF = pikepdf.Dictionary(Fields=[])
     fdf.save(fdf_path)
 
-    with patch("pdftl.operations.fill_form.smart_open", return_value=open(fdf_path, "rb")):
+    with open(fdf_path, "rb") as fdf_file:
         # Lambda mimics user typing the correct path during get_input prompt
-        fill_form(pdf, [], lambda msg, **kw: str(fdf_path))
+        with patch("pdftl.operations.fill_form.smart_open", return_value=fdf_file):
+            fill_form(pdf, [], lambda msg, **kw: str(fdf_path))
 
 
 def test_fill_form_os_error(pdf):

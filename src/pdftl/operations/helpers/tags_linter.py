@@ -276,7 +276,7 @@ def _process_heading(
             level = int(standard_tag[1:])
             heading_levels_by_order.append((level, current_path, raw_tag))
         except ValueError:
-            pass
+            pass  # tag suffix isn't numeric; skip heading-level tracking
 
 
 def _process_figure(
@@ -320,7 +320,7 @@ def _is_node_seen(elem, seen: set) -> bool:
         if objgen:
             seen.add(objgen)
     except (AttributeError, TypeError):
-        pass
+        pass  # object has no comparable ref; treat as unseen
     return False
 
 

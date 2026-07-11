@@ -160,7 +160,6 @@ def _mock_font_tools(monkeypatch):
         def save(self, path_or_stream):
             if hasattr(path_or_stream, "write"):
                 path_or_stream.write(b"mock_saved_bytes")
-            pass
 
     monkeypatch.setattr("fontTools.ttLib.TTFont", DummyTTFont)
 
@@ -558,7 +557,7 @@ def test_import_fonts_success_end_to_end(tmp_path, sample_pdf_with_fonts):
 # ============================================================================
 
 
-def testfile_hash_oserror(monkeypatch, tmp_path):
+def test_file_hash_oserror(monkeypatch, tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_text("test")
 
@@ -569,7 +568,7 @@ def testfile_hash_oserror(monkeypatch, tmp_path):
     assert file_hash(test_file) == ""
 
 
-def testget_target_pages_direct():
+def test_get_target_pages_direct():
     pdf = pikepdf.new()
     pdf.add_blank_page()
     pdf.add_blank_page()

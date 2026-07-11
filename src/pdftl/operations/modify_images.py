@@ -166,12 +166,12 @@ def _parse_operational_args(args: list[str]) -> tuple[int | None, int, list[str]
             try:
                 threads_val = int(arg.split("=", 1)[1])
             except ValueError:
-                pass
+                pass  # ignore malformed threads= arg, fall through to default
         elif arg.startswith("quality="):
             try:
                 quality = int(arg.split("=", 1)[1])
             except ValueError:
-                pass
+                pass  # ignore malformed quality= arg, fall through to default
         else:
             clean_args.append(arg)
 

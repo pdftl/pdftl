@@ -171,7 +171,7 @@ def _decode_ccitt_image(data: bytes, w: int, h: int, normalized_meta: dict) -> t
         try:
             k_val = int(re.sub(r"[^\d-]", "", str(normalized_meta["K"])))
         except ValueError:
-            pass
+            pass  # non-numeric K value; leave k_val unset
     elif "DecodeParms" in normalized_meta:
         dp_str = str(normalized_meta["DecodeParms"])
         match_k = re.search(r"/K\s+([-\d]+)", dp_str)

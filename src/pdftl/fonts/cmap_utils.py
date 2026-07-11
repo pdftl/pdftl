@@ -132,7 +132,7 @@ def _try_parse_bfchar_item(src_token: str, dst_token: str, mappings: dict[str, s
         if val:  # Only assign if decoding was successful and non-empty
             mappings[src_hex] = val
     except ValueError:
-        pass
+        pass  # unparsable hex destination; skip this mapping entry
 
 
 def _parse_bfchar_block(tokens: list[str], start_idx: int, mappings: dict[str, str]) -> int:

@@ -185,7 +185,7 @@ def _import_flags(descriptor: Any, desc_data: dict) -> bool:
             descriptor["/Flags"] = new_flags
             return True
     except (TypeError, ValueError):
-        pass
+        pass  # descriptor Flags missing/non-numeric; treat as no update needed
 
     return False
 

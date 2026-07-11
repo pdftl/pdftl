@@ -74,7 +74,6 @@ def _mock_font_tools(monkeypatch):
         def save(self, path_or_stream):
             if hasattr(path_or_stream, "write"):
                 path_or_stream.write(b"mock_saved_bytes")
-            pass
 
     monkeypatch.setattr("fontTools.ttLib.TTFont", DummyTTFont)
 
@@ -124,7 +123,6 @@ def _mock_font_tools_with_extra_glyph(monkeypatch):
         def save(self, path_or_stream):
             if hasattr(path_or_stream, "write"):
                 path_or_stream.write(b"mock_saved_bytes")
-            pass
 
     monkeypatch.setattr("fontTools.ttLib.TTFont", DummyTTFont)
 
@@ -797,7 +795,6 @@ def _mock_font_tools_with_winansi_glyph(monkeypatch):
         def save(self, path_or_stream):
             if hasattr(path_or_stream, "write"):
                 path_or_stream.write(b"mock_saved_bytes")
-            pass
 
     monkeypatch.setattr("fontTools.ttLib.TTFont", DummyTTFont)
 

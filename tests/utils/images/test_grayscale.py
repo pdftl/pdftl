@@ -4,6 +4,7 @@
 
 # tests/utils/images/test_grayscale.py
 
+import io
 import pytest
 from types import SimpleNamespace
 import pikepdf
@@ -265,11 +266,6 @@ def test_prepare_recolor_payload_success(monkeypatch):
     assert ctx.page_num == 3
 
 
-import io
-import pytest
-
-import pdftl.utils.images.grayscale as gray_mod
-
 # ==============================================================================
 # FIXTURES & HELPERS (Preserved from test_image_utils)
 # ==============================================================================
@@ -328,7 +324,7 @@ def test_prepare_payload_structural_guards(empty_pdf, extra_entries):
     seen = set()
 
     # Phased orchestrator explicitly aborts stage 1 processing by returning None
-    assert gray_mod.prepare_recolor_payload(img_meta, 75, seen) is None
+    assert mod.prepare_recolor_payload(img_meta, 75, seen) is None
 
 
 def test_prepare_payload_already_grayscale(empty_pdf):
@@ -337,7 +333,7 @@ def test_prepare_payload_already_grayscale(empty_pdf):
     img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
     seen = set()
 
-    assert gray_mod.prepare_recolor_payload(img_meta, 75, seen) is None
+    assert mod.prepare_recolor_payload(img_meta, 75, seen) is None
 
 
 def test_prepare_payload_handles_missing_colorspace(empty_pdf):
@@ -348,7 +344,7 @@ def test_prepare_payload_handles_missing_colorspace(empty_pdf):
     img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
     seen = set()
 
-    assert gray_mod.prepare_recolor_payload(img_meta, 75, seen) is None
+    assert mod.prepare_recolor_payload(img_meta, 75, seen) is None
 
 
 def test_commit_strips_decode_parms(empty_pdf):
@@ -358,11 +354,11 @@ def test_commit_strips_decode_parms(empty_pdf):
     img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
     seen = set()
 
-    prepared = gray_mod.prepare_recolor_payload(img_meta, 75, seen)
+    prepared = mod.prepare_recolor_payload(img_meta, 75, seen)
     payload, ctx = prepared
-    result = gray_mod.worker_recolor_pixels(payload)
+    result = mod.worker_recolor_pixels(payload)
 
-    assert gray_mod.commit_recolored_stream(ctx, result, payload) is True
+    assert mod.commit_recolored_stream(ctx, result, payload) is True
     assert "/DecodeParms" not in img_xobj
 
 
@@ -372,9 +368,9 @@ def test_commit_handles_mutation_pdf_error(empty_pdf, monkeypatch):
     img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
     seen = set()
 
-    prepared = gray_mod.prepare_recolor_payload(img_meta, 75, seen)
+    prepared = mod.prepare_recolor_payload(img_meta, 75, seen)
     payload, ctx = prepared
-    result = gray_mod.worker_recolor_pixels(payload)
+    result = mod.worker_recolor_pixels(payload)
 
     original_name_init = pikepdf.Name
 
@@ -386,12 +382,11 @@ def test_commit_handles_mutation_pdf_error(empty_pdf, monkeypatch):
     monkeypatch.setattr(pikepdf, "Name", mock_name_constructor)
 
     # Commit phase should catch internal pikepdf errors and report failure safely
-    assert gray_mod.commit_recolored_stream(ctx, result, payload) is False
+    assert mod.commit_recolored_stream(ctx, result, payload) is False
 
 
 def test_prepare_payload_handles_colorspace_mutation_failure():
     """Ported from test_core_lines_28_29_handles_colorspace_mutation_failure."""
-    import pdftl.utils.images.grayscale as gray_mod
 
     class MockStreamWithBadArray:
         def __init__(self):
@@ -420,13 +415,12 @@ def test_prepare_payload_handles_colorspace_mutation_failure():
     img_meta = {"xobj": MockStreamWithBadArray(), "format": "dctdecode", "page": 1}
     seen = set()
 
-    assert gray_mod.prepare_recolor_payload(img_meta, 75, seen) is None
+    assert mod.prepare_recolor_payload(img_meta, 75, seen) is None
 
 
 def test_worker_handles_pil_conversion_value_error(empty_pdf, monkeypatch):
     """Ported from test_convert_grayscale_pil_conversion_value_error."""
     from PIL import Image
-    import pdftl.utils.images.grayscale as gray_mod
 
     def mock_convert(*args, **kwargs):
         raise ValueError("Matrix downsample channel mismatch conversion failure")
@@ -437,18 +431,17 @@ def test_worker_handles_pil_conversion_value_error(empty_pdf, monkeypatch):
     img_meta = {"xobj": img_xobj, "format": "dctdecode", "page": 1}
     seen = set()
 
-    prepared = gray_mod.prepare_recolor_payload(img_meta, 75, seen)
+    prepared = mod.prepare_recolor_payload(img_meta, 75, seen)
     assert prepared is not None
     payload, ctx = prepared
 
     # The off-thread worker wraps this failure explicitly in a RuntimeError
     with pytest.raises(RuntimeError, match="PIL failed downsampling image channels"):
-        gray_mod.worker_recolor_pixels(payload)
+        mod.worker_recolor_pixels(payload)
 
 
 def test_commit_handles_nested_smask_neutralization(empty_pdf):
     """Ported from test_core_lines_59_61_neutralizes_nested_smask."""
-    import pdftl.utils.images.grayscale as gray_mod
 
     smask_stream = empty_pdf.make_stream(b"")
     smask_stream.ColorSpace = pikepdf.Name("/DeviceRGB")
@@ -459,12 +452,12 @@ def test_commit_handles_nested_smask_neutralization(empty_pdf):
     img_meta = {"xobj": fake_xobj, "format": "dctdecode", "page": 1}
     seen = set()
 
-    prepared = gray_mod.prepare_recolor_payload(img_meta, 75, seen)
+    prepared = mod.prepare_recolor_payload(img_meta, 75, seen)
     assert prepared is not None
     payload, ctx = prepared
 
-    result = gray_mod.worker_recolor_pixels(payload)
-    success = gray_mod.commit_recolored_stream(ctx, result, payload)
+    result = mod.worker_recolor_pixels(payload)
+    success = mod.commit_recolored_stream(ctx, result, payload)
 
     assert success is True
     assert smask_stream.ColorSpace == pikepdf.Name("/DeviceGray")

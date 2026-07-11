@@ -148,7 +148,7 @@ def _extract_fit_type(coords: list) -> str:
             if val_str in ("/XYZ", "/Fit", "/FitH", "/FitV", "/FitR", "/FitB", "/FitBH", "/FitBV"):
                 return val_str
         except (ValueError, TypeError):
-            pass
+            pass  # destination array missing recognized fit-mode string
     return ""
 
 

@@ -905,7 +905,7 @@ def test_patch_widths_with_extreme_values(tmp_path, bad_width):
         patched_file.write_bytes(result)
         widths = get_widths_from_cff(patched_file)
         # A parse failure here (empty dict) would indicate silent corruption.
-        assert widths != {} or bad_width != bad_width  # tolerate NaN edge case explicitly
+        assert widths != {} or math.isnan(bad_width)  # tolerate NaN edge case explicitly
 
 
 def test_import_with_zero_length_sidecar_mapping(tmp_path):

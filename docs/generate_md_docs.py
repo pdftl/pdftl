@@ -76,35 +76,6 @@ def _apply_autolinks(text: str, current_topic: str, current_folder: str, targets
     return text
 
 
-# def _apply_autolinks(text: str, current_topic: str, current_folder: str, targets: dict) -> str:
-#     """
-#     Scans generated markdown and transforms bare operation/topic words
-#     into explicit relative markdown links based on target locations.
-#     """
-#     for name, target_folder in targets.items():
-#         if name == current_topic:
-#             continue  # Avoid rendering a self-linking reference loop
-
-#         # Matches the exact word boundary, ensuring it's not part of a flag like 'render='
-#         pattern = rf"`({name})`(?!\s*=|\w|\.)"
-
-#         # Calculate the relative path depth based on the folder structure
-#         if current_folder == ".":
-#             # From the root (source/): targets are in folder/name.md
-#             rel_path = f"{target_folder}/{name}.md"
-#         else:
-#             if current_folder == target_folder:
-#                 # Same directory tier (e.g., inside operations/ linking to another operation)
-#                 rel_path = f"{name}.md"
-#             else:
-#                 # Traversing across different folders (e.g., general/ linking to operations/)
-#                 rel_path = f"../{target_folder}/{name}.md"
-
-#         text = re.sub(pattern, rf"[`\1`](<{rel_path}>)", text)
-
-#     return text
-
-
 def write_api_reference(operations, filepath):
     """
     Generates the Python API Reference (RST format) by translating

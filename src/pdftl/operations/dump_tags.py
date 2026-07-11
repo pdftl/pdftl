@@ -189,9 +189,9 @@ _KNOWN_FLAGS = {"json", "annotate"}
 _KNOWN_KV = {"streams"}
 
 
-def _parse_args(op_args: list[str], op_name: str) -> tuple[str, list[str], bool, bool, bool]:
+def _parse_args(op_args: list[str], op_name: str) -> tuple[str, list[str], set[str], bool]:
     """
-    Returns (mode, page_specs, json_output, annotate, show_streams).
+    Returns (mode, page_specs, flags, show_streams).
     """
     from pdftl.utils.keyval_parser import parse_keyval_list
 
@@ -206,21 +206,18 @@ def _parse_args(op_args: list[str], op_name: str) -> tuple[str, list[str], bool,
 
     mode = "reading_order"
     page_specs: list[str] = []
-    json_output = False
-    annotate = False
+    flags = set()
 
     for token in bare:
         if token in _MODES:
             mode = token
-        elif token == "json":
-            json_output = True
-        elif token == "annotate":
-            annotate = True
+        elif token in _KNOWN_FLAGS:
+            flags.update({token})
         else:
             page_specs.append(token)
 
     show_streams = kvs.get("streams", "true") != "false"
-    return mode, page_specs, json_output, annotate, show_streams
+    return mode, page_specs, flags, show_streams
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +337,9 @@ def dump_tags(op_name, pdf: pikepdf.Pdf, op_args, output_file=None) -> OpResult:
     Inspect the PDF structure tree in one of three modes:
     reading_order (default), tree, or issues.
     """
-    mode, page_specs, json_output, annotate, show_streams = _parse_args(op_args, op_name)
+    mode, page_specs, flags, show_streams = _parse_args(op_args, op_name)
+    json_output = "json" in flags
+    annotate = "annotate" in flags
 
     # Resolve target pages
     num_pages = len(pdf.pages)

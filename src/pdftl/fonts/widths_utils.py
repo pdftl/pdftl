@@ -75,7 +75,7 @@ def _extract_simple_widths(font_obj: Any) -> dict[str, float]:
         try:
             widths[f"{char_code:02X}"] = float(w)
         except (ValueError, TypeError):
-            pass
+            pass  # skip entries with non-numeric width data
 
     return widths
 
@@ -87,7 +87,7 @@ def _extract_seq_widths(start_cid: int, seq_items: list, widths: dict[str, float
         try:
             widths[f"{cid:04X}"] = float(w)
         except (ValueError, TypeError):
-            pass
+            pass  # skip entries with non-numeric width data
 
 
 def _extract_range_widths(
@@ -100,7 +100,7 @@ def _extract_range_widths(
         for cid in range(start_cid, end_cid + 1):
             widths[f"{cid:04X}"] = w
     except (ValueError, TypeError):
-        pass
+        pass  # non-numeric width value; skip this CID range
 
 
 def _extract_composite_widths(font_obj: Any) -> dict[str, float]:
@@ -176,7 +176,7 @@ def _update_simple_widths(font_obj: Any, widths_map: dict[str, float], pikepdf) 
         try:
             normalized_map[f"{int(k, 16):02X}"] = v
         except ValueError:
-            pass
+            pass  # skip keys that aren't valid hex
 
     if not normalized_map:
         return
@@ -240,7 +240,7 @@ def _update_composite_widths(font_obj: Any, widths_map: dict[str, float], pikepd
         try:
             normalized_map[f"{int(k, 16):04X}"] = v
         except ValueError:
-            pass
+            pass  # skip keys that aren't valid hex
 
     if not normalized_map:
         if "/W" in cid_font:

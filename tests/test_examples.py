@@ -54,7 +54,7 @@ def discover_examples():
 @pytest.mark.slow
 @pytest.mark.serial
 @pytest.mark.parametrize("command_str, setup_data", discover_examples())
-def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_dir):
+def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_dir, pdf_factory):
     """
     Tests all example commands discovered from CLI_DATA in a fully isolated environment.
     """
@@ -77,6 +77,14 @@ def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_d
         # 1. Make directories
         for dir_name in setup_data.get("mkdirs", []):
             (work_dir / dir_name).mkdir(parents=True, exist_ok=True)
+
+        # Ensure any {N}_page.pdf referenced by copy_assets is actually generated
+        # before attempting to copy it — these are dynamically built by
+        # pdf_factory, not static committed files, so they don't exist until
+        # something requests them.
+        for asset_name in setup_data.get("copy_assets", {}):
+            if asset_name.endswith("_page.pdf") and asset_name[: -len("_page.pdf")].isdigit():
+                pdf_factory(int(asset_name[: -len("_page.pdf")]))
 
         # 2. Create raw files (e.g. JSON manifests)
         for filepath, content in setup_data.get("create_files", {}).items():

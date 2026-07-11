@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import sys
 import tempfile
 import time
@@ -268,7 +269,7 @@ def check_widths_extraction_no_crash(pdf_path: Path, workspace: Path) -> None:
                 raise AssertionError(
                     f"non-numeric width for glyph {glyph_name!r} in {embedded_file}: {value!r}"
                 )
-            if isinstance(value, float) and value != value:  # NaN check
+            if isinstance(value, float) and math.isnan(value):  # NaN check
                 raise AssertionError(f"NaN width for glyph {glyph_name!r} in {embedded_file}")
 
 

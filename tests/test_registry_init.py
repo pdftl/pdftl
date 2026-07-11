@@ -227,8 +227,6 @@ def test_clean_registry_does_not_break_class_identity():
     )
     from pdftl.operations.helpers.simplify_vectors_stream import Path as PathBefore
 
-    import pdftl.registry_init as reg_init
-
     if hasattr(reg_init.initialize_registry, "initialized"):
         delattr(reg_init.initialize_registry, "initialized")
     reg_init.initialize_registry()

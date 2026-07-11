@@ -311,7 +311,7 @@ def _merge_stroke_group(
                 initial_w = ([avg_w], widths[0][1])
                 final_w = widths[-1]
         except (IndexError, ValueError, TypeError):
-            pass
+            pass  # not enough valid width samples to average; skip smoothing
 
     merged_subpaths = []
 

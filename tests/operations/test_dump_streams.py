@@ -97,7 +97,7 @@ def test_annotate_stream_gs_lookup(base_pdf):
     annotated = annotate_stream(stream, resources)
     assert b"fill-alpha: 0.5" in annotated
     assert b"stroke-alpha: 0.8" in annotated
-    assert b"blend: /Multiply" in annotated
+    assert b"blend: Multiply" in annotated
 
 
 def test_annotate_stream_graceful_lookup_failures():

@@ -3,7 +3,7 @@
 """Stream annotation & formatting helpers for dump_streams"""
 
 from pdftl.operations.data.pdf_operators import PDF_OPERATORS
-from pdftl.operations.data.pdf_operator_args import PDF_OPERATOR_ARGS
+from pdftl.operations.data.pdf_operator_args import PDF_OPERATOR_ARGS, _BLEND_MODES
 from pdftl.utils.scope_tracker import ScopeTracker
 
 
@@ -14,7 +14,7 @@ def _interpret_operands(op: str, tokens: list[str]) -> str:
         if arg_fn:
             return arg_fn(tokens) or ""
     except (ValueError, IndexError, KeyError, TypeError):
-        pass
+        pass  # malformed/unsupported operator tokens; fall through to empty
     return ""
 
 
@@ -49,7 +49,7 @@ def _resolve_do_extras(tokens: list[str], resources) -> list[str]:
             if xobj is not None and "/Subtype" in xobj:
                 return [f"Subtype: {xobj.Subtype}"]
     except (AttributeError, KeyError, TypeError, ValueError):
-        pass
+        pass  # resource lookup failed; fall through to empty list
     return []
 
 
@@ -58,13 +58,14 @@ def _resolve_gs_extras(tokens: list[str], resources) -> list[str]:
         if len(tokens) >= 2 and resources and "/ExtGState" in resources:
             gs_obj = resources.ExtGState.get(tokens[-2])
             if gs_obj is not None:
+                bm_str = str(gs_obj.BM) if "/BM" in gs_obj else None
                 return [
                     *([f"fill-alpha: {gs_obj.ca}"] if "/ca" in gs_obj else []),
                     *([f"stroke-alpha: {gs_obj.CA}"] if "/CA" in gs_obj else []),
-                    *([f"blend: {gs_obj.BM}"] if "/BM" in gs_obj else []),
+                    *([f"blend: {_BLEND_MODES.get(bm_str, bm_str)}"] if bm_str else []),
                 ]
     except (AttributeError, KeyError, TypeError, ValueError):
-        pass
+        pass  # graphics state lookup failed; fall through to empty list
     return []
 
 

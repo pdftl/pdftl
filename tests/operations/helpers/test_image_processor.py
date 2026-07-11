@@ -288,6 +288,7 @@ def test_handle_flate_fallback():
 from unittest.mock import patch
 
 
+# noqa py:missing-equals
 class MockXObjDict(dict):
     """Dict that also records .write() calls and supports DecodeParms assignment,
     mirroring the pikepdf Stream object's dual dict-like/attribute-like interface

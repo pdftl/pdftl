@@ -111,7 +111,7 @@ def _rename_font_objects(font_obj: Any, descriptor: Any, ps_name: str, pikepdf_m
             descendant = font_obj.DescendantFonts[0]
             descendant["/BaseFont"] = new_name
         except (AttributeError, IndexError, TypeError):
-            pass
+            pass  # no descendant CIDFont present; nothing to rename
 
 
 def _attach_stream_to_descriptor(
@@ -241,27 +241,11 @@ def _create_and_attach_descriptor(
     return True
 
 
-@register_operation(
-    "embed_fonts",
-    tags=["in_place", "fonts", "embed", "repair"],
-    type="single input operation",
-    desc="Automatically locate and embed missing system fonts",
-    long_desc=_EMBED_FONTS_LONG_DESC,
-    examples=_EMBED_FONTS_EXAMPLES,
-    usage="<input> embed_fonts [<spec>...] [output <output>]",
-    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
-)
-def embed_fonts(pdf: pikepdf.Pdf, specs: list[str]) -> OpResult:
-    """
-    Locate equivalents for unembedded fonts and inject their binary
-    streams back into the PDF structures.
-    """
-    ensure_dependencies(
-        feature_name="embed_fonts",
-        dependencies={"fontTools": "fonttools"},
-        extra_tag="embed-fonts",
-    )
+def _parse_embed_fonts_args(specs: list[str]) -> tuple[list[str], bool, bool, list[str]]:
+    """Parses embed_fonts spec tokens into structured options.
 
+    Returns (custom_dirs, use_system, do_rename, clean_specs).
+    """
     custom_dirs = []
     use_system = True
     do_rename = False
@@ -283,6 +267,121 @@ def embed_fonts(pdf: pikepdf.Pdf, specs: list[str]) -> OpResult:
             clean_specs.append(arg)
             i += 1
 
+    return custom_dirs, use_system, do_rename, clean_specs
+
+
+def _resolve_and_read_font_bytes(
+    font_meta: dict, custom_dirs: list[str], use_system: bool
+) -> tuple[str, bytes] | None:
+    """Locates a system font binary matching font_meta and reads its bytes.
+
+    Returns (sys_path, font_bytes) on success, or None if the font could not
+    be located or read.
+    """
+    base_font = font_meta.get("base_font")
+    if not base_font or base_font == "[none]":
+        return None
+
+    sys_path = resolve_system_font_path(base_font, custom_dirs=custom_dirs, use_system=use_system)
+    if not sys_path:
+        logger.warning("Could not locate font binary for unembedded PDF font: %s", base_font)
+        return None
+
+    try:
+        with open(sys_path, "rb") as f:
+            font_bytes = f.read()
+    except OSError as e:
+        # File exists but access denied or read error occurred; skip gracefully
+        logger.warning("Failed to read located font file %s: %s", sys_path, e)
+        return None
+
+    return sys_path, font_bytes
+
+
+def _maybe_rename_font(
+    font_obj: Any, descriptor: Any, base_font: str, sys_path: str, file_ext: str
+) -> None:
+    """Renames the PDF's internal font structures to match the located binary's true name."""
+    import pikepdf
+
+    ps_name = _extract_ps_name(sys_path, file_ext)
+    if not ps_name:
+        return
+
+    resolved_desc = descriptor if descriptor else font_obj.get("/FontDescriptor")
+    _rename_font_objects(font_obj, resolved_desc, ps_name, pikepdf)
+    logger.info(
+        "Renamed PDF font structures from %s to match injected binary %s", base_font, ps_name
+    )
+
+
+def _embed_single_font(
+    pdf: pikepdf.Pdf,
+    local_name: str,
+    font_obj: Any,
+    custom_dirs: list[str],
+    use_system: bool,
+    do_rename: bool,
+) -> bool:
+    """Resolves, reads, and embeds a single font object's binary if possible.
+
+    Returns True if a font stream was successfully embedded.
+    """
+    font_meta = process_single_font(local_name, font_obj)
+    if not font_meta or font_meta.get("is_embedded"):
+        return False
+
+    base_font = font_meta.get("base_font")
+    resolved = _resolve_and_read_font_bytes(font_meta, custom_dirs, use_system)
+    if resolved is None:
+        return False
+    sys_path, font_bytes = resolved
+
+    file_ext = Path(sys_path).suffix.lower()
+    descriptor = find_font_descriptor(font_obj)
+
+    if descriptor:
+        _attach_stream_to_descriptor(pdf, descriptor, font_bytes, file_ext)
+        embedded = True
+        logger.info(
+            "Successfully embedded missing font stream for %s from %s", base_font, sys_path
+        )
+    else:
+        embedded = _create_and_attach_descriptor(pdf, font_obj, font_bytes, sys_path, file_ext)
+        if embedded:
+            logger.info(
+                "Created descriptor and embedded missing font for %s from %s", base_font, sys_path
+            )
+
+    if embedded and do_rename:
+        _maybe_rename_font(font_obj, descriptor, base_font, sys_path, file_ext)
+
+    return embedded
+
+
+@register_operation(
+    "embed_fonts",
+    tags=["in_place", "fonts", "embed", "repair"],
+    type="single input operation",
+    desc="Automatically locate and embed missing system fonts",
+    long_desc=_EMBED_FONTS_LONG_DESC,
+    examples=_EMBED_FONTS_EXAMPLES,
+    usage="<input> embed_fonts [<spec>...] [output <output>]",
+    args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
+)
+def embed_fonts(pdf: pikepdf.Pdf, specs: list[str]) -> OpResult:
+    """
+    Locate equivalents for unembedded fonts and inject their binary
+    streams back into the PDF structures.
+    """
+    ensure_dependencies(
+        feature_name="embed_fonts",
+        dependencies={"fontTools": "fonttools"},
+        extra_tag="embed-fonts",
+    )
+
+    custom_dirs, use_system, do_rename, clean_specs = _parse_embed_fonts_args(specs)
+
     target_pages = get_target_pages(pdf, clean_specs)
     embedded_count = 0
     seen_obj_ids = set()
@@ -295,59 +394,8 @@ def embed_fonts(pdf: pikepdf.Pdf, specs: list[str]) -> OpResult:
             continue
         seen_obj_ids.add(obj_id)
 
-        font_meta = process_single_font(local_name, font_obj)
-        if not font_meta or font_meta.get("is_embedded"):
-            continue
-
-        base_font = font_meta.get("base_font")
-        if not base_font or base_font == "[none]":
-            continue
-
-        sys_path = resolve_system_font_path(
-            base_font, custom_dirs=custom_dirs, use_system=use_system
-        )
-        if not sys_path:
-            logger.warning("Could not locate font binary for unembedded PDF font: %s", base_font)
-            continue
-
-        try:
-            with open(sys_path, "rb") as f:
-                font_bytes = f.read()
-        except OSError as e:
-            # File exists but access denied or read error occurred; skip gracefully
-            logger.warning("Failed to read located font file %s: %s", sys_path, e)
-            continue
-
-        file_ext = Path(sys_path).suffix.lower()
-        descriptor = find_font_descriptor(font_obj)
-
-        if descriptor:
-            _attach_stream_to_descriptor(pdf, descriptor, font_bytes, file_ext)
+        if _embed_single_font(pdf, local_name, font_obj, custom_dirs, use_system, do_rename):
             embedded_count += 1
-            logger.info(
-                "Successfully embedded missing font stream for %s from %s", base_font, sys_path
-            )
-        else:
-            if _create_and_attach_descriptor(pdf, font_obj, font_bytes, sys_path, file_ext):
-                embedded_count += 1
-                logger.info(
-                    "Created descriptor and embedded missing font for %s from %s",
-                    base_font,
-                    sys_path,
-                )
-
-        if do_rename:
-            import pikepdf
-
-            ps_name = _extract_ps_name(sys_path, file_ext)
-            if ps_name:
-                resolved_desc = descriptor if descriptor else font_obj.get("/FontDescriptor")
-                _rename_font_objects(font_obj, resolved_desc, ps_name, pikepdf)
-                logger.info(
-                    "Renamed PDF font structures from %s to match injected binary %s",
-                    base_font,
-                    ps_name,
-                )
 
     logger.info("Successfully embedded %d missing font(s).", embedded_count)
     return OpResult(success=True, pdf=pdf)

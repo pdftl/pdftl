@@ -154,7 +154,6 @@ def _mock_font_tools(monkeypatch):
         def save(self, path_or_stream):
             if hasattr(path_or_stream, "write"):
                 path_or_stream.write(b"mock_saved_bytes")
-            pass
 
     monkeypatch.setattr("fontTools.ttLib.TTFont", DummyTTFont)
 
@@ -1413,7 +1412,6 @@ def test_apply_descriptor_edit_no_change():
 def test_import_descriptor_empty_desc_data(tmp_path):
     from pdftl.operations.helpers.font_import_helpers import import_descriptor
     import pikepdf
-    import json
 
     font_entry = {"sidecar_json_file": "sidecar.json"}
     sidecar = tmp_path / "sidecar.json"
@@ -1426,7 +1424,6 @@ def test_import_type3_font_reconstruction_success(tmp_path):
     from pdftl.operations.helpers.font_import_helpers import import_type3_font
     from PIL import Image
     import pikepdf
-    import json
 
     img = Image.new("L", (2, 2))
     img_path = tmp_path / "img0.tiff"
@@ -1527,7 +1524,6 @@ def test_resolve_sidecar_clash_and_files(tmp_path):
 def test_import_tounicode_json_success(tmp_path):
     from pdftl.operations.helpers.font_import_helpers import _import_tounicode_json
     import pikepdf
-    import json
 
     pdf = pikepdf.new()
     f = tmp_path / "u.json"
@@ -1689,7 +1685,6 @@ def test_import_tounicode_json_updates_existing_stream(tmp_path):
     """527: existing /ToUnicode is overwritten via .write(), not replaced."""
     from pdftl.operations.helpers.font_import_helpers import _import_tounicode_json
     import pikepdf
-    import json
 
     pdf = pikepdf.new()
     f = tmp_path / "u.json"
@@ -1750,7 +1745,6 @@ def test_import_widths_preserve_mode_returns_false(tmp_path):
     """1091: sync_mode == 'preserve' -> no writes at all."""
     from pdftl.operations.helpers.font_import_helpers import import_widths
     import pikepdf
-    import json
 
     font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/TrueType")})
     font_entry = {"sidecar_json_file": "sidecar.json"}

@@ -145,7 +145,7 @@ def _resolve_linux_fontconfig(font_name: str) -> str | None:
                 return path
 
     except (FileNotFoundError, subprocess.CalledProcessError, OSError):
-        pass
+        pass  # locator command unavailable or failed; fall through to None
 
     return None
 

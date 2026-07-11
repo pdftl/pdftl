@@ -22,22 +22,21 @@ from pdftl.operations.dump_tags import _parse_args, dump_tags, dump_tags_cli_hoo
 def test_parse_args_defaults() -> None:
     """Verify default configurations set expected parameters."""
     args = []
-    mode, page_specs, json_out, annotate, show_streams = _parse_args(args, "dump_tags")
+    mode, page_specs, flags, show_streams = _parse_args(args, "dump_tags")
 
     assert mode == "reading_order"
     assert page_specs == []
-    assert json_out is False
-    assert annotate is False
+    assert len(flags) == 0
     assert show_streams is True
 
 
 def test_parse_args_explicit() -> None:
     """Check specific parameters override mode choices correctly."""
     args = ["tree", "json", "1-5", "streams=false"]
-    mode, page_specs, json_out, annotate, show_streams = _parse_args(args, "dump_tags")
+    mode, page_specs, flags, show_streams = _parse_args(args, "dump_tags")
 
     assert mode == "tree"
-    assert json_out is True
+    assert flags == {"json"}
     assert page_specs == ["1-5"]
     assert show_streams is False
 
@@ -45,10 +44,10 @@ def test_parse_args_explicit() -> None:
 def test_parse_args_annotate() -> None:
     """Verify the annotate flag token is parsed correctly."""
     args = ["annotate"]
-    mode, page_specs, json_out, annotate, show_streams = _parse_args(args, "dump_tags")
+    mode, page_specs, flags, show_streams = _parse_args(args, "dump_tags")
 
     assert mode == "reading_order"
-    assert annotate is True
+    assert flags == {"annotate"}
 
 
 @patch("pdftl.operations.dump_tags._run_tree")
@@ -101,7 +100,7 @@ def test_dump_tags_invalid_mode() -> None:
     mock_pdf.pages = [MagicMock()]
 
     with patch("pdftl.operations.dump_tags._parse_args") as mock_parse:
-        mock_parse.return_value = ("invalid_mode", [], False, False, True)
+        mock_parse.return_value = ("invalid_mode", [], set(), True)
         with pytest.raises(ValueError, match="Unknown dump_tags mode"):
             dump_tags("dump_tags", mock_pdf, ["invalid_mode"])
 
