@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `deskew` operation
+
 - `stamp_fields` operation
 
 - `embed_fonts` operation

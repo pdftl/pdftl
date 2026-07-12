@@ -6,6 +6,11 @@
 
 """Inject PDF code at the start or end of a page content stream"""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pikepdf import Matrix
+
 
 def affix_content(page, code, position):
     """
@@ -13,3 +18,10 @@ def affix_content(page, code, position):
     at given position, either 'head' or 'tail'
     """
     page.contents_add(bytes(code, "utf-8"), prepend=position == "head")
+
+
+def apply_content_matrix(page, matrix: "Matrix") -> None:
+    """Wraps a page's content stream in `q ... cm` / `Q` using the given matrix."""
+    matrix_str = matrix.encode().decode("utf-8")
+    affix_content(page, "Q", "tail")
+    affix_content(page, f"q {matrix_str} cm ", "head")

@@ -142,6 +142,13 @@ def delete_images(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def deskew(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def diff_text(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,

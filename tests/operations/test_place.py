@@ -337,3 +337,25 @@ def test_place_raises_when_no_page_dimensions():
     ):
         with pytest.raises(OperationError, match="Could not get page dimensions"):
             place_content(pdf, ["1(shift=10,10)"])
+
+
+def test_place_raises_when_wrap_visual_matrix_dims_vanish():
+    """Verify OperationError is raised if visual dims succeed initially but vanish
+    on wrap_visual_matrix's own re-fetch (e.g. a page mutated mid-calculation)."""
+    from unittest.mock import MagicMock, patch
+
+    import pikepdf
+
+    from pdftl.operations.place import place_content
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+
+    shared_mock = MagicMock(
+        side_effect=[(0, 0, 200, 300), (0, 0, 200, 300), (0, 0, 200, 300), None]
+    )
+
+    with patch("pdftl.operations.place.get_visible_page_dimensions", shared_mock):
+        with patch("pdftl.utils.dimensions.get_visible_page_dimensions", shared_mock):
+            with pytest.raises(OperationError, match="Could not get page dimensions"):
+                place_content(pdf, ["1(shift=10,10)"])

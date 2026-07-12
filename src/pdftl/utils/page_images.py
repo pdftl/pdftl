@@ -47,6 +47,41 @@ def render_page_to_pil(pdf, page_index: int, dpi: float):
         pdf_buffer.close()
 
 
+def render_page_region_to_pil(
+    pdf, page_index: int, dpi: float, crop_pts: tuple[float, float, float, float]
+):
+    """
+    Render only a rectangular region of a page (in PDF points) at the given DPI.
+
+    Creates a temporary in-memory copy of the PDF for pypdfium2 so the
+    original pikepdf object is not consumed or closed.
+
+    Args:
+        pdf:         An open pikepdf.Pdf object.
+        page_index:  0-based page index.
+        dpi:         Render resolution in dots per inch.
+        crop_pts:    Tuple of (left, bottom, right, top) margins, in PDF
+                     points, to trim from each corresponding page edge.
+
+    Returns:
+        A PIL Image object of the rendered crop region.
+    """
+    pdfium = _get_pdfium()
+    pdf_buffer = _get_open_pdf_buffer(pdf)
+    ui_pdf = None
+    try:
+        ui_pdf = pdfium.PdfDocument(pdf_buffer)
+        ui_pdf.init_forms()
+        scale = dpi / 72.0
+        page = ui_pdf[page_index]
+        bitmap = page.render(scale=scale, crop=crop_pts)
+        return bitmap.to_pil()
+    finally:
+        if ui_pdf:
+            ui_pdf.close()
+        pdf_buffer.close()
+
+
 def iter_pages_as_pil(pdf, dpi: float, page_indices: list[int] | None = None):
     """
     Yield (page_index, PIL Image) for pages in the PDF.

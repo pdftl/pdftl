@@ -62,7 +62,7 @@ Some features also require system software such as `java`.
 * **Geometry:** [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html) or [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html).
 * **Clip and crop:** [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html) to margins or standard paper sizes, or [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html) content outside a given region.
 * **Chop:** [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html) pages into grids or rows.
-* **Layout:** Shift, scale, and spin content with [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html).
+* **Layout:** Shift, scale, and spin content with [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html), or automatically [`deskew`](https://pdftl.readthedocs.io/en/latest/operations/deskew.html).
 * **Montage:** [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html) multiple pages onto a grid layout.
 * **Booklet:** Create a printable [`booklet`](https://pdftl.readthedocs.io/en/latest/operations/booklet.html).
 
@@ -70,7 +70,7 @@ Some features also require system software such as `java`.
 
 * **Search and comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html).
 * **Extraction:** [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html), [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html), and [`dump_fonts`](https://pdftl.readthedocs.io/en/latest/operations/dump_fonts.html).
-* **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html).
+* **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html) and [`stamp_fields`](https://pdftl.readthedocs.io/en/latest/operations/stamp_fields.html).
 * **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html).
 * **Actions and scripts:** [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html) and [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html).
 * **Accessibility and structure:** [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html) for auto-tagging, and [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html) to inspect the structure tree.
@@ -93,7 +93,7 @@ Some features also require system software such as `java`.
 ### Advanced
 
 * **Content streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html), edit and import with [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html).
-* **Fonts:** [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html), edit as needed and then [`import_fonts`](https://pdftl.readthedocs.io/en/latest/operations/import_fonts.html).
+* **Fonts:** [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html), edit as needed and then [`import_fonts`](https://pdftl.readthedocs.io/en/latest/operations/import_fonts.html). And [`embed_fonts`](https://pdftl.readthedocs.io/en/latest/operations/embed_fonts.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) and [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize).
 * **Layers (OCGs):** [`dump_layers`](https://pdftl.readthedocs.io/en/latest/operations/dump_layers.html) and [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html).
@@ -222,6 +222,7 @@ See the [**API Tutorial**][4] for more details.
 | [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
 | [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
+| [`deskew`](https://pdftl.readthedocs.io/en/latest/operations/deskew.html)                               | Automatically detect and correct document skew                  |
 | [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html)                         | Diff the text content of two PDFs and output bounding boxes     |
 | [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html)                   | Dump action info                                                |
 | [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html)                     | Dump annotation info                                            |

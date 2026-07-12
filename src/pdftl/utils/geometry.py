@@ -117,3 +117,40 @@ def get_visual_mapping_matrices(x0: float, y0: float, w: float, h: float, rotati
         m_v_to_u = Matrix()
 
     return m_u_to_v, m_v_to_u
+
+
+def wrap_visual_matrix(page, visual_matrix: "Matrix") -> "Matrix | None":
+    """Wraps a visual-space matrix so it's safe to apply to an unrotated content stream.
+
+    Returns None if the page's visible dimensions can't be determined
+    (caller decides whether that means identity or an error).
+    """
+    from pdftl.utils.dimensions import get_visible_page_dimensions
+
+    rotation = int(page.get("/Rotate", 0)) % 360
+
+    unrot_dims = get_visible_page_dimensions(page, apply_rotate=False)
+    if unrot_dims is None:
+        return None
+    u_x0, u_y0, u_w, u_h = unrot_dims
+
+    vis_dims = get_visible_page_dimensions(page, apply_rotate=True)
+    if vis_dims is None:
+        return None
+
+    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(u_x0, u_y0, u_w, u_h, rotation)
+    return m_u_to_v @ visual_matrix @ m_v_to_u
+
+
+def update_annotations_for_matrix(page, matrix: "Matrix") -> None:
+    """Transforms click-coordinate bounding boxes of page annotations to match `matrix`."""
+    if "/Annots" not in page:
+        return
+
+    for annot in page["/Annots"]:
+        if "/QuadPoints" in annot:
+            annot["/QuadPoints"] = transform_quadpoints(annot["/QuadPoints"], matrix)
+        if "/Rect" in annot:
+            annot["/Rect"] = transform_rect_bbox(annot["/Rect"], matrix)
+        if "/AP" in annot:
+            del annot["/AP"]

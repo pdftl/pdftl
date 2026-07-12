@@ -13,14 +13,9 @@ from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import OperationError
 from pdftl.operations.parsers.place_parser import parse_place_args
-from pdftl.utils.affix_content import affix_content
+from pdftl.utils.affix_content import apply_content_matrix
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
-from pdftl.utils.geometry import (
-    get_visual_mapping_matrices,
-    resolve_anchor,
-    transform_quadpoints,
-    transform_rect_bbox,
-)
+from pdftl.utils.geometry import resolve_anchor, update_annotations_for_matrix, wrap_visual_matrix
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 if TYPE_CHECKING:
@@ -111,12 +106,10 @@ def place_content(target_pdf: "pikepdf.Pdf", place_specs) -> OpResult:
 
             if matrix != pikepdf.Matrix():
                 # 2. Apply the matrix to the content stream
-                matrix_str = matrix.encode().decode("utf-8")
-                affix_content(page, "Q", "tail")
-                affix_content(page, f"q {matrix_str} cm ", "head")
+                apply_content_matrix(page, matrix)
 
                 # 3. Update annotations using the shared helpers
-                _update_annotations(page, matrix)
+                update_annotations_for_matrix(page, matrix)
 
     return OpResult(success=True, pdf=target_pdf)
 
@@ -175,15 +168,11 @@ def _calculate_transformation_matrix(page, operations):
     """
     from pikepdf import Matrix
 
-    rotation = int(page.get("/Rotate", 0)) % 360
-
-    # 1. Unrotated dimensions needed for the coordinate mapping wrap
     unrot_dims = get_visible_page_dimensions(page, apply_rotate=False)
     if unrot_dims is None:
         return Matrix()
-    u_x0, u_y0, u_w, u_h = unrot_dims
 
-    # 2. Visual dimensions needed for percentage math and anchors
+    # Visual dimensions needed for percentage math and anchors
     vis_dims = get_visible_page_dimensions(page, apply_rotate=True)
     if vis_dims is None:
         raise OperationError("Could not get page dimensions")
@@ -197,10 +186,11 @@ def _calculate_transformation_matrix(page, operations):
     if visual_matrix == Matrix():
         return Matrix()
 
-    m_u_to_v, m_v_to_u = get_visual_mapping_matrices(u_x0, u_y0, u_w, u_h, rotation)
-
-    # 4. Wrap the visual transformations to execute safely inside the unrotated content stream
-    return m_u_to_v @ visual_matrix @ m_v_to_u
+    # Wrap the visual transformations to execute safely inside the unrotated content stream
+    wrapped = wrap_visual_matrix(page, visual_matrix)
+    if wrapped is None:
+        raise OperationError("Could not get page dimensions")
+    return wrapped
 
 
 def _step_matrix(op, v_x0, v_y0, v_w, v_h, pikepdf_matrix):
@@ -238,25 +228,6 @@ def _step_matrix(op, v_x0, v_y0, v_w, v_h, pikepdf_matrix):
         step_matrix = m1 @ m2 @ m3
 
     return step_matrix
-
-
-def _update_annotations(page, matrix):
-    """Updates clickable areas to match the new visual location."""
-    if "/Annots" not in page:
-        return
-
-    for annot in page["/Annots"]:
-        # Use shared geometry helpers for the heavy lifting
-        if "/QuadPoints" in annot:
-            # transform_quadpoints is a new export from geometry.py
-            annot["/QuadPoints"] = transform_quadpoints(annot["/QuadPoints"], matrix)
-
-        if "/Rect" in annot:
-            # transform_rect_bbox is a new export from geometry.py
-            annot["/Rect"] = transform_rect_bbox(annot["/Rect"], matrix)
-
-        if "/AP" in annot:
-            del annot["/AP"]
 
 
 def _eval_dim(terms, reference_size: float) -> float:
