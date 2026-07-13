@@ -2,16 +2,60 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Tests for pdftl/utils/keyval_parser.py — 100% coverage target."""
+"""Tests for pdftl/utils/keyval_parser.py."""
+
+# tests/utils/test_keyval_parser.py
 
 import pytest
 
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import (
+    constrained_int,
     parse_keyval_list,
     parse_keyval_string,
     parse_keyval_token,
 )
+
+# ---------------------------------------------------------------------------
+# constrained_int Validator Factory Tests
+# ---------------------------------------------------------------------------
+
+
+class TestConstrainedInt:
+    def test_valid_integer_coercion(self):
+        validator = constrained_int()
+        assert validator("42") == 42
+        assert validator("-123") == -123
+
+    def test_invalid_integer_raises(self):
+        validator = constrained_int()
+        with pytest.raises(ValueError, match="must be a valid integer"):
+            validator("not_a_number")
+
+    def test_min_boundary_validation(self):
+        validator = constrained_int(min_val=10)
+        assert validator("10") == 10
+        assert validator("15") == 15
+        with pytest.raises(ValueError, match="must be >= 10"):
+            validator("9")
+
+    def test_max_boundary_validation(self):
+        validator = constrained_int(max_val=100)
+        assert validator("100") == 100
+        assert validator("50") == 50
+        with pytest.raises(ValueError, match="must be <= 100"):
+            validator("101")
+
+    def test_dual_boundary_range_validation(self):
+        validator = constrained_int(min_val=5, max_val=15)
+        assert validator("5") == 5
+        assert validator("10") == 10
+        assert validator("15") == 15
+        with pytest.raises(ValueError, match="must be >= 5"):
+            validator("4")
+        with pytest.raises(ValueError, match="must be <= 15"):
+            validator("16")
+
 
 # ---------------------------------------------------------------------------
 # parse_keyval_token
@@ -74,6 +118,43 @@ class TestParseKeyvalToken:
         with pytest.raises(InvalidArgumentError) as exc_info:
             parse_keyval_token("noequalssign")
         assert not str(exc_info.value).startswith(":")
+
+    def test_schema_valid_coercion(self):
+        schema = {"port": int, "host": str}
+        assert parse_keyval_token("port=8080", schema=schema) == ("port", 8080)
+        assert parse_keyval_token("host=localhost", schema=schema) == ("host", "localhost")
+
+    def test_schema_unknown_key_raises(self):
+        schema = {"port": int}
+        with pytest.raises(
+            InvalidArgumentError, match="unknown parameter 'host'. Expected one of: port"
+        ):
+            parse_keyval_token("host=127.0.0.1", schema=schema)
+
+    def test_schema_coercion_failure_raises(self):
+        schema = {"port": int}
+        with pytest.raises(InvalidArgumentError, match="invalid value for 'port': 'abc'"):
+            parse_keyval_token("port=abc", schema=schema)
+
+    def test_schema_coercion_failure_custom_message(self):
+        def custom_failing_validator(val: str) -> str:
+            raise ValueError("custom range error")
+
+        schema = {"key": custom_failing_validator}
+        with pytest.raises(
+            InvalidArgumentError, match=r"invalid value for 'key': 'val' \(custom range error\)"
+        ):
+            parse_keyval_token("key=val", schema=schema)
+
+    def test_schema_coercion_failure_no_message_details(self):
+        def failing_type_validator(val: str) -> str:
+            raise TypeError()
+
+        schema = {"key": failing_type_validator}
+        with pytest.raises(InvalidArgumentError) as exc_info:
+            parse_keyval_token("key=val", schema=schema)
+        assert "invalid value for 'key': 'val'" in str(exc_info.value)
+        assert "()" not in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------

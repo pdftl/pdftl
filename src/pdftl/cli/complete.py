@@ -91,6 +91,7 @@ HARDCODED_KEYWORDS = {
     "replace",
     "resample_images",
     "rotate",
+    "server",
     "set",
     "shuffle",
     "simplify_vectors",

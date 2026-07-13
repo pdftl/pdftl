@@ -12,6 +12,7 @@ ALWAYS_FORBIDDEN = [
     "fonttools",
     "numpy",
     "numba",
+    "http.server",
 ]
 
 

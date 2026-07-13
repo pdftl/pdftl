@@ -20,7 +20,7 @@ from pdftl.cli.help_render import (
     load_hprint,
     usage_as_markdown,
 )
-from pdftl.cli.metadata import get_project_version
+from pdftl.core.metadata import get_project_version
 from pdftl.cli.whoami import PACKAGE, WHOAMI
 from pdftl.core.core_types import HelpExample
 from pdftl.core.registry import register_help_topic, registry

@@ -4,28 +4,54 @@
 
 # src/pdftl/utils/keyval_parser.py
 
-"""Shared utility for parsing key=value argument strings."""
+"""Shared utility for parsing key=value argument strings with schema and range validation."""
 
+from typing import Any
+from collections.abc import Callable
 from pdftl.exceptions import InvalidArgumentError
+
+
+def constrained_int(
+    min_val: int | None = None, max_val: int | None = None
+) -> Callable[[str], int]:
+    """Generates a validator function that coerces a string to an integer
+    and enforces strict boundary bounds.
+    """
+
+    def validator(val: str) -> int:
+        try:
+            i = int(val)
+        except ValueError:
+            raise ValueError("must be a valid integer")
+        if min_val is not None and i < min_val:
+            raise ValueError(f"must be >= {min_val}")
+        if max_val is not None and i > max_val:
+            raise ValueError(f"must be <= {max_val}")
+        return i
+
+    return validator
 
 
 def parse_keyval_token(
     token: str,
     *,
     allowed_keys: list[str] | None = None,
+    schema: dict[str, Callable[[str], Any]] | None = None,
     lowercase_keys: bool = True,
     lowercase_values: bool = False,
     context: str = "",
-) -> tuple[str, str]:
+) -> tuple[str, Any]:
     """
     Parse a single ``key=value`` token into a ``(key, value)`` tuple.
 
     Raises ``InvalidArgumentError`` if the token contains no ``=``, or if
-    the key is not in ``allowed_keys``.
+    the key is not in ``allowed_keys`` / ``schema``.
 
     Args:
         token:            A single token string, e.g. ``"threshold=0.01"``.
         allowed_keys:     Optional whitelist of valid keys.
+        schema:           Optional dict mapping keys to type-casting callables (e.g. `int`).
+                          If provided, `allowed_keys` is ignored and inferred from the schema.
         lowercase_keys:   Normalise keys to lowercase (default: ``True``).
         lowercase_values: Normalise values to lowercase (default: ``False``).
         context:          Operation name used in error messages.
@@ -40,7 +66,19 @@ def parse_keyval_token(
     k = k.strip().lower() if lowercase_keys else k.strip()
     v = v.strip().lower() if lowercase_values else v.strip()
 
-    if allowed_keys is not None and k not in allowed_keys:
+    if schema is not None:
+        if k not in schema:
+            raise InvalidArgumentError(
+                f"{prefix}unknown parameter '{k}'."
+                + f" Expected one of: {', '.join(schema.keys())}."
+            )
+        try:
+            v = schema[k](v)
+        except (ValueError, TypeError) as e:
+            error_detail = f" ({e})" if str(e) else ""
+            raise InvalidArgumentError(f"{prefix}invalid value for '{k}': '{v}'{error_detail}")
+
+    elif allowed_keys is not None and k not in allowed_keys:
         raise InvalidArgumentError(
             f"{prefix}unknown parameter '{k}'."
             + (f" Expected one of: {', '.join(allowed_keys)}." if allowed_keys else "")
@@ -54,7 +92,7 @@ def parse_keyval_list(
     *,
     bare_tokens: bool | list[str] | None = None,
     **kwargs,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """
     Parse a list of token strings into a dictionary of key-value pairs.
 
@@ -88,7 +126,7 @@ def parse_keyval_list(
 def parse_keyval_string(
     params_str: str,
     **kwargs,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """
     Parse a comma-separated ``key=value`` string into a dictionary.
 

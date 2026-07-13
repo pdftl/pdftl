@@ -13,7 +13,7 @@ from pdftl.cli.console import get_console
 from pdftl.cli.help_data import (
     VERSION_TEMPLATE,
 )
-from pdftl.cli.metadata import get_dependencies_status, get_project_version
+from pdftl.core.metadata import get_dependencies_status, get_project_version
 from pdftl.cli.whoami import DOCSPAGE, HOMEPAGE, PACKAGE, WHOAMI
 
 logger = logging.getLogger(__name__)

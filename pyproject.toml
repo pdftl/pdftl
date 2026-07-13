@@ -103,6 +103,7 @@ dev = [
     "pytest",
     "pytest-xdist",
     "pytest-mock",
+    "pytest-timeout",
     "pytest-cov",
     "pytest-randomly",   # randomise test order to catch ordering-sensitive bugs
     "pytest-repeat",     # run tests N times via --count
@@ -136,6 +137,7 @@ version_file = "src/pdftl/_version.py"
 
 [tool.setuptools.package-data]
 "pdftl" = ["*.pyi", "py.typed"]
+"pdftl.operations" = ["static/*.html"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

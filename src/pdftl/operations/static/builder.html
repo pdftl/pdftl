@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Mobile viewport meta tag -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pdftl pipeline builder</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8eb;
+    --muted: #8a8f9a;
+    --accent: #5b8cff;
+    --accent-hover: #7aa0ff;
+    --danger: #ff5b5b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 80px;
+    min-height: 100vh;
+  }
+
+  /* Full-page drag overlay */
+  body.dragover::after {
+    content: "Drop PDFs anywhere to upload";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 17, 21, 0.9);
+    border: 4px dashed var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--accent);
+    z-index: 9999;
+    pointer-events: none; /* Let events pass through so drop registers on body */
+  }
+
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; line-height: 1.4; }
+  .sub code { color: var(--accent); word-break: break-all; }
+
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  section h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  /* Clickable drop zone for mobile / manual browsing */
+  #dropZone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--muted);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  #dropZone:hover {
+    border-color: var(--accent);
+    background: rgba(91, 140, 255, 0.05);
+  }
+  #dropZone span { color: var(--accent); font-weight: 600; }
+  #fileInput { display: none; }
+
+  .files-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .file-chip {
+    background: #202531;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+  }
+  .file-chip input {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 13px;
+    width: 40px;
+  }
+  .file-chip span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-chip button {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 4px;
+    margin-left: auto;
+  }
+
+  .op-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  select, input[type=text], textarea {
+    background: #202531;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px; /* 16px usually prevents iOS zoom, but 14px is okay with correct viewport */
+    font-family: inherit;
+  }
+  select { flex: 1; min-width: 0; }
+  .op-desc { color: var(--muted); font-size: 12px; margin: 6px 0 14px; min-height: 16px; line-height: 1.4; }
+  .op-desc code { color: var(--accent); font-family: var(--mono); }
+
+  button.primary {
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button.primary:hover { background: var(--accent-hover); }
+
+  ol#stepList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .step {
+    background: #0f1115;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .step-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .step-head .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 4px;
+    padding: 2px 7px;
+    margin-right: 8px;
+  }
+  .step-head .opname { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .step-controls { display: flex; gap: 4px; }
+  .step-controls button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+  }
+  .step-controls button:hover { color: var(--text); }
+  .step-controls button.remove:hover { color: var(--danger); }
+  .step input[type=text] { width: 100%; font-family: var(--mono); }
+  .step .hint { color: var(--muted); font-size: 11px; margin-top: 6px; line-height: 1.3; }
+
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; }
+  #runBtn { width: 100%; padding: 14px; font-size: 15px; margin-top: 4px; }
+  #runBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .rtd-link {
+    background: #1c3a2a;
+    color: #6be89a;
+  }
+
+  #result { margin-top: 16px; font-size: 13px; }
+  #result a {
+    display: block;
+    text-align: center;
+    background: #1c3a2a;
+    color: #6be89a;
+    border: 1px solid #2e5a41;
+    padding: 12px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  #result .error {
+    background: #3a1c1c;
+    color: #ff9d9d;
+    border: 1px solid #5a2e2e;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+  }
+  #result pre {
+    background: #0f1115;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    overflow-x: auto;
+    font-size: 12px;
+  }
+  .status-line { font-size: 13px; color: var(--muted); margin-top: 12px; text-align: center; }
+  .status-line.ok { color: #6be89a; }
+  .status-line.err { color: var(--danger); }
+
+  @media (max-width: 480px) {
+    .op-row { flex-direction: column; }
+    .op-row button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>pdftl pipeline builder</h1>
+  <div class="sub">Talks directly to <code id="apiBase"></code>. Connect operations, run.</div>
+
+  <section>
+    <h2>1. Upload PDFs</h2>
+    <div id="dropZone">
+      Drag & drop PDFs here or <span>browse files</span>
+      <input type="file" id="fileInput" accept="application/pdf" multiple>
+    </div>
+    <div class="files-list" id="filesList"></div>
+  </section>
+
+  <section>
+    <h2>2. Build pipeline</h2>
+    <div class="op-row">
+      <select id="opSelect"></select>
+      <button class="primary" id="addStepBtn" type="button">Add step</button>
+    </div>
+    <div class="op-desc" id="opDesc"></div>
+    <ol id="stepList"></ol>
+    <div class="empty" id="emptyHint" style="margin-top: 12px;">No steps yet — pick an operation above and add it.</div>
+  </section>
+
+  <section>
+    <h2>3. Run</h2>
+    <button class="primary" id="runBtn" type="button" disabled>Run pipeline</button>
+    <div class="status-line" id="statusLine"></div>
+    <div id="result"></div>
+  </section>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const API = params.get('api') || location.origin;
+document.getElementById('apiBase').textContent = API;
+
+let opsMeta = {};
+let opNames = [];
+let handleCounter = 0;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+const nextHandle = () => {
+  let n = handleCounter++, s = '';
+  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return s;
+};
+
+function processFiles(files) {
+  const box = document.getElementById('filesList');
+  [...files].forEach(f => {
+    if (f.type !== "application/pdf") return;
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    chip.innerHTML = `
+      📄 <input type="text" class="handleInput" value="${escapeHtml(nextHandle())}">
+      <span style="color:var(--muted)" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+      <button class="removeFile" type="button" title="Remove">✕</button>
+    `;
+    chip._file = f;
+    box.appendChild(chip);
+  });
+  document.getElementById('fileInput').value = '';
+  updateRunEnabled();
+}
+
+// Full-page drag and drop handling
+let dragCounter = 0;
+
+document.body.addEventListener('dragenter', e => {
+  e.preventDefault();
+  dragCounter++;
+  document.body.classList.add('dragover');
+});
+
+document.body.addEventListener('dragover', e => {
+  e.preventDefault();
+});
+
+document.body.addEventListener('dragleave', e => {
+  dragCounter--;
+  if (dragCounter === 0) {
+    document.body.classList.remove('dragover');
+  }
+});
+
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  dragCounter = 0;
+  document.body.classList.remove('dragover');
+  if (e.dataTransfer && e.dataTransfer.files) {
+    processFiles(e.dataTransfer.files);
+  }
+});
+
+// Click to browse handling
+document.getElementById('dropZone').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  processFiles(e.target.files);
+});
+
+// File removal
+document.getElementById('filesList').addEventListener('click', e => {
+  const btn = e.target.closest('.removeFile');
+  if (btn) {
+    btn.closest('.file-chip').remove();
+    updateRunEnabled();
+  }
+});
+
+function addStepToDOM(name, argsValue = '') {
+  const list = document.getElementById('stepList');
+  const meta = opsMeta[name] || {};
+  const li = document.createElement('li');
+  li.className = 'step';
+  li.dataset.operation = name;
+  li.innerHTML = `
+    <div class="step-head">
+      <div style="display:flex; align-items:center;">
+        <span class="badge step-num"></span>
+        <span class="opname">${escapeHtml(name)}</span>
+        &nbsp;&nbsp;
+        <span class="opname">${rtdLink(name)}</span>
+      </div>
+      <div class="step-controls">
+        <button class="moveUp" type="button" title="Move up">↑</button>
+        <button class="moveDown" type="button" title="Move down">↓</button>
+        <button class="remove" type="button" title="Remove">✕</button>
+      </div>
+    </div>
+    <input type="text" class="argsInput" placeholder='args, e.g. ["90"] or ["A", "B"]' spellcheck="false" autocomplete="off">
+    <div class="hint">${escapeHtml(meta.usage || '')}</div>
+  `;
+
+  if (argsValue) {
+    li.querySelector('.argsInput').value = argsValue;
+  }
+
+  list.appendChild(li);
+  updateStepLayout();
+}
+
+async function loadOps() {
+  try {
+    const resp = await fetch(`${API}/v1/status`);
+    if (!resp.ok) throw new Error("API not reachable");
+    const data = await resp.json();
+    opsMeta = data.operations || {};
+    opNames = Object.keys(opsMeta).sort();
+    const sel = document.getElementById('opSelect');
+    sel.innerHTML = opNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    updateOpDesc();
+    parseUrlPipeline();
+  } catch (e) {
+    setStatus("Warning: Could not connect to API to load operations.", "err");
+  }
+}
+
+function updateOpDesc() {
+  const name = document.getElementById('opSelect').value;
+  const meta = opsMeta[name];
+  const el = document.getElementById('opDesc');
+
+  if (meta) {
+    el.innerHTML = `${escapeHtml(meta.desc)} &nbsp;·&nbsp; <code>${escapeHtml(meta.usage)}</code>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+function rtdLink(name) {
+  return `<a class="rtd-link" href="https://pdftl.readthedocs.io/en/latest/operations/${name}.html" target="_blank">help</a>`;
+}
+
+function parseUrlPipeline() {
+  let stepIndex = 1;
+  while (true) {
+    const op = params.get(`op${stepIndex}`);
+    if (!op) break;
+    const args = params.get(`args${stepIndex}`) || params.get(`arg${stepIndex}`) || '';
+    if (opsMeta[op]) {
+      addStepToDOM(op, args);
+    } else {
+      console.warn(`URL requested operation "${op}", but it is not supported by this API.`);
+    }
+    stepIndex++;
+  }
+}
+
+function updateStepLayout() {
+  const list = document.getElementById('stepList');
+  const steps = list.querySelectorAll('.step');
+
+  document.getElementById('emptyHint').style.display = steps.length ? 'none' : 'block';
+  updateRunEnabled();
+
+  steps.forEach((step, i) => {
+    step.querySelector('.step-num').textContent = i + 1;
+    step.querySelector('.moveUp').style.display = i === 0 ? 'none' : 'inline-block';
+    step.querySelector('.moveDown').style.display = i === steps.length - 1 ? 'none' : 'inline-block';
+  });
+}
+
+function updateRunEnabled() {
+  const stepCount = document.querySelectorAll('#stepList .step').length;
+  document.getElementById('runBtn').disabled = stepCount === 0;
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('statusLine');
+  el.textContent = msg;
+  el.className = 'status-line' + (cls ? ' ' + cls : '');
+}
+
+function parseListField(text) {
+  const t = text.trim();
+  if (!t) return [];
+  try {
+    const v = JSON.parse(t);
+    if (Array.isArray(v)) return v;
+  } catch (e) { /* fall through */ }
+  return t.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+document.getElementById('opSelect').addEventListener('change', updateOpDesc);
+
+document.getElementById('addStepBtn').addEventListener('click', () => {
+  const name = document.getElementById('opSelect').value;
+  if (!name) return;
+  addStepToDOM(name);
+});
+
+document.getElementById('stepList').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+
+  const li = btn.closest('.step');
+  if (!li) return;
+
+  if (btn.classList.contains('remove')) {
+    li.remove();
+  } else if (btn.classList.contains('moveUp')) {
+    const prev = li.previousElementSibling;
+    if (prev) li.parentNode.insertBefore(li, prev);
+  } else if (btn.classList.contains('moveDown')) {
+    const next = li.nextElementSibling;
+    if (next) li.parentNode.insertBefore(next, li);
+  }
+  updateStepLayout();
+});
+
+document.getElementById('runBtn').addEventListener('click', async () => {
+  setStatus('Running pipeline…');
+  const resultBox = document.getElementById('result');
+  resultBox.innerHTML = '';
+  document.getElementById('runBtn').disabled = true;
+
+  try {
+    const steps = document.querySelectorAll('#stepList .step');
+    const pipeline = Array.from(steps).map(stepEl => {
+      const operation = stepEl.dataset.operation;
+      const argsText = stepEl.querySelector('.argsInput').value;
+      return { operation, args: parseListField(argsText) };
+    });
+
+    const formData = new FormData();
+    formData.append('args', JSON.stringify(pipeline));
+
+    const fileChips = document.querySelectorAll('#filesList .file-chip');
+    fileChips.forEach(chip => {
+      const handle = chip.querySelector('.handleInput').value.trim();
+      const file = chip._file;
+      if (file && handle) {
+        formData.append(handle, file, file.name);
+      }
+    });
+
+    const resp = await fetch(`${API}/v1/execute/pipeline`, { method: 'POST', body: formData });
+    const contentType = resp.headers.get('Content-Type') || '';
+
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try {
+        const err = await resp.json();
+        msg = err.error || JSON.stringify(err);
+      } catch (e) {
+        msg = await resp.text();
+      }
+
+      const errDiv = document.createElement('div');
+      errDiv.className = 'error';
+      errDiv.textContent = msg;
+      resultBox.appendChild(errDiv);
+      setStatus('Failed', 'err');
+      return;
+    }
+
+    if (contentType.includes('application/pdf')) {
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'pdftl_output.pdf';
+      link.textContent = '⬇ Download result.pdf';
+      resultBox.appendChild(link);
+
+    } else if (contentType.includes('application/json')) {
+      const data = await resp.json();
+      const pre = document.createElement('pre');
+      pre.textContent = JSON.stringify(data, null, 2);
+      resultBox.appendChild(pre);
+
+    } else {
+      const text = await resp.text();
+      const pre = document.createElement('pre');
+      pre.textContent = text;
+      resultBox.appendChild(pre);
+    }
+    setStatus('Done', 'ok');
+  } catch (e) {
+    setStatus('Failed', 'err');
+    const errDiv = document.createElement('div');
+    errDiv.className = 'error';
+    errDiv.textContent = e.message;
+    resultBox.appendChild(errDiv);
+  } finally {
+    updateRunEnabled();
+  }
+});
+
+loadOps();
+</script>
+</body>
+</html>

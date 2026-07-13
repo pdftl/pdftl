@@ -6,9 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.25.0] - 2026-07-14
 
 ### Added
+
+- `server` operation
 
 - `deskew` operation
 
@@ -27,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `style_text` now adapts Tr (text rendering mode) better to user parameters
 
 ### Fixed
+
+- `dump_text`: if `output` is passed directly, we now write the text, not the PDF.
 
 - `render` now initializes forms, so that they are properly rendered
 

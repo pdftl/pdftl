@@ -74,6 +74,7 @@ def _extract_text_from_pdf(pdf_pike: "pikepdf.Pdf", pdfium, password=None) -> li
     desc="Print PDF text data to the console or a file",
     long_desc=_DUMP_TEXT_LONG_DESC,
     usage="<input> dump_text [output <output>]",
+    skip_pipeline_save=True,
     examples=_DUMP_TEXT_EXAMPLES,
     args=([c.INPUT_PDF, c.INPUT_PASSWORD], {"output_file": c.OUTPUT}),
 )
