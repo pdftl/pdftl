@@ -15,7 +15,7 @@ this module fresh in the child and hands these functions off by reference.
 import io as _io
 import os
 import logging
-import multiprocessing
+import json
 from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
@@ -162,12 +162,65 @@ def _run_pipeline_in_subprocess(
                 logger.debug("Failed to close pdf_obj during subprocess cleanup: %s", exc)
 
 
-def _subprocess_worker_entrypoint(
-    q: "multiprocessing.Queue", fn: Callable[..., Any], args: tuple
+def _apply_worker_resource_limits() -> None:
+    try:
+        import resource
+
+        max_mem = int(os.environ.get("PDFTL_WORKER_MAX_MEM_BYTES", 2 * 1024 * 1024 * 1024))
+        resource.setrlimit(resource.RLIMIT_AS, (max_mem, max_mem))
+    except ImportError:
+        pass  # Graceful fallback on Windows: no `resource` module.
+    except (ValueError, OSError):
+        # Some platforms (notably macOS) impose their own hard ceiling on
+        # RLIMIT_AS that setrlimit() can reject outright, independent of
+        # the value requested. Enforcing a worker memory cap is a
+        # best-effort protection, not a correctness requirement -- if the
+        # platform won't allow it, skip rather than crash the worker.
+        logger.debug("Could not apply worker memory limit on this platform.", exc_info=True)
+
+
+def _serialize_worker_payload(result: Any) -> tuple[bytes, Any, bool]:
+    if isinstance(result, tuple) and len(result) == 2:
+        val_bytes, val_meta = result
+        val_bytes = val_bytes if val_bytes is not None else b""
+        return val_bytes, val_meta, True
+    elif isinstance(result, bytes):
+        return result, None, False
+    else:
+        return b"", result, False
+
+
+def _send_safe_ipc_response(
+    pipe_conn: Any, metadata: dict[str, Any], payload_bytes: bytes
 ) -> None:
+    try:
+        pipe_conn.send_bytes(json.dumps(metadata).encode("utf-8"))
+        pipe_conn.send_bytes(payload_bytes)
+    except (OSError, BrokenPipeError):
+        logger.warning("Parent process disconnected before worker could send response data.")
+
+
+def _subprocess_worker_entrypoint(pipe_conn: Any, fn: Callable[..., Any], args: tuple) -> None:
     """Module-level target for the child process started in the handler's
     _run_with_timeout."""
+    _apply_worker_resource_limits()
     try:
-        q.put(("ok", fn(*args)))
-    except Exception as exc:  # noqa: BLE001 - forward any exception to parent
-        q.put(("err", exc))
+        result = fn(*args)
+        payload_bytes, result_meta, is_tuple = _serialize_worker_payload(result)
+        metadata = {
+            "status": "ok",
+            "error_class": None,
+            "message": None,
+            "meta": result_meta,
+            "is_tuple": is_tuple,
+        }
+        _send_safe_ipc_response(pipe_conn, metadata, payload_bytes)
+    except Exception as exc:  # noqa: BLE001 - capture arbitrary exceptions to forward safely
+        metadata = {
+            "status": "err",
+            "error_class": exc.__class__.__name__,
+            "message": str(exc),
+            "meta": None,
+            "is_tuple": False,
+        }
+        _send_safe_ipc_response(pipe_conn, metadata, b"")

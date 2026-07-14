@@ -1067,21 +1067,30 @@ def test_run_pipeline_in_subprocess_swallows_close_failure(tmp_path):
 
 def test_subprocess_worker_entrypoint_success_and_error():
     import multiprocessing
+    import json
     from pdftl.server import _subprocess_worker_entrypoint
 
-    q = multiprocessing.get_context("spawn").Queue()
+    ctx = multiprocessing.get_context("spawn")
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
 
-    _subprocess_worker_entrypoint(q, lambda: 42, ())
-    status, payload = q.get()
-    assert (status, payload) == ("ok", 42)
+    _subprocess_worker_entrypoint(child_conn, lambda: 42, ())
+    meta_bytes = parent_conn.recv_bytes()
+    metadata = json.loads(meta_bytes.decode("utf-8"))
+    payload_bytes = parent_conn.recv_bytes()
+    assert metadata["status"] == "ok"
+    assert metadata["meta"] == 42
+    assert payload_bytes == b""
 
     def boom():
         raise ValueError("bad")
 
-    _subprocess_worker_entrypoint(q, boom, ())
-    status, payload = q.get()
-    assert status == "err"
-    assert isinstance(payload, ValueError)
+    parent_conn2, child_conn2 = ctx.Pipe(duplex=False)
+    _subprocess_worker_entrypoint(child_conn2, boom, ())
+    meta_bytes2 = parent_conn2.recv_bytes()
+    metadata2 = json.loads(meta_bytes2.decode("utf-8"))
+    assert metadata2["status"] == "err"
+    assert metadata2["error_class"] == "ValueError"
+    assert metadata2["message"] == "bad"
 
 
 def test_mixin_run_with_error_handling_generic_exception():
@@ -1100,10 +1109,11 @@ def test_mixin_run_with_timeout_escalates_to_kill():
     handler.op_timeout_seconds = 0.05
 
     mock_proc = MagicMock()
-    mock_proc.is_alive.side_effect = [True, True]
+    mock_proc.is_alive.return_value = True
     mock_proc.pid = 1234
     mock_ctx = MagicMock()
     mock_ctx.Process.return_value = mock_proc
+    mock_ctx.Pipe.return_value = (MagicMock(poll=lambda *a, **k: False), MagicMock())
 
     with patch("pdftl.server.handler.multiprocessing.get_context", return_value=mock_ctx):
         with pytest.raises(TimeoutError, match="exceeded the 0.05s server timeout"):
@@ -1240,3 +1250,280 @@ def test_send_text_response_writes_expected_headers_and_body():
     handler.send_header.assert_called_once_with("Content-Type", "text/plain; charset=utf-8")
     handler.end_headers.assert_called_once()
     handler.wfile.write.assert_called_once_with(b"hello world")
+
+
+# ==============================================================================
+# Coverage: handler.py internals not reachable via real end-to-end HTTP tests
+# ==============================================================================
+
+
+def test_spawn_worker_start_failure_closes_parent_conn():
+    """If ctx.Process.start() raises, _spawn_worker must close parent_conn
+    before re-raising, since the caller never receives a handle to close it
+    itself (only child_conn's cleanup runs via the `finally` in that case)."""
+    handler = PdftlServerRequestHandlerMixIn()
+
+    mock_parent_conn = MagicMock()
+    mock_child_conn = MagicMock()
+    mock_ctx = MagicMock()
+    mock_ctx.Pipe.return_value = (mock_parent_conn, mock_child_conn)
+    mock_proc = MagicMock()
+    mock_proc.start.side_effect = OSError("Cannot allocate memory")
+    mock_ctx.Process.return_value = mock_proc
+
+    with pytest.raises(OSError, match="Cannot allocate memory"):
+        handler._spawn_worker(mock_ctx, lambda: None, ())
+
+    mock_parent_conn.close.assert_called_once()
+    mock_child_conn.close.assert_called_once()
+
+
+def test_poll_ipc_connection_immediate_timeout():
+    """A zero/negative remaining budget on entry returns 'timeout' without
+    ever touching the connection."""
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.op_timeout_seconds = -1
+    mock_parent_conn = MagicMock()
+    mock_proc = MagicMock()
+
+    status, metadata, payload = handler._poll_ipc_connection(mock_parent_conn, mock_proc)
+    assert status == "timeout"
+    assert metadata == {}
+    assert payload == b""
+
+
+def test_poll_ipc_connection_corrupt_metadata():
+    """Malformed bytes on the pipe (not valid JSON) must surface as a
+    transport-level 'err' rather than propagating a raw exception."""
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.op_timeout_seconds = 5
+    mock_parent_conn = MagicMock()
+    mock_parent_conn.poll.return_value = True
+    mock_parent_conn.recv_bytes.return_value = b"not valid json"
+    mock_proc = MagicMock()
+    mock_proc.is_alive.return_value = True
+
+    status, metadata, payload = handler._poll_ipc_connection(mock_parent_conn, mock_proc)
+    assert status == "err"
+    assert metadata["error_class"] == "RuntimeError"
+    assert "IPC transport failure" in metadata["message"]
+    assert payload == b""
+
+
+def test_poll_ipc_connection_process_crashed():
+    """If the worker process dies and no follow-up data ever arrives, this
+    is reported as a crash rather than a silent hang."""
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.op_timeout_seconds = 5
+    mock_parent_conn = MagicMock()
+    mock_parent_conn.poll.return_value = False
+    mock_proc = MagicMock()
+    mock_proc.is_alive.return_value = False
+
+    status, metadata, payload = handler._poll_ipc_connection(mock_parent_conn, mock_proc)
+    assert status == "err"
+    assert metadata["error_class"] == "RuntimeError"
+    assert "crashed unexpectedly" in metadata["message"]
+
+
+def test_poll_ipc_connection_recovers_from_race():
+    """If proc.is_alive() reports dead but a follow-up poll finds pending
+    data (a race between the worker exiting and its last write landing),
+    the loop must recover and return the real result instead of a false
+    'crashed' error."""
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.op_timeout_seconds = 5
+    mock_parent_conn = MagicMock()
+    # call1: main poll -> False; call2: race-recheck poll -> True (continue);
+    # call3: main poll -> True (recv metadata, continue);
+    # call4: main poll -> True (recv payload, return).
+    mock_parent_conn.poll.side_effect = [False, True, True, True]
+    mock_parent_conn.recv_bytes.side_effect = [
+        json.dumps(
+            {
+                "status": "ok",
+                "error_class": None,
+                "message": None,
+                "meta": 7,
+                "is_tuple": False,
+            }
+        ).encode("utf-8"),
+        b"",
+    ]
+    mock_proc = MagicMock()
+    mock_proc.is_alive.return_value = False
+
+    status, metadata, payload = handler._poll_ipc_connection(mock_parent_conn, mock_proc)
+    assert status == "ok"
+    assert metadata["meta"] == 7
+    assert payload == b""
+
+
+def test_ensure_process_cleanup_kills_after_join_timeout():
+    """A worker that's still alive after the join grace period must be
+    force-killed and its handle released, mirroring the escalation path
+    already covered for the timeout branch."""
+    handler = PdftlServerRequestHandlerMixIn()
+    mock_proc = MagicMock()
+    mock_proc.is_alive.return_value = True
+
+    handler._ensure_process_cleanup(mock_proc)
+
+    mock_proc.join.assert_any_call(timeout=2.0)
+    mock_proc.kill.assert_called_once()
+    mock_proc.close.assert_called_once()
+
+
+def test_reconstruct_exception_builtin_fallback():
+    """Standard library exceptions (not imported into handler.py's own
+    globals()) must be found via the builtins fallback and re-raised with
+    their original type, not silently downgraded to RuntimeError."""
+    handler = PdftlServerRequestHandlerMixIn()
+    with pytest.raises(ValueError, match="bad value"):
+        handler._reconstruct_and_raise_exception(
+            {"error_class": "ValueError", "message": "bad value"}
+        )
+
+
+def test_reconstruct_exception_via_module_lookup():
+    """An exception type that's neither in handler.py's globals() nor a
+    builtin, but does exist in one of the searched pdftl modules, is
+    reconstructed with its real type via that module lookup."""
+    handler = PdftlServerRequestHandlerMixIn()
+    with pytest.raises(OperationError, match="op failed"):
+        handler._reconstruct_and_raise_exception(
+            {"error_class": "OperationError", "message": "op failed"}
+        )
+
+
+def test_reconstruct_exception_unknown_class_fallback():
+    """An error_class that can't be found anywhere falls back to a plain
+    RuntimeError carrying the original class name and message, rather than
+    crashing the reconstruction itself."""
+    handler = PdftlServerRequestHandlerMixIn()
+    with pytest.raises(RuntimeError, match="TotallyFakeExceptionXYZ: something broke"):
+        handler._reconstruct_and_raise_exception(
+            {"error_class": "TotallyFakeExceptionXYZ", "message": "something broke"}
+        )
+
+
+def test_run_with_timeout_server_at_capacity():
+    """When the worker semaphore can't be acquired within the timeout
+    window, the server reports capacity exhaustion rather than silently
+    hanging or crashing."""
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.op_timeout_seconds = 0.05
+
+    with patch("pdftl.server.handler._worker_semaphore") as mock_sem:
+        mock_sem.acquire.return_value = False
+        with pytest.raises(TimeoutError, match="Server is at capacity"):
+            handler._run_with_timeout(lambda: None, op_name="test_op")
+
+
+# ==============================================================================
+# Coverage: subprocess_workers.py internals that only run inside a real
+# spawned child (and thus aren't captured by coverage in end-to-end tests)
+# ==============================================================================
+
+
+def test_raise_on_file_arg_blocks_disallowed_path(tmp_path):
+    """A path that exists on disk but isn't one of the request's own
+    upload-spool paths is rejected as local file inclusion."""
+    from pdftl.server.subprocess_workers import _raise_on_file_arg
+
+    bad_file = tmp_path / "secret.txt"
+    bad_file.write_text("shh")
+
+    with pytest.raises(UserCommandLineError, match="forbidden over the REST API"):
+        _raise_on_file_arg([str(bad_file)], allowed_paths=set())
+
+
+def test_apply_worker_resource_limits_import_error(monkeypatch):
+    """On platforms without the `resource` module (Windows), the memory
+    clamp is skipped gracefully rather than crashing the worker."""
+    from pdftl.server.subprocess_workers import _apply_worker_resource_limits
+    import builtins as _builtins
+
+    real_import = _builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "resource":
+            raise ImportError("no resource module on this platform")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(_builtins, "__import__", fake_import)
+    _apply_worker_resource_limits()  # must not raise
+
+
+@pytest.mark.skipif(os.name == "nt", reason="resource module not available on Windows")
+def test_apply_worker_resource_limits_platform_rejection(monkeypatch):
+    """If the platform's own hard ceiling rejects the requested limit
+    (observed on macOS), the worker must not crash -- memory clamping is
+    best-effort, not a correctness requirement."""
+    import resource
+    from pdftl.server.subprocess_workers import _apply_worker_resource_limits
+
+    monkeypatch.setattr(
+        resource,
+        "setrlimit",
+        MagicMock(side_effect=ValueError("current limit exceeds maximum limit")),
+    )
+    _apply_worker_resource_limits()  # must not raise
+
+
+def test_serialize_worker_payload_bytes_only():
+    """A raw bytes result (no metadata tuple) serializes with an empty/None
+    meta rather than being misidentified as a tuple result."""
+    from pdftl.server.subprocess_workers import _serialize_worker_payload
+
+    payload_bytes, meta, is_tuple = _serialize_worker_payload(b"%PDF-RAW")
+    assert payload_bytes == b"%PDF-RAW"
+    assert meta is None
+    assert is_tuple is False
+
+
+def test_serialize_worker_payload_fallback_scalar():
+    """A bare scalar result (neither a 2-tuple nor bytes) falls through to
+    the generic meta-only shape."""
+    from pdftl.server.subprocess_workers import _serialize_worker_payload
+
+    payload_bytes, meta, is_tuple = _serialize_worker_payload(42)
+    assert payload_bytes == b""
+    assert meta == 42
+    assert is_tuple is False
+
+
+def test_send_safe_ipc_response_swallows_oserror():
+    """If the parent has already disconnected by the time the worker tries
+    to respond, the write failure is logged rather than crashing the
+    worker's own exit path."""
+    from pdftl.server.subprocess_workers import _send_safe_ipc_response
+
+    mock_conn = MagicMock()
+    mock_conn.send_bytes.side_effect = BrokenPipeError("parent gone")
+
+    _send_safe_ipc_response(mock_conn, {"status": "ok"}, b"data")  # must not raise
+
+
+def test_serialize_worker_payload_tuple_with_bytes():
+    """A (bytes, meta) 2-tuple result -- the shape returned by
+    _run_single_operation_in_subprocess for PDF results -- serializes with
+    is_tuple=True and passes the bytes through unchanged."""
+    from pdftl.server.subprocess_workers import _serialize_worker_payload
+
+    payload_bytes, meta, is_tuple = _serialize_worker_payload((b"%PDF-DATA", {"kind": "pdf"}))
+    assert payload_bytes == b"%PDF-DATA"
+    assert meta == {"kind": "pdf"}
+    assert is_tuple is True
+
+
+def test_serialize_worker_payload_tuple_with_none_bytes():
+    """A (None, meta) 2-tuple -- the shape for non-PDF OpResult data, e.g.
+    JSON or text output -- normalizes the None to b"" rather than passing
+    None through as the payload."""
+    from pdftl.server.subprocess_workers import _serialize_worker_payload
+
+    payload_bytes, meta, is_tuple = _serialize_worker_payload((None, {"kind": "data", "data": 1}))
+    assert payload_bytes == b""
+    assert meta == {"kind": "data", "data": 1}
+    assert is_tuple is True

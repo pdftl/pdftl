@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [0.25.1] - 2026-07-15
+
+### Fixed
+
+- `server`:
+  - Replaced a racy `multiprocessing.Queue`-based IPC mechanism for
+    subprocess-isolated operation execution with a `Pipe`-based protocol that
+    correctly handles worker timeouts, crashes, and cleanup. This fixes
+    intermittent hangs, leaked worker processes/pipes, and dropped/incorrect
+    exception types under concurrent load.
+  - Fixed a timeout error message that silently dropped the
+    configured timeout value.
+  - Fixed a keep-alive connection handling bug where rejecting an
+    oversized upload could leave the request thread blocked waiting on the
+    remainder of an in-flight upload body.
+  - Fixed a per-worker memory limit that crashed workers outright
+    on some platforms (notably macOS) instead of degrading gracefully.
+
+### Security
+
+- `server`: bounded the number of concurrent subprocess-isolated operation
+  workers (default: capped to available CPU count, configurable via
+  `PDFTL_MAX_CONCURRENT_WORKERS`). Previously, a burst of concurrent
+  requests could spawn an unbounded number of worker processes.
+
 ## [0.25.0] - 2026-07-14
 
 ### Added

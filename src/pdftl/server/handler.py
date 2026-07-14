@@ -14,8 +14,11 @@ operation/pipeline execution lives in `pdftl.server.subprocess_workers`.
 import json
 import logging
 import multiprocessing
+import builtins
 import socketserver
 import threading
+import time
+import os
 from functools import lru_cache
 from collections.abc import Callable
 from typing import Any
@@ -34,6 +37,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_UPLOAD_MB = 100
 DEFAULT_TIMEOUT_SECONDS = 300
+
+MAX_CONCURRENT_WORKERS = int(
+    os.environ.get("PDFTL_MAX_CONCURRENT_WORKERS", min(4, os.cpu_count() or 1))
+)
+_worker_semaphore = threading.BoundedSemaphore(MAX_CONCURRENT_WORKERS)
 
 
 @lru_cache(maxsize=1)
@@ -149,37 +157,154 @@ class PdftlServerRequestHandlerMixIn:
             logger.exception("Internal error executing operation '%s'", operation)
             self._send_error(500, f"Execution failed: {str(e)}")
 
-    def _run_with_timeout(self, fn: Callable[..., Any], *args: Any, op_name: str) -> Any:
-        ctx = multiprocessing.get_context("spawn")
-        result_queue: multiprocessing.Queue = ctx.Queue()
-
+    def _spawn_worker(
+        self, ctx: multiprocessing.context.BaseContext, fn: Callable[..., Any], args: tuple
+    ) -> tuple[Any, multiprocessing.Process]:
+        parent_conn, child_conn = ctx.Pipe(duplex=False)
         proc = ctx.Process(
-            target=_subprocess_worker_entrypoint, args=(result_queue, fn, args), daemon=True
+            target=_subprocess_worker_entrypoint, args=(child_conn, fn, args), daemon=True
         )
-        proc.start()
-        proc.join(timeout=self.op_timeout_seconds)
+        try:
+            proc.start()
+        except Exception:  # noqa: BLE001 - start() can fail for many reasons
+            # (OSError from resource exhaustion, platform-specific spawn
+            # failures on Windows, etc); whatever it is, we must still
+            # release parent_conn here since the caller never receives it
+            # to clean up itself.
+            parent_conn.close()
+            raise
+        finally:
+            child_conn.close()  # Close parent copy of child handle to prevent leaks and deadlocks
+        return parent_conn, proc
 
+    def _poll_ipc_connection(
+        self, parent_conn: Any, proc: multiprocessing.Process
+    ) -> tuple[str, dict[str, Any], bytes]:
+        start_time = time.time()
+        metadata = None
+        while True:
+            remaining = self.op_timeout_seconds - (time.time() - start_time)
+            if remaining <= 0:
+                return "timeout", {}, b""
+
+            if parent_conn.poll(0.5):
+                try:
+                    if metadata is None:
+                        meta_bytes = parent_conn.recv_bytes()
+                        metadata = json.loads(meta_bytes.decode("utf-8"))
+                        # Loop back around rather than assuming the second
+                        # message is already available -- poll() only
+                        # guarantees the *first* pending message is ready.
+                        continue
+                    payload_bytes = parent_conn.recv_bytes()
+                    return metadata["status"], metadata, payload_bytes
+                except Exception as e:  # noqa: BLE001
+                    # catch any corrupt payload or pipe state at the transport boundary
+                    return (
+                        "err",
+                        {
+                            "status": "err",
+                            "error_class": "RuntimeError",
+                            "message": f"IPC transport failure: {str(e)}",
+                        },
+                        b"",
+                    )
+
+            if not proc.is_alive():
+                # Check once more in case of race conditions
+                if parent_conn.poll(0.1):
+                    continue
+                return (
+                    "err",
+                    {
+                        "status": "err",
+                        "error_class": "RuntimeError",
+                        "message": "Worker process crashed unexpectedly (OOM or segfault).",
+                    },
+                    b"",
+                )
+
+            if time.time() - start_time > self.op_timeout_seconds:
+                return "timeout", {}, b""
+
+    def _terminate_runaway_process(self, proc: multiprocessing.Process, op_name: str) -> None:
+        logger.warning(
+            "Operation '%s' exceeded %ds timeout; killing worker.",
+            op_name,
+            self.op_timeout_seconds,
+        )
+        proc.terminate()
+        proc.join(timeout=1.0)
         if proc.is_alive():
-            logger.warning(
-                "Operation '%s' exceeded %ds timeout; killing worker process pid=%s.",
-                op_name,
-                self.op_timeout_seconds,
-                proc.pid,
-            )
-            proc.terminate()
-            proc.join(timeout=5.0)
-            if proc.is_alive():
-                proc.kill()
-                proc.join(timeout=5.0)
-            raise TimeoutError(
-                f"Operation '{op_name}' exceeded the {self.op_timeout_seconds}s "
-                "server timeout; the worker process was killed."
-            )
+            proc.kill()
+            proc.join(timeout=1.0)
+        proc.close()
 
-        status, payload = result_queue.get()
-        if status == "err":
-            raise payload
-        return payload
+    def _ensure_process_cleanup(self, proc: multiprocessing.Process) -> None:
+        proc.join(timeout=2.0)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=1.0)
+        proc.close()
+
+    def _reconstruct_and_raise_exception(self, metadata: dict[str, Any]) -> None:
+        exc_class_name = metadata["error_class"]
+        msg = metadata["message"]
+
+        cls = globals().get(exc_class_name)
+        if cls is None:
+            # builtin exceptions (ValueError, AttributeError, etc.) aren't
+            # in this module's globals(); fall back to the builtins module.
+            cls = getattr(builtins, exc_class_name, None)
+        if cls and issubclass(cls, BaseException):
+            raise cls(msg)
+
+        for module_path in ["pdftl.exceptions", "pdftl.errors", "pdftl.cli"]:
+            try:
+                import importlib
+
+                mod = importlib.import_module(module_path)
+                cls = getattr(mod, exc_class_name, None)
+                if cls and issubclass(cls, BaseException):
+                    raise cls(msg)
+            except ImportError:
+                continue
+
+        raise RuntimeError(f"{exc_class_name}: {msg}")
+
+    def _unpack_ipc_result(self, metadata: dict[str, Any], payload_bytes: bytes) -> Any:
+        if metadata["is_tuple"]:
+            kind = metadata["meta"].get("kind") if isinstance(metadata["meta"], dict) else None
+            actual_bytes = None if kind != "pdf" and not payload_bytes else payload_bytes
+            return actual_bytes, metadata["meta"]
+        return payload_bytes
+
+    def _run_with_timeout(self, fn: Callable[..., Any], *args: Any, op_name: str) -> Any:
+        if not _worker_semaphore.acquire(timeout=self.op_timeout_seconds):
+            raise TimeoutError("Server is at capacity. Failed to acquire a worker slot.")
+
+        ctx = multiprocessing.get_context("spawn")
+        parent_conn, proc = self._spawn_worker(ctx, fn, args)
+
+        try:
+            status, metadata, payload_bytes = self._poll_ipc_connection(parent_conn, proc)
+
+            if status == "timeout":
+                self._terminate_runaway_process(proc, op_name)
+                raise TimeoutError(
+                    f"Operation '{op_name}' exceeded the "
+                    f"{self.op_timeout_seconds}s server timeout."
+                )
+
+            self._ensure_process_cleanup(proc)
+
+            if status == "err":
+                self._reconstruct_and_raise_exception(metadata)
+
+            return self._unpack_ipc_result(metadata, payload_bytes)
+        finally:
+            parent_conn.close()
+            _worker_semaphore.release()
 
     def _dispatch_execution_route(self, operation: str) -> None:
         from pdftl.core.registry import registry
@@ -206,6 +331,12 @@ class PdftlServerRequestHandlerMixIn:
     def _reject_if_oversized(self, content_length: int) -> bool:
         if content_length <= self.max_upload_bytes:
             return False
+        # The client may still be mid-upload when we reject here. Don't try
+        # to keep the connection alive for a pipelined next request -- the
+        # remaining body bytes are still in flight and nothing will drain
+        # them, which can leave this handler thread (and its socket) never
+        # cleanly exiting under keep-alive. Force the connection closed.
+        self.close_connection = True
         limit_mb = self.max_upload_bytes / (1024 * 1024)
         self._send_error(
             413,
