@@ -682,6 +682,37 @@ class TestCoalesceInternals:
         assert group_widths == []
         assert j == 1
 
+    def test_merge_stroke_group_skips_degenerate_empty_subpaths(self):
+        """A path with no subpaths (e.g. from a malformed/degenerate
+        construction) must not crash _merge_stroke_group with an
+        IndexError when accessing merged_subpaths[-1]; it should simply
+        be skipped while merging the remaining valid paths."""
+        from pdftl.operations.helpers.simplify_vectors_stream import _merge_stroke_group
+
+        degenerate = Path(
+            subpaths=[],  # no subpaths at all
+            paint_op="S",
+            original_instructions=[([], "S")],
+        )
+        normal = Path(
+            subpaths=[Subpath(points=[(0.0, 0.0), (1.0, 0.0)], original_op_count=2)],
+            paint_op="S",
+            original_instructions=[([0.0, 0.0], "m"), ([1.0, 0.0], "l"), ([], "S")],
+        )
+
+        # degenerate first: merged_subpaths starts empty, so the loop must
+        # skip `normal` via the `not merged_subpaths` branch rather than
+        # indexing merged_subpaths[-1].
+        merged, initial_w, final_w = _merge_stroke_group([degenerate, normal], [])
+        assert merged.subpaths == []
+
+        # degenerate second: merged_subpaths is seeded from the first
+        # (normal) path, so the loop must skip `degenerate` via the
+        # `not p.subpaths` branch rather than crashing on p.subpaths[0].
+        merged2, _, _ = _merge_stroke_group([normal, degenerate], [])
+        assert len(merged2.subpaths) == 1
+        assert merged2.subpaths[0].points == [(0.0, 0.0), (1.0, 0.0)]
+
 
 # ---------------------------------------------------------------------------
 # Graphics State and Fallback Tests (Verification of Segmenter State Machine)

@@ -296,67 +296,68 @@ def _connects(path_a: Path, path_b: Path) -> bool:
     return (dx * dx + dy * dy) < tolerance * tolerance
 
 
+def _average_stroke_widths(widths: list[Any]) -> tuple[Any | None, Any | None]:
+    """Computes the averaged initial width and the last width op for a
+    stroke group, or (None, None) if there aren't enough valid samples."""
+    if not widths:
+        return None, None
+    try:
+        valid_widths = [float(w[0][0]) for w in widths]
+        avg_w = sum(valid_widths) / len(valid_widths)
+        return ([avg_w], widths[0][1]), widths[-1]
+    except (IndexError, ValueError, TypeError):
+        return None, None  # not enough valid width samples to average; skip smoothing
+
+
+def _clone_subpaths(subpaths: list[Subpath]) -> list[Subpath]:
+    """Deep-copies a list of Subpath objects (points list included)."""
+    return [
+        Subpath(
+            points=list(sp.points),
+            closed=sp.closed,
+            has_curves=sp.has_curves,
+            ctm_scale=sp.ctm_scale,
+            original_op_count=sp.original_op_count,
+        )
+        for sp in subpaths
+    ]
+
+
+def _splice_path_into_group(
+    merged_subpaths: list[Subpath], merged_orig_ops: list, p: Path
+) -> None:
+    """Splices one stroke path's subpaths/instructions onto the tail of an
+    in-progress merged group. No-op if either side has no usable subpaths."""
+    if not merged_subpaths or not p.subpaths:
+        return
+
+    first_sp = p.subpaths[0]
+    last_merged_sp = merged_subpaths[-1]
+
+    last_merged_sp.points.extend(first_sp.points[1:])
+    last_merged_sp.has_curves = last_merged_sp.has_curves or first_sp.has_curves
+    last_merged_sp.original_op_count += max(0, first_sp.original_op_count - 1)
+
+    merged_subpaths.extend(_clone_subpaths(p.subpaths[1:]))
+
+    ops_to_add = p.original_instructions[:-1]
+    if ops_to_add and str(ops_to_add[0][1]) == "m":
+        ops_to_add = ops_to_add[1:]
+    merged_orig_ops.extend(ops_to_add)
+
+
 def _merge_stroke_group(
     paths: list[Path], widths: list[Any]
 ) -> tuple[Path, Any | None, Any | None]:
     """Combines a contiguous chain of strokes into a single Path structure."""
-    initial_w = None
-    final_w = None
-    if widths:
-        try:
-            # Capture the average width to preserve the visual weight of the tapered stroke
-            valid_widths = [float(w[0][0]) for w in widths]
-            if valid_widths:
-                avg_w = sum(valid_widths) / len(valid_widths)
-                initial_w = ([avg_w], widths[0][1])
-                final_w = widths[-1]
-        except (IndexError, ValueError, TypeError):
-            pass  # not enough valid width samples to average; skip smoothing
+    initial_w, final_w = _average_stroke_widths(widths)
 
-    merged_subpaths = []
-
-    # Prime the merged list with the first path's subpaths
-    for sp in paths[0].subpaths:
-        merged_subpaths.append(
-            Subpath(
-                points=list(sp.points),
-                closed=sp.closed,
-                has_curves=sp.has_curves,
-                ctm_scale=sp.ctm_scale,
-                original_op_count=sp.original_op_count,
-            )
-        )
-
+    merged_subpaths = _clone_subpaths(paths[0].subpaths)
     # Start with the original ops, skipping the terminal 'S'
     merged_orig_ops = list(paths[0].original_instructions[:-1])
 
     for p in paths[1:]:
-        first_sp = p.subpaths[0]
-        last_merged_sp = merged_subpaths[-1]
-
-        # Splice the connecting point sequences
-        last_merged_sp.points.extend(first_sp.points[1:])
-        last_merged_sp.has_curves = last_merged_sp.has_curves or first_sp.has_curves
-        # Add op count but discount the dropped 'm' operator
-        last_merged_sp.original_op_count += max(0, first_sp.original_op_count - 1)
-
-        # Append any subsequent subpaths verbatim
-        for sp in p.subpaths[1:]:
-            merged_subpaths.append(
-                Subpath(
-                    points=list(sp.points),
-                    closed=sp.closed,
-                    has_curves=sp.has_curves,
-                    ctm_scale=sp.ctm_scale,
-                    original_op_count=sp.original_op_count,
-                )
-            )
-
-        # Merge original instructions, carefully discarding the intermediate 'm'
-        ops_to_add = p.original_instructions[:-1]
-        if ops_to_add and str(ops_to_add[0][1]) == "m":
-            ops_to_add = ops_to_add[1:]
-        merged_orig_ops.extend(ops_to_add)
+        _splice_path_into_group(merged_subpaths, merged_orig_ops, p)
 
     # Cap it off with the paint operator
     merged_orig_ops.append(paths[0].original_instructions[-1])
