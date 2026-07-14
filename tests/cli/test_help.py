@@ -127,6 +127,11 @@ def test_get_project_version_no_pyproject(monkeypatch, patch_environment):
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
+    # 3b. Force changelog parser to fail to test the ultimate "unknown-dev-version" fallback path
+    from pdftl.core import metadata
+
+    monkeypatch.setattr(metadata, "_parse_changelog_version", lambda: (None, None))
+
     # 4. Now it must take the final fallback
     assert helpmod.get_project_version() == "unknown-dev-version"
 

@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `style_text` now adapts Tr (text rendering mode) better to user parameters
 
+- improved project version-finding heuristics
+
 ### Fixed
 
 - `dump_text`: if `output` is passed directly, we now write the text, not the PDF.
