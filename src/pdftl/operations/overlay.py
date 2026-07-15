@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.exceptions import OperationError
+from pdftl.exceptions import OperationError, MissingArgumentError
 from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.ocg import create_layer
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
@@ -84,7 +84,7 @@ def _register_overlay_op(name, desc, long_desc, examples):
         tags=["in_place", "overlay", "layer"],
         type="single input operation",
         args=(
-            [c.INPUT_PDF, c.OVERLAY_PDF, c.OPERATION_ARGS],
+            [c.OPERATION_NAME, c.INPUT_PDF, c.OVERLAY_PDF, c.OPERATION_ARGS],
             {},
             {c.MULTI: "multi" in name, c.ON_TOP: "stamp" in name},
         ),
@@ -151,8 +151,9 @@ def _register_overlay_op(name, desc, long_desc, examples):
     ],
 )
 def apply_overlay(
+    operation_name: str,
     input_pdf: "pikepdf.Pdf",
-    overlay_filename: str,
+    overlay_filename: str | None,
     operation_args: list[str],
     on_top: bool = True,
     multi: bool = False,
@@ -161,10 +162,14 @@ def apply_overlay(
     """Apply overlay or underlay with optional OCG layering and page-range filtering."""
     import pikepdf
 
+    if overlay_filename is None:
+        raise MissingArgumentError(f"Missing '{operation_name}' argument, a PDF file is required")
+
     page_specs, layer_name = _parse_operation_args(operation_args[1:])
     total_pages = len(input_pdf.pages)
     page_specs = page_specs or ["1-end"]  # (Assuming previous type fix)
     target_pages = page_numbers_matching_page_specs(page_specs, total_pages)
+
     source = None if overlay_filename == "-" else overlay_filename
     try:
         with smart_pikepdf_open(source) as overlay_pdf:

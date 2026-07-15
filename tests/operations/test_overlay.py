@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pikepdf
 import pytest
 
-from pdftl.exceptions import OperationError
+from pdftl.exceptions import OperationError, MissingArgumentError
 from pdftl.operations.overlay import _parse_operation_args, apply_overlay
 
 
@@ -17,12 +17,19 @@ def test_apply_overlay_empty_pdf():
         # Updated regex to match the new error message
         fn = "empty_overlay.pdf"
         with pytest.raises(OperationError, match="has no pages"):
-            apply_overlay(mock_input_pdf, fn, [fn])
+            apply_overlay("fake_op", mock_input_pdf, fn, [fn])
 
 
 def test_apply_overlay_missing_layer_name_value(two_page_pdf):
     with pytest.raises(OperationError, match="requires a value"):
-        apply_overlay(pikepdf.open(two_page_pdf), "-", ["-", "layer_name"], on_top=True)
+        apply_overlay("fake_op", pikepdf.open(two_page_pdf), "-", ["-", "layer_name"], on_top=True)
+
+
+def test_apply_overlay_missing_overlay_argument(two_page_pdf):
+    with pytest.raises(MissingArgumentError, match="PDF file is required"):
+        apply_overlay(
+            "fake_op", pikepdf.open(two_page_pdf), None, ["-", "layer_name"], on_top=True
+        )
 
 
 def test_apply_overlay_with_ocg_layer(two_page_pdf, tmp_path):
@@ -33,6 +40,7 @@ def test_apply_overlay_with_ocg_layer(two_page_pdf, tmp_path):
         stamp.save(stamp_path)
 
     result = apply_overlay(
+        "fake_op",
         pikepdf.open(two_page_pdf),
         str(stamp_path),
         [str(stamp_path), "layer_name", "MyLayer"],
@@ -57,7 +65,9 @@ def test_apply_overlay_underlay(two_page_pdf, tmp_path):
         bg.add_blank_page()
         bg.save(bg_path)
 
-    result = apply_overlay(pikepdf.open(two_page_pdf), str(bg_path), [str(bg_path)], on_top=False)
+    result = apply_overlay(
+        "fake_op", pikepdf.open(two_page_pdf), str(bg_path), [str(bg_path)], on_top=False
+    )
     assert result.success
 
 
@@ -77,8 +87,8 @@ def stamp_pdf_path(tmp_path):
 def test_overlay_stamp_basic(two_page_pdf, stamp_pdf_path):
     """Test applying a stamp (overlay)."""
     with pikepdf.open(two_page_pdf) as pdf:
-        # apply_overlay(input_pdf, overlay_filename, ...)
-        apply_overlay(pdf, stamp_pdf_path, [stamp_pdf_path], on_top=True)
+        # apply_overlay("fake_op",input_pdf, overlay_filename, ...)
+        apply_overlay("fake_op", pdf, stamp_pdf_path, [stamp_pdf_path], on_top=True)
 
         # We verify success by checking the file structure implicitly
         # (pikepdf handles the heavy lifting)
@@ -88,7 +98,7 @@ def test_overlay_stamp_basic(two_page_pdf, stamp_pdf_path):
 def test_overlay_background(two_page_pdf, stamp_pdf_path):
     """Test applying a background (underlay)."""
     with pikepdf.open(two_page_pdf) as pdf:
-        apply_overlay(pdf, stamp_pdf_path, [stamp_pdf_path], on_top=False)
+        apply_overlay("fake_op", pdf, stamp_pdf_path, [stamp_pdf_path], on_top=False)
         assert len(pdf.pages) == 2
 
 
@@ -96,7 +106,7 @@ def test_overlay_missing_file_error(two_page_pdf):
     """Test error when overlay file doesn't exist."""
     with pikepdf.open(two_page_pdf) as pdf:
         with pytest.raises(OperationError):
-            apply_overlay(pdf, "non_existent_file.pdf", ["non_existent_file.pdf"])
+            apply_overlay("fake_op", pdf, "non_existent_file.pdf", ["non_existent_file.pdf"])
 
 
 def test_apply_overlay_stdin():
@@ -115,7 +125,7 @@ def test_apply_overlay_stdin():
         mock_open.return_value = overlay_pdf
 
         # 2. Call with "-"
-        apply_overlay(input_pdf, overlay_filename="-", operation_args=[])
+        apply_overlay("fake_op", input_pdf, overlay_filename="-", operation_args=[])
 
         # 3. Assert
         mock_open.assert_called_with(None)
@@ -205,7 +215,7 @@ class TestApplyOverlayPageFiltering:
     def test_no_specs_stamps_all_pages(self, three_page_pdf, stamp_path):
         """Default (no specs): every page receives the stamp."""
         with pikepdf.open(three_page_pdf) as pdf:
-            result = apply_overlay(pdf, stamp_path, [stamp_path])
+            result = apply_overlay("fake_op", pdf, stamp_path, [stamp_path])
         assert result.success
         counts = _count_xobjects(result.pdf)
         assert all(c > 0 for c in counts), f"Expected all pages stamped, got {counts}"
@@ -213,7 +223,7 @@ class TestApplyOverlayPageFiltering:
     def test_page_spec_skips_excluded_pages(self, three_page_pdf, stamp_path):
         """Line 176: pages outside the spec are skipped (no XObject added)."""
         with pikepdf.open(three_page_pdf) as pdf:
-            result = apply_overlay(pdf, stamp_path, [stamp_path, "2"])  # only page 2
+            result = apply_overlay("fake_op", pdf, stamp_path, [stamp_path, "2"])  # only page 2
         counts = _count_xobjects(result.pdf)
         assert counts[0] == 0, "Page 1 should be untouched"
         assert counts[1] > 0, "Page 2 should be stamped"
@@ -222,7 +232,7 @@ class TestApplyOverlayPageFiltering:
     def test_range_spec_stamps_subset(self, three_page_pdf, stamp_path):
         """Stamp pages 1-2 only; page 3 must be skipped (line 176)."""
         with pikepdf.open(three_page_pdf) as pdf:
-            result = apply_overlay(pdf, stamp_path, [stamp_path, "1-2"])
+            result = apply_overlay("fake_op", pdf, stamp_path, [stamp_path, "1-2"])
         counts = _count_xobjects(result.pdf)
         assert counts[0] > 0, "Page 1 should be stamped"
         assert counts[1] > 0, "Page 2 should be stamped"
@@ -231,7 +241,7 @@ class TestApplyOverlayPageFiltering:
     def test_odd_spec_stamps_odd_pages_only(self, three_page_pdf, stamp_path):
         """'odd' spec: pages 1 and 3 stamped, page 2 skipped (line 176)."""
         with pikepdf.open(three_page_pdf) as pdf:
-            result = apply_overlay(pdf, stamp_path, [stamp_path, "odd"])
+            result = apply_overlay("fake_op", pdf, stamp_path, [stamp_path, "odd"])
         counts = _count_xobjects(result.pdf)
         assert counts[0] > 0, "Page 1 (odd) should be stamped"
         assert counts[1] == 0, "Page 2 (even) should be untouched"
@@ -240,7 +250,7 @@ class TestApplyOverlayPageFiltering:
     def test_even_spec_stamps_even_pages_only(self, three_page_pdf, stamp_path):
         """'even' spec: only page 2 stamped; pages 1 and 3 skipped (line 176)."""
         with pikepdf.open(three_page_pdf) as pdf:
-            result = apply_overlay(pdf, stamp_path, [stamp_path, "even"])
+            result = apply_overlay("fake_op", pdf, stamp_path, [stamp_path, "even"])
         counts = _count_xobjects(result.pdf)
         assert counts[0] == 0, "Page 1 should be untouched"
         assert counts[1] > 0, "Page 2 (even) should be stamped"
@@ -250,7 +260,7 @@ class TestApplyOverlayPageFiltering:
         """Page spec and layer_name together: only specified pages get the OCG-tagged stamp."""
         with pikepdf.open(three_page_pdf) as pdf:
             result = apply_overlay(
-                pdf, stamp_path, [stamp_path, "2", "layer_name", "MyLayer"], on_top=True
+                "fake_op", pdf, stamp_path, [stamp_path, "2", "layer_name", "MyLayer"], on_top=True
             )
         assert result.success
         assert "/OCProperties" in result.pdf.Root
@@ -268,7 +278,7 @@ class TestApplyOverlayPageFiltering:
     def test_last_page_only(self, three_page_pdf, stamp_path):
         """'end' spec targets only the last page; first two are skipped (line 176)."""
         with pikepdf.open(three_page_pdf) as pdf:
-            result = apply_overlay(pdf, stamp_path, [stamp_path, "end"])
+            result = apply_overlay("fake_op", pdf, stamp_path, [stamp_path, "end"])
         counts = _count_xobjects(result.pdf)
         assert counts[0] == 0
         assert counts[1] == 0
@@ -278,7 +288,7 @@ class TestApplyOverlayPageFiltering:
         """Directly verify _process_page is never called for out-of-spec pages."""
         with patch("pdftl.operations.overlay._process_page") as mock_process:
             with pikepdf.open(three_page_pdf) as pdf:
-                apply_overlay(pdf, stamp_path, [stamp_path, "2"])
+                apply_overlay("fake_op", pdf, stamp_path, [stamp_path, "2"])
 
             # args[0] is now `stamped_count`. Since it's the first stamp applied, it will be 0.
             called_indices = [c.args[0] for c in mock_process.call_args_list]
@@ -316,7 +326,7 @@ class TestApplyOverlayAdvancedSequencing:
         # Simulate the user requesting page 3, then page 1
         mock_matching.return_value = [3, 1]
 
-        apply_overlay(input_pdf, "stamp.pdf", ["stamp.pdf", "3,1"])
+        apply_overlay("fake_op", input_pdf, "stamp.pdf", ["stamp.pdf", "3,1"])
 
         # We expect 2 calls to _process_page.
         # Call 1: stamped_count=0, base_page=input_pdf.pages[2] (Page 3)
@@ -346,7 +356,7 @@ class TestApplyOverlayAdvancedSequencing:
         # Simulate the user requesting page 2 twice (e.g., applying two different background layers)
         mock_matching.return_value = [2, 2]
 
-        apply_overlay(input_pdf, "stamp.pdf", ["stamp.pdf", "2,2"])
+        apply_overlay("fake_op", input_pdf, "stamp.pdf", ["stamp.pdf", "2,2"])
 
         assert mock_process.call_count == 2
 
