@@ -1,13 +1,24 @@
 # tests/operations/test_optimize_images_complete.py
 
 import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Import the optimize_images module for testing
 import pdftl.operations.optimize_images as optimize_images_module
-from pdftl.exceptions import InvalidArgumentError, PackageError
+from pdftl.exceptions import InvalidArgumentError, PackageError, OperationError
+
+
+# Define genuine exception classes for our mock module to prevent TypeError
+class MockMissingDependencyError(Exception):
+    pass
+
+
+class MockSubprocessOutputError(Exception):
+    pass
+
 
 # --- 1. Parameter Parsing Tests ---
 
@@ -103,10 +114,21 @@ def test_optimize_images_success(two_page_pdf):
     mock_lib.DEFAULT_PNG_QUALITY = 0
     mock_lib.extract_images_generic.return_value = ([], [])
 
+    mock_exceptions = types.ModuleType("exceptions")
+    mock_exceptions.MissingDependencyError = MockMissingDependencyError
+    mock_exceptions.SubprocessOutputError = MockSubprocessOutputError
+
     # optimize_images_pdf() imports everything from ocrmypdf.optimize inside its
     # own function body on every call, so patching sys.modules is enough on its
     # own - no reload of optimize_images_module needed.
-    with patch.dict(sys.modules, {"ocrmypdf": MagicMock(), "ocrmypdf.optimize": mock_lib}):
+    with patch.dict(
+        sys.modules,
+        {
+            "ocrmypdf": MagicMock(),
+            "ocrmypdf.optimize": mock_lib,
+            "ocrmypdf.exceptions": mock_exceptions,
+        },
+    ):
         import pikepdf
 
         with pikepdf.open(two_page_pdf) as pdf:
@@ -115,3 +137,92 @@ def test_optimize_images_success(two_page_pdf):
 
             # Check that it called the library functions
             mock_lib.extract_images_generic.assert_called()
+
+
+def test_optimize_images_missing_dependency(two_page_pdf):
+    """Test that MissingDependencyError is caught and raised as OperationError."""
+    mock_lib = MagicMock()
+    mock_lib.DEFAULT_JPEG_QUALITY = 0
+    mock_lib.DEFAULT_PNG_QUALITY = 0
+
+    mock_exceptions = types.ModuleType("exceptions")
+    mock_exceptions.MissingDependencyError = MockMissingDependencyError
+    mock_exceptions.SubprocessOutputError = MockSubprocessOutputError
+
+    mock_lib.extract_images_generic.side_effect = MockMissingDependencyError("test missing tool")
+
+    with patch.dict(
+        sys.modules,
+        {
+            "ocrmypdf": MagicMock(),
+            "ocrmypdf.optimize": mock_lib,
+            "ocrmypdf.exceptions": mock_exceptions,
+        },
+    ):
+        import pikepdf
+
+        with pikepdf.open(two_page_pdf) as pdf:
+            with pytest.raises(
+                OperationError, match="An external dependency required by OCRmyPDF is missing"
+            ):
+                optimize_images_module.optimize_images_pdf(pdf, ["medium"], "out.pdf")
+
+
+def test_optimize_images_subprocess_error(two_page_pdf):
+    """Test that SubprocessOutputError is caught and raised as OperationError."""
+    mock_lib = MagicMock()
+    mock_lib.DEFAULT_JPEG_QUALITY = 0
+    mock_lib.DEFAULT_PNG_QUALITY = 0
+
+    mock_exceptions = types.ModuleType("exceptions")
+    mock_exceptions.MissingDependencyError = MockMissingDependencyError
+    mock_exceptions.SubprocessOutputError = MockSubprocessOutputError
+
+    mock_lib.extract_images_generic.side_effect = MockSubprocessOutputError(
+        "test subprocess failure"
+    )
+
+    with patch.dict(
+        sys.modules,
+        {
+            "ocrmypdf": MagicMock(),
+            "ocrmypdf.optimize": mock_lib,
+            "ocrmypdf.exceptions": mock_exceptions,
+        },
+    ):
+        import pikepdf
+
+        with pikepdf.open(two_page_pdf) as pdf:
+            with pytest.raises(
+                OperationError, match="An external tool executed by OCRmyPDF failed"
+            ):
+                optimize_images_module.optimize_images_pdf(pdf, ["medium"], "out.pdf")
+
+
+def test_optimize_images_file_not_found_error(two_page_pdf):
+    """Test that FileNotFoundError is caught and raised as OperationError."""
+    mock_lib = MagicMock()
+    mock_lib.DEFAULT_JPEG_QUALITY = 0
+    mock_lib.DEFAULT_PNG_QUALITY = 0
+
+    mock_exceptions = types.ModuleType("exceptions")
+    mock_exceptions.MissingDependencyError = MockMissingDependencyError
+    mock_exceptions.SubprocessOutputError = MockSubprocessOutputError
+
+    mock_lib.extract_images_generic.side_effect = FileNotFoundError("test executable not found")
+
+    with patch.dict(
+        sys.modules,
+        {
+            "ocrmypdf": MagicMock(),
+            "ocrmypdf.optimize": mock_lib,
+            "ocrmypdf.exceptions": mock_exceptions,
+        },
+    ):
+        import pikepdf
+
+        with pikepdf.open(two_page_pdf) as pdf:
+            with pytest.raises(
+                OperationError, match="Failed to execute an underlying system tool"
+            ):
+                optimize_images_module.optimize_images_pdf(pdf, ["medium"], "out.pdf")

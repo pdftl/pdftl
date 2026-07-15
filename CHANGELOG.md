@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `stamp`, `multistamp`, `background`, `multibackground`: a PDF file argument to use as overlay/underlay is now required, per the documentation
 
+- `optimize_images`: better errors on missing `ocrmypdf` system dependencies
+
 ## [0.25.1] - 2026-07-15
 
 ### Fixed

@@ -17,7 +17,7 @@ import logging
 import pdftl.core.constants as c
 from pdftl.core.core_types import Compatibility, FeatureType, OpResult, Status
 from pdftl.core.registry import register_operation
-from pdftl.exceptions import InvalidArgumentError, PackageError
+from pdftl.exceptions import OperationError, InvalidArgumentError, PackageError
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +136,7 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
             transcode_jpegs,
             transcode_pngs,
         )
+        from ocrmypdf.exceptions import MissingDependencyError, SubprocessOutputError
     except ImportError as exc:
         raise PackageError(
             "Loading OCRmyPDF failed.\n pip install pdftl.[optimize-images] to fix this."
@@ -188,13 +189,22 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
     root = Path(output_filename).parent / "images"
     root.mkdir(exist_ok=True)
     executor = DEFAULT_EXECUTOR
-    jpegs, pngs = extract_images_generic(pdf, root, options)
-    transcode_jpegs(pdf, jpegs, root, options, executor)
-    deflate_jpegs(pdf, root, options, executor)
-    transcode_pngs(pdf, pngs, png_name, root, options, executor)
+    try:
+        jpegs, pngs = extract_images_generic(pdf, root, options)
+        transcode_jpegs(pdf, jpegs, root, options, executor)
+        deflate_jpegs(pdf, root, options, executor)
+        transcode_pngs(pdf, pngs, png_name, root, options, executor)
 
-    jbig2_groups = extract_images_jbig2(pdf, root, options)
-    convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
+        jbig2_groups = extract_images_jbig2(pdf, root, options)
+        convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
+    except MissingDependencyError as exc:
+        raise OperationError(
+            f"An external dependency required by OCRmyPDF is missing: {exc}"
+        ) from exc
+    except SubprocessOutputError as exc:
+        raise OperationError(f"An external tool executed by OCRmyPDF failed: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise OperationError(f"Failed to execute an underlying system tool: {exc}") from exc
 
     return OpResult(success=True, pdf=pdf)
 
