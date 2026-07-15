@@ -16,6 +16,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
+from pdftl.operations.helpers.del_pages import del_pages
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ want to extract pages 1-5 of a PDF file, then it may be a good idea is
 use this operation to delete pages `6-end` rather than using `cat`
 (which would have to create a new PDF file from scratch and graft
 pages 1-5 from the input file in, using all sorts of trickery).
+
+If the document has custom page labels, they are remapped so that every
+surviving page keeps its own original label.
 
 """
 
@@ -59,18 +63,5 @@ def delete_pages(pdf: "Pdf", specs) -> OpResult:
     structure essentially unchanged.
     """
     pages_to_delete = page_numbers_matching_page_specs(specs, len(pdf.pages))
-    for page_num in sorted(pages_to_delete, reverse=True):
-        del_page(pdf, page_num)
-
+    del_pages(pdf, pages_to_delete)
     return OpResult(success=True, pdf=pdf)
-
-
-def del_page(pdf, page_num):
-    # See https://github.com/pikepdf/pikepdf/issues/196
-    # idea is to remove /Contents, /Resources first
-    # to avoid them sticking around after page deletion
-    page = pdf.pages[page_num - 1]
-    logger.debug("deleting page_num=%s", page_num)
-    for key in page.keys():
-        del page[key]
-    del pdf.pages[page_num - 1]

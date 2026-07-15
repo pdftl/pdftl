@@ -15,6 +15,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.operations.helpers.del_pages import del_pages
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,9 @@ without parentheses or commas, as a convenient shorthand.
 | `stddev`    | Max pixel stddev to consider uniform (0–255)            | `5.0`   | `stddev=2.5` |
 | `mode`      | Colour space: `grey` or `rgb`                           | `grey`  | `mode=rgb`   |
 | `dpi`       | Render resolution for detection                         | `30`    | `dpi=72`     |
+
+If the document has custom page labels, they are remapped so that every
+surviving page keeps its own original label.
 
 """
 
@@ -312,8 +316,7 @@ def delete_blank(pdf, specs) -> OpResult:
         spec = _parse_spec(spec_str, total_pages)
         pages_to_delete |= _find_blank_pages_for_spec(pdf, spec)
 
-    for p_num in sorted(pages_to_delete, reverse=True):
-        del pdf.pages[p_num - 1]
+    del_pages(pdf, pages_to_delete)
 
     logger.info("Deleted %d blank page(s) from %d total.", len(pages_to_delete), total_pages)
     return OpResult(success=True, pdf=pdf)

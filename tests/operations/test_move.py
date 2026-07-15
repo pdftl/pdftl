@@ -218,3 +218,48 @@ def test_move_parse_failure_coverage():
     with patch("pdftl.operations.move.resolve_operation_spec", return_value=None):
         with pytest.raises(UserCommandLineError, match="Failed to parse move specification"):
             move_pages(mock_pdf, ["invalid", "args"])
+
+
+def get_page_label_starts(pdf):
+    from pdftl.utils.page_labels import get_all_page_label_dicts
+
+    dicts = get_all_page_label_dicts(pdf)
+    return [d["St"] if d else None for d in dicts]
+
+
+def test_move_preserves_page_labels(numbered_pdf):
+    """Each page's original logical label should follow it to its new
+    position, regardless of the move — labels attach to pages, not slots."""
+    import pikepdf
+
+    # give the fixture's 10 pages decimal labels 1..10, indirect object
+    # per page_labels.py's NumberTree requirements.
+    d = pikepdf.Dictionary(Nums=pikepdf.Array([0, pikepdf.Dictionary(St=1)]))
+    numbered_pdf.Root.PageLabels = numbered_pdf.make_indirect(d)
+
+    # move page 5 (idx 4, label "5") after page 8 (idx 7, label "8")
+    move_pages(numbered_pdf, ["5", "after", "8"])
+
+    heights = get_heights(numbered_pdf)
+    labels = get_page_label_starts(numbered_pdf)
+
+    # Original: 0,1,2,3,4(moved),5,6,7(anchor),8,9
+    # Expected order (by height, i.e. original index):
+    assert heights == [100, 101, 102, 103, 105, 106, 107, 104, 108, 109]
+    # Labels should follow the same pages: original label = index + 1
+    expected_labels = [h - 100 + 1 for h in heights]
+    assert labels == expected_labels
+
+
+def test_move_preserves_page_labels_range_before(numbered_pdf):
+    import pikepdf
+
+    d = pikepdf.Dictionary(Nums=pikepdf.Array([0, pikepdf.Dictionary(St=1)]))
+    numbered_pdf.Root.PageLabels = numbered_pdf.make_indirect(d)
+
+    move_pages(numbered_pdf, ["1-3", "before", "5"])
+
+    heights = get_heights(numbered_pdf)
+    labels = get_page_label_starts(numbered_pdf)
+    expected_labels = [h - 100 + 1 for h in heights]
+    assert labels == expected_labels

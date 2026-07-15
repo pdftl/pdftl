@@ -6,6 +6,7 @@ import pytest
 from pdftl.exceptions import UserCommandLineError
 from pdftl.operations.insert import insert_pages
 from pdftl.operations.parsers.insert_parser import parse_insert_args
+from pdftl.utils.page_labels import get_all_page_label_dicts
 
 # --- PART 1: Parser Logic Tests ---
 
@@ -197,3 +198,77 @@ def test_insert_malformed_custom_geometry(simple_pdf):
     with pytest.raises(UserCommandLineError) as exc:
         insert_pages(simple_pdf, ["(bad,data)"])
     assert "Unknown geometry spec" in str(exc.value)
+
+
+# --- PART 3: Page Label Preservation ---
+#
+# insert_pages mutates its pdf in place (src_pdf is dst_pdf), so
+# remap_page_labels must run BEFORE any pages are actually inserted -- see
+# page_labels.py's own docstring/guard for why. These tests exist
+# specifically to catch a regression of that ordering bug.
+
+
+def make_labeled_pdf(n_pages, rules):
+    pdf = pikepdf.Pdf.new()
+    for _ in range(n_pages):
+        pdf.add_blank_page(page_size=(200, 200))
+    nums = []
+    for k in sorted(rules):
+        nums.append(k)
+        nums.append(rules[k])
+    pdf.Root.PageLabels = pdf.make_indirect(pikepdf.Dictionary(Nums=pikepdf.Array(nums)))
+    return pdf
+
+
+def label_starts(pdf):
+    return [d["St"] if d else None for d in get_all_page_label_dicts(pdf)]
+
+
+class TestInsertPreservesPageLabels:
+    def test_insert_before_middle_page_shifts_nothing_but_itself(self):
+        """Survivors must keep their OWN original numbers; only the newly
+        inserted page gets a synthesized plain-decimal label (option 2
+        default: inherit_style=False)."""
+        pdf = make_labeled_pdf(4, {0: pikepdf.Dictionary(St=1)})  # 1,2,3,4
+
+        insert_pages(pdf, ["before", "2"])  # insert 1 blank before page 2
+
+        assert len(pdf.pages) == 5
+        # page1(1), [inserted], page2(2), page3(3), page4(4)
+        assert label_starts(pdf) == [1, 2, 2, 3, 4]
+
+    def test_insert_after_last_page_appends_new_label(self):
+        pdf = make_labeled_pdf(2, {0: pikepdf.Dictionary(St=1)})  # 1,2
+
+        insert_pages(pdf, ["after", "end"])
+
+        assert len(pdf.pages) == 3
+        assert label_starts(pdf) == [1, 2, 3]
+
+    def test_insert_multiple_pages_before_first_page(self):
+        pdf = make_labeled_pdf(3, {0: pikepdf.Dictionary(St=1)})  # 1,2,3
+
+        insert_pages(pdf, ["2", "before", "1"])  # insert 2 blanks before page 1
+
+        assert len(pdf.pages) == 5
+        # [inserted, inserted], page1(1), page2(2), page3(3)
+        assert label_starts(pdf) == [1, 2, 1, 2, 3]
+
+    def test_insert_does_not_leak_roman_style_onto_new_pages(self):
+        """Regression guard: inserted pages must get plain decimal labels,
+        never inherit a roman-numeral style from surrounding context (the
+        original bug this whole feature was built to fix)."""
+        pdf = make_labeled_pdf(2, {0: pikepdf.Dictionary(St=1, S=pikepdf.Name("/r"))})  # i, ii
+
+        insert_pages(pdf, ["before", "2"])
+
+        labels = get_all_page_label_dicts(pdf)
+        assert labels[0] == {"St": 1, "S": pikepdf.Name("/r")}
+        # inserted page: plain decimal, no /S key
+        assert "S" not in labels[1]
+        assert labels[2] == {"St": 2, "S": pikepdf.Name("/r")}
+
+    def test_insert_into_pdf_without_labels_adds_no_labels(self, simple_pdf):
+        insert_pages(simple_pdf, ["after", "1"])
+
+        assert "/PageLabels" not in simple_pdf.Root

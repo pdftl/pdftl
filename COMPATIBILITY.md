@@ -40,3 +40,5 @@ None right now. [Please report if you find any](https://github.com/pdftl/pdftl/i
   See the [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html) documentation for details.
 
 - It is not possible to deny the "screenreader" (a.k.a. "accessibility") permission in files saved with pdftl. This is a limitation of the underlying qpdf library, to align with the modern PDF specification.
+
+- `burst` supports multi-page chunks via `split_spec` (page ranges, `level<n>` bookmark splits, `step<n>`, `size<limit>`), whereas pdftk can only burst into single pages. When pdftl bursts into single pages, each output file also preserves that page's ORIGINAL label/number rather than restarting at "1", which pdftk does not do.

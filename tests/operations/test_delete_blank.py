@@ -144,6 +144,23 @@ class TestDeleteBlankAnalysis:
         assert _page_is_blank(None, spec) is False
 
 
+class _FakePage:
+    """Minimal page stand-in: supports .keys()/del like a real pikepdf.Page,
+    but is still distinguishable/comparable like the old bare-string mocks."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def keys(self):
+        return []
+
+    def __eq__(self, other):
+        return isinstance(other, _FakePage) and self.name == other.name
+
+    def __repr__(self):
+        return f"_FakePage({self.name!r})"
+
+
 class TestDeleteBlankOperation:
     @patch("pdftl.utils.page_images.iter_pages_as_pil")
     @patch("pdftl.operations.delete_blank._page_is_blank")
@@ -161,11 +178,11 @@ class TestDeleteBlankOperation:
     @patch("pdftl.operations.delete_blank._find_blank_pages_for_spec")
     def test_delete_blank_empty_specs(self, mock_find, mock_deps):
         mock_pdf = MagicMock()
-        mock_pdf.pages = ["page1", "page2"]
+        mock_pdf.pages = [_FakePage("page1"), _FakePage("page2")]
         mock_find.return_value = {2}
 
         result = delete_blank(mock_pdf, [])
-        assert mock_pdf.pages == ["page1"]
+        assert mock_pdf.pages == [_FakePage("page1")]
         assert result.success is True
 
     @patch("pdftl.utils.dependencies.ensure_dependencies")
@@ -173,7 +190,7 @@ class TestDeleteBlankOperation:
     def test_delete_blank_main(self, mock_find, mock_deps):
         # Setup mock PDF with 3 pages
         mock_pdf = MagicMock()
-        mock_pdf.pages = ["page1", "page2", "page3"]
+        mock_pdf.pages = [_FakePage("page1"), _FakePage("page2"), _FakePage("page3")]
 
         # Spec 1 finds page 1, Spec 2 finds page 3
         mock_find.side_effect = [{1}, {3}]
@@ -185,4 +202,4 @@ class TestDeleteBlankOperation:
         assert mock_deps.called
 
         # Deletions must happen in reverse order (index 2, then index 0)
-        assert mock_pdf.pages == ["page2"]
+        assert mock_pdf.pages == [_FakePage("page2")]

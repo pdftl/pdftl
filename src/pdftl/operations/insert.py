@@ -20,6 +20,7 @@ from pdftl.operations.parsers.insert_parser import InsertSpec, parse_insert_args
 from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts
+from pdftl.utils.page_labels import remap_page_labels
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,11 @@ Geometry Specifications:
   - `(20cm, 10cm)`: Custom dimensions (width, height).
   - `(50%, 100%)`: Dimensions relative to the target page.
   - `(model=N)`: Copy geometry from page N.
+
+If the document has custom page labels, existing pages keep their
+original labels. Newly inserted pages get plain sequential decimal
+labels (independent of any surrounding label style, e.g. roman
+numerals), since they aren't part of the original numbered sequence.
 """
 
 _INSERT_EXAMPLES = [
@@ -58,7 +64,10 @@ _INSERT_EXAMPLES = [
         "cmd": "in.pdf insert 2 after 1 output out.pdf",
         "desc": "Insert 2 blank pages after page 1.",
     },
-    {"cmd": "in.pdf insert (50%,100%)", "desc": "Insert a half-width page after every page."},
+    {
+        "cmd": "in.pdf insert (50%,100%) output out.pdf",
+        "desc": "Insert a half-width page after every page.",
+    },
     {
         "cmd": "in.pdf insert output out.pdf",
         "desc": "Insert 1 blank page after every page (using defaults).",
@@ -76,7 +85,7 @@ _INSERT_EXAMPLES = [
     type="single input operation",
     desc="Insert blank pages",
     long_desc=_INSERT_LONG_DESC,
-    usage="<input> insert [N][(geometry)] [{after|before} <range>] ...",
+    usage="<input> insert [N][(geometry)] [{after|before} <range>] output <output>",
     examples=_INSERT_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
@@ -110,6 +119,16 @@ def insert_pages(pdf: "Pdf", args: list) -> OpResult:
     # Execute Actions (Reverse sort to keep indices valid)
     actions.sort(key=lambda x: x[0], reverse=True)
     dummy_pdf = pikepdf.new()
+
+    # Build the new_to_old mapping (in original index space) BEFORE mutating pdf,
+    # since remap_page_labels reads pdf's current page count/labels live and
+    # must run prior to any insertion when src_pdf is dst_pdf.
+    new_pages_list = list(range(total_pages))
+    for insert_idx, _media_box, _crop_box, _trim_box in actions:
+        for _ in range(spec.insert_count):
+            new_pages_list.insert(insert_idx, None)
+
+    remap_page_labels(pdf, pdf, new_pages_list)
 
     count_inserted = 0
     for insert_idx, media_box, crop_box, trim_box in actions:

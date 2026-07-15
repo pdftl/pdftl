@@ -13,6 +13,7 @@ from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.page_images import iter_pages_as_pil
+from pdftl.operations.helpers.del_pages import del_pages
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,9 @@ The `survival=<val>` argument is the minimum fraction (0.0-1.0) of ink
 pixels from the previous page that must survive on the current page for
 it to be considered a continuation (default: 0.98). Genuine Beamer
 transitions produce survival=1.00; new slides typically produce <0.20.
+
+If the document has custom page labels, they are remapped so that every
+surviving page keeps its own original label.
 """
 
 _UNPAUSE_EXAMPLES = [
@@ -193,14 +197,9 @@ def unpause_pdf(input_pdf, args) -> OpResult:
         n_removed,
     )
 
-    pages_to_delete = sorted(
-        set(range(n_original)) - set(pages_to_keep),
-        reverse=True,
-    )
+    pages_to_delete = set(range(n_original)) - set(pages_to_keep)
 
-    from pdftl.operations.delete import del_page
-
-    for page_idx in pages_to_delete:
-        del_page(input_pdf, page_idx + 1)  # del_page expects 1-based
+    # convert 0-indexed to 1-indexed for del_pages
+    del_pages(input_pdf, sorted([x + 1 for x in pages_to_delete]))
 
     return OpResult(success=True, pdf=input_pdf)

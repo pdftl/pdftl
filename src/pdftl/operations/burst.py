@@ -16,6 +16,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.pages.add_pages import add_pages
 from pdftl.utils.outline_select import get_outlines_to_level_pages
+from pdftl.utils.page_labels import remap_page_labels
 from pdftl.utils.page_specs import page_numbers_matching_page_specs, expand_specs_to_pages
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,11 @@ bytes, kilobytes (K/KB), or megabytes (M/MB). For example, `size5M` or
 in which case chunks may be sub-divided to fit into the given size
 limit.
 
+If the source document has custom page labels, each output chunk
+preserves the ORIGINAL page labels/numbering for the pages it contains,
+rather than restarting numbering at "1". This differs from classic
+`pdftk` burst, which has no equivalent concept of preserving original
+numbering per chunk.
 
 """
 
@@ -195,6 +201,10 @@ def _make_chunk_pdf(source_pdf, start_idx, end_idx):
 
     new_pdf = pikepdf.Pdf.new()
     add_pages(new_pdf, [source_pdf], source_pages)
+
+    new_to_old = list(range(start_idx, end_idx + 1))
+    remap_page_labels(source_pdf, new_pdf, new_to_old)
+
     return new_pdf
 
 

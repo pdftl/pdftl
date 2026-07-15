@@ -17,6 +17,7 @@ from pdftl.operations.parsers.move_parser import parse_move_args
 from pdftl.operations.types.move_types import MoveSpec
 from pdftl.utils.arg_helpers import resolve_operation_spec
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.page_labels import remap_page_labels
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 _MOVE_LONG_DESC = """
 Relocates pages within the document without duplication.
+
+If the document has custom page labels, they will be remapped so that every page retains its label.
 
 Semantics:
   - Pages matching `<source-spec>` are removed and reinserted at the target.
@@ -89,7 +92,7 @@ _MOVE_EXAMPLES = [
     desc="Move pages to a new location",
     long_desc=_MOVE_LONG_DESC,
     examples=_MOVE_EXAMPLES,
-    usage="<input> move <source> {before|after} <target>",
+    usage="<input> move <source> {before|after} <target> output <file>",
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
 def move_pages(pdf: "Pdf", args: list) -> OpResult:
@@ -134,7 +137,16 @@ def execute_move(pdf: "Pdf", spec: MoveSpec) -> OpResult:
     adjustment = sum(1 for idx in source_indices if idx < anchor_orig)
     anchor_final = anchor_orig - adjustment
 
-    # 4. Perform Move
+    # 4. Remap page labels BEFORE mutating pdf, since remap_page_labels reads
+    # pdf's current page count/labels live (src_pdf is dst_pdf here).
+    source_set = set(source_indices)
+    remaining_indices = [i for i in range(total_pages) if i not in source_set]
+    new_to_old = (
+        remaining_indices[:anchor_final] + source_indices + remaining_indices[anchor_final:]
+    )
+    remap_page_labels(pdf, pdf, new_to_old)
+
+    # 5. Perform Move
     pages_to_move = [pdf.pages[i] for i in source_indices]
 
     for i in reversed(source_indices):

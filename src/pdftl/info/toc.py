@@ -36,6 +36,10 @@ _ALLOWED_BOOKMARK_KEYS = {
 }
 
 
+def _to_clean_string(s: "pikepdf.String"):
+    return str(s).split("\x00", 1)[0]
+
+
 def _to_python_types(obj):
     """Recursively converts pikepdf Objects to JSON/YAML-safe Python types."""
     import pikepdf
@@ -48,7 +52,8 @@ def _to_python_types(obj):
         # Unambiguous tagging to prevent strings from accidentally becoming PDF Names
         return {"__name__": str(obj)}
     elif isinstance(obj, pikepdf.String):
-        return str(obj)
+        # Safely truncate string objects at the first null byte (handles padding)
+        return _to_clean_string(obj)
     elif isinstance(obj, (int, float, bool)):
         return obj
     elif obj is None:
@@ -89,7 +94,11 @@ def extract_toc_tree(pdf: "pikepdf.Pdf") -> list[dict]:
 def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> dict:
     if not item.obj:
         raise OperationError("Invalid item (no obj)")
-    node: dict[str, Any] = {"title": item.title}
+
+    # Safely extract and clean the outline item title of any trailing/embedded null bytes
+    clean_title = _to_clean_string(item.title) if item.title is not None else ""
+    node: dict[str, Any] = {"title": clean_title}
+
     if color_array := item.obj.get("/C"):
         node["color"] = [float(c) for c in list(color_array)]
     if flags_obj := item.obj.get("/F"):

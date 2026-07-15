@@ -41,6 +41,13 @@ from pdftl.utils.string_utils import (
 logger = logging.getLogger(__name__)
 
 
+def _clean_string(val: Any) -> str:
+    """Safely convert a pikepdf String/str and truncate at the first null byte."""
+    if val is None:
+        return ""
+    return str(val).split("\x00", 1)[0]
+
+
 def _get_extra_info(info, pdf, input_filename):
     info.file_path = input_filename
     info.version = pdf.pdf_version
@@ -65,8 +72,9 @@ def _get_docinfo(info, pdf_docinfo):
                     key_str,
                 )
                 continue
-            if value:
-                info.doc_info.append(DocInfoEntry(key=key_str, value=str(value)))
+            cleaned_value = _clean_string(value)
+            if cleaned_value:
+                info.doc_info.append(DocInfoEntry(key=key_str, value=cleaned_value))
 
 
 def _get_page_info(info, i, page):
@@ -260,21 +268,23 @@ def _extract_bookmarks_recursive(
     results = []
     for item in items:
         page_num = 0
+        clean_title = _clean_string(item.title)
         try:
             page_num = resolve_page_number(item, page_map, named_destinations)
         except AssertionError as exc:
             logger.warning(
                 "Could not resolve page number for bookmark '%s': %s.\n  Using page number 0.",
-                item.title,
+                clean_title,
                 exc,
             )
             page_num = 0
         if page_num is None:
             logger.warning(
-                "Could not resolve page number for bookmark '%s'. Using page number 0.", item.title
+                "Could not resolve page number for bookmark '%s'. Using page number 0.",
+                clean_title,
             )
             page_num = 0
-        entry = BookmarkEntry(title=str(item.title), level=level, page_number=page_num)
+        entry = BookmarkEntry(title=clean_title, level=level, page_number=page_num)
 
         if item.children:
             entry.children = _extract_bookmarks_recursive(

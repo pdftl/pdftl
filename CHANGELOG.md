@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `optimize_images`: better errors on missing `ocrmypdf` system dependencies
 
+- `delete`, `delete_blank`, `unpause`, `insert`, `move`: page labels (`/PageLabels`)
+  are now preserved and remapped across page deletion, insertion, and
+  reordering, so surviving pages keep their original logical page numbers
+  (e.g. roman-numeral front matter) instead of losing custom numbering.
+
+- `burst`: each output chunk now preserves the ORIGINAL document's page
+  labels/numbering rather than restarting at "1" — e.g. splitting a book
+  by chapter keeps each chapter's pages numbered as they were in the whole
+  book. This is an intentional deviation from classic `pdftk` burst
+  behaviour, which has no equivalent concept.
+
+- `dump_bookmarks`: strip trailing nulls from outline titles and metadata, like most PDF readers
+
 ## [0.25.1] - 2026-07-15
 
 ### Fixed

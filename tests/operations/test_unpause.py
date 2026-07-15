@@ -184,21 +184,18 @@ class TestUnpauseOperation:
 
     @patch("pdftl.operations.unpause.ensure_dependencies")
     @patch("pdftl.operations.unpause._find_pages_to_keep")
-    @patch("pdftl.operations.delete.del_page")
-    def test_unpause_pdf_integration(self, mock_del_page, mock_keep, mock_deps):
+    @patch("pdftl.operations.unpause.del_pages")
+    def test_unpause_pdf_integration(self, mock_del_pages, mock_keep, mock_deps):
         mock_pdf = MagicMock()
-        mock_pdf.pages = ["p1", "p2", "p3", "p4"]
-        mock_keep.return_value = [1, 3]
+        mock_pdf.pages = ["p1", "p2", "p3", "p4", "p5"]
+        mock_keep.return_value = [0, 1, 4]
 
         result = unpause_pdf(mock_pdf, ["dpi=72"])
 
         assert isinstance(result, OpResult)
         assert result.success is True
         assert mock_deps.called
-
-        mock_del_page.assert_any_call(mock_pdf, 3)
-        mock_del_page.assert_any_call(mock_pdf, 1)
-        assert mock_del_page.call_count == 2
+        mock_del_pages.assert_called_once_with(mock_pdf, [3, 4])
 
     def test_unpause_pdf_invalid_args_raise(self):
         mock_pdf = MagicMock()

@@ -10,12 +10,14 @@ from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.operations.burst import (
     _generate_burst_chunks,
+    _make_chunk_pdf,
     _parse_size_to_bytes,
     burst_cli_hook,
     burst_pdf,
     get_chunk_size,
     get_effective_specs,
 )
+from pdftl.utils.page_labels import get_all_page_label_dicts
 
 
 def test_burst_basic(two_page_pdf):
@@ -537,3 +539,174 @@ def test_burst_preserves_named_destination_links(pdf_with_named_destination_link
     # Sanity: the chunk must still save out as a structurally valid PDF.
     buf = io.BytesIO()
     chunk.save(buf)
+
+
+# --- Regression tests: burst must preserve original page-label identity ---
+#
+# Each burst chunk is a NEW pdf built from a contiguous slice of the source
+# document, so there's no in-place-mutation ordering hazard here (unlike
+# delete/insert/move) -- remap_page_labels just needs to run once per chunk
+# against the (untouched) source. This is an intentional pdftk deviation:
+# classic pdftk burst has no concept of preserving original numbering per
+# chunk. See CHANGELOG.
+
+
+@pytest.fixture
+def book_with_chapters():
+    """An 8-page 'book' with roman-numeral front matter (pages 1-4, i..iv)
+    and decimal body pages (pages 5-8, 1..4), plus chapter bookmarks used
+    as burst split points."""
+    pdf = pikepdf.Pdf.new()
+    for _ in range(8):
+        pdf.add_blank_page(page_size=(200, 200))
+
+    nums = [
+        0,
+        pikepdf.Dictionary(St=1, S=pikepdf.Name("/r")),  # pages 0-3: i..iv
+        4,
+        pikepdf.Dictionary(St=1, S=pikepdf.Name("/D")),  # pages 4-7: 1..4
+    ]
+    pdf.Root.PageLabels = pdf.make_indirect(pikepdf.Dictionary(Nums=pikepdf.Array(nums)))
+
+    with pdf.open_outline() as outline:
+        outline.root.append(
+            pikepdf.OutlineItem("Front Matter", destination=[pdf.pages[0].obj, pikepdf.Name.Fit])
+        )
+        outline.root.append(
+            pikepdf.OutlineItem("Chapter 1", destination=[pdf.pages[4].obj, pikepdf.Name.Fit])
+        )
+
+    return pdf
+
+
+@pytest.fixture
+def book_with_implicit_decimal_body():
+    """Like book_with_chapters, but the body section's rule has NO /S key
+    at all (relying on the PDF-spec default of plain decimal), rather than
+    an explicit S=/D. Lets tests distinguish 'no style set' from
+    'explicitly decimal style' without ambiguity."""
+    pdf = pikepdf.Pdf.new()
+    for _ in range(8):
+        pdf.add_blank_page(page_size=(200, 200))
+
+    nums = [
+        0,
+        pikepdf.Dictionary(St=1, S=pikepdf.Name("/r")),  # pages 0-3: i..iv
+        4,
+        pikepdf.Dictionary(St=1),  # pages 4-7: 1..4, no /S key at all
+    ]
+    pdf.Root.PageLabels = pdf.make_indirect(pikepdf.Dictionary(Nums=pikepdf.Array(nums)))
+    return pdf
+
+
+def test_burst_preserves_absence_of_explicit_style(book_with_implicit_decimal_body):
+    """When the source rule has no /S key, chunks taken from that section
+    must not gain one either -- distinct from the S=/D case covered
+    elsewhere, where the source explicitly sets decimal style."""
+    chunk = _make_chunk_pdf(book_with_implicit_decimal_body, start_idx=5, end_idx=7)
+    labels = get_all_page_label_dicts(chunk)
+    assert [d["St"] for d in labels] == [2, 3, 4]
+    assert all("S" not in d for d in labels)
+
+
+def test_burst_by_bookmark_preserves_original_page_numbers(book_with_chapters):
+    """Splitting at chapter boundaries (level1 bookmarks) should give each
+    chunk labels that match its ORIGINAL position in the book, not a
+    restarted 1-based sequence local to the chunk."""
+    results = list(
+        _generate_burst_chunks(
+            opened_pdfs=[book_with_chapters],
+            specs=["level1"],
+            output_pattern="chunk_%d.pdf",
+        )
+    )
+    assert len(results) == 2
+    _, front_matter = results[0]
+    _, chapter1 = results[1]
+
+    front_labels = get_all_page_label_dicts(front_matter)
+    assert [d["St"] for d in front_labels] == [1, 2, 3, 4]
+    assert all(d["S"] == pikepdf.Name("/r") for d in front_labels)
+
+    chapter1_labels = get_all_page_label_dicts(chapter1)
+    assert [d["St"] for d in chapter1_labels] == [1, 2, 3, 4]
+    assert all(d["S"] == pikepdf.Name("/D") for d in chapter1_labels)
+
+
+def test_burst_single_pages_each_keep_their_own_original_number(book_with_chapters):
+    """Classic pdftk-style single-page burst: even here, each single-page
+    output file should carry the page's real original number/style rather
+    than defaulting to '1' for every file."""
+    results = list(
+        _generate_burst_chunks(
+            opened_pdfs=[book_with_chapters],
+            specs=["1-end"],
+            output_pattern="pg_%04d.pdf",
+        )
+    )
+    assert len(results) == 8
+
+    # page 2 (0-based idx 1) -> should be labeled "ii", not "i"/"1"
+    _, page2_chunk = results[1]
+    labels = get_all_page_label_dicts(page2_chunk)
+    assert labels == [{"St": 2, "S": pikepdf.Name("/r")}]
+
+    # page 6 (0-based idx 5) -> should be labeled "2" (decimal body), not "1"
+    _, page6_chunk = results[5]
+    labels = get_all_page_label_dicts(page6_chunk)
+    assert labels == [{"St": 2, "S": pikepdf.Name("/D")}]
+
+
+def test_burst_step_split_preserves_numbers_across_arbitrary_boundaries(book_with_chapters):
+    """Fixed-size step splitting (not aligned to the label-style boundary)
+    should still correctly split styles at the point where they actually
+    change, e.g. step3 on an 8-page book with the roman/decimal boundary
+    at page 5 produces a chunk straddling both styles."""
+    results = list(
+        _generate_burst_chunks(
+            opened_pdfs=[book_with_chapters],
+            specs=["step3"],
+            output_pattern="chunk_%d.pdf",
+        )
+    )
+    # 8 pages, step 3 -> chunks of [1-3], [4-6], [7-8]
+    assert len(results) == 3
+    _, chunk1 = results[0]
+    _, chunk2 = results[1]
+    _, chunk3 = results[2]
+
+    assert [d["St"] for d in get_all_page_label_dicts(chunk1)] == [1, 2, 3]
+    assert all(d["S"] == pikepdf.Name("/r") for d in get_all_page_label_dicts(chunk1))
+
+    # chunk2 straddles the roman/decimal boundary: original pages 4(iv),5(1),6(2)
+    chunk2_labels = get_all_page_label_dicts(chunk2)
+    assert chunk2_labels[0] == {"St": 4, "S": pikepdf.Name("/r")}
+    assert chunk2_labels[1] == {"St": 1, "S": pikepdf.Name("/D")}
+    assert chunk2_labels[2] == {"St": 2, "S": pikepdf.Name("/D")}
+
+    assert [d["St"] for d in get_all_page_label_dicts(chunk3)] == [3, 4]
+
+
+def test_burst_source_without_page_labels_produces_chunks_without_labels(two_page_pdf):
+    """If the source PDF has no /PageLabels at all, chunks shouldn't have
+    any synthesized labels either -- consistent with remap_page_labels'
+    no-source-labels short circuit."""
+    with pikepdf.open(two_page_pdf) as pdf:
+        results = list(
+            _generate_burst_chunks(
+                opened_pdfs=[pdf],
+                specs=["1-end"],
+                output_pattern="pg_%d.pdf",
+            )
+        )
+        for _, chunk in results:
+            assert "/PageLabels" not in chunk.Root
+
+
+def test_make_chunk_pdf_directly_preserves_labels(book_with_chapters):
+    """Direct unit-level check on _make_chunk_pdf itself, independent of
+    the burst-splitting logic in _generate_burst_chunks."""
+    chunk = _make_chunk_pdf(book_with_chapters, start_idx=5, end_idx=7)
+    labels = get_all_page_label_dicts(chunk)
+    assert [d["St"] for d in labels] == [2, 3, 4]
+    assert all(d["S"] == pikepdf.Name("/D") for d in labels)
