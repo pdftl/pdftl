@@ -157,7 +157,7 @@ def _run_single_operation_in_subprocess(
 def _run_pipeline_in_subprocess(
     steps: list[dict[str, Any]],
     raw_file_paths: list[dict[str, Any]],
-) -> bytes:
+) -> tuple[bytes | None, dict[str, Any]]:
     """Pipeline counterpart of _run_single_operation_in_subprocess: applies
     the same LFI filesystem sandbox validation for all stages within a
     pipelined request before executing."""

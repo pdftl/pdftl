@@ -157,7 +157,7 @@ def run_pipeline(
     steps: list[dict[str, Any]],
     opened_pdfs: list["pikepdf.Pdf"],
     aliases: dict[str, int],
-) -> bytes:
+) -> tuple[bytes | None, dict[str, Any]]:
     """Execute a parsed pipeline against already-opened input PDFs.
 
     Uploaded-file handles (e.g. ``A``, ``B``) are exposed to every stage via
@@ -172,22 +172,17 @@ def run_pipeline(
     than calling .save() a second time on the same pikepdf.Pdf object
     (pikepdf.Pdf objects are not safe to save more than once). If no
     stage wrote an output file, pipeline_pdf is saved here, exactly once.
+
+    If the final stage's operation is flagged skip_pipeline_save (i.e. it
+    doesn't produce a PDF -- e.g. dump_data, dump_bookmarks), the final
+    stage's OpResult.data is serialized instead, using the same
+    (bytes|None, meta) shape single-operation execution already returns.
     """
-    # Reject pipelines ending with a read-only/side-effect operation (one that
-    # handles its own output via a cli_hook, e.g. dump_text) by querying the
-    # registry's skip_pipeline_save flag. We can't rely on manager.pipeline_pdf
-    # being None to detect this: PipelineManager falls back to the original
-    # input PDF when a stage returns no new result, so pipeline_pdf is never
-    # None as long as there was at least one input file. skip_pipeline_save is
-    # the actual signal that a stage's "output" doesn't mean a PDF was produced.
+    final_op_is_data_producing = False
     if steps:
         final_op = steps[-1].get("operation")
         op_entry = registry.operations.get(final_op, {})
-        if op_entry.get("skip_pipeline_save", False):
-            raise UserCommandLineError(
-                f"The '{final_op}' operation does not produce a PDF output and "
-                "cannot be used as the final step of a server pipeline."
-            )
+        final_op_is_data_producing = op_entry.get("skip_pipeline_save", False)
 
     handles = {name: opened_pdfs[idx] for name, idx in aliases.items()}
 
@@ -203,20 +198,32 @@ def run_pipeline(
         )
         manager.run()
 
+        if final_op_is_data_producing:
+            # Deferred import: subprocess_workers imports run_pipeline from
+            # this module at load time, so importing it back at module
+            # level here would create a circular import.
+            from pdftl.server.subprocess_workers import _serialize_operation_result
+
+            if not manager.results:
+                raise UserCommandLineError(
+                    f"The '{final_op}' operation completed but produced no result."
+                )
+            return _serialize_operation_result(manager.results[-1])
+
         last_options = stages[-1].options if stages else {}
         if last_options.get("output") == tmp_path and os.path.getsize(tmp_path) > 0:
             # CLI already saved the final PDF to disk exactly once, inside
             # PipelineManager.run(). Read those bytes back rather than
             # calling .save() again on the same pikepdf.Pdf object.
             with open(tmp_path, "rb") as f:
-                return f.read()
+                return f.read(), {"kind": "pdf"}
 
         if manager.pipeline_pdf is None:
             raise UserCommandLineError("Pipeline completed but produced no output PDF.")
 
         buf = io.BytesIO()
         manager.pipeline_pdf.save(buf)
-        return buf.getvalue()
+        return buf.getvalue(), {"kind": "pdf"}
     finally:
         try:
             os.remove(tmp_path)

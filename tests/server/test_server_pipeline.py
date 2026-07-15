@@ -187,17 +187,18 @@ def test_pipeline_endpoint_applies_output_encryption(server) -> None:
             assert pdf.is_encrypted
 
 
-def test_pipeline_endpoint_rejects_missing_output(server) -> None:
-    """A pipeline whose last stage yields no PDF surfaces as a client error."""
+def test_pipeline_endpoint_dump_text_final_step_returns_text(server) -> None:
+    """A pipeline whose last stage is a skip_pipeline_save operation (e.g.
+    dump_text) with no 'output' now succeeds, returning that operation's
+    own data/text instead of requiring a PDF."""
     ms = server()
     base_url = ms.base_url
 
     pdf_a = make_pdf_bytes(1)
     steps = json.dumps([{"operation": "dump_text"}])
 
-    with pytest.raises(urllib.error.HTTPError) as exc_info:
-        post_multipart(f"{base_url}/v1/execute/pipeline", {"A": pdf_a}, steps)
-    assert exc_info.value.code == 400
+    with post_multipart(f"{base_url}/v1/execute/pipeline", {"A": pdf_a}, steps) as response:
+        assert response.status == 200
 
 
 def test_pipeline_endpoint_rejects_blocked_step_operation(server) -> None:
@@ -244,9 +245,10 @@ def test_run_pipeline_saves_in_memory_pdf_when_no_stage_writes_output() -> None:
         "pdftl.server.server_pipeline.PipelineManager",
         FakeManagerNoOutput,
     ):
-        result = run_pipeline([], [], {})
+        result_bytes, meta = run_pipeline([], [], {})
 
-    assert isinstance(result, bytes)
+    assert isinstance(result_bytes, bytes)
+    assert meta == {"kind": "pdf"}
 
 
 def test_run_pipeline_reads_bytes_from_temp_output_file() -> None:
@@ -276,9 +278,12 @@ def test_run_pipeline_reads_bytes_from_temp_output_file() -> None:
             FakeManagerWritesOutput,
         ),
     ):
-        result = run_pipeline([{"operation": "stub_requires_output", "args": []}], [], {})
+        result_bytes, meta = run_pipeline(
+            [{"operation": "stub_requires_output", "args": []}], [], {}
+        )
 
-    assert result == b"%PDF-FAKE-FINALIZED-BYTES"
+    assert result_bytes == b"%PDF-FAKE-FINALIZED-BYTES"
+    assert meta == {"kind": "pdf"}
 
 
 def test_run_pipeline_cleanup_swallows_missing_temp_file() -> None:
@@ -302,9 +307,10 @@ def test_run_pipeline_cleanup_swallows_missing_temp_file() -> None:
         "pdftl.server.server_pipeline.PipelineManager",
         FakeManagerNoFileWritten,
     ):
-        result = run_pipeline([], [], {})
+        result_bytes, meta = run_pipeline([], [], {})
 
-    assert isinstance(result, bytes)
+    assert isinstance(result_bytes, bytes)
+    assert meta == {"kind": "pdf"}
 
 
 def test_run_pipeline_cleanup_swallows_already_removed_temp_file() -> None:
@@ -331,9 +337,10 @@ def test_run_pipeline_cleanup_swallows_already_removed_temp_file() -> None:
         # but mkstemp still creates tmp_path up front; delete it directly to
         # force the finally block's os.remove to hit a missing file.
         with patch("os.remove", side_effect=OSError("already gone")):
-            result = run_pipeline([], [], {})
+            result_bytes, meta = run_pipeline([], [], {})
 
-    assert isinstance(result, bytes)
+    assert isinstance(result_bytes, bytes)
+    assert meta == {"kind": "pdf"}
 
 
 def test_run_pipeline_raises_when_pipeline_pdf_is_none() -> None:
@@ -464,3 +471,82 @@ def test_pipeline_forbidden_output_option(server) -> None:
             pass
     assert exc_info.value.code == 400
     assert "forbidden in pipeline steps" in exc_info.value.read().decode("utf-8").lower()
+
+
+def test_run_pipeline_final_step_returns_json_data(tmp_path):
+    """A pipeline whose final step is a skip_pipeline_save (data-producing)
+    operation now succeeds, returning (bytes|None, meta) instead of being
+    hard-rejected."""
+    from pdftl.core.core_types import OpResult
+
+    class FakeManagerDataResult:
+        def __init__(self, stages, input_context, handles=None) -> None:
+            self.stages = stages
+            self.pipeline_pdf = MagicMock()
+            self.results = [OpResult(success=True, data={"pages": 3}, meta={"json_output": True})]
+
+        def run(self) -> None:
+            pass
+
+    fake_op_registry = {"dump_data": {"skip_pipeline_save": True}}
+    with (
+        patch.object(registry, "operations", fake_op_registry),
+        patch("pdftl.server.server_pipeline.PipelineManager", FakeManagerDataResult),
+    ):
+        result_bytes, meta = run_pipeline([{"operation": "dump_data", "args": ["json"]}], [], {})
+
+    assert result_bytes is None
+    assert meta == {"kind": "data", "data": {"pages": 3}}
+
+
+def test_run_pipeline_final_step_data_producing_no_results_raises():
+    """If the final step is flagged skip_pipeline_save but somehow produced
+    no OpResult at all, this is a clean error, not a silent empty response."""
+
+    class FakeManagerNoResults:
+        def __init__(self, stages, input_context, handles=None) -> None:
+            self.stages = stages
+            self.pipeline_pdf = None
+            self.results = []
+
+        def run(self) -> None:
+            pass
+
+    fake_op_registry = {"dump_data": {"skip_pipeline_save": True}}
+    with (
+        patch.object(registry, "operations", fake_op_registry),
+        patch("pdftl.server.server_pipeline.PipelineManager", FakeManagerNoResults),
+    ):
+        with pytest.raises(UserCommandLineError, match="produced no result"):
+            run_pipeline([{"operation": "dump_data", "args": []}], [], {})
+
+
+def test_pipeline_endpoint_final_step_dump_data_returns_json(server) -> None:
+    """End-to-end: a pipeline ending in dump_data (json) returns a JSON
+    response instead of a PDF, via the real HTTP + subprocess path."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_a = make_pdf_bytes(1)
+    steps = json.dumps([{"operation": "dump_data", "args": ["json"]}])
+
+    with post_multipart(f"{base_url}/v1/execute/pipeline", {"A": pdf_a}, steps) as response:
+        assert response.status == 200
+        assert "application/json" in response.headers.get("Content-Type", "")
+        data = json.loads(response.read().decode("utf-8"))
+        assert data["success"] is True
+        assert "result" in data
+
+
+def test_unpack_ipc_result_plain_non_tuple_payload():
+    """When the worker's underlying result wasn't a 2-tuple (is_tuple=False,
+    per _serialize_worker_payload), _unpack_ipc_result returns the raw
+    payload bytes directly rather than a (bytes, meta) pair."""
+    from pdftl.server.handler import PdftlServerRequestHandlerMixIn
+
+    handler = PdftlServerRequestHandlerMixIn()
+    metadata = {"is_tuple": False, "meta": 42}
+
+    result = handler._unpack_ipc_result(metadata, b"raw-payload-bytes")
+
+    assert result == b"raw-payload-bytes"

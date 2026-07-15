@@ -260,6 +260,30 @@
     padding: 12px;
     overflow-x: auto;
     font-size: 12px;
+    position: relative;
+  }
+  .result-json-wrap {
+    position: relative;
+    display: block;
+  }
+  .copy-json-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #2a2e38;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    z-index: 5;
+    transition: all 0.2s ease;
+  }
+  .copy-json-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: #333947;
   }
   .status-line { font-size: 13px; color: var(--muted); margin-top: 12px; text-align: center; }
   .status-line.ok { color: #6be89a; }
@@ -817,15 +841,60 @@ document.getElementById('runBtn').addEventListener('click', async () => {
 
     } else if (contentType.includes('application/json')) {
       const data = await resp.json();
+      const jsonText = JSON.stringify(data, null, 2);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'result-json-wrap';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'copy-json-btn';
+      copyBtn.textContent = '📋 Copy';
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(jsonText);
+          const origText = copyBtn.textContent;
+          copyBtn.textContent = '✓ Copied';
+          setTimeout(() => { copyBtn.textContent = origText; }, 1500);
+        } catch (err) {
+          alert('Failed to copy: ' + err);
+        }
+      });
+
       const pre = document.createElement('pre');
-      pre.textContent = JSON.stringify(data, null, 2);
-      resultBox.appendChild(pre);
+      pre.textContent = jsonText;
+
+      wrap.appendChild(pre);
+      wrap.appendChild(copyBtn);
+      resultBox.appendChild(wrap);
 
     } else {
       const text = await resp.text();
+
+      const wrap = document.createElement('div');
+      wrap.className = 'result-json-wrap';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'copy-json-btn';
+      copyBtn.textContent = '📋 Copy';
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          const origText = copyBtn.textContent;
+          copyBtn.textContent = '✓ Copied';
+          setTimeout(() => { copyBtn.textContent = origText; }, 1500);
+        } catch (err) {
+          alert('Failed to copy: ' + err);
+        }
+      });
+
       const pre = document.createElement('pre');
       pre.textContent = text;
-      resultBox.appendChild(pre);
+
+      wrap.appendChild(pre);
+      wrap.appendChild(copyBtn);
+      resultBox.appendChild(wrap);
     }
     setStatus('Done', 'ok');
   } catch (e) {

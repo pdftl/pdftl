@@ -23,7 +23,6 @@ import pikepdf
 import pytest
 
 from pdftl.exceptions import OperationError, UserCommandLineError
-from pdftl.core.registry import registry
 from pdftl.operations.server_op import (
     run_server_op,
     _parse_server_args,
@@ -969,17 +968,6 @@ def test_server_payload_too_large(server) -> None:
         f"{base_url}/v1/execute/pipeline", data=body_data, headers=headers
     )
     assert_early_rejection(req_pipe, check_body=False)
-
-
-def test_run_pipeline_rejects_skip_pipeline_save_final_step():
-    """Final step whose op is flagged skip_pipeline_save must be rejected
-    before PipelineManager ever runs."""
-    from pdftl.server.server_pipeline import run_pipeline
-
-    fake_registry = {"stub_skip": {"skip_pipeline_save": True}}
-    with patch.object(registry, "operations", fake_registry):
-        with pytest.raises(UserCommandLineError, match="cannot be used as the final step"):
-            run_pipeline([{"operation": "stub_skip", "args": []}], [], {})
 
 
 def test_run_single_operation_in_subprocess_json_output_to_dict():

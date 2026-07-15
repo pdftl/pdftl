@@ -438,10 +438,10 @@ class PdftlServerRequestHandlerMixIn:
             self._cleanup_pdfs(opened_pdfs)
 
             steps = parse_pipeline_steps(parsed_fields.get("args", "[]"))
-            pdf_bytes = self._run_with_timeout(
+            result_bytes, result_meta = self._run_with_timeout(
                 _run_pipeline_in_subprocess, steps, uploaded_files, op_name="pipeline"
             )
-            self._send_pdf_bytes(pdf_bytes)
+            self._serialize_subprocess_result(result_bytes, result_meta)
         finally:
             multipart.cleanup_uploaded_files(uploaded_files)
 
