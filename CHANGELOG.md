@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Changed
+
+- `server`: 
+  - UI enhancements to `builder` interface
+  - server pipeline now takes understands `@A` per-operation arguments, allowing use of `stamp`, for example
+
+### Fixed
+
+- `stamp`, `multistamp`, `background`, `multibackground`: a PDF file argument to use as overlay/underlay is now required, per the documentation
+
 ## [0.25.1] - 2026-07-15
 
 ### Fixed

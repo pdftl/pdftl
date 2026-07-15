@@ -70,6 +70,26 @@ def _serialize_operation_result(result: Any) -> tuple[bytes | None, dict[str, An
     return None, {"kind": "empty"}
 
 
+def _substitute_file_handles(
+    operation_args: list[str], raw_file_paths: list[dict[str, Any]]
+) -> list[str]:
+    """Resolves '@<handle>' tokens in operation_args to the real on-disk
+    spool path of that uploaded handle. Used by path-based operations
+    (e.g. 'stamp', 'background') that don't understand pikepdf-alias
+    handles the way 'cat'/'shuffle' do -- they just want a real path.
+
+    Only exact '@<handle>' tokens are substituted; anything else (including
+    a bare handle name with no '@' prefix) passes through unchanged. This
+    is independent of a stage's 'inputs' list: a handle doesn't need to be
+    in 'inputs' to be substitutable here, and being substituted here doesn't
+    add it to 'inputs' either.
+    """
+    handle_to_path = {f["name"]: f["path"] for f in raw_file_paths if f.get("name")}
+    return [
+        handle_to_path.get(arg[1:], arg) if arg.startswith("@") else arg for arg in operation_args
+    ]
+
+
 def _raise_on_file_arg(operation_args, allowed_paths):
     for arg in operation_args:
         # Intercept absolute paths, path traversals, or raw files on disk
@@ -100,6 +120,7 @@ def _run_single_operation_in_subprocess(
 
     allowed_paths = {f["path"] for f in raw_file_paths}
 
+    operation_args = _substitute_file_handles(operation_args, raw_file_paths)
     _raise_on_file_arg(operation_args, allowed_paths)
 
     opened_pdfs = [pikepdf.open(f["path"]) for f in raw_file_paths]
@@ -144,9 +165,14 @@ def _run_pipeline_in_subprocess(
 
     allowed_paths = {f["path"] for f in raw_file_paths}
 
+    resolved_steps = []
     for step in steps:
+        step = dict(step)
         if "args" in step:
+            step["args"] = _substitute_file_handles(step["args"], raw_file_paths)
             _raise_on_file_arg(step["args"], allowed_paths)
+        resolved_steps.append(step)
+    steps = resolved_steps
 
     opened_pdfs = [pikepdf.open(f["path"]) for f in raw_file_paths]
     aliases = {f["name"]: idx for idx, f in enumerate(raw_file_paths) if f["name"]}

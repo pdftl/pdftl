@@ -1527,3 +1527,84 @@ def test_serialize_worker_payload_tuple_with_none_bytes():
     assert payload_bytes == b""
     assert meta == {"kind": "data", "data": 1}
     assert is_tuple is True
+
+
+def test_substitute_file_handles_resolves_at_handle():
+    """An exact '@<handle>' token resolves to that handle's real spool
+    path; unrelated tokens (including a bare handle name with no '@')
+    pass through unchanged."""
+    from pdftl.server.subprocess_workers import _substitute_file_handles
+
+    raw_file_paths = [
+        {"name": "A", "filename": "a.pdf", "path": "/tmp/spool_a.pdf"},
+        {"name": "B", "filename": "b.pdf", "path": "/tmp/spool_b.pdf"},
+    ]
+    args = ["@B", "B", "1-3", "@C"]
+    resolved = _substitute_file_handles(args, raw_file_paths)
+    assert resolved == ["/tmp/spool_b.pdf", "B", "1-3", "@C"]
+
+
+def test_substitute_file_handles_ignores_unnamed_files():
+    """Uploaded files with no handle name (e.g. the plain 'file' field)
+    are simply not substitutable -- no name means no lookup key."""
+    from pdftl.server.subprocess_workers import _substitute_file_handles
+
+    raw_file_paths = [{"name": "", "filename": "x.pdf", "path": "/tmp/spool_x.pdf"}]
+    resolved = _substitute_file_handles(["@"], raw_file_paths)
+    assert resolved == ["@"]
+
+
+def test_run_pipeline_in_subprocess_substitutes_at_handle_per_step(tmp_path):
+    """The '@<handle>' substitution applies independently to every step's
+    own args, and doesn't require the handle to be in that step's 'inputs'."""
+    from pdftl.server import _run_pipeline_in_subprocess
+
+    stamp_path = tmp_path / "stamp.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.save(str(stamp_path))
+
+    captured_steps = {}
+
+    def fake_run_pipeline(steps, opened_pdfs, aliases):
+        captured_steps["steps"] = steps
+        return b"%PDF-OK"
+
+    with patch("pdftl.server.subprocess_workers.run_pipeline", side_effect=fake_run_pipeline):
+        result = _run_pipeline_in_subprocess(
+            [{"operation": "stamp", "args": ["@S"], "inputs": ["_"]}],
+            [{"name": "S", "filename": "stamp.pdf", "path": str(stamp_path)}],
+        )
+
+    assert result == b"%PDF-OK"
+    assert captured_steps["steps"][0]["args"] == [str(stamp_path)]
+    # Confirm substitution didn't mutate 'inputs' -- S is resolved via args
+    # only, never added to the opened-PDF input list.
+    assert captured_steps["steps"][0]["inputs"] == ["_"]
+
+
+def test_run_single_operation_in_subprocess_substitutes_at_handle(tmp_path):
+    """End-to-end (in-process) check that '@<handle>' in operation_args is
+    resolved to a real path before run_operation is called, and that the
+    resolved path passes the LFI guard since it's a legitimate upload."""
+    from pdftl.core.core_types import OpResult
+
+    pdf_path = tmp_path / "stamp_source.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.save(str(pdf_path))
+
+    captured_args = {}
+
+    def fake_run_operation(operation, call_context):
+        captured_args["args"] = call_context["operation_args"]
+        return OpResult(success=True)
+
+    with patch("pdftl.core.executor.run_operation", side_effect=fake_run_operation):
+        _run_single_operation_in_subprocess(
+            "noop",
+            ["@S"],
+            [{"name": "S", "filename": "stamp_source.pdf", "path": str(pdf_path)}],
+        )
+
+    assert captured_args["args"] == [str(pdf_path)]

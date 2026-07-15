@@ -95,7 +95,7 @@ class PdftlServerRequestHandlerMixIn:
     def do_GET(self) -> None:
         if self.path in ("/", "/v1/status"):
             self._handle_status_route()
-        elif self.path == "/builder":
+        elif self.path.split("?", 1)[0] == "/builder":
             self._handle_builder()
         else:
             self.send_error(404, "Endpoint not found")
@@ -177,55 +177,66 @@ class PdftlServerRequestHandlerMixIn:
             child_conn.close()  # Close parent copy of child handle to prevent leaks and deadlocks
         return parent_conn, proc
 
+    def _read_next_ipc_message(
+        self, parent_conn: Any, metadata: dict[str, Any] | None
+    ) -> tuple[dict[str, Any] | None, tuple[str, dict[str, Any], bytes] | None]:
+        """Reads the next sequential message from the IPC pipe.
+
+        Returns (updated_metadata, result_tuple). If result_tuple is returned,
+        the transaction is complete or has encountered an error.
+        """
+        try:
+            if metadata is None:
+                meta_bytes = parent_conn.recv_bytes()
+                new_metadata = json.loads(meta_bytes.decode("utf-8"))
+                return new_metadata, None
+            payload_bytes = parent_conn.recv_bytes()
+            return metadata, (metadata["status"], metadata, payload_bytes)
+        except Exception as e:  # noqa: BLE001
+            return (
+                None,
+                (
+                    "err",
+                    {
+                        "status": "err",
+                        "error_class": "RuntimeError",
+                        "message": f"IPC transport failure: {str(e)}",
+                    },
+                    b"",
+                ),
+            )
+
+    def _handle_worker_crash(self, parent_conn: Any) -> tuple[str, dict[str, Any], bytes] | None:
+        """Evaluates deadlocks and handles sudden child-worker execution crashes."""
+        if parent_conn.poll(0.1):
+            return None
+        return (
+            "err",
+            {
+                "status": "err",
+                "error_class": "RuntimeError",
+                "message": "Worker process crashed unexpectedly (OOM or segfault).",
+            },
+            b"",
+        )
+
     def _poll_ipc_connection(
         self, parent_conn: Any, proc: multiprocessing.Process
     ) -> tuple[str, dict[str, Any], bytes]:
         start_time = time.time()
         metadata = None
         while True:
-            remaining = self.op_timeout_seconds - (time.time() - start_time)
-            if remaining <= 0:
+            if time.time() - start_time > self.op_timeout_seconds:
                 return "timeout", {}, b""
 
             if parent_conn.poll(0.5):
-                try:
-                    if metadata is None:
-                        meta_bytes = parent_conn.recv_bytes()
-                        metadata = json.loads(meta_bytes.decode("utf-8"))
-                        # Loop back around rather than assuming the second
-                        # message is already available -- poll() only
-                        # guarantees the *first* pending message is ready.
-                        continue
-                    payload_bytes = parent_conn.recv_bytes()
-                    return metadata["status"], metadata, payload_bytes
-                except Exception as e:  # noqa: BLE001
-                    # catch any corrupt payload or pipe state at the transport boundary
-                    return (
-                        "err",
-                        {
-                            "status": "err",
-                            "error_class": "RuntimeError",
-                            "message": f"IPC transport failure: {str(e)}",
-                        },
-                        b"",
-                    )
-
-            if not proc.is_alive():
-                # Check once more in case of race conditions
-                if parent_conn.poll(0.1):
-                    continue
-                return (
-                    "err",
-                    {
-                        "status": "err",
-                        "error_class": "RuntimeError",
-                        "message": "Worker process crashed unexpectedly (OOM or segfault).",
-                    },
-                    b"",
-                )
-
-            if time.time() - start_time > self.op_timeout_seconds:
-                return "timeout", {}, b""
+                metadata, result = self._read_next_ipc_message(parent_conn, metadata)
+                if result is not None:
+                    return result
+            elif not proc.is_alive():
+                crash_result = self._handle_worker_crash(parent_conn)
+                if crash_result is not None:
+                    return crash_result
 
     def _terminate_runaway_process(self, proc: multiprocessing.Process, op_name: str) -> None:
         logger.warning(

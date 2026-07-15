@@ -94,13 +94,20 @@
     gap: 8px;
     max-width: 100%;
   }
-  .file-chip input {
+  .file-chip input.handleInput {
     background: transparent;
     border: none;
+    border-bottom: 1px dashed var(--accent);
     color: var(--accent);
     font-family: var(--mono);
     font-size: 13px;
-    width: 40px;
+    font-weight: bold;
+    width: 28px;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    text-transform: uppercase;
+    outline: none;
   }
   .file-chip span {
     white-space: nowrap;
@@ -128,11 +135,13 @@
     color: var(--text);
     border-radius: 6px;
     padding: 10px;
-    font-size: 14px; /* 16px usually prevents iOS zoom, but 14px is okay with correct viewport */
+    font-size: 14px;
     font-family: inherit;
   }
   select { flex: 1; min-width: 0; }
-  .op-desc { color: var(--muted); font-size: 12px; margin: 6px 0 14px; min-height: 16px; line-height: 1.4; }
+  .op-desc {
+    color: var(--muted); font-size: 12px; margin: 6px 0 14px; min-height: 16px; line-height: 1.4;
+  }
   .op-desc code { color: var(--accent); font-family: var(--mono); }
 
   button.primary {
@@ -147,7 +156,25 @@
   }
   button.primary:hover { background: var(--accent-hover); }
 
-  ol#stepList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  button.secondary {
+    background: #202531;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  button.secondary:hover {
+    background: #2a2e38;
+    border-color: var(--muted);
+  }
+
+  ol#stepList {
+   list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px;
+  }
   .step {
     background: #0f1115;
     border: 1px solid var(--border);
@@ -159,6 +186,16 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 8px;
+  }
+  .step-head select.stepOpSelect {
+    padding: 4px 8px;
+    font-size: 13px;
+    font-family: var(--mono);
+    background: #202531;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    outline: none;
   }
   .step-head .badge {
     background: var(--accent);
@@ -185,7 +222,7 @@
   .step .hint { color: var(--muted); font-size: 11px; margin-top: 6px; line-height: 1.3; }
 
   .empty { color: var(--muted); font-size: 13px; font-style: italic; }
-  #runBtn { width: 100%; padding: 14px; font-size: 15px; margin-top: 4px; }
+  #runBtn { width: 100%; padding: 14px; font-size: 15px; }
   #runBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .rtd-link {
@@ -250,18 +287,25 @@
 
   <section>
     <h2>2. Build pipeline</h2>
-    <div class="op-row">
-      <select id="opSelect"></select>
-      <button class="primary" id="addStepBtn" type="button">Add step</button>
-    </div>
-    <div class="op-desc" id="opDesc"></div>
     <ol id="stepList"></ol>
-    <div class="empty" id="emptyHint" style="margin-top: 12px;">No steps yet — pick an operation above and add it.</div>
+    <div class="empty" id="emptyHint" style="margin-top: 12px; display: none;">No steps yet —
+      click below to add a step.</div>
+    <div style="margin-top: 16px;">
+      <button class="primary" id="addStepBtn" type="button">+ Add step</button>
+    </div>
   </section>
 
   <section>
     <h2>3. Run</h2>
-    <button class="primary" id="runBtn" type="button" disabled>Run pipeline</button>
+    <div style="display: flex; gap: 10px; margin-top: 4px;">
+      <button class="primary" id="runBtn" type="button" disabled style="flex: 1;">Run
+	pipeline</button>
+      <button 
+	class="secondary" 
+	id="shareBtn" 
+	type="button" 
+	title="Copy shareable link for this pipeline">🔗 Copy link</button>
+    </div>
     <div class="status-line" id="statusLine"></div>
     <div id="result"></div>
   </section>
@@ -269,12 +313,15 @@
 
 <script>
 const params = new URLSearchParams(location.search);
-const API = params.get('api') || location.origin;
+//const API = params.get('api') || location.origin;
+//const API = (location.origin === "null") ? "http://localhost:4080" : location.origin;
+const API = (location.protocol === 'file:' || location.origin === 'null') 
+  ? 'http://localhost:4080' 
+  : location.origin;
 document.getElementById('apiBase').textContent = API;
 
 let opsMeta = {};
 let opNames = [];
-let handleCounter = 0;
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -287,9 +334,16 @@ function escapeHtml(str) {
 }
 
 const nextHandle = () => {
-  let n = handleCounter++, s = '';
-  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
-  return s;
+  const existing = Array.from(
+      document.querySelectorAll('.handleInput')
+  ).map(i => i.value.trim().toUpperCase());
+  for (let i = 0; i < 26; i++) {
+    const char = String.fromCharCode(65 + i);
+    if (!existing.includes(char)) {
+      return char;
+    }
+  }
+  return 'A';
 };
 
 function processFiles(files) {
@@ -298,16 +352,27 @@ function processFiles(files) {
     if (f.type !== "application/pdf") return;
     const chip = document.createElement('div');
     chip.className = 'file-chip';
+    const initialHandle = nextHandle();
     chip.innerHTML = `
-      📄 <input type="text" class="handleInput" value="${escapeHtml(nextHandle())}">
+      📄 <input type="text" class="handleInput" 
+          value="${escapeHtml(initialHandle)}" maxlength="1" spellcheck="false" autocomplete="off">
       <span style="color:var(--muted)" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
       <button class="removeFile" type="button" title="Remove">✕</button>
     `;
     chip._file = f;
+
+    const input = chip.querySelector('.handleInput');
+    input.addEventListener('input', e => {
+      let val = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+      if (val.length > 1) val = val[0];
+      e.target.value = val;
+      updateStepLayout();
+    });
+
     box.appendChild(chip);
   });
   document.getElementById('fileInput').value = '';
-  updateRunEnabled();
+  updateStepLayout();
 }
 
 // Full-page drag and drop handling
@@ -352,23 +417,45 @@ document.getElementById('filesList').addEventListener('click', e => {
   const btn = e.target.closest('.removeFile');
   if (btn) {
     btn.closest('.file-chip').remove();
-    updateRunEnabled();
+    updateStepLayout();
   }
 });
 
-function addStepToDOM(name, argsValue = '') {
+function formatDisplayInputs(val) {
+  if (!val) return '';
+  try {
+    const parsed = JSON.parse(val);
+    if (Array.isArray(parsed)) return parsed.join(', ');
+  } catch(e) {}
+  return val;
+}
+
+function addStepToDOM(name, argsValue = '', inputsValue = '') {
   const list = document.getElementById('stepList');
   const meta = opsMeta[name] || {};
   const li = document.createElement('li');
   li.className = 'step';
   li.dataset.operation = name;
+
+  const stepsCount = list.querySelectorAll('.step').length;
+  let defaultInputs = formatDisplayInputs(inputsValue);
+  if (!defaultInputs) {
+    if (stepsCount === 0) {
+      const handles = Array.from(document.querySelectorAll('.handleInput'))
+        .map(i => i.value.trim().toUpperCase())
+        .filter(Boolean);
+      defaultInputs = handles.join(', ');
+    } else {
+      defaultInputs = '_';
+    }
+  }
+
   li.innerHTML = `
     <div class="step-head">
-      <div style="display:flex; align-items:center;">
+      <div style="display:flex; align-items:center; gap: 8px;">
         <span class="badge step-num"></span>
-        <span class="opname">${escapeHtml(name)}</span>
-        &nbsp;&nbsp;
-        <span class="opname">${rtdLink(name)}</span>
+        <select class="stepOpSelect"></select>
+        <span class="rtd-link-container"></span>
       </div>
       <div class="step-controls">
         <button class="moveUp" type="button" title="Move up">↑</button>
@@ -376,13 +463,98 @@ function addStepToDOM(name, argsValue = '') {
         <button class="remove" type="button" title="Remove">✕</button>
       </div>
     </div>
-    <input type="text" class="argsInput" placeholder='args, e.g. ["90"] or ["A", "B"]' spellcheck="false" autocomplete="off">
-    <div class="hint">${escapeHtml(meta.usage || '')}</div>
+
+    <!-- Restored Description Field -->
+    <div class="op-desc" style="margin: 0 0 10px 0; min-height: 0;"></div>
+
+    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+      <div style="flex: 1;">
+        <label style="display:block; font-size: 11px; color: var(--muted); 
+         margin-bottom: 2px;">Inputs</label>
+        <input type="text" class="stepInputsInput" value="${escapeHtml(defaultInputs)}" 
+         placeholder="e.g. A, B or _" spellcheck="false" autocomplete="off" style="padding: 8px;">
+      </div>
+      <div style="flex: 2;">
+        <label style="display:block; font-size: 11px; color: var(--muted); 
+         margin-bottom: 2px;">Arguments (args)</label>
+        <input type="text" class="argsInput" placeholder="e.g., 1-3 or right or @B" 
+         spellcheck="false" autocomplete="off" style="padding: 8px;">
+      </div>
+    </div>
+
+    <div class="hint"></div>
   `;
 
   if (argsValue) {
     li.querySelector('.argsInput').value = argsValue;
   }
+
+  if (inputsValue) {
+    li.querySelector('.stepInputsInput').dataset.touched = 'true';
+  }
+
+  const stepInputsInput = li.querySelector('.stepInputsInput');
+
+  // Real-time filter: Force uppercase, only allow A-Z, underscore, comma, and spaces
+  stepInputsInput.addEventListener('input', e => {
+    let val = e.target.value.toUpperCase().replace(/[^A-Z_,\s]/g, '');
+    e.target.value = val;
+
+    if (val.trim() === '') {
+      delete e.target.dataset.touched;
+      updateStepLayout();
+    } else {
+      e.target.dataset.touched = 'true';
+    }
+  });
+
+  // Strict split-clean on loss of focus: translates "A,,,B C" into "A, B, C"
+  stepInputsInput.addEventListener('blur', e => {
+    let val = e.target.value;
+    let singleChars = val.match(/[A-Z_]/g);
+    if (singleChars) {
+      e.target.value = singleChars.join(', ');
+    } else {
+      e.target.value = '';
+      delete e.target.dataset.touched;
+      updateStepLayout();
+    }
+  });
+
+  // Populate dynamic inline select dropdown
+  const selectEl = li.querySelector('.stepOpSelect');
+  selectEl.innerHTML = opNames.map(n => 
+      `<option value="${escapeHtml(n)}" ${n === name ? 'selected' : ''}>${escapeHtml(n)}</option>`
+  ).join('');
+
+  // Update logic on operation dropdown change
+  const updateStepHelpAndHint = () => {
+    const selectedOp = selectEl.value;
+    li.dataset.operation = selectedOp;
+
+    // Help link
+    const rtdContainer = li.querySelector('.rtd-link-container');
+    if (rtdContainer) {
+      rtdContainer.innerHTML = rtdLink(selectedOp);
+    }
+
+    const selectedMeta = opsMeta[selectedOp] || {};
+
+    // Populating Restored Description
+    const descEl = li.querySelector('.op-desc');
+    if (descEl) {
+      descEl.textContent = selectedMeta.description || selectedMeta.desc || '';
+    }
+
+    // Usage Hint
+    const hintEl = li.querySelector('.hint');
+    if (hintEl) {
+      hintEl.textContent = selectedMeta.usage || '';
+    }
+  };
+
+  selectEl.addEventListener('change', updateStepHelpAndHint);
+  updateStepHelpAndHint();
 
   list.appendChild(li);
   updateStepLayout();
@@ -395,43 +567,58 @@ async function loadOps() {
     const data = await resp.json();
     opsMeta = data.operations || {};
     opNames = Object.keys(opsMeta).sort();
-    const sel = document.getElementById('opSelect');
-    sel.innerHTML = opNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-    updateOpDesc();
+
     parseUrlPipeline();
+
+    // Start with exactly one stage ("cat" by default) if none loaded from URL
+    const list = document.getElementById('stepList');
+    if (list.querySelectorAll('.step').length === 0 && opNames.length > 0) {
+      const defaultOp = opNames.includes('cat') ? 'cat' : opNames[0];
+      addStepToDOM(defaultOp);
+    }
   } catch (e) {
     setStatus("Warning: Could not connect to API to load operations.", "err");
   }
 }
 
-function updateOpDesc() {
-  const name = document.getElementById('opSelect').value;
-  const meta = opsMeta[name];
-  const el = document.getElementById('opDesc');
-
-  if (meta) {
-    el.innerHTML = `${escapeHtml(meta.desc)} &nbsp;·&nbsp; <code>${escapeHtml(meta.usage)}</code>`;
-  } else {
-    el.innerHTML = '';
-  }
-}
-
 function rtdLink(name) {
-  return `<a class="rtd-link" href="https://pdftl.readthedocs.io/en/latest/operations/${name}.html" target="_blank">help</a>`;
+  return `<a class="rtd-link" 
+           href="https://pdftl.readthedocs.io/en/latest/operations/${name}.html" 
+           target="_blank">help</a>`;
 }
 
 function parseUrlPipeline() {
-  let stepIndex = 1;
-  while (true) {
-    const op = params.get(`op${stepIndex}`);
-    if (!op) break;
-    const args = params.get(`args${stepIndex}`) || params.get(`arg${stepIndex}`) || '';
-    if (opsMeta[op]) {
-      addStepToDOM(op, args);
-    } else {
-      console.warn(`URL requested operation "${op}", but it is not supported by this API.`);
+  let maxStep = 0;
+
+  // Find the highest step number specified in the URL params
+  for (const key of params.keys()) {
+    const match = key.match(/^op(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxStep) {
+        maxStep = num;
+      }
     }
-    stepIndex++;
+  }
+
+  // Iterate up to the max step, backfilling any gaps with 'filter'
+  for (let i = 1; i <= maxStep; i++) {
+    let op = params.get(`op${i}`);
+    const args = params.get(`args${i}`) || params.get(`arg${i}`) || '';
+    const inputs = params.get(`inputs${i}`) || params.get(`input${i}`) || params.get(`in${i}`) || '';
+
+    if (!op) {
+      op = 'filter';
+    }
+
+    if (opsMeta[op]) {
+      addStepToDOM(op, args, inputs);
+    } else {
+      // Safe fallback in case 'filter' or the specified op isn't supported by the loaded API
+      const fallback = opsMeta['filter'] ? 'filter' : (opNames[0] || 'cat');
+      addStepToDOM(fallback, args, inputs);
+      console.warn(`Operation "${op}" is not supported by this API. Defaulted to "${fallback}".`);
+    }
   }
 }
 
@@ -442,10 +629,24 @@ function updateStepLayout() {
   document.getElementById('emptyHint').style.display = steps.length ? 'none' : 'block';
   updateRunEnabled();
 
+  const handles = Array.from(document.querySelectorAll('.handleInput'))
+    .map(i => i.value.trim().toUpperCase())
+    .filter(Boolean);
+
   steps.forEach((step, i) => {
     step.querySelector('.step-num').textContent = i + 1;
     step.querySelector('.moveUp').style.display = i === 0 ? 'none' : 'inline-block';
-    step.querySelector('.moveDown').style.display = i === steps.length - 1 ? 'none' : 'inline-block';
+    step.querySelector('.moveDown').style.display = 
+	  i === steps.length - 1 ? 'none' : 'inline-block';
+
+    const inputEl = step.querySelector('.stepInputsInput');
+    if (inputEl && !inputEl.dataset.touched) {
+      if (i === 0) {
+        inputEl.value = handles.join(', ');
+      } else {
+        inputEl.value = '_';
+      }
+    }
   });
 }
 
@@ -470,12 +671,9 @@ function parseListField(text) {
   return t.split(',').map(s => s.trim()).filter(Boolean);
 }
 
-document.getElementById('opSelect').addEventListener('change', updateOpDesc);
-
 document.getElementById('addStepBtn').addEventListener('click', () => {
-  const name = document.getElementById('opSelect').value;
-  if (!name) return;
-  addStepToDOM(name);
+  const defaultOp = opNames.includes('cat') ? 'cat' : (opNames[0] || 'cat');
+  addStepToDOM(defaultOp);
 });
 
 document.getElementById('stepList').addEventListener('click', e => {
@@ -492,9 +690,54 @@ document.getElementById('stepList').addEventListener('click', e => {
     if (prev) li.parentNode.insertBefore(li, prev);
   } else if (btn.classList.contains('moveDown')) {
     const next = li.nextElementSibling;
-    if (next) li.parentNode.insertBefore(next, li);
+    if (next) li.parentNode.insertBefore(li, next);
   }
   updateStepLayout();
+});
+
+// Reconstruct pipeline configurations into a clean shareable URL
+function generatePipelineUrl() {
+  const newParams = new URLSearchParams();
+  const originalApi = params.get('api');
+  if (originalApi) {
+    newParams.set('api', originalApi);
+  }
+
+  const steps = document.querySelectorAll('#stepList .step');
+  steps.forEach((stepEl, idx) => {
+    const i = idx + 1;
+    const op = stepEl.dataset.operation;
+    const args = stepEl.querySelector('.argsInput').value.trim();
+    const inputs = stepEl.querySelector('.stepInputsInput').value.trim();
+
+    newParams.set(`op${i}`, op);
+    if (args) {
+      newParams.set(`args${i}`, args);
+    }
+    if (inputs) {
+      newParams.set(`inputs${i}`, inputs);
+    }
+  });
+
+  return `${window.location.origin}${window.location.pathname}?${newParams.toString()}`;
+}
+
+// Share button handling
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  const url = generatePipelineUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    const btn = document.getElementById('shareBtn');
+    const origText = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.borderColor = 'var(--accent)';
+    setTimeout(() => {
+      btn.textContent = origText;
+      btn.style.borderColor = 'var(--border)';
+    }, 2000);
+  } catch (err) {
+    alert('Failed to copy shareable link: ' + err);
+  }
 });
 
 document.getElementById('runBtn').addEventListener('click', async () => {
@@ -505,18 +748,23 @@ document.getElementById('runBtn').addEventListener('click', async () => {
 
   try {
     const steps = document.querySelectorAll('#stepList .step');
-    const pipeline = Array.from(steps).map(stepEl => {
+    const pipelineSteps = Array.from(steps).map(stepEl => {
       const operation = stepEl.dataset.operation;
       const argsText = stepEl.querySelector('.argsInput').value;
-      return { operation, args: parseListField(argsText) };
+      const inputsText = stepEl.querySelector('.stepInputsInput').value;
+      return {
+        operation,
+        args: parseListField(argsText),
+        inputs: parseListField(inputsText)
+      };
     });
 
     const formData = new FormData();
-    formData.append('args', JSON.stringify(pipeline));
+    formData.append('args', JSON.stringify(pipelineSteps));
 
     const fileChips = document.querySelectorAll('#filesList .file-chip');
     fileChips.forEach(chip => {
-      const handle = chip.querySelector('.handleInput').value.trim();
+      const handle = chip.querySelector('.handleInput').value.trim().toUpperCase();
       const file = chip._file;
       if (file && handle) {
         formData.append(handle, file, file.name);
@@ -547,11 +795,25 @@ document.getElementById('runBtn').addEventListener('click', async () => {
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
 
+      // 1. Keep the manual green download link in #result
       const link = document.createElement('a');
       link.href = url;
       link.download = 'pdftl_output.pdf';
       link.textContent = '⬇ Download result.pdf';
       resultBox.appendChild(link);
+
+      // 2. Robust auto-trigger using a temporary body-attached anchor helper
+      try {
+        const downloadHelper = document.createElement('a');
+        downloadHelper.href = url;
+        downloadHelper.download = 'pdftl_output.pdf';
+        downloadHelper.style.display = 'none';
+        document.body.appendChild(downloadHelper);
+        downloadHelper.click();
+        document.body.removeChild(downloadHelper);
+      } catch (downloadErr) {
+        console.error("Auto-download context blocked. Fall back to manual click.", downloadErr);
+      }
 
     } else if (contentType.includes('application/json')) {
       const data = await resp.json();
