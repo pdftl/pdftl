@@ -77,12 +77,20 @@ def _process_annotation(original_annot, page_idx, remapper: LinkRemapper):
     if remapper.pdf is None or remapper.source_pdf is None:
         return None, None
 
+    if original_annot is None:
+        logger.warning(
+            "Skipping a dangling /Annots entry on source page %s "
+            "(the PDF's cross-reference table points at a missing/broken object).",
+            page_idx,
+        )
+        return None, None
+
     try:
         # this make_indirect call is needed, even if original_annot is indirect
         # otherwise we encounter pollution issues
         annot_to_copy = remapper.source_pdf.make_indirect(original_annot)
         new_annot = remapper.pdf.copy_foreign(annot_to_copy)
-    except (remapper.pikepdf.ForeignObjectError, ValueError, RuntimeError) as e:
+    except (remapper.pikepdf.ForeignObjectError, ValueError, RuntimeError, TypeError) as e:
         logger.warning(
             "Skipping potentially corrupt annotation from source page %s. "
             "Reason: %s\nAnnotation: %s",

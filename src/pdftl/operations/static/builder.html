@@ -839,6 +839,34 @@ document.getElementById('runBtn').addEventListener('click', async () => {
         console.error("Auto-download context blocked. Fall back to manual click.", downloadErr);
       }
 
+    } else if (contentType.includes('application/zip')) {
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+
+      // Try to recover the server's suggested filename from
+      // Content-Disposition (falls back to a generic name).
+      const disposition = resp.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : 'pdftl_output.zip';
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.textContent = `⬇ Download ${filename}`;
+      resultBox.appendChild(link);
+
+      try {
+        const downloadHelper = document.createElement('a');
+        downloadHelper.href = url;
+        downloadHelper.download = filename;
+        downloadHelper.style.display = 'none';
+        document.body.appendChild(downloadHelper);
+        downloadHelper.click();
+        document.body.removeChild(downloadHelper);
+      } catch (downloadErr) {
+        console.error("Auto-download context blocked. Fall back to manual click.", downloadErr);
+      }
+
     } else if (contentType.includes('application/json')) {
       const data = await resp.json();
       const jsonText = JSON.stringify(data, null, 2);

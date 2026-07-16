@@ -16,6 +16,8 @@ import io as _io
 import os
 import logging
 import json
+import traceback
+import zipfile
 from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
@@ -57,10 +59,37 @@ def _serialize_operation_data(data: Any, meta: dict[str, Any]) -> dict[str, Any]
     return {"kind": "data", "data": str(data)}
 
 
+def _serialize_generator_as_zip(generator: Any) -> tuple[bytes, dict[str, Any]]:
+    """Consumes a (filename, pdf) generator (e.g. burst's OpResult.data) and
+    bundles every yielded pdf into a single in-memory zip archive, closing
+    each pdf as it's consumed. This lets operations like `burst` -- which
+    naturally produce multiple output files -- cross the subprocess/HTTP
+    boundary as one response instead of the server having no way to
+    represent "many files" at all.
+    """
+    buf = _io.BytesIO()
+    count = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, pdf in generator:
+            pdf_buf = _io.BytesIO()
+            try:
+                pdf.save(pdf_buf)
+            finally:
+                pdf.close()
+            zf.writestr(filename, pdf_buf.getvalue())
+            count += 1
+    return buf.getvalue(), {"kind": "zip", "count": count}
+
+
 def _serialize_operation_result(result: Any) -> tuple[bytes | None, dict[str, Any]]:
     """Flattens a live OpResult (data or pdf) into the (bytes, meta) shape
     that crosses the subprocess boundary."""
     if hasattr(result, "data") and result.data is not None:
+        import inspect
+
+        if inspect.isgenerator(result.data):
+            return _serialize_generator_as_zip(result.data)
+
         meta = result.meta if (hasattr(result, "meta") and isinstance(result.meta, dict)) else {}
         return None, _serialize_operation_data(result.data, meta)
     if hasattr(result, "pdf") and result.pdf is not None:
@@ -246,6 +275,7 @@ def _subprocess_worker_entrypoint(pipe_conn: Any, fn: Callable[..., Any], args: 
             "status": "err",
             "error_class": exc.__class__.__name__,
             "message": str(exc),
+            "traceback": traceback.format_exc(),
             "meta": None,
             "is_tuple": False,
         }

@@ -616,3 +616,71 @@ def test_rebuild_links_skips_pages_without_annotations():
     # Verify that it hits 'continue' early and never builds any context or configurations
     assert all_named_dests == []
     mock_remapper.set_call_context.assert_not_called()
+
+
+def test_process_annotation_skips_none_annotation(caplog):
+    """A dangling /Annots entry (pikepdf returns None for a broken/missing
+    indirect reference) must be skipped gracefully, not crash with
+    make_indirect(): incompatible function arguments."""
+    remapper = MagicMock()
+    remapper.pdf = MagicMock()
+    remapper.source_pdf = MagicMock()
+
+    with caplog.at_level("WARNING"):
+        new_annot, new_named_dest = _process_annotation(None, page_idx=3, remapper=remapper)
+
+    assert new_annot is None
+    assert new_named_dest is None
+    assert "dangling" in caplog.text.lower()
+    remapper.source_pdf.make_indirect.assert_not_called()
+
+
+def test_process_annotation_catches_type_error_from_make_indirect():
+    """Even if a None slips past the explicit guard (e.g. via some other
+    code path), a TypeError from make_indirect must be treated as a
+    skippable corrupt annotation, not propagate and crash the caller."""
+    remapper = MagicMock()
+    remapper.pdf = MagicMock()
+    remapper.source_pdf = MagicMock()
+    remapper.source_pdf.make_indirect.side_effect = TypeError(
+        "make_indirect(): incompatible function arguments"
+    )
+    remapper.pikepdf.ForeignObjectError = ValueError  # dummy distinct class, unused here
+
+    new_annot, new_named_dest = _process_annotation(
+        "not-really-none", page_idx=1, remapper=remapper
+    )
+
+    assert new_annot is None
+    assert new_named_dest is None
+
+
+def test_rebuild_annotations_for_page_skips_none_entries_among_valid_ones():
+    """A source page whose /Annots array mixes valid annotations with a
+    dangling (None) entry must still process the valid ones and simply
+    omit the broken one -- not abort the whole page's annotation rebuild."""
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    new_page = pdf.pages[0]
+
+    valid_annot = pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Text)
+
+    class AnnotsWithDangling:
+        def __iter__(self):
+            yield valid_annot
+            yield None
+
+    source_page = MagicMock()
+    source_page.__contains__.side_effect = lambda key: key == "/Annots"
+    source_page.Annots = AnnotsWithDangling()
+
+    remapper = MagicMock()
+    remapper.pdf = pdf
+    remapper.source_pdf = pikepdf.new()
+    remapper.pikepdf = pikepdf
+
+    dests = _rebuild_annotations_for_page(new_page, source_page, 0, remapper, pikepdf)
+
+    assert dests == []

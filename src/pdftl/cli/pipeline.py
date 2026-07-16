@@ -288,13 +288,30 @@ class PipelineManager:
             self.result_discardable = result.is_discardable
 
             # CLI Hooks (like printing text to console)
+            hook_ran = False
             if not getattr(self.input_context, "is_api", False):
                 op_entry = registry.operations.get(stage.operation, {})
                 if hook := op_entry.get("cli_hook"):
                     hook(result, stage, self)
+                    hook_ran = True
 
             # Update the pipeline data
-            result_val = result.pdf
+            #
+            # Some operations (e.g. burst) set OpResult.pdf to a source
+            # PDF purely as CLI-hook bookkeeping (e.g. for a post-drain
+            # dump_data call), even though the "real" result is the
+            # generator in .data. That .pdf is only safe to treat as
+            # authoritative once something has actually drained the
+            # generator -- which only the CLI hook does, and only when it
+            # ran. If no hook drained it, the generator is still the live,
+            # not-yet-consumed result, and must flow into pipeline_pdf
+            # instead so cleanup is deferred to whoever drains it later.
+            # This takes priority over result.pdf regardless of whether
+            # result.pdf happens to be None or not.
+            if not hook_ran and isinstance(result.data, types.GeneratorType):
+                result_val = result.data
+            else:
+                result_val = result.pdf
         else:
             self.result_discardable = False
             result_val = result

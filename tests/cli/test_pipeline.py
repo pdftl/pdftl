@@ -1202,3 +1202,258 @@ def test_inline_sub_pipeline_repr():
     """Covers Line 49: __repr__ mapping context for InlineSubPipeline."""
     pipeline = InlineSubPipeline(stages=[], original_text="<test_inline_sub_pipeline>")
     assert repr(pipeline) == "<test_inline_sub_pipeline>"
+
+
+class TestGeneratorDataResultUnpacking:
+    """Regression coverage for the server-pipeline bug: an OpResult with
+    pdf=None but a generator in .data (e.g. burst) must not fall back to
+    opened_pdfs[0] unless a cli_hook actually drained that generator
+    first. Covers: API path (no hooks ever run), CLI path with a
+    draining hook (existing behavior must be preserved exactly), and CLI
+    path with a generator-returning op that has NO hook at all (the case
+    that would leak silently if hook_ran weren't tracked correctly).
+    """
+
+    def _make_stage_and_manager(self, is_api):
+        stage = CliStage(operation="burst", inputs=["_"], input_passwords=[None])
+        input_context = MagicMock()
+        input_context.is_api = is_api
+        manager = PipelineManager(stages=[stage], input_context=input_context)
+        return stage, manager
+
+    def test_api_path_preserves_undrained_generator(self, mock_registry):
+        """is_api=True: hooks never run regardless of registry. The
+        generator in .data must become pipeline_pdf, not opened_pdfs[0]
+        (the source PDF) -- this is the exact server-pipeline bug."""
+        mock_registry.operations["burst"] = {"skip_pipeline_save": True}
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+        source_pdf.close = MagicMock()
+
+        def gen():
+            yield ("chunk_1.pdf", MagicMock())
+
+        stage, manager = self._make_stage_and_manager(is_api=True)
+        generator = gen()
+        result = OpResult(success=True, pdf=None, data=generator)
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [source_pdf])
+
+        assert result_val is generator
+        source_pdf.close.assert_not_called()
+
+    def test_api_path_ignores_registered_hook(self, mock_registry):
+        """Even if a cli_hook IS registered for the operation, is_api=True
+        must never invoke it. The generator must still come through
+        undrained and unconsumed."""
+        drain_calls = []
+
+        def draining_hook(result, stage, mgr):
+            drain_calls.append(True)
+            list(result.data)
+
+        mock_registry.operations["burst"] = {
+            "skip_pipeline_save": True,
+            "cli_hook": draining_hook,
+        }
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+
+        def gen():
+            yield ("chunk_1.pdf", MagicMock())
+
+        stage, manager = self._make_stage_and_manager(is_api=True)
+        generator = gen()
+        result = OpResult(success=True, pdf=None, data=generator)
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [source_pdf])
+
+        assert drain_calls == []  # hook must never fire over the API
+        assert result_val is generator
+
+    def test_cli_path_with_draining_hook_falls_back_to_source_pdf(self, mock_registry):
+        """Existing CLI behavior must be preserved exactly: when a
+        cli_hook actually drains the generator, pipeline_pdf falls back
+        to opened_pdfs[0] (the source pdf) so it gets closed normally by
+        PipelineManager.run()'s finally block. Must NOT take the new
+        generator-preserving branch, or the source pdf would leak."""
+        drain_calls = []
+
+        def draining_hook(result, stage, mgr):
+            drain_calls.append(True)
+            list(result.data)  # fully consumes it, like burst_cli_hook does
+
+        mock_registry.operations["burst"] = {
+            "skip_pipeline_save": True,
+            "cli_hook": draining_hook,
+        }
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+
+        def gen():
+            yield ("chunk_1.pdf", MagicMock())
+
+        stage, manager = self._make_stage_and_manager(is_api=False)
+        result = OpResult(success=True, pdf=None, data=gen())
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [source_pdf])
+
+        assert drain_calls == [True]
+        assert result_val is source_pdf  # falls back correctly, not the spent generator
+
+    def test_cli_path_no_hook_registered_preserves_generator(self, mock_registry):
+        """CLI path, but the operation has NO cli_hook at all. hook_ran
+        must be False here too, so an undrained generator is preserved
+        rather than silently swapped for opened_pdfs[0] (which would
+        leak the generator's own resources with nothing to close them,
+        and would produce empty/no output since the generator is never
+        consumed)."""
+        mock_registry.operations["burst"] = {"skip_pipeline_save": True}  # no cli_hook key
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+        source_pdf.close = MagicMock()
+
+        def gen():
+            yield ("chunk_1.pdf", MagicMock())
+
+        stage, manager = self._make_stage_and_manager(is_api=False)
+        generator = gen()
+        result = OpResult(success=True, pdf=None, data=generator)
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [source_pdf])
+
+        assert result_val is generator
+        source_pdf.close.assert_not_called()
+
+    def test_non_generator_data_is_unaffected(self, mock_registry):
+        """A .data value that's present but NOT a generator (plain dict/
+        str/etc, e.g. dump_data) must still fall back to opened_pdfs[0]
+        exactly as before -- the new branch is generator-specific and
+        must not swallow ordinary data results."""
+        mock_registry.operations["dump_data_like_op"] = {"skip_pipeline_save": True}
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+
+        stage = CliStage(operation="dump_data_like_op", inputs=["_"], input_passwords=[None])
+        input_context = MagicMock()
+        input_context.is_api = True
+        manager = PipelineManager(stages=[stage], input_context=input_context)
+
+        result = OpResult(success=True, pdf=None, data={"pages": 3})
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [source_pdf])
+
+        assert result_val is source_pdf
+
+    def test_undrained_generator_takes_priority_over_result_pdf(self, mock_registry):
+        """When .data is an undrained generator, it must win over .pdf
+        regardless of whether .pdf happens to be non-None -- this is the
+        exact burst_pdf shape (pdf=opened_pdfs[0] set for CLI-hook
+        bookkeeping, alongside a live, not-yet-consumed generator). The
+        generator check is unconditional, not gated on result.pdf being
+        None, since that gating was the root cause of the original bug."""
+        mock_registry.operations["weird_op"] = {}
+
+        real_pdf = MagicMock(spec=pikepdf.Pdf)
+
+        def gen():
+            yield ("x.pdf", MagicMock())
+
+        stage = CliStage(operation="weird_op", inputs=["_"], input_passwords=[None])
+        input_context = MagicMock()
+        input_context.is_api = True
+        manager = PipelineManager(stages=[stage], input_context=input_context)
+
+        result = OpResult(success=True, pdf=real_pdf, data=gen())
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [])
+
+        assert result_val is not real_pdf
+        import types as types_module
+
+        assert isinstance(result_val, types_module.GeneratorType)
+
+    def test_non_generator_data_defers_to_result_pdf(self, mock_registry):
+        """When .data is present but not a generator (or absent), .pdf
+        remains authoritative -- the generator-first branch only
+        supersedes .pdf for actual undrained generators."""
+        mock_registry.operations["weird_op_2"] = {}
+
+        real_pdf = MagicMock(spec=pikepdf.Pdf)
+
+        stage = CliStage(operation="weird_op_2", inputs=["_"], input_passwords=[None])
+        input_context = MagicMock()
+        input_context.is_api = True
+        manager = PipelineManager(stages=[stage], input_context=input_context)
+
+        result = OpResult(success=True, pdf=real_pdf, data=None)
+
+        result_val = manager._unpack_result_value_and_run_hooks(result, stage, [])
+
+        assert result_val is real_pdf
+
+    def test_end_to_end_process_result_defers_cleanup_for_undrained_generator(self, mock_registry):
+        """Full _process_result integration: an undrained generator
+        surfacing from _unpack_result_value_and_run_hooks must land in
+        self.pipeline_pdf, take the generator branch in the smart-cleanup
+        logic (Case A), and leave opened_pdfs untouched -- mirroring
+        test_execute_stage_generator's existing assertions, but entering
+        via the .data path instead of .pdf."""
+        mock_registry.operations["burst"] = {"skip_pipeline_save": True}
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+        source_pdf.close = MagicMock()
+
+        def gen():
+            yield ("chunk_1.pdf", MagicMock())
+
+        stage, manager = self._make_stage_and_manager(is_api=True)
+        generator = gen()
+        result = OpResult(success=True, pdf=None, data=generator)
+
+        manager._process_result(result, stage, [source_pdf])
+
+        import types
+
+        assert isinstance(manager.pipeline_pdf, types.GeneratorType)
+        assert manager.pipeline_pdf is generator
+        source_pdf.close.assert_not_called()
+
+    def test_end_to_end_run_finally_does_not_close_source_pdf_for_generator(
+        self, mock_registry, mock_context
+    ):
+        """Full run() integration: with is_api=True and a generator .data
+        result, PipelineManager.run()'s finally block must NOT close the
+        source pdf, since self.pipeline_pdf is the generator, not a
+        pikepdf.Pdf -- this is the exact closure-timing bug that broke
+        the server pipeline (source pdf closed before the generator, held
+        elsewhere by the caller, was ever iterated)."""
+        mock_registry.operations["burst"] = {"skip_pipeline_save": True}
+
+        source_pdf = MagicMock(spec=pikepdf.Pdf)
+        source_pdf.close = MagicMock()
+
+        def gen():
+            yield ("chunk_1.pdf", MagicMock())
+
+        generator_holder = {}
+
+        def fake_run_operation(self_stage, opened, effective_inputs=None, adjusted_handles=None):
+            g = gen()
+            generator_holder["gen"] = g
+            return OpResult(success=True, pdf=None, data=g)
+
+        stage = CliStage(operation="burst", inputs=["_"], input_passwords=[None])
+        input_context = MagicMock()
+        input_context.is_api = True
+        manager = PipelineManager(stages=[stage], input_context=input_context)
+
+        with patch.object(manager, "_open_input_pdfs", return_value=([source_pdf], ["_"], {})):
+            with patch.object(manager, "_run_operation", side_effect=fake_run_operation):
+                manager.run()
+
+        # The source pdf must still be open: nothing has drained the
+        # generator yet, and run()'s finally block correctly skipped
+        # closing it because pipeline_pdf is a generator, not a Pdf.
+        source_pdf.close.assert_not_called()
+        assert manager.pipeline_pdf is generator_holder["gen"]

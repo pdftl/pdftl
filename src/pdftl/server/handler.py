@@ -149,13 +149,27 @@ class PdftlServerRequestHandlerMixIn:
             handler()
         except (ValueError, TypeError, KeyError, UserCommandLineError) as e:
             logger.error("Client parameters error for operation '%s': %s", operation, e)
-            self._send_error(400, f"Bad request parameters: {str(e)}")
+            self._send_error(400, self._format_client_error(operation, e))
         except TimeoutError as e:
             logger.error("Timeout executing operation '%s': %s", operation, e)
             self._send_error(504, str(e))
         except Exception as e:
             logger.exception("Internal error executing operation '%s'", operation)
             self._send_error(500, f"Execution failed: {str(e)}")
+
+    def _format_client_error(self, operation: str, e: Exception) -> str:
+        """Builds the 400 response body for client-parameter errors.
+
+        Always includes the plain message. Only appends the worker
+        subprocess's original traceback when PDFTL_SERVER_DEBUG is set,
+        so internals never leak in a real deployment by default.
+        """
+        base = f"Bad request parameters for operation '{operation}': {str(e)}"
+        if os.environ.get("PDFTL_SERVER_DEBUG"):
+            tb = getattr(e, "__pdftl_subprocess_traceback__", None)
+            if tb:
+                base += "\n\n--- worker subprocess traceback ---\n" + tb
+        return base
 
     def _spawn_worker(
         self, ctx: multiprocessing.context.BaseContext, fn: Callable[..., Any], args: tuple
@@ -261,6 +275,9 @@ class PdftlServerRequestHandlerMixIn:
     def _reconstruct_and_raise_exception(self, metadata: dict[str, Any]) -> None:
         exc_class_name = metadata["error_class"]
         msg = metadata["message"]
+        child_tb = metadata.get("traceback")
+        if child_tb:
+            logger.error("Worker subprocess traceback:\n%s", child_tb)
 
         cls = globals().get(exc_class_name)
         if cls is None:
@@ -268,7 +285,9 @@ class PdftlServerRequestHandlerMixIn:
             # in this module's globals(); fall back to the builtins module.
             cls = getattr(builtins, exc_class_name, None)
         if cls and issubclass(cls, BaseException):
-            raise cls(msg)
+            new_exc = cls(msg)
+            new_exc.__pdftl_subprocess_traceback__ = child_tb
+            raise new_exc
 
         for module_path in ["pdftl.exceptions", "pdftl.errors", "pdftl.cli"]:
             try:
@@ -277,11 +296,15 @@ class PdftlServerRequestHandlerMixIn:
                 mod = importlib.import_module(module_path)
                 cls = getattr(mod, exc_class_name, None)
                 if cls and issubclass(cls, BaseException):
-                    raise cls(msg)
+                    new_exc = cls(msg)
+                    new_exc.__pdftl_subprocess_traceback__ = child_tb
+                    raise new_exc
             except ImportError:
                 continue
 
-        raise RuntimeError(f"{exc_class_name}: {msg}")
+        fallback_exc = RuntimeError(f"{exc_class_name}: {msg}")
+        fallback_exc.__pdftl_subprocess_traceback__ = child_tb
+        raise fallback_exc
 
     def _unpack_ipc_result(self, metadata: dict[str, Any], payload_bytes: bytes) -> Any:
         if metadata["is_tuple"]:
@@ -449,6 +472,8 @@ class PdftlServerRequestHandlerMixIn:
         kind = meta.get("kind")
         if kind == "pdf" and pdf_bytes is not None:
             self._send_pdf_bytes(pdf_bytes)
+        elif kind == "zip" and pdf_bytes is not None:
+            self._send_zip_bytes(pdf_bytes)
         elif kind == "text":
             self._send_text_response(meta["text"])
         elif kind == "data":
@@ -466,6 +491,14 @@ class PdftlServerRequestHandlerMixIn:
         self.send_header("Content-Length", str(len(pdf_data)))
         self.end_headers()
         self.wfile.write(pdf_data)
+
+    def _send_zip_bytes(self, zip_data: bytes) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", 'attachment; filename="burst_output.zip"')
+        self.send_header("Content-Length", str(len(zip_data)))
+        self.end_headers()
+        self.wfile.write(zip_data)
 
     def _send_text_response(self, text: str) -> None:
         self.send_response(200)

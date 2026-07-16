@@ -14,6 +14,7 @@ from pdftl.info.info_types import (
 
 # --- Import SUT ---
 from pdftl.info.output_info import (
+    _clean_string,
     _write_bookmarks,
     _write_docinfo,
     _write_page_labels,
@@ -33,6 +34,27 @@ def mock_pikepdf_number_tree():
     """
     with patch("pikepdf.NumberTree") as mock_tree:
         yield mock_tree
+
+
+# ==================================================================
+# === Tests for _clean_string
+# ==================================================================
+
+
+class TestCleanString:
+    def test_none_returns_empty_string(self):
+        """Line 47: val is None must short-circuit to "" without
+        attempting str(None)."""
+        assert _clean_string(None) == ""
+
+    def test_plain_string_passthrough(self):
+        assert _clean_string("hello") == "hello"
+
+    def test_truncates_at_first_null_byte(self):
+        assert _clean_string("hello\x00world") == "hello"
+
+    def test_pikepdf_string_is_converted(self):
+        assert _clean_string(String("pike value")) == "pike value"
 
 
 @pytest.fixture

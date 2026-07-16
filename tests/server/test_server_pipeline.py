@@ -27,6 +27,7 @@ from pdftl.server.server_pipeline import (
 )
 
 from tests.server.server_fixtures import make_pdf_bytes, post_multipart
+from pdftl.server.handler import PdftlServerRequestHandlerMixIn
 
 
 @pytest.fixture(autouse=True)
@@ -542,7 +543,6 @@ def test_unpack_ipc_result_plain_non_tuple_payload():
     """When the worker's underlying result wasn't a 2-tuple (is_tuple=False,
     per _serialize_worker_payload), _unpack_ipc_result returns the raw
     payload bytes directly rather than a (bytes, meta) pair."""
-    from pdftl.server.handler import PdftlServerRequestHandlerMixIn
 
     handler = PdftlServerRequestHandlerMixIn()
     metadata = {"is_tuple": False, "meta": 42}
@@ -550,3 +550,118 @@ def test_unpack_ipc_result_plain_non_tuple_payload():
     result = handler._unpack_ipc_result(metadata, b"raw-payload-bytes")
 
     assert result == b"raw-payload-bytes"
+
+
+def test_server_burst_does_not_write_doc_data(server, tmp_path, monkeypatch):
+    """burst_cli_hook (which writes doc_data.txt for pdftk compatibility)
+    must never fire on the server path -- cli_hook is CLI-only. Run the
+    server subprocess with cwd pointed at an empty tmp_path and confirm
+    no doc_data.txt appears after a burst request completes."""
+    monkeypatch.chdir(tmp_path)
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_bytes = make_pdf_bytes(3)
+    with post_multipart(f"{base_url}/v1/execute/burst", {"file": pdf_bytes}, "[]") as response:
+        assert response.status == 200
+
+    assert not (tmp_path / "doc_data.txt").exists()
+
+
+def test_pipeline_final_step_burst_returns_zip(server) -> None:
+    """burst as the final pipeline step (a skip_pipeline_save, generator-
+    producing operation) must round-trip through run_pipeline's shared
+    _serialize_operation_result path and come back as a zip -- exercising
+    the REAL burst_pdf/add_pages code, not mocks."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_a = make_pdf_bytes(3)
+    steps = json.dumps([{"operation": "burst", "args": []}])
+
+    with post_multipart(f"{base_url}/v1/execute/pipeline", {"A": pdf_a}, steps) as response:
+        assert response.status == 200
+        assert response.headers["Content-Type"] == "application/zip"
+        zip_bytes = response.read()
+
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        assert len(zf.namelist()) == 3
+
+
+def test_subprocess_worker_entrypoint_forwards_traceback():
+    """The child's real traceback string must survive the JSON metadata
+    round-trip intact -- confirms adding this field doesn't require any
+    pickling changes, since metadata crosses as json.dumps'd bytes, not
+    pickle, exactly like error_class/message already do."""
+    import multiprocessing
+    import json
+    from pdftl.server.subprocess_workers import _subprocess_worker_entrypoint
+
+    ctx = multiprocessing.get_context("spawn")
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
+
+    def boom():
+        def inner():
+            raise ValueError("deep failure")
+
+        inner()
+
+    _subprocess_worker_entrypoint(child_conn, boom, ())
+
+    meta_bytes = parent_conn.recv_bytes()
+    metadata = json.loads(meta_bytes.decode("utf-8"))
+    payload_bytes = parent_conn.recv_bytes()
+
+    assert metadata["status"] == "err"
+    assert metadata["error_class"] == "ValueError"
+    assert "traceback" in metadata
+    assert "inner" in metadata["traceback"]  # confirms the real call stack survived
+    assert "raise ValueError" in metadata["traceback"]
+    assert payload_bytes == b""
+
+
+def test_format_client_error_without_debug_omits_traceback(monkeypatch):
+    monkeypatch.delenv("PDFTL_SERVER_DEBUG", raising=False)
+    handler = PdftlServerRequestHandlerMixIn()
+    exc = ValueError("bad page spec")
+    exc.__pdftl_subprocess_traceback__ = "Traceback (most recent call last):\n...\n"
+
+    msg = handler._format_client_error("burst", exc)
+
+    assert "Bad request parameters for operation 'burst': bad page spec" in msg
+    assert "Traceback" not in msg
+
+
+def test_format_client_error_with_debug_includes_traceback(monkeypatch):
+    monkeypatch.setenv("PDFTL_SERVER_DEBUG", "1")
+    handler = PdftlServerRequestHandlerMixIn()
+    exc = ValueError("bad page spec")
+    exc.__pdftl_subprocess_traceback__ = (
+        "Traceback (most recent call last):\n  File x\nValueError: bad page spec\n"
+    )
+
+    msg = handler._format_client_error("burst", exc)
+
+    assert "bad page spec" in msg
+    assert "Traceback (most recent call last)" in msg
+
+
+def test_run_with_error_handling_client_error_uses_format_client_error(monkeypatch):
+    """Confirms _run_with_error_handling actually calls the new method
+    rather than crashing with AttributeError -- this is the regression
+    this whole fix addresses."""
+    monkeypatch.delenv("PDFTL_SERVER_DEBUG", raising=False)
+    handler = PdftlServerRequestHandlerMixIn()
+    handler._send_error = MagicMock()
+
+    def raise_value_error():
+        raise ValueError("nope")
+
+    handler._run_with_error_handling("burst", raise_value_error)
+
+    handler._send_error.assert_called_once()
+    code, msg = handler._send_error.call_args[0]
+    assert code == 400
+    assert "nope" in msg
