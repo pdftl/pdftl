@@ -215,6 +215,23 @@ def _write_stream_block(
     print("", file=out)
 
 
+def format_stream_blocks(collected: list[tuple[str, bytes, list[str]]]) -> str:
+    """Render collected (header, content, warnings) stream entries to text,
+    the same block format `dump_streams_cli_hook` writes to stdout/file."""
+    import io
+
+    buf = io.StringIO()
+    for header, content, warnings in collected:
+        _write_stream_block(buf, header, content, warnings)
+    return buf.getvalue()
+
+
+def _api_serialize_stream_blocks(data, _meta):
+    """api_serializer: renders .data as text for the server/API path,
+    where no cli_hook ever runs to format it."""
+    return None, {"kind": "text", "text": format_stream_blocks(data)}
+
+
 # ---------------------------------------------------------------------------
 # Long description and examples
 # ---------------------------------------------------------------------------
@@ -326,12 +343,12 @@ def dump_streams_cli_hook(result: OpResult, stage, _pipeline) -> None:
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
     with smart_open_maybe_dash(output_file) as f:
-        for header, content, warnings in result.data:
-            _write_stream_block(f, header, content, warnings)
+        f.write(format_stream_blocks(result.data))
 
 
 @register_operation(
     "dump_streams",
+    api_serializer=_api_serialize_stream_blocks,
     tags=["info", "content_stream", "replace"],
     type="single input operation",
     desc="Dump page content streams as seen by `replace`",

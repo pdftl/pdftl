@@ -120,6 +120,7 @@ def dump_dests_cli_hook(result: OpResult, stage, _pipeline):
     usage="<input> dump_dests [output <output>]",
     examples=_DUMP_DESTS_EXAMPLES,
     args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
+    skip_pipeline_save=True,
 )
 def dump_dests(pdf: "pikepdf.Pdf", output_file=None) -> OpResult:
     """

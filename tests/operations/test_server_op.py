@@ -45,6 +45,8 @@ from pdftl.server.multipart import (
 from tests.server.server_fixtures import (
     wait_until_down,
     get_free_port,
+    make_pdf_bytes,
+    post_multipart,
 )
 
 
@@ -1596,3 +1598,103 @@ def test_run_single_operation_in_subprocess_substitutes_at_handle(tmp_path):
         )
 
     assert captured_args["args"] == [str(pdf_path)]
+
+
+def test_serialize_operation_data_uses_registered_api_serializer():
+    """When an operation is registered with an api_serializer, that must
+    take priority over the generic shape-based fallback -- exercises the
+    dump_streams-style dispatch path directly, in-process."""
+    from pdftl.server.subprocess_workers import _serialize_operation_data
+    from pdftl.core.registry import registry
+
+    def fake_api_serializer(data, meta):
+        return None, {"kind": "text", "text": f"SERIALIZED:{data}"}
+
+    original = registry.operations.get("fake_stream_op")
+    registry.operations["fake_stream_op"] = {"api_serializer": fake_api_serializer}
+    try:
+        result_meta = _serialize_operation_data("raw-data", {}, operation="fake_stream_op")
+    finally:
+        if original is not None:
+            registry.operations["fake_stream_op"] = original
+        else:
+            registry.operations.pop("fake_stream_op", None)
+
+    assert result_meta == {"kind": "text", "text": "SERIALIZED:raw-data"}
+
+
+def test_serialize_operation_data_api_serializer_receives_data_and_meta():
+    """Confirms both positional arguments (data, meta) are forwarded to the
+    api_serializer exactly as received, not reordered or partially applied."""
+    from pdftl.server.subprocess_workers import _serialize_operation_data
+    from pdftl.core.registry import registry
+
+    captured = {}
+
+    def fake_api_serializer(data, meta):
+        captured["data"] = data
+        captured["meta"] = meta
+        return None, {"kind": "data", "data": "ok"}
+
+    original = registry.operations.get("fake_stream_op2")
+    registry.operations["fake_stream_op2"] = {"api_serializer": fake_api_serializer}
+    try:
+        _serialize_operation_data({"pages": 3}, {"json_output": True}, operation="fake_stream_op2")
+    finally:
+        if original is not None:
+            registry.operations["fake_stream_op2"] = original
+        else:
+            registry.operations.pop("fake_stream_op2", None)
+
+    assert captured["data"] == {"pages": 3}
+    assert captured["meta"] == {"json_output": True}
+
+
+def test_serialize_operation_data_falls_back_without_api_serializer():
+    """An operation with no api_serializer registered must fall through to
+    the generic shape-based logic unchanged (regression guard: adding the
+    api_serializer branch must not affect ops that don't define one)."""
+    from pdftl.server.subprocess_workers import _serialize_operation_data
+    from pdftl.core.registry import registry
+
+    original = registry.operations.get("plain_op")
+    registry.operations["plain_op"] = {}  # no api_serializer key
+    try:
+        result_meta = _serialize_operation_data({"a": 1}, {}, operation="plain_op")
+    finally:
+        if original is not None:
+            registry.operations["plain_op"] = original
+        else:
+            registry.operations.pop("plain_op", None)
+
+    assert result_meta == {"kind": "data", "data": {"a": 1}}
+
+
+def test_serialize_operation_data_falls_back_when_operation_none():
+    """operation=None (the default) must skip the api_serializer lookup
+    entirely and go straight to the generic fallback -- covers the `if
+    operation:` guard's False branch."""
+    from pdftl.server.subprocess_workers import _serialize_operation_data
+
+    result_meta = _serialize_operation_data("plain string", {}, operation=None)
+
+    assert result_meta == {"kind": "data", "data": "plain string"}
+
+
+def test_dump_streams_end_to_end_over_server_uses_api_serializer(server) -> None:
+    """Full HTTP + subprocess round-trip: dump_streams over the API must
+    return formatted text (via its registered api_serializer), not a raw
+    JSON dump of the (header, bytes, warnings) tuples it actually returns
+    as .data -- exercising the real registry entry, not a fake one."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_bytes = make_pdf_bytes(1)
+    with post_multipart(
+        f"{base_url}/v1/execute/dump_streams", {"file": pdf_bytes}, "[]"
+    ) as response:
+        assert response.status == 200
+        assert "text/plain" in response.headers.get("Content-Type", "")
+        text = response.read().decode("utf-8")
+        assert "Page 1" in text
+        assert "===" in text  # confirms real block-format output, not raw tuples

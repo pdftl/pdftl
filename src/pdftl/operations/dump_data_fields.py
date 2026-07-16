@@ -440,6 +440,7 @@ def _process_node_recursive(
         {"output_file": c.OUTPUT},
         {"escape_xml": False},
     ),
+    skip_pipeline_save=True,
 )
 @register_operation(
     "dump_data_fields",
@@ -451,6 +452,7 @@ def _process_node_recursive(
     cli_hook=dump_fields_cli_hook,
     usage="<input> dump_data_fields [output <output>]",
     args=([c.INPUT_PDF], {"output_file": c.OUTPUT}, {"escape_xml": True}),
+    skip_pipeline_save=True,
 )
 def dump_data_fields(
     pdf,

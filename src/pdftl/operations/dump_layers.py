@@ -188,6 +188,7 @@ def dump_layers_cli_hook(result: OpResult, stage, _pipeline):
     examples=_DUMP_LAYERS_EXAMPLES,
     # Note the mapping of "output_file": c.OUTPUT to capture the CLI keyword
     args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
+    skip_pipeline_save=True,
 )
 def dump_layers(pdf, output_file=None) -> OpResult:
     """

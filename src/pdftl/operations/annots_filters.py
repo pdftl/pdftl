@@ -253,6 +253,7 @@ def dump_data_annots_cli_hook(result: OpResult, stage, _pipeline):
     usage="<input> dump_data_annots [output <output>]",
     examples=_DUMP_DATA_ANNOTS_EXAMPLES,
     args=([c.INPUT_PDF], {"output_file": c.OUTPUT}),
+    skip_pipeline_save=True,
 )
 def dump_data_annots(pdf, output_file=None, string_convert=xml_encode_for_info) -> OpResult:
     """

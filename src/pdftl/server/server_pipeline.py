@@ -208,7 +208,7 @@ def run_pipeline(
                 raise UserCommandLineError(
                     f"The '{final_op}' operation completed but produced no result."
                 )
-            return _serialize_operation_result(manager.results[-1])
+            return _serialize_operation_result(manager.results[-1], final_op)
 
         last_options = stages[-1].options if stages else {}
         if last_options.get("output") == tmp_path and os.path.getsize(tmp_path) > 0:

@@ -22,6 +22,7 @@ from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
 import pdftl.core.constants as c
+from pdftl.core.registry import registry
 from pdftl.server.server_pipeline import run_pipeline
 from pdftl.exceptions import UserCommandLineError
 
@@ -31,10 +32,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _serialize_operation_data(data: Any, meta: dict[str, Any]) -> dict[str, Any]:
+def _serialize_operation_data(
+    data: Any, meta: dict[str, Any], operation: str | None = None
+) -> dict[str, Any]:
     """Flattens a non-PDF OpResult.data value (plus its json/text-rendering
     meta flags) into the picklable {"kind": ..., ...} shape used for the
-    subprocess -> parent handoff."""
+    subprocess -> parent handoff.
+
+    If the operation was registered with an api_serializer (same pattern
+    as cli_hook -- attached via extra @register_operation metadata), that
+    takes priority over the generic shape-based fallback below. This is
+    for operations whose .data is only meaningful after hook-style
+    formatting (e.g. dump_streams' list of (header, bytes, warnings)
+    tuples), so this function doesn't need to reverse-engineer shapes
+    with isinstance() checks as new such operations are added.
+    """
+    if operation:
+        op_entry = registry.operations.get(operation)
+        if op_entry is not None and (api_serializer := op_entry.get("api_serializer")):
+            _, api_meta = api_serializer(data, meta)
+            return api_meta
+
     json_output = meta.get("json_output", False)
     escape_xml = meta.get("escape_xml", True)
     extra_info = meta.get("extra_info", False)
@@ -81,7 +99,9 @@ def _serialize_generator_as_zip(generator: Any) -> tuple[bytes, dict[str, Any]]:
     return buf.getvalue(), {"kind": "zip", "count": count}
 
 
-def _serialize_operation_result(result: Any) -> tuple[bytes | None, dict[str, Any]]:
+def _serialize_operation_result(
+    result: Any, operation: str | None = None
+) -> tuple[bytes | None, dict[str, Any]]:
     """Flattens a live OpResult (data or pdf) into the (bytes, meta) shape
     that crosses the subprocess boundary."""
     if hasattr(result, "data") and result.data is not None:
@@ -91,7 +111,7 @@ def _serialize_operation_result(result: Any) -> tuple[bytes | None, dict[str, An
             return _serialize_generator_as_zip(result.data)
 
         meta = result.meta if (hasattr(result, "meta") and isinstance(result.meta, dict)) else {}
-        return None, _serialize_operation_data(result.data, meta)
+        return None, _serialize_operation_data(result.data, meta, operation)
     if hasattr(result, "pdf") and result.pdf is not None:
         buf = _io.BytesIO()
         result.pdf.save(buf)
@@ -172,7 +192,7 @@ def _run_single_operation_in_subprocess(
             c.GET_INPUT: None,
         }
         result = run_operation(operation, call_context)
-        return _serialize_operation_result(result)
+        return _serialize_operation_result(result, operation)
     finally:
         import pikepdf as _pikepdf
 

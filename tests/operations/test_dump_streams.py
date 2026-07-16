@@ -569,3 +569,46 @@ def test_dump_streams_escapes_real_content_with_equals(base_pdf):
     _write_stream_block(out, "Page 1 / Contents", content)
     text = out.getvalue()
     assert "\\=== not a header ===" in text
+
+
+def test_api_serialize_stream_blocks_renders_text():
+    """_api_serialize_stream_blocks must format collected (header, content,
+    warnings) tuples into the same text block format the CLI hook writes,
+    wrapped in the {"kind": "text", ...} shape the server expects."""
+    from pdftl.operations.dump_streams import _api_serialize_stream_blocks
+
+    collected = [
+        ("Page 1 / Contents", b"BT ET", []),
+        ("Page 2 / Contents", b"", ["Empty stream content!"]),
+    ]
+
+    result_bytes, meta = _api_serialize_stream_blocks(collected, {})
+
+    assert result_bytes is None
+    assert meta["kind"] == "text"
+    assert "=== Page 1 / Contents" in meta["text"]
+    assert "BT ET" in meta["text"]
+    assert "=== Empty stream content!" in meta["text"]
+
+
+def test_api_serialize_stream_blocks_empty_collected():
+    """An empty collected list still produces a valid (empty-ish) text
+    payload rather than erroring."""
+    from pdftl.operations.dump_streams import _api_serialize_stream_blocks
+
+    result_bytes, meta = _api_serialize_stream_blocks([], {})
+
+    assert result_bytes is None
+    assert meta == {"kind": "text", "text": ""}
+
+
+def test_api_serialize_stream_blocks_ignores_meta_argument():
+    """The _meta parameter is accepted but unused -- confirms passing an
+    arbitrary/irrelevant meta dict doesn't affect output."""
+    from pdftl.operations.dump_streams import _api_serialize_stream_blocks
+
+    collected = [("Page 1 / Contents", b"content", [])]
+    result_bytes, meta = _api_serialize_stream_blocks(collected, {"json_output": True, "extra": 1})
+
+    assert meta["kind"] == "text"
+    assert "content" in meta["text"]
