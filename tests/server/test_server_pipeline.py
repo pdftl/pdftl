@@ -9,6 +9,7 @@
 import os
 import io
 import json
+import zipfile
 import urllib.error
 import urllib.request
 
@@ -665,3 +666,106 @@ def test_run_with_error_handling_client_error_uses_format_client_error(monkeypat
     code, msg = handler._send_error.call_args[0]
     assert code == 400
     assert "nope" in msg
+
+
+def test_render_end_to_end_over_server_default_zip(server) -> None:
+    """render over the API with no format= defaults to a zip of PNGs --
+    exercises the real render_api_serializer path, not a mock."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_bytes = make_pdf_bytes(2)
+    with post_multipart(f"{base_url}/v1/execute/render", {"file": pdf_bytes}, "[]") as response:
+        assert response.status == 200
+        assert response.headers["Content-Type"] == "application/zip"
+        zip_bytes = response.read()
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        assert len(zf.namelist()) == 2
+        for name in zf.namelist():
+            assert name.endswith(".png")
+
+
+def test_render_end_to_end_over_server_format_pdf(server) -> None:
+    """render format=pdf over the API returns a single combined PDF."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_bytes = make_pdf_bytes(2)
+    with post_multipart(
+        f"{base_url}/v1/execute/render", {"file": pdf_bytes}, '["format=pdf"]'
+    ) as response:
+        assert response.status == 200
+        assert response.headers["Content-Type"] == "application/pdf"
+        assert response.read().startswith(b"%PDF")
+
+
+def test_render_as_final_pipeline_step_returns_zip(server) -> None:
+    """render as the final pipeline step must not have its output_pattern
+    clobbered by build_pipeline_stages' forced-output injection (the
+    skip_pipeline_save carve-out) and must still round-trip via its
+    api_serializer, not the generic zip-of-pikepdf-Pdf path."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf_a = make_pdf_bytes(3)
+    steps = json.dumps([{"operation": "render", "args": ["format=png"]}])
+
+    with post_multipart(f"{base_url}/v1/execute/pipeline", {"A": pdf_a}, steps) as response:
+        assert response.status == 200
+        assert response.headers["Content-Type"] == "application/zip"
+        zip_bytes = response.read()
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        assert len(zf.namelist()) == 3
+
+
+def test_serialize_operation_result_uses_explicit_api_serializer():
+    """Verifies that if an operation has an api_serializer registered,
+    _serialize_operation_result bypasses generic processing and delegates to it.
+    """
+    from pdftl.server.subprocess_workers import _serialize_operation_result
+    from pdftl.core.registry import registry
+
+    # Create a mock operation result with custom data and meta
+    mock_result = MagicMock()
+    mock_result.data = "custom_raw_data"
+    mock_result.meta = {"format": "custom-json"}
+
+    # Define a dummy api_serializer matching the expected signature: (data, meta) -> (bytes | None, dict)
+    def dummy_serializer(data, meta):
+        return b"serialized-bytes-via-serializer", {
+            "kind": "serialized-by-api",
+            "source_meta": meta,
+        }
+
+    fake_operations = {"mock_custom_op": {"api_serializer": dummy_serializer}}
+
+    # Patch the registry's operations to inject our mock operation
+    with patch.object(registry, "operations", fake_operations):
+        payload_bytes, metadata = _serialize_operation_result(mock_result, "mock_custom_op")
+
+    assert payload_bytes == b"serialized-bytes-via-serializer"
+    assert metadata == {"kind": "serialized-by-api", "source_meta": {"format": "custom-json"}}
+
+
+def test_serialize_operation_result_with_api_serializer_fallback_meta():
+    """Verifies that when result.meta is invalid or missing, an empty dict is
+    passed down to the explicit api_serializer.
+    """
+    from pdftl.server.subprocess_workers import _serialize_operation_result
+    from pdftl.core.registry import registry
+
+    mock_result = MagicMock()
+    mock_result.data = "custom_raw_data"
+    mock_result.meta = "not-a-dictionary"  # Invalid meta type triggers fallback
+
+    def dummy_serializer(data, meta):
+        return b"data", {"meta_received": meta}
+
+    fake_operations = {"mock_custom_op": {"api_serializer": dummy_serializer}}
+
+    with patch.object(registry, "operations", fake_operations):
+        _, metadata = _serialize_operation_result(mock_result, "mock_custom_op")
+
+    assert metadata["meta_received"] == {}

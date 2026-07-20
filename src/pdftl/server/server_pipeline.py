@@ -135,7 +135,13 @@ def build_pipeline_stages(
 
         if i == last_index:
             op_data = registry.operations.get(step["operation"], {})
-            op_requires_output = " output " in op_data.get("usage", "")
+            # skip_pipeline_save ops (render, dump_data, ...) manage their own
+            # serialization and never write a CLI-style `output <file>`; the
+            # usage-string substring match alone can't tell a required output
+            # from an optional/bracketed one (e.g. render's "[output <template>]").
+            op_requires_output = not op_data.get("skip_pipeline_save", False) and (
+                " output " in op_data.get("usage", "")
+            )
             if step["operation"] == "filter" or op_requires_output:
                 options["output"] = final_output_path
 

@@ -27,6 +27,12 @@
     min-height: 100vh;
   }
 
+  /* Keyboard focus-visible rings */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   /* Full-page drag overlay */
   body.dragover::after {
     content: "Drop PDFs anywhere to upload";
@@ -75,9 +81,10 @@
     cursor: pointer;
     font-size: 14px;
   }
-  #dropZone:hover {
+  #dropZone:hover, #dropZone:focus-visible {
     border-color: var(--accent);
     background: rgba(91, 140, 255, 0.05);
+    outline: none;
   }
   #dropZone span { color: var(--accent); font-weight: 600; }
   #fileInput { display: none; }
@@ -109,6 +116,11 @@
     text-transform: uppercase;
     outline: none;
   }
+  .file-chip input.handleInput:focus-visible {
+    border-bottom-style: solid;
+    background: rgba(91, 140, 255, 0.1);
+    outline: none;
+  }
   .file-chip span {
     white-space: nowrap;
     overflow: hidden;
@@ -122,6 +134,10 @@
     font-size: 13px;
     padding: 0 4px;
     margin-left: auto;
+  }
+  .file-chip button:focus-visible {
+    outline: 2px solid var(--danger);
+    border-radius: 4px;
   }
 
   .op-row {
@@ -176,6 +192,7 @@
    list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px;
   }
   .step {
+    position: relative;
     background: #0f1115;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -184,8 +201,8 @@
   .step-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     margin-bottom: 8px;
+    padding-right: 80px; /* Leave clean space on the right for absolute positioned controls */
   }
   .step-head select.stepOpSelect {
     padding: 4px 8px;
@@ -195,7 +212,9 @@
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: 4px;
-    outline: none;
+  }
+  .step-head select.stepOpSelect:focus-visible {
+    outline: 2px solid var(--accent);
   }
   .step-head .badge {
     background: var(--accent);
@@ -207,7 +226,15 @@
     margin-right: 8px;
   }
   .step-head .opname { font-family: var(--mono); font-size: 13px; word-break: break-all; }
-  .step-controls { display: flex; gap: 4px; }
+
+  /* Absolute positioned controls keep visual layout but move them to the end of the keyboard flow */
+  .step-controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 4px;
+  }
   .step-controls button {
     background: none;
     border: none;
@@ -217,7 +244,13 @@
     padding: 4px 8px;
   }
   .step-controls button:hover { color: var(--text); }
+  .step-controls button:focus-visible {
+    outline: 2px solid var(--accent);
+    border-radius: 4px;
+  }
   .step-controls button.remove:hover { color: var(--danger); }
+  .step-controls button.remove:focus-visible { outline: 2px solid var(--danger); }
+
   .step input[type=text] { width: 100%; font-family: var(--mono); }
   .step .hint { color: var(--muted); font-size: 11px; margin-top: 6px; line-height: 1.3; }
 
@@ -228,6 +261,10 @@
   .rtd-link {
     background: #1c3a2a;
     color: #6be89a;
+    text-decoration: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
   }
 
   #result { margin-top: 16px; font-size: 13px; }
@@ -302,9 +339,9 @@
 
   <section>
     <h2>1. Upload PDFs</h2>
-    <div id="dropZone">
+    <div id="dropZone" tabindex="0" role="button" aria-label="Upload PDFs. Drag and drop PDFs here or press enter to browse files.">
       Drag & drop PDFs here or <span>browse files</span>
-      <input type="file" id="fileInput" accept="application/pdf" multiple>
+      <input type="file" id="fileInput" accept="application/pdf" multiple tabindex="-1">
     </div>
     <div class="files-list" id="filesList"></div>
   </section>
@@ -322,12 +359,12 @@
   <section>
     <h2>3. Run</h2>
     <div style="display: flex; gap: 10px; margin-top: 4px;">
-      <button class="primary" id="runBtn" type="button" disabled style="flex: 1;">Run
+      <button class="primary" id="runBtn" type="button" disabled style="flex: 1;" title="Run pipeline (Ctrl+Enter)">Run
 	pipeline</button>
-      <button 
-	class="secondary" 
-	id="shareBtn" 
-	type="button" 
+      <button
+	class="secondary"
+	id="shareBtn"
+	type="button"
 	title="Copy shareable link for this pipeline">🔗 Copy link</button>
     </div>
     <div class="status-line" id="statusLine"></div>
@@ -337,10 +374,8 @@
 
 <script>
 const params = new URLSearchParams(location.search);
-//const API = params.get('api') || location.origin;
-//const API = (location.origin === "null") ? "http://localhost:4080" : location.origin;
-const API = (location.protocol === 'file:' || location.origin === 'null') 
-  ? 'http://localhost:4080' 
+const API = (location.protocol === 'file:' || location.origin === 'null')
+  ? 'http://localhost:4080'
   : location.origin;
 document.getElementById('apiBase').textContent = API;
 
@@ -378,10 +413,10 @@ function processFiles(files) {
     chip.className = 'file-chip';
     const initialHandle = nextHandle();
     chip.innerHTML = `
-      📄 <input type="text" class="handleInput" 
-          value="${escapeHtml(initialHandle)}" maxlength="1" spellcheck="false" autocomplete="off">
+      📄 <input type="text" class="handleInput"
+          value="${escapeHtml(initialHandle)}" maxlength="1" spellcheck="false" autocomplete="off" aria-label="Reference letter for ${escapeHtml(f.name)}">
       <span style="color:var(--muted)" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
-      <button class="removeFile" type="button" title="Remove">✕</button>
+      <button class="removeFile" type="button" title="Remove" aria-label="Remove ${escapeHtml(f.name)}">✕</button>
     `;
     chip._file = f;
 
@@ -432,6 +467,12 @@ document.body.addEventListener('drop', e => {
 document.getElementById('dropZone').addEventListener('click', () => {
   document.getElementById('fileInput').click();
 });
+document.getElementById('dropZone').addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('fileInput').click();
+  }
+});
 document.getElementById('fileInput').addEventListener('change', e => {
   processFiles(e.target.files);
 });
@@ -478,13 +519,8 @@ function addStepToDOM(name, argsValue = '', inputsValue = '') {
     <div class="step-head">
       <div style="display:flex; align-items:center; gap: 8px;">
         <span class="badge step-num"></span>
-        <select class="stepOpSelect"></select>
+        <select class="stepOpSelect" aria-label="Step operation select"></select>
         <span class="rtd-link-container"></span>
-      </div>
-      <div class="step-controls">
-        <button class="moveUp" type="button" title="Move up">↑</button>
-        <button class="moveDown" type="button" title="Move down">↓</button>
-        <button class="remove" type="button" title="Remove">✕</button>
       </div>
     </div>
 
@@ -493,20 +529,26 @@ function addStepToDOM(name, argsValue = '', inputsValue = '') {
 
     <div style="display: flex; gap: 8px; margin-bottom: 6px;">
       <div style="flex: 1;">
-        <label style="display:block; font-size: 11px; color: var(--muted); 
-         margin-bottom: 2px;">Inputs</label>
-        <input type="text" class="stepInputsInput" value="${escapeHtml(defaultInputs)}" 
-         placeholder="e.g. A, B or _" spellcheck="false" autocomplete="off" style="padding: 8px;">
+        <label style="display:block; font-size: 11px; color: var(--muted);
+          margin-bottom: 2px;">Inputs</label>
+        <input type="text" class="stepInputsInput" value="${escapeHtml(defaultInputs)}"
+          placeholder="e.g. A, B or _" spellcheck="false" autocomplete="off" style="padding: 8px;">
       </div>
       <div style="flex: 2;">
-        <label style="display:block; font-size: 11px; color: var(--muted); 
-         margin-bottom: 2px;">Arguments (args)</label>
-        <input type="text" class="argsInput" placeholder="e.g., 1-3 or right or @B" 
-         spellcheck="false" autocomplete="off" style="padding: 8px;">
+        <label style="display:block; font-size: 11px; color: var(--muted);
+          margin-bottom: 2px;">Arguments (args)</label>
+        <input type="text" class="argsInput" placeholder="e.g., 1-3 or right or @B"
+          spellcheck="false" autocomplete="off" style="padding: 8px;">
       </div>
     </div>
 
     <div class="hint"></div>
+
+    <div class="step-controls">
+      <button class="moveUp" type="button" title="Move up">↑</button>
+      <button class="moveDown" type="button" title="Move down">↓</button>
+      <button class="remove" type="button" title="Remove">✕</button>
+    </div>
   `;
 
   if (argsValue) {
@@ -547,7 +589,7 @@ function addStepToDOM(name, argsValue = '', inputsValue = '') {
 
   // Populate dynamic inline select dropdown
   const selectEl = li.querySelector('.stepOpSelect');
-  selectEl.innerHTML = opNames.map(n => 
+  selectEl.innerHTML = opNames.map(n =>
       `<option value="${escapeHtml(n)}" ${n === name ? 'selected' : ''}>${escapeHtml(n)}</option>`
   ).join('');
 
@@ -605,10 +647,11 @@ async function loadOps() {
   }
 }
 
+// RTD helper link generator
 function rtdLink(name) {
-  return `<a class="rtd-link" 
-           href="https://pdftl.readthedocs.io/en/latest/operations/${name}.html" 
-           target="_blank">help</a>`;
+  return `<a class="rtd-link"
+             href="https://pdftl.readthedocs.io/en/latest/operations/${name}.html"
+             target="_blank">help</a>`;
 }
 
 function parseUrlPipeline() {
@@ -660,8 +703,13 @@ function updateStepLayout() {
   steps.forEach((step, i) => {
     step.querySelector('.step-num').textContent = i + 1;
     step.querySelector('.moveUp').style.display = i === 0 ? 'none' : 'inline-block';
-    step.querySelector('.moveDown').style.display = 
-	  i === steps.length - 1 ? 'none' : 'inline-block';
+    step.querySelector('.moveDown').style.display =
+      i === steps.length - 1 ? 'none' : 'inline-block';
+
+    // Build functional descriptive accessibility labels for screen readers
+    step.querySelector('.moveUp').setAttribute('aria-label', `Move step ${i + 1} up`);
+    step.querySelector('.moveDown').setAttribute('aria-label', `Move step ${i + 1} down`);
+    step.querySelector('.remove').setAttribute('aria-label', `Remove step ${i + 1}`);
 
     const inputEl = step.querySelector('.stepInputsInput');
     if (inputEl && !inputEl.dataset.touched) {
@@ -695,11 +743,82 @@ function parseListField(text) {
   return t.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+// Determine which specific interactive class is currently focused inside a step
+function getFocusedControlClass(active) {
+  if (!active) return null;
+  if (active.classList.contains('stepOpSelect')) return 'stepOpSelect';
+  if (active.classList.contains('stepInputsInput')) return 'stepInputsInput';
+  if (active.classList.contains('argsInput')) return 'argsInput';
+  if (active.classList.contains('moveUp')) return 'moveUp';
+  if (active.classList.contains('moveDown')) return 'moveDown';
+  if (active.classList.contains('remove')) return 'remove';
+  return null;
+}
+
+// Move step up while seamlessly retaining focused child node context
+function moveStepUp(li) {
+  const prev = li.previousElementSibling;
+  if (prev) {
+    const active = document.activeElement;
+    const controlClass = getFocusedControlClass(active);
+
+    li.parentNode.insertBefore(li, prev);
+    updateStepLayout();
+
+    if (controlClass) {
+      const target = li.querySelector('.' + controlClass);
+      if (target && target.style.display !== 'none') {
+        target.focus();
+      } else {
+        li.querySelector('.stepOpSelect').focus();
+      }
+    }
+  }
+}
+
+// Move step down while seamlessly retaining focused child node context
+function moveStepDown(li) {
+  const next = li.nextElementSibling;
+  if (next) {
+    const active = document.activeElement;
+    const controlClass = getFocusedControlClass(active);
+
+    li.parentNode.insertBefore(next, li);
+    updateStepLayout();
+
+    if (controlClass) {
+      const target = li.querySelector('.' + controlClass);
+      if (target && target.style.display !== 'none') {
+        target.focus();
+      } else {
+        li.querySelector('.stepOpSelect').focus();
+      }
+    }
+  }
+}
+
+// Delete step and smoothly restore keyboard focus context
+function removeStep(li) {
+  const prev = li.previousElementSibling;
+  const next = li.nextElementSibling;
+  li.remove();
+  updateStepLayout();
+
+  if (next) {
+    next.querySelector('.stepOpSelect').focus();
+  } else if (prev) {
+    prev.querySelector('.stepOpSelect').focus();
+  } else {
+    document.getElementById('addStepBtn').focus();
+  }
+}
+
 document.getElementById('addStepBtn').addEventListener('click', () => {
   const defaultOp = opNames.includes('cat') ? 'cat' : (opNames[0] || 'cat');
   addStepToDOM(defaultOp);
 });
 
+// Delegate manual mouse interactions to step actions
 document.getElementById('stepList').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -708,15 +827,82 @@ document.getElementById('stepList').addEventListener('click', e => {
   if (!li) return;
 
   if (btn.classList.contains('remove')) {
-    li.remove();
+    removeStep(li);
   } else if (btn.classList.contains('moveUp')) {
-    const prev = li.previousElementSibling;
-    if (prev) li.parentNode.insertBefore(li, prev);
+    moveStepUp(li);
   } else if (btn.classList.contains('moveDown')) {
-    const next = li.nextElementSibling;
-    if (next) li.parentNode.insertBefore(li, next);
+    moveStepDown(li);
   }
-  updateStepLayout();
+});
+
+// Global Keydown Shortcut Listener
+document.addEventListener('keydown', e => {
+  const active = document.activeElement;
+  const isTextInput = active && active.tagName === 'INPUT' && active.type === 'text';
+  const isTyping = active && (
+    (active.tagName === 'INPUT' && active.type === 'text') ||
+    active.tagName === 'TEXTAREA'
+  );
+
+  // 1. Force pipeline run shortcut (Ctrl/Cmd + Enter) - always active
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    const runBtn = document.getElementById('runBtn');
+    if (!runBtn.disabled) {
+      e.preventDefault();
+      runBtn.click();
+    }
+    return;
+  }
+
+  const activeStep = active ? active.closest('.step') : null;
+
+  // 2. Enter key progression focuses down or runs pipeline ONLY when focused inside a text input field inside a step
+  if (e.key === 'Enter' && activeStep && isTextInput) {
+    e.preventDefault();
+    const nextStep = activeStep.nextElementSibling;
+    if (nextStep) {
+      nextStep.querySelector('.stepOpSelect').focus();
+    } else {
+      const runBtn = document.getElementById('runBtn');
+      if (!runBtn.disabled) {
+        runBtn.click();
+      }
+    }
+    return;
+  }
+
+  // 3. Shortcuts active ONLY when NOT typing in a text field
+  if (!isTyping) {
+    // '+' or '=' adds a new step & focuses its operator selector
+    if (e.key === '+' || e.key === '=') {
+      e.preventDefault();
+      const addStepBtn = document.getElementById('addStepBtn');
+      addStepBtn.click();
+      const steps = document.querySelectorAll('#stepList .step');
+      if (steps.length > 0) {
+        steps[steps.length - 1].querySelector('.stepOpSelect').focus();
+      }
+      return;
+    }
+
+    // '1' to '9' focuses the corresponding step's select dropdown
+    if (e.key >= '1' && e.key <= '9') {
+      const index = parseInt(e.key, 10) - 1;
+      const steps = document.querySelectorAll('#stepList .step');
+      if (steps[index]) {
+        e.preventDefault();
+        steps[index].querySelector('.stepOpSelect').focus();
+      }
+      return;
+    }
+
+    // 'Delete' key removes the currently active step
+    if (e.key === 'Delete' && activeStep) {
+      e.preventDefault();
+      removeStep(activeStep);
+      return;
+    }
+  }
 });
 
 // Reconstruct pipeline configurations into a clean shareable URL
@@ -819,14 +1005,14 @@ document.getElementById('runBtn').addEventListener('click', async () => {
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
 
-      // 1. Keep the manual green download link in #result
+      // Keep the manual green download link in #result
       const link = document.createElement('a');
       link.href = url;
       link.download = 'pdftl_output.pdf';
       link.textContent = '⬇ Download result.pdf';
       resultBox.appendChild(link);
 
-      // 2. Robust auto-trigger using a temporary body-attached anchor helper
+      // Robust auto-trigger using a temporary body-attached anchor helper
       try {
         const downloadHelper = document.createElement('a');
         downloadHelper.href = url;
@@ -843,8 +1029,6 @@ document.getElementById('runBtn').addEventListener('click', async () => {
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
 
-      // Try to recover the server's suggested filename from
-      // Content-Disposition (falls back to a generic name).
       const disposition = resp.headers.get('Content-Disposition') || '';
       const match = disposition.match(/filename="?([^"]+)"?/);
       const filename = match ? match[1] : 'pdftl_output.zip';

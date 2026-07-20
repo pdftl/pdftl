@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `server`: 
+- `render`: API now supports explicit `format=png|jpg|jpeg|pdf` output selection. Image formats return a ZIP archive; `format=pdf` returns a single rasterized PDF. The CLI continues to determine output format from `output`.
+
+- `server`:
   - UI enhancements to `builder` interface
   - server pipeline now takes understands `@A` per-operation arguments, allowing use of `stamp`, for example
 

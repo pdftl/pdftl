@@ -1,11 +1,18 @@
 import logging
 from unittest.mock import MagicMock, patch
 
+import io
 import pytest
 
 from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.operations.render import _save_single_pdf, render_cli_hook, render_pdf
+from pdftl.operations.render import (
+    _save_single_pdf,
+    _parse_render_args,
+    render_api_serializer,
+    render_cli_hook,
+    render_pdf,
+)
 
 
 def test_render_cli_hook_jpg_extension():
@@ -30,6 +37,27 @@ def test_render_pdf_more_invalid_args():
         render_pdf(mock_pdf, ["png_compression=10"])
     with pytest.raises(InvalidArgumentError, match="Should be an integer between 1 and 9"):
         render_pdf(mock_pdf, ["png_compression=0"])
+
+
+def test_render_pdf_format_arg_valid_and_invalid():
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [MagicMock()]
+
+    with pytest.raises(InvalidArgumentError, match="invalid format 'bogus'"):
+        render_pdf(mock_pdf, ["format=bogus"])
+
+
+def test_parse_render_args_format_defaults_to_none():
+    dpi, page_specs, png_compression, fmt = _parse_render_args([])
+    assert fmt is None
+
+
+def test_parse_render_args_format_lowercased():
+    _, _, _, fmt = _parse_render_args(["format=PNG"])
+    assert fmt == "png"
+
+    _, _, _, fmt = _parse_render_args(["format=JPG"])
+    assert fmt == "jpg"
 
 
 def test_render_pdf_dpi_error_handling():
@@ -212,3 +240,61 @@ def test_render_cli_hook_triggers_single_pdf(tmp_path, caplog):
     # Check lines 112-113 coverage
     assert "Rendered 1 pages into a single PDF" in caplog.text
     mock_img.save.assert_called_once()
+
+
+# --- Test render_api_serializer (server-side format= dispatch) ---
+
+
+def _real_pil_image():
+    from PIL import Image
+
+    return Image.new("RGB", (4, 4), color="white")
+
+
+def test_render_api_serializer_defaults_to_png_zip():
+    import zipfile
+
+    data = [("page_1.png", _real_pil_image()), ("page_2.png", _real_pil_image())]
+    result_bytes, meta = render_api_serializer(iter(data), {})
+
+    assert meta == {"kind": "zip", "count": 2}
+    with zipfile.ZipFile(io.BytesIO(result_bytes)) as zf:
+        assert sorted(zf.namelist()) == ["page_1.png", "page_2.png"]
+
+
+def test_render_api_serializer_jpg_format_zip():
+    import zipfile
+
+    data = [("page_1.jpg", _real_pil_image())]
+    result_bytes, meta = render_api_serializer(iter(data), {"format": "jpg"})
+
+    assert meta == {"kind": "zip", "count": 1}
+    with zipfile.ZipFile(io.BytesIO(result_bytes)) as zf:
+        assert zf.namelist() == ["page_1.jpg"]
+
+
+def test_render_api_serializer_pdf_format_combines_single_pdf():
+    data = [("page_1.png", _real_pil_image()), ("page_2.png", _real_pil_image())]
+    result_bytes, meta = render_api_serializer(iter(data), {"format": "pdf", "dpi": 150.0})
+
+    assert meta == {"kind": "pdf"}
+    assert result_bytes.startswith(b"%PDF")
+
+
+def test_render_api_serializer_pdf_format_empty_generator():
+    result_bytes, meta = render_api_serializer(iter([]), {"format": "pdf"})
+
+    assert meta == {"kind": "empty"}
+    assert result_bytes == b""
+
+
+def test_render_api_serializer_png_compression_forwarded():
+    img = MagicMock()
+    data = [("page_1.png", img)]
+
+    render_api_serializer(iter(data), {"format": "png", "png_compression": 3})
+
+    img.save.assert_called_once()
+    _, kwargs = img.save.call_args
+    assert kwargs["format"] == "PNG"
+    assert kwargs["compress_level"] == 3

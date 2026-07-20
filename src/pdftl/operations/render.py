@@ -21,6 +21,8 @@ from pdftl.utils.keyval_parser import parse_keyval_list
 
 logger = logging.getLogger(__name__)
 
+_VALID_API_FORMATS = {"png", "jpg", "jpeg", "pdf"}
+
 _RENDER_LONG_DESC = """
 The `render` operation converts PDF pages into raster images or a single PDF.
 It respects page rotation, cropping, and current pipeline modifications.
@@ -38,6 +40,12 @@ and the slowest. The default level is 9.
 The default `<template>` is `page_%d.png`. The parameter `%d` is replaced
 with the output page counter value, starting at `1`. Standard formatting
 directives like `%03d` are supported.
+
+**Over the API:** the server never honors client-supplied filesystem paths,
+so `output <template>` has no effect there. Use `format=<png|jpg|pdf>`
+instead to select the response shape: `png`/`jpg` return a zip of one image
+per page, `pdf` returns a single combined PDF. `format=` is accepted (and
+ignored by `output`-based CLI rendering) on the CLI too, for consistency.
 
 **Single PDF Output:**
 If the output template ends with `.pdf` and contains no `%` directive
@@ -139,10 +147,11 @@ def _parse_render_args(args):
     dpi = 150.0
     page_specs = []
     png_compression = 9
+    fmt = None
 
     try:
         parsed = parse_keyval_list(
-            args, allowed_keys=["dpi", "png_compression"], bare_tokens=page_specs
+            args, allowed_keys=["dpi", "png_compression", "format"], bare_tokens=page_specs
         )
     except InvalidArgumentError as exc:
         raise InvalidArgumentError(f"Could not parse `render` arguments {args}: {exc}")
@@ -167,22 +176,76 @@ def _parse_render_args(args):
                 f"'render': invalid png_compression '{val_str}'. "
                 "Should be an integer between 1 and 9."
             ) from exc
+    if "format" in parsed:
+        fmt = parsed["format"].lower()
+        if fmt not in _VALID_API_FORMATS:
+            raise InvalidArgumentError(
+                f"'render': invalid format '{fmt}'. Choose from {sorted(_VALID_API_FORMATS)}."
+            )
 
     if not page_specs:
         page_specs = ["1-end"]
 
-    return dpi, page_specs, png_compression
+    return dpi, page_specs, png_compression, fmt
+
+
+def _pil_format_and_ext(fmt: str) -> tuple[str, str]:
+    if fmt in ("jpg", "jpeg"):
+        return "JPEG", "jpg"
+    return fmt.upper(), fmt
+
+
+def render_api_serializer(data, meta):
+    """Serializes render's (filename, PIL.Image) generator for the API.
+
+    Keyed off the explicit `format=` argument rather than sniffing a
+    filesystem output path -- the server forbids clients from controlling
+    output paths, so the CLI's "guess format from output template"
+    convention (see render_cli_hook) can't apply here. Independent of
+    render_cli_hook, which is unaffected and still used for CLI runs.
+    """
+    import io as _io
+    import zipfile
+
+    meta = meta or {}
+    fmt = meta.get("format") or "png"
+    dpi = meta.get("dpi", 150.0)
+    png_compression = meta.get("png_compression", 9)
+
+    if fmt == "pdf":
+        images = [img for _, img in data]
+        if not images:
+            return b"", {"kind": "empty"}
+        buf = _io.BytesIO()
+        images[0].save(buf, "PDF", resolution=dpi, save_all=True, append_images=images[1:])
+        return buf.getvalue(), {"kind": "pdf"}
+
+    pil_format, ext = _pil_format_and_ext(fmt)
+
+    buf = _io.BytesIO()
+    count = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for idx, (_filename, image) in enumerate(data, start=1):
+            img_buf = _io.BytesIO()
+            save_kw = {"format": pil_format}
+            if pil_format == "PNG":
+                save_kw["compress_level"] = png_compression
+            image.save(img_buf, **save_kw)
+            zf.writestr(f"page_{idx}.{ext}", img_buf.getvalue())
+            count += 1
+    return buf.getvalue(), {"kind": "zip", "count": count}
 
 
 @register_operation(
     "render",
-    tags=["images", "experimental", "alpha"],
-    type="single input operation with optional output",
+    tags=["images", "from_scratch"],
+    type="single input operation",
     desc="Render PDF pages as images or a single rasterized PDF",
     long_desc=_RENDER_LONG_DESC,
     examples=_RENDER_EXAMPLES,
     cli_hook=render_cli_hook,
     usage="<input> render [<page_specs>...] [dpi=<val>] [output <template>]",
+    api_serializer=render_api_serializer,
     args=(
         [c.INPUT_PDF, c.OPERATION_ARGS],
         {
@@ -192,7 +255,7 @@ def _parse_render_args(args):
     skip_pipeline_save=True,
 )
 def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
-    dpi, page_specs, png_compression = _parse_render_args(args)
+    dpi, page_specs, png_compression, fmt = _parse_render_args(args)
 
     ensure_dependencies("render", ["pypdfium2", "PIL"], "render")
 
@@ -221,5 +284,10 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
         pdf=input_pdf,
         data=_render_generator(),
         is_discardable=True,
-        meta={"output_pattern": output_pattern, "dpi": dpi, "png_compression": png_compression},
+        meta={
+            "output_pattern": output_pattern,
+            "dpi": dpi,
+            "png_compression": png_compression,
+            "format": fmt,
+        },
     )

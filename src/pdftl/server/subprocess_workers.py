@@ -107,10 +107,21 @@ def _serialize_operation_result(
     if hasattr(result, "data") and result.data is not None:
         import inspect
 
+        meta = result.meta if (hasattr(result, "meta") and isinstance(result.meta, dict)) else {}
+
+        # An explicit api_serializer (same mechanism dump_streams already
+        # uses) always wins, generator or not -- this is how ops whose
+        # generator doesn't yield pikepdf.Pdf objects (e.g. render's PIL
+        # images) get their own packaging instead of falling into the
+        # generic zip-of-pikepdf-Pdf assumption below.
+        if operation:
+            op_entry = registry.operations.get(operation)
+            if op_entry is not None and (api_serializer := op_entry.get("api_serializer")):
+                return api_serializer(result.data, meta)
+
         if inspect.isgenerator(result.data):
             return _serialize_generator_as_zip(result.data)
 
-        meta = result.meta if (hasattr(result, "meta") and isinstance(result.meta, dict)) else {}
         return None, _serialize_operation_data(result.data, meta, operation)
     if hasattr(result, "pdf") and result.pdf is not None:
         buf = _io.BytesIO()
