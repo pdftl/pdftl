@@ -214,6 +214,30 @@ def _resolve_output_dir(output_dir, get_input):
     return output_dir
 
 
+def unpack_files_api_serializer(data, meta):
+    """Serializes unpack_files' (filename, bytes) generator for the API.
+
+    Unlike burst's (filename, pikepdf.Pdf) generator -- which the generic
+    `_serialize_generator_as_zip` fallback assumes -- unpack_files already
+    yields raw bytes for each attachment, so this just zips them directly
+    rather than treating each item as a pikepdf.Pdf to `.save()`/`.close()`.
+    """
+    import io as _io
+    import zipfile
+
+    buf = _io.BytesIO()
+    count = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename, file_bytes in data:
+            zf.writestr(filename, file_bytes)
+            count += 1
+
+    if count == 0:
+        return b"", {"kind": "empty"}
+
+    return buf.getvalue(), {"kind": "zip", "count": count}
+
+
 @register_operation(
     "unpack_files",
     tags=["attachments"],
@@ -223,6 +247,7 @@ def _resolve_output_dir(output_dir, get_input):
     cli_hook=unpack_files_cli_hook,
     usage="<input> unpack_files [output <dir>]",
     examples=_UNPACK_FILES_EXAMPLES,
+    api_serializer=unpack_files_api_serializer,
     args=(
         [c.INPUT_PDF, c.GET_INPUT],
         {"output_dir": c.OUTPUT},

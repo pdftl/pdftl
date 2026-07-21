@@ -17,6 +17,7 @@ from pdftl.operations.attachments import (
     dump_files,
     dump_files_cli_hook,
     unpack_files,
+    unpack_files_api_serializer,
     unpack_files_cli_hook,
 )
 
@@ -334,6 +335,69 @@ class TestUnpackFiles:
             unpack_files_cli_hook(result, None, None)
         assert (tmp_path / "a.txt").exists()
         assert (tmp_path / "b.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# unpack_files_api_serializer
+# ---------------------------------------------------------------------------
+
+
+class TestUnpackFilesApiSerializer:
+    """Regression coverage for the API path: unpack_files' generator yields
+    (filename, bytes) tuples, unlike burst's (filename, pikepdf.Pdf), so it
+    must not fall through the generic `_serialize_generator_as_zip` fallback
+    -- that fallback calls `.save()`/`.close()` on each item and crashes
+    with "'bytes' object has no attribute 'close'" against raw bytes.
+    """
+
+    def test_zips_single_attachment(self, pdf_with_attachment):
+        import zipfile
+        import io
+
+        with pikepdf.open(pdf_with_attachment) as pdf:
+            result = unpack_files(pdf, None)
+            zip_bytes, meta = unpack_files_api_serializer(result.data, result.meta)
+
+        assert meta == {"kind": "zip", "count": 1}
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            assert zf.namelist() == ["hello.txt"]
+            assert zf.read("hello.txt") == b"Hello World"
+
+    def test_zips_multiple_attachments(self, pdf_with_two_attachments):
+        import zipfile
+        import io
+
+        with pikepdf.open(pdf_with_two_attachments) as pdf:
+            result = unpack_files(pdf, None)
+            zip_bytes, meta = unpack_files_api_serializer(result.data, result.meta)
+
+        assert meta == {"kind": "zip", "count": 2}
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            assert sorted(zf.namelist()) == ["a.txt", "b.txt"]
+            assert zf.read("a.txt") == b"aaa"
+            assert zf.read("b.txt") == b"bbbbbb"
+
+    def test_no_attachments_returns_empty_kind(self, pdf_no_attachment):
+        with pikepdf.open(pdf_no_attachment) as pdf:
+            result = unpack_files(pdf, None)
+            payload, meta = unpack_files_api_serializer(result.data, result.meta)
+
+        assert payload == b""
+        assert meta == {"kind": "empty"}
+
+    def test_does_not_write_to_disk(self, pdf_with_attachment, tmp_path, monkeypatch):
+        """The API path must never touch the filesystem, regardless of what
+        output_dir the client passed -- that's the whole point of the fix:
+        the client-controlled directory argument is irrelevant here since
+        the CLI hook (the only code that writes to output_dir) is never
+        invoked from the API/server path."""
+        monkeypatch.chdir(tmp_path)
+        with pikepdf.open(pdf_with_attachment) as pdf:
+            result = unpack_files(pdf, None, output_dir="some_client_supplied_dir")
+            unpack_files_api_serializer(result.data, result.meta)
+
+        assert not (tmp_path / "some_client_supplied_dir").exists()
+        assert not (tmp_path / "hello.txt").exists()
 
 
 # ---------------------------------------------------------------------------

@@ -591,6 +591,35 @@ def test_pipeline_final_step_burst_returns_zip(server) -> None:
         assert len(zf.namelist()) == 3
 
 
+def test_pipeline_final_step_unpack_files_returns_zip(server) -> None:
+    """unpack_files as the final pipeline step must round-trip through its
+    dedicated api_serializer and come back as a zip of the raw attachment
+    bytes -- regression test for a bug where unpack_files' (filename, bytes)
+    generator fell through the generic _serialize_generator_as_zip fallback
+    (which assumes (filename, pikepdf.Pdf) like burst) and crashed with
+    "'bytes' object has no attribute 'close'" on every real request."""
+    ms = server()
+    base_url = ms.base_url
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.attachments["hello.txt"] = b"Hello World"
+    buf = io.BytesIO()
+    pdf.save(buf)
+    pdf_a = buf.getvalue()
+
+    steps = json.dumps([{"operation": "unpack_files", "args": []}])
+
+    with post_multipart(f"{base_url}/v1/execute/pipeline", {"A": pdf_a}, steps) as response:
+        assert response.status == 200
+        assert response.headers["Content-Type"] == "application/zip"
+        zip_bytes = response.read()
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        assert zf.namelist() == ["hello.txt"]
+        assert zf.read("hello.txt") == b"Hello World"
+
+
 def test_subprocess_worker_entrypoint_forwards_traceback():
     """The child's real traceback string must survive the JSON metadata
     round-trip intact -- confirms adding this field doesn't require any
