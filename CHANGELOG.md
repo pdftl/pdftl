@@ -8,7 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `style_text`: use `stroke=none` to remove text stroke
+
 ### Changed
+
+- `style_text`: adding a stroke, by default, now uses the text fill color (if any) as the stroke color
 
 - `render`: API now supports explicit `format=png|jpg|jpeg|pdf` output selection. Image formats return a ZIP archive; `format=pdf` returns a single rasterized PDF. The CLI continues to determine output format from `output`.
 

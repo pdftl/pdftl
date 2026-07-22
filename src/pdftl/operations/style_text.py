@@ -38,6 +38,8 @@ Page ranges can be specified using `<pages>`. The default page range is all page
 
 * `stroke=<float|percent>`  The width of the text outline. May be an absolute value (e.g. 0.5)
 or a percentage of the current font size (e.g. 2%). Defaults to 0.5 if stroke_color is set.
+* `stroke=none`  Removes any existing text stroke/outline, leaving fill untouched. Cannot be
+combined with `stroke_color`.
 * `color=<r g b>` Set both fill and stroke fallback colour (floats 0.0–1.0 separated by spaces).
 * `fill_color=<r g b>` Set fill colour only.
 * `stroke_color=<r g b>` Set stroke colour only.
@@ -141,31 +143,50 @@ def _parse_style_text_args(args: list[str]) -> list[tuple[str, dict]]:
 
 
 def _build_replacer(pdf, parsed_kwargs: dict) -> "TextStrokeReplaceContentStream | None":
-    stroke_width, stroke_width_type = _parse_stroke_width(parsed_kwargs)
+    stroke_raw = parsed_kwargs.get("stroke")
+    has_stroke_removal = isinstance(stroke_raw, str) and stroke_raw.strip().lower() == "none"
+
+    if has_stroke_removal and parsed_kwargs.get("stroke_color") is not None:
+        raise InvalidArgumentError(
+            "Cannot combine stroke=none with stroke_color: stroke_color implies "
+            "adding/changing a stroke, which conflicts with removing it."
+        )
+
+    if has_stroke_removal:
+        stroke_width, stroke_width_type = None, "absolute"
+    else:
+        stroke_width, stroke_width_type = _parse_stroke_width(parsed_kwargs)
 
     color = _get_color_or_raise(parsed_kwargs, "color")
     fill_color = _get_color_or_raise(parsed_kwargs, "fill_color")
-    stroke_color = _get_color_or_raise(parsed_kwargs, "stroke_color")
+    stroke_color = (
+        None if has_stroke_removal else _get_color_or_raise(parsed_kwargs, "stroke_color")
+    )
 
     has_fill_intent = (color is not None) or (fill_color is not None)
-    has_stroke_intent = (parsed_kwargs.get("stroke") is not None) or (stroke_color is not None)
+    has_stroke_intent = (not has_stroke_removal) and (
+        (stroke_raw is not None) or (stroke_color is not None)
+    )
 
-    if not has_fill_intent and not has_stroke_intent:
+    if not has_fill_intent and not has_stroke_intent and not has_stroke_removal:
         return None
 
     # Resolve fallbacks to pass concrete data to the replacer
     final_fill_color = fill_color or color
-    final_stroke_color = stroke_color or color or fill_color or [0.0, 0.0, 0.0]
+    final_stroke_color = stroke_color or color
     final_stroke_width = stroke_width if stroke_width is not None else 0.5
+    stroke_width_explicit = stroke_width is not None
 
     return TextStrokeReplaceContentStream(
         pdf=pdf,
         has_fill_intent=has_fill_intent,
         has_stroke_intent=has_stroke_intent,
+        has_stroke_removal=has_stroke_removal,
         fill_color=final_fill_color,
         stroke_color=final_stroke_color,
         stroke_width=final_stroke_width,
         stroke_width_type=stroke_width_type,
+        stroke_width_explicit=stroke_width_explicit,
     )
 
 
@@ -219,10 +240,18 @@ class TextStrokeReplaceContentStream:
     pdf: "Pdf"
     has_fill_intent: bool = False
     has_stroke_intent: bool = False
+    # Mutually exclusive with has_stroke_intent: requests removal of any existing
+    # stroke (Tr mode falls back to fill-only or invisible) rather than setting one.
+    # _build_replacer never sets both; direct construction (tests) should avoid it too.
+    has_stroke_removal: bool = False
     fill_color: list[float] | None = None
     stroke_color: list[float] | None = None
     stroke_width: float | None = None
     stroke_width_type: str = "absolute"
+    # True unless built via _build_replacer with an implicitly-defaulted width
+    # (e.g. stroke_color given without an explicit `stroke=` value). Directly
+    # constructed instances (tests, callers) keep the legacy always-on behavior.
+    stroke_width_explicit: bool = True
 
     _processed: set = field(default_factory=set, repr=False, compare=False)
     _pikepdf: "pikepdf_t | None" = field(default=None, init=False, repr=False, compare=False)
@@ -309,6 +338,22 @@ class TextStrokeReplaceContentStream:
             return font_size * self.stroke_width / 100
         return self.stroke_width
 
+    def _resolve_stroke_color(self, state: dict) -> list[float]:
+        if self.stroke_color is not None:
+            return self.stroke_color
+
+        current_tr = state.get("render_mode", 0)
+        stroke_is_currently_visible = current_tr in (1, 2)
+
+        if (
+            stroke_is_currently_visible
+            and state.get("stroke_color") is not None
+            and state.get("stroke_explicit")
+        ):
+            return state["stroke_color"]
+
+        return state.get("fill_color") or [0.0]
+
     def _get_target_tr_mode(self, current_mode: int) -> int:
         """Determines the target Tr mode dynamically based on the current state."""
         target = current_mode
@@ -316,6 +361,11 @@ class TextStrokeReplaceContentStream:
             target = {0: 0, 1: 2, 2: 2, 3: 0}.get(target, target)
         if self.has_stroke_intent:
             target = {0: 2, 1: 1, 2: 2, 3: 1}.get(target, target)
+        elif self.has_stroke_removal:
+            # 0 (fill-only) stays put; 2 (fill+stroke) drops to fill-only;
+            # 1 (stroke-only) and 3 (invisible) have no fill to fall back to,
+            # so removal leaves them invisible.
+            target = {0: 0, 1: 3, 2: 0, 3: 3}.get(target, target)
         return target
 
     def _state_matches_desired(self, state):
@@ -331,11 +381,14 @@ class TextStrokeReplaceContentStream:
             return False
 
         if self.has_stroke_intent and target_tr_mode in (1, 2):
-            if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
+            target_stroke_color = self._resolve_stroke_color(state)
+            if state["stroke_color"] != target_stroke_color:
                 return False
-            if self.stroke_width is not None and state[
-                "stroke_width"
-            ] != self._get_absolute_stroke_width(state):
+            if (
+                self.stroke_width is not None
+                and self.stroke_width_explicit
+                and state["stroke_width"] != self._get_absolute_stroke_width(state)
+            ):
                 return False
 
         return True
@@ -351,11 +404,16 @@ class TextStrokeReplaceContentStream:
             new_instructions.append(self._color_instruction(self.fill_color, "fill"))
 
         if self.has_stroke_intent and target_tr_mode in (1, 2):
-            if self.stroke_color is not None and state["stroke_color"] != self.stroke_color:
-                new_instructions.append(self._color_instruction(self.stroke_color, "stroke"))
+            target_stroke_color = self._resolve_stroke_color(state)
+            if state["stroke_color"] != target_stroke_color:
+                new_instructions.append(self._color_instruction(target_stroke_color, "stroke"))
 
             abs_stroke_width = self._get_absolute_stroke_width(state)
-            if self.stroke_width is not None and state["stroke_width"] != abs_stroke_width:
+            if (
+                self.stroke_width is not None
+                and self.stroke_width_explicit
+                and state["stroke_width"] != abs_stroke_width
+            ):
                 new_instructions.append(([abs_stroke_width], "w"))
 
         if state["render_mode"] != target_tr_mode:
@@ -370,6 +428,7 @@ class TextStrokeReplaceContentStream:
             "render_mode": 0,
             "stroke_color": [0.0, 0.0, 0.0],
             "stroke_width": 0.0,
+            "stroke_explicit": False,
             "fill_color": [0.0, 0.0, 0.0],
         }
 
@@ -403,10 +462,12 @@ class TextStrokeReplaceContentStream:
             state["fill_color"] = self._colors_to_list(operands, _FILL_COLOR_OPS[op_str])
         elif op_str in _STROKE_COLOR_OPS:
             state["stroke_color"] = self._colors_to_list(operands, _STROKE_COLOR_OPS[op_str])
+            state["stroke_explicit"] = True
         elif op_str in _UNKNOWN_FILL_OPS:
             state["fill_color"] = None
         elif op_str in _UNKNOWN_STROKE_OPS:
             state["stroke_color"] = None
+            state["stroke_explicit"] = False
         elif op_str in _TEXT_OPS and not self._state_matches_desired(state):
             self._force_style_state(new_instructions, state)
             self._update_state(state)
@@ -418,9 +479,10 @@ class TextStrokeReplaceContentStream:
             state["fill_color"] = list(self.fill_color)
 
         if self.has_stroke_intent and target_tr_mode in (1, 2):
-            if self.stroke_color is not None:
-                state["stroke_color"] = list(self.stroke_color)
-            if self.stroke_width is not None:
+            target_stroke_color = self._resolve_stroke_color(state)
+            state["stroke_color"] = list(target_stroke_color)
+            state["stroke_explicit"] = self.stroke_color is not None
+            if self.stroke_width is not None and self.stroke_width_explicit:
                 state["stroke_width"] = self._get_absolute_stroke_width(state)
 
         state["render_mode"] = target_tr_mode

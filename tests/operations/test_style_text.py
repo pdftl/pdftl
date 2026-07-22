@@ -975,3 +975,331 @@ def test_fill_intent_from_stroke_only_mode_1():
     assert state["fill_color"] == [0.3, 0.3, 0.9]
     assert state["stroke_color"] == [0.4, 0.4, 0.4]
     assert state["stroke_width"] == 2.5
+
+
+##################################################
+
+
+def create_minimal_pdf(content_stream: bytes, resources: dict | None = None) -> pikepdf.Pdf:
+    """Helper construct for an in-memory single-page PDF document."""
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(100, 100))
+    page.Contents = pdf.make_stream(content_stream)
+    if resources is not None:
+        page.Resources = pikepdf.Dictionary(resources)
+    return pdf
+
+
+def test_style_text_inherits_existing_fill_color_when_adding_stroke():
+    """Text without a stroke inherits its active fill color when stroke width is added."""
+    stream_red_text = b"1 0 0 rg /F1 12 Tf (Red Text) Tj"
+    pdf = create_minimal_pdf(stream_red_text)
+
+    style_text_in_content_streams(pdf, ["1(stroke=1.0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    operators = [str(op) for _, op in parsed]
+    operands = [ops for ops, _ in parsed]
+
+    assert "RG" in operators
+    rg_index = operators.index("RG")
+    assert [float(x) for x in operands[rg_index]] == [1.0, 0.0, 0.0]
+
+
+def test_style_text_preserves_existing_stroke_color_when_visible():
+    """Text that already has a visible stroke preserves its stroke color during stroke width updates."""
+    stream_existing_stroke = b"2 Tr 0 1 0 rg 0 0 1 RG /F1 12 Tf (Outlined Text) Tj"
+    pdf = create_minimal_pdf(stream_existing_stroke)
+
+    style_text_in_content_streams(pdf, ["(stroke=2.0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    rg_ops = [ops for ops, op in parsed if str(op) == "RG"]
+
+    assert len(rg_ops) >= 1
+    assert [float(x) for x in rg_ops[-1]] == [0.0, 0.0, 1.0]
+
+
+def test_style_text_falls_back_to_black_when_fill_color_is_unknown():
+    """Text with an unhandled color space falls back to black when generating a stroke."""
+    stream_unknown_fill = b"/DeviceRGB cs /F1 12 Tf (Text) Tj"
+    pdf = create_minimal_pdf(stream_unknown_fill)
+
+    style_text_in_content_streams(pdf, ["(stroke=1.0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    g_ops = [ops for ops, op in parsed if str(op) == "G"]
+
+    assert len(g_ops) >= 1
+    assert [float(x) for x in g_ops[0]] == [0.0]
+
+
+def test_style_text_explicit_stroke_color_overrides_fill_inheritance():
+    """Providing an explicit stroke color overrides fill color inheritance."""
+    stream = b"1 0 0 rg /F1 12 Tf (Red Fill Green Stroke) Tj"
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(stroke=1.0,stroke_color=0 1 0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    rg_ops = [ops for ops, op in parsed if str(op) == "RG"]
+
+    assert len(rg_ops) >= 1
+    assert [float(x) for x in rg_ops[-1]] == [0.0, 1.0, 0.0]
+
+
+def test_style_text_percentage_stroke_width_default_font_size_fallback():
+    """Percentage stroke width uses default font size when text operator precedes font selection."""
+    stream = b"(Text Before Tf) Tj /F1 14 Tf (Text After Tf) Tj"
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(stroke=10%)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    w_ops = [ops for ops, op in parsed if str(op) == "w"]
+
+    assert len(w_ops) >= 2
+    assert float(w_ops[0][0]) == 1.2
+    assert float(w_ops[1][0]) == 1.4
+
+
+def test_style_text_handles_form_xobjects_and_resource_variations():
+    """Processes Form XObjects and skips non-form XObjects in resource dictionaries."""
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(100, 100))
+    page.Contents = pdf.make_stream(b"/F1 12 Tf (Main Page) Tj")
+
+    image_xobj = pdf.make_stream(b"")
+    image_xobj.Subtype = pikepdf.Name("/Image")
+
+    form_xobj = pdf.make_stream(b"/F1 12 Tf (Form Text) Tj")
+    form_xobj.Subtype = pikepdf.Name("/Form")
+
+    nested_form = pdf.make_stream(b"/F1 10 Tf (Nested Text) Tj")
+    nested_form.Subtype = pikepdf.Name("/Form")
+
+    form_xobj.Resources = pikepdf.Dictionary(
+        {
+            "/XObject": pikepdf.Dictionary(
+                {
+                    "/NestedForm": nested_form,
+                }
+            )
+        }
+    )
+
+    page.Resources = pikepdf.Dictionary(
+        {
+            "/XObject": pikepdf.Dictionary(
+                {
+                    "/Img1": image_xobj,
+                    "/Form1": form_xobj,
+                }
+            )
+        }
+    )
+
+    style_text_in_content_streams(pdf, ["(stroke=1.0)"])
+
+    nested_parsed = list(pikepdf.parse_content_stream(nested_form))
+    nested_operators = [str(op) for _, op in nested_parsed]
+    assert "Tr" in nested_operators
+
+
+def test_style_text_empty_args_or_no_intent():
+    """Returns early or performs no-op when empty arguments or no styling intents are supplied."""
+    pdf = create_minimal_pdf(b"/F1 12 Tf (Hello) Tj")
+    result = style_text_in_content_streams(pdf, [])
+    assert result.success
+
+    result_no_intent = style_text_in_content_streams(pdf, ["1"])
+    assert result_no_intent.success
+
+
+def test_style_text_consecutive_drawing_ops_matching_state():
+    """Avoids inserting redundant graphic state instructions when state is already aligned."""
+    stream = b"/F1 12 Tf (A) Tj (B) TJ ' \" "
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(stroke=1.0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    tr_ops = [ops for ops, op in parsed if str(op) == "Tr"]
+
+    assert len(tr_ops) == 1
+
+
+def test_style_text_graphics_state_stack_push_pop():
+    """Correctly restores graphics state across push and pop operators."""
+    stream = b"1 0 0 rg q 0 1 0 rg /F1 12 Tf (Inner) Tj Q /F1 12 Tf (Outer) Tj"
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(stroke=0.5)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    rg_ops = [ops for ops, op in parsed if str(op) == "RG"]
+
+    assert len(rg_ops) == 2
+    assert [float(x) for x in rg_ops[0]] == [0.0, 1.0, 0.0]
+    assert [float(x) for x in rg_ops[1]] == [1.0, 0.0, 0.0]
+
+
+def test_style_text_invalid_argument_errors():
+    """Raises InvalidArgumentError on invalid input parameter values."""
+    pdf = create_minimal_pdf(b"/F1 12 Tf (Hello) Tj")
+
+    with pytest.raises(InvalidArgumentError):
+        style_text_in_content_streams(pdf, ["(stroke=-1)"])
+
+    with pytest.raises(InvalidArgumentError):
+        style_text_in_content_streams(pdf, ["(stroke=invalid)"])
+
+    with pytest.raises(InvalidArgumentError):
+        style_text_in_content_streams(pdf, ["(color=invalid_color)"])
+
+
+def test_style_text_cmyk_and_grayscale_color_formatting():
+    """Formats Grayscale and CMYK color operand instructions correctly."""
+    pdf = create_minimal_pdf(b"0.5 g /F1 12 Tf (Gray) Tj 0.1 0.2 0.3 0.4 k /F1 12 Tf (CMYK) Tj")
+
+    style_text_in_content_streams(pdf, ["(stroke=1.0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    operators = [str(op) for _, op in parsed]
+
+    assert "G" in operators
+    assert "K" in operators
+
+
+def test_style_text_stroke_color_without_stroke_width():
+    """Applies stroke color intent without injecting width instruction if width is omitted."""
+    pdf = create_minimal_pdf(b"/F1 12 Tf (Text) Tj")
+
+    style_text_in_content_streams(pdf, ["(stroke_color=1 0 0)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    operators = [str(op) for _, op in parsed]
+
+    assert "RG" in operators
+    assert "w" not in operators
+
+
+def test_style_text_color_instruction_operand_validation():
+    """Raises ValueError when invalid color operand lengths are supplied to internal helper."""
+    pdf = pikepdf.Pdf.new()
+    replacer = TextStrokeReplaceContentStream(pdf=pdf)
+
+    with pytest.raises(ValueError):
+        replacer._color_instruction([1.0, 2.0], "fill")
+
+
+def test_style_text_empty_page_contents_and_duplicate_processing():
+    """Handles blank pages with no contents stream and guards against re-processing."""
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(100, 100))
+
+    result = style_text_in_content_streams(pdf, ["(stroke=1.0)"])
+    assert result.success
+
+    pdf_with_contents = create_minimal_pdf(b"/F1 12 Tf (Text) Tj")
+    style_text_in_content_streams(pdf_with_contents, ["(stroke=1.0)"])
+    style_text_in_content_streams(pdf_with_contents, ["(stroke=1.0)"])
+
+
+def test_apply_page_with_no_resources_key():
+    """Covers the branch where a page has contents but no /Resources entry at all."""
+    with pikepdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(100, 100))
+        page.Contents = pdf.make_stream(b"/F1 12 Tf (Text) Tj")
+        if "/Resources" in page:
+            del page["/Resources"]
+
+        replacer = TextStrokeReplaceContentStream(
+            pdf=pdf,
+            has_stroke_intent=True,
+            stroke_color=[1, 0, 0],
+            stroke_width=1.0,
+        )
+
+        with patch.object(replacer, "_process_resources") as mock_res:
+            replacer.apply(1)
+            mock_res.assert_not_called()
+
+
+def test_build_replacer_stroke_none_sets_removal_flag():
+    r = _build_replacer(MagicMock(), {"stroke": "none"})
+    assert r is not None
+    assert r.has_stroke_removal is True
+    assert r.has_stroke_intent is False
+
+
+def test_build_replacer_stroke_none_with_stroke_color_raises():
+    with pytest.raises(InvalidArgumentError, match="stroke=none"):
+        _build_replacer(MagicMock(), {"stroke": "none", "stroke_color": "1 0 0"})
+
+
+def test_get_target_tr_mode_stroke_removal_matrix():
+    r = TextStrokeReplaceContentStream(pdf=MagicMock(), has_stroke_removal=True)
+    assert r._get_target_tr_mode(0) == 0
+    assert r._get_target_tr_mode(1) == 3
+    assert r._get_target_tr_mode(2) == 0
+    assert r._get_target_tr_mode(3) == 3
+
+
+def test_get_target_tr_mode_fill_plus_stroke_removal_combo():
+    """Stroke-only text (Tr1) gaining a fill while removing its stroke -> Tr0."""
+    r = TextStrokeReplaceContentStream(
+        pdf=MagicMock(), has_fill_intent=True, has_stroke_removal=True
+    )
+    assert r._get_target_tr_mode(1) == 0
+    assert r._get_target_tr_mode(2) == 0
+
+
+def test_style_text_stroke_none_removes_stroke_from_fill_and_stroke_text():
+    """Tr 2 (fill+stroke) + stroke=none -> Tr 0, existing stroke ops left as-is
+    (nothing new injected), only the Tr transition changes."""
+    stream = b"2 Tr 1 0 0 rg 0 1 0 RG /F1 12 Tf (Text) Tj"
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(stroke=none)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    tr_ops = [ops for ops, op in parsed if str(op) == "Tr"]
+
+    assert [int(x) for x in tr_ops[-1]] == [0]
+
+
+def test_style_text_stroke_none_on_stroke_only_text_goes_invisible():
+    """Tr 1 (stroke-only, no fill) + stroke=none -> Tr 3 (invisible),
+    since there's no fill to fall back to."""
+    stream = b"1 Tr 0 1 0 RG /F1 12 Tf (Text) Tj"
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(stroke=none)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    tr_ops = [ops for ops, op in parsed if str(op) == "Tr"]
+
+    assert [int(x) for x in tr_ops[-1]] == [3]
+
+
+def test_style_text_stroke_none_combined_with_fill_color():
+    """Stroke-only text (Tr1) + fill_color + stroke=none -> Tr0: fill is set,
+    stroke is gone, not left dangling at Tr2."""
+    stream = b"1 Tr 0 1 0 RG /F1 12 Tf (Text) Tj"
+    pdf = create_minimal_pdf(stream)
+
+    style_text_in_content_streams(pdf, ["(fill_color=0.2 0.2 0.9,stroke=none)"])
+
+    parsed = list(pikepdf.parse_content_stream(pdf.pages[0].Contents))
+    tr_ops = [ops for ops, op in parsed if str(op) == "Tr"]
+    rg_ops = [ops for ops, op in parsed if str(op) == "rg"]
+
+    assert [int(x) for x in tr_ops[-1]] == [0]
+    assert [float(x) for x in rg_ops[-1]] == [0.2, 0.2, 0.9]
+
+
+def test_style_text_stroke_none_and_stroke_color_conflict_raises():
+    pdf = create_minimal_pdf(b"/F1 12 Tf (Text) Tj")
+    with pytest.raises(InvalidArgumentError):
+        style_text_in_content_streams(pdf, ["(stroke=none,stroke_color=1 0 0)"])
