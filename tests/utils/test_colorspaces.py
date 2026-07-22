@@ -267,3 +267,61 @@ def test_effective_family():
     assert effective_family({"family": "icc", "icc_family": "cmyk"}) == "cmyk"
     assert effective_family({"family": "icc"}) == "icc"
     assert effective_family({}) == "unknown"
+
+
+def test_resolve_separation_no_alternate(pikepdf_mock):
+    """Ensures Separation colorspace arrays lacking an alternate space resolve correctly."""
+    res = resolve_separation(["/Separation", "/Cyan"], None, pikepdf_mock)
+    assert res == {"family": "spot", "colorants": ["Cyan"]}
+
+
+def test_resolve_device_n_no_alternate(pikepdf_mock):
+    """Ensures DeviceN colorspace arrays lacking an alternate space resolve correctly."""
+    res = resolve_device_n(["/DeviceN", ["/Cyan", "/Magenta"]], None, pikepdf_mock)
+    assert res == {"family": "spot", "colorants": ["Cyan", "Magenta"]}
+
+
+def test_resolve_calgray_missing_keys(pikepdf_mock):
+    """Ensures CalGray colorspace dictionaries with missing optional keys resolve safely."""
+    res = resolve_calgray(["/CalGray", {}], pikepdf_mock)
+    assert res == {"family": "calgray"}
+
+
+def test_resolve_calrgb_missing_keys(pikepdf_mock):
+    """Ensures CalRGB colorspace dictionaries with missing optional keys resolve safely."""
+    res = resolve_calrgb(["/CalRGB", {}], pikepdf_mock)
+    assert res == {"family": "calrgb"}
+
+
+def test_resolve_lab_missing_keys(pikepdf_mock):
+    """Ensures Lab colorspace dictionaries with missing optional keys resolve safely."""
+    res = resolve_lab(["/Lab", {}], pikepdf_mock)
+    assert res == {"family": "lab"}
+
+
+def test_resolve_named_cs_missing_colorspace_dict(pikepdf_mock):
+    """Ensures named colorspaces resolve as unknown when the resource dictionary lacks a /ColorSpace entry."""
+    resources = MagicMock()
+    resources.get.return_value = None
+    res = resolve_named_cs("CS1", resources, pikepdf_mock)
+    assert res == {"family": "unknown", "raw": "/CS1"}
+
+
+def test_resolve_icc_no_alternate_and_no_profile_name(pikepdf_mock):
+    """Ensures ICCBased colorspaces without an alternate space or embedded profile name resolve components correctly."""
+    stream = MagicMock()
+    # Return 3 for /N, and None for /Alternate
+    stream.get.side_effect = lambda k, d=None: 3 if k == "/N" else d
+    # Dummy raw bytes that result in profile_name = None from extract_icc_profile_name
+    stream.read_raw_bytes.return_value = b"\x00" * 100
+
+    res = resolve_icc(["/ICCBased", stream], pikepdf_mock)
+    assert res["components"] == 3
+    assert "alternate" not in res
+    assert "profile_name" not in res
+
+
+def test_resolve_named_cs_none_resources(pikepdf_mock):
+    """Ensures standard named colorspaces resolve correctly even when no resource dictionary is provided."""
+    res = resolve_named_cs("DeviceRGB", None, pikepdf_mock)
+    assert res == {"family": "rgb"}

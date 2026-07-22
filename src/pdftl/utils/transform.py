@@ -145,7 +145,7 @@ def _extract_fit_type(coords: list) -> str:
     if len(coords) >= 2:
         try:
             val_str = str(coords[1])
-            if val_str in ("/XYZ", "/Fit", "/FitH", "/FitV", "/FitR", "/FitB", "/FitBH", "/FitBV"):
+            if val_str.startswith("/") and val_str != "/null":
                 return val_str
         except (ValueError, TypeError):
             pass  # destination array missing recognized fit-mode string
@@ -258,6 +258,8 @@ def _transform_explicit_dest(
         _transform_fit_v(coords, new_coords, angle, width, height, scale, fit_type)
     elif fit_type == "/FitR" and len(coords) >= 6:
         _transform_fitr_coords(coords, new_coords, angle, width, height, scale)
+    else:
+        logger.warning("Unrecognized or unhandled explicit destination fit type %s.", fit_type)
 
     return _clean_coordinate_types(new_coords)
 

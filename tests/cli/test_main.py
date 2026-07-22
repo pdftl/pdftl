@@ -705,3 +705,29 @@ def test_validate_inputs_exist_skips_handle_names(tmp_path):
     pipeline = types.SimpleNamespace(stages=[stage])
 
     _validate_inputs_exist(pipeline)  # Should not raise
+
+
+def test_prepare_pipeline_empty_stage_skipped(monkeypatch):
+    """Ensures empty or falsy pipeline stages are skipped during pipeline preparation."""
+    mock_stage = types.SimpleNamespace(options={}, inputs=[])
+
+    def fake_parse_cli_stage(stage_args_core, is_first_stage):
+        if is_first_stage:
+            return mock_stage
+        return None  # Second stage parses as None without raising an error
+
+    monkeypatch.setattr(
+        mainmod, "split_args_by_separator", lambda args: [["cat"], ["empty_stage"]]
+    )
+    monkeypatch.setattr(
+        mainmod,
+        "parse_options_and_specs",
+        lambda stage_args: (stage_args, {}),
+    )
+    monkeypatch.setattr(mainmod, "parse_cli_stage", fake_parse_cli_stage)
+
+    pipeline = mainmod._prepare_pipeline_from_remaining_args(["cat", "---", "empty_stage"])
+
+    # Ensure only the valid first stage was registered
+    assert len(pipeline.stages) == 1
+    assert pipeline.stages[0] == mock_stage

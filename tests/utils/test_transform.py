@@ -333,3 +333,82 @@ def test_transform_explicit_destination(dest_in, box, angle, scale, dest_out):
             assert str(r) == str(e)
         else:
             assert r == e
+
+
+def test_transform_destination_coordinates_handles_short_arrays():
+    """Ensures destination arrays shorter than two elements fall back gracefully."""
+    box = pikepdf.Array([0, 0, 100, 200])
+
+    result = transform_destination_coordinates([10], box, angle=0, scale=1.0)
+
+    assert result == [10.0, None]
+
+
+def test_transform_destination_coordinates_warns_on_unrecognized_fit_type(caplog):
+    """Ensures unrecognized explicit fit types are preserved and log a warning."""
+    page = pikepdf.Name("/Page1")
+    box = pikepdf.Array([0, 0, 100, 200])
+
+    with caplog.at_level(logging.WARNING):
+        result = transform_destination_coordinates(
+            [page, pikepdf.Name("/UnknownFit"), 10, 20], box, angle=90, scale=1.0
+        )
+
+    assert result == [page, pikepdf.Name("/UnknownFit"), 10.0, 20.0]
+    assert "Unrecognized or unhandled explicit destination fit type /UnknownFit" in caplog.text
+
+
+def test_transform_destination_coordinates_handles_truncated_xyz():
+    """Ensures /XYZ fit types missing optional coordinates return unchanged."""
+    page = pikepdf.Name("/Page1")
+    box = pikepdf.Array([0, 0, 100, 200])
+
+    result = transform_destination_coordinates(
+        [page, pikepdf.Name("/XYZ")], box, angle=90, scale=1.0
+    )
+
+    assert result == [page, pikepdf.Name("/XYZ")]
+
+
+def test_transform_destination_coordinates_handles_truncated_fith():
+    """Ensures parameterless /FitH destinations adjust fit mode dynamically on rotation."""
+    page = pikepdf.Name("/Page1")
+    box = pikepdf.Array([0, 0, 100, 200])
+
+    res_90 = transform_destination_coordinates(
+        [page, pikepdf.Name("/FitH")], box, angle=90, scale=1.0
+    )
+    res_0 = transform_destination_coordinates(
+        [page, pikepdf.Name("/FitH")], box, angle=0, scale=1.0
+    )
+
+    assert res_90 == [page, pikepdf.Name("/FitV")]
+    assert res_0 == [page, pikepdf.Name("/FitH")]
+
+
+def test_transform_destination_coordinates_handles_truncated_fitv():
+    """Ensures parameterless /FitV destinations adjust fit mode dynamically on rotation."""
+    page = pikepdf.Name("/Page1")
+    box = pikepdf.Array([0, 0, 100, 200])
+
+    res_90 = transform_destination_coordinates(
+        [page, pikepdf.Name("/FitV")], box, angle=90, scale=1.0
+    )
+    res_0 = transform_destination_coordinates(
+        [page, pikepdf.Name("/FitV")], box, angle=0, scale=1.0
+    )
+
+    assert res_90 == [page, pikepdf.Name("/FitH")]
+    assert res_0 == [page, pikepdf.Name("/FitV")]
+
+
+def test_transform_destination_coordinates_handles_truncated_fitr():
+    """Ensures /FitR destinations missing full bounding box coordinates return unchanged."""
+    page = pikepdf.Name("/Page1")
+    box = pikepdf.Array([0, 0, 100, 200])
+
+    result = transform_destination_coordinates(
+        [page, pikepdf.Name("/FitR"), 10, 20], box, angle=90, scale=1.0
+    )
+
+    assert result == [page, pikepdf.Name("/FitR"), 10.0, 20.0]

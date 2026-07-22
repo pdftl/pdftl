@@ -342,8 +342,7 @@ def print_help(command=None, dest=None, raw=False):
         try:
             _print_help_core(command, dest, raw)
         finally:
-            if _HELP_RECURSION_DEPTH > 0:
-                _HELP_RECURSION_DEPTH -= 1
+            _HELP_RECURSION_DEPTH = max(0, _HELP_RECURSION_DEPTH - 1)
 
 
 def _print_help_core(command=None, dest=None, raw=False):

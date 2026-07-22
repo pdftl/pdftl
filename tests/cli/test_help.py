@@ -494,3 +494,186 @@ def test_args_help_topic_execution():
     from pdftl.cli.args_loader import _args_help_topic
 
     _args_help_topic()
+
+
+def test_get_rtd_url_no_caller():
+    """Verify _get_rtd_url returns None when caller is missing or falsy."""
+    assert helpmod._get_rtd_url("combine", "HelpTopic", {}, caller=None) is None
+
+
+def test_print_topic_help_no_desc_no_caller():
+    """Verify topic help formatting when desc and caller are omitted from topic_data."""
+    mock_hprint = MagicMock()
+    topic_data = {}
+    helpmod._print_topic_help(mock_hprint, topic_data, "test_topic")
+
+    mock_hprint.assert_any_call("# pdftl: help for `test_topic`")
+    printed_texts = [call[0][0] for call in mock_hprint.call_args_list]
+    assert not any("Source:" in t for t in printed_texts)
+
+
+def test_print_main_help_rich_console_none(monkeypatch):
+    """Verify RuntimeError is raised when Rich console is unavailable."""
+    monkeypatch.setattr(helpmod, "get_console", lambda: None)
+    with pytest.raises(RuntimeError, match="Rich console is not available"):
+        helpmod.print_main_help(dest=None, raw=False)
+
+
+def test_print_output_options_help_object_attributes(monkeypatch):
+    """Verify help output formatting for option objects possessing long_desc and examples attributes."""
+    mock_hprint = MagicMock()
+
+    class FakeOptionObj:
+        long_desc = "Detailed option explanation"
+        examples = [HelpExample(desc="Example description", cmd="--custom-flag")]
+
+        def get(self, key, default=None):
+            return "Option summary" if key == "desc" else default
+
+    monkeypatch.setattr(
+        helpmod.registry,
+        "options",
+        {"custom_opt": FakeOptionObj()},
+    )
+
+    helpmod._print_output_options_help(mock_hprint)
+
+    printed_texts = [call[0][0] for call in mock_hprint.call_args_list]
+    assert any("Detailed option explanation" in t for t in printed_texts)
+
+
+def test_print_help_paging_activation(monkeypatch):
+    """Verify interactive TTY terminal paging execution."""
+    mock_page_context = MagicMock()
+    monkeypatch.setattr(
+        "pdftl.cli.help_render.page_captured_output",
+        MagicMock(return_value=mock_page_context),
+    )
+
+    fake_console = Console(file=io.StringIO(), force_terminal=True)
+    monkeypatch.setattr(helpmod, "get_console", lambda: fake_console)
+
+    fake_stdout = io.StringIO()
+    fake_stdout.isatty = lambda: True
+    monkeypatch.setattr(sys, "stdout", fake_stdout)
+
+    helpmod.print_help(command="combine", dest=None, raw=False)
+
+    mock_page_context.__enter__.assert_called_once()
+    mock_page_context.__exit__.assert_called_once()
+
+
+def test_print_help_tag_query(monkeypatch):
+    """Verify tag query execution using tag:<tagname> syntax."""
+    mock_hprint = MagicMock()
+    monkeypatch.setattr(helpmod, "load_hprint", lambda dest, raw: mock_hprint)
+
+    monkeypatch.setattr(
+        helpmod.registry,
+        "operations",
+        {"encrypt": {"desc": "Encrypt PDF", "tags": ["security"]}},
+    )
+
+    helpmod._print_help_core(command="tag:security", dest=None, raw=True)
+
+    assert mock_hprint.called
+
+
+from contextlib import redirect_stdout
+import pytest
+
+
+def test_print_output_options_help_branches(monkeypatch):
+    """Verify output options help with option objects that lack long_desc and examples."""
+    mock_hprint = MagicMock()
+
+    class OptWithLongDesc:
+        long_desc = "Detailed option explanation"
+        examples = [HelpExample(desc="Example description", cmd="--custom-flag")]
+
+        def get(self, key, default=None):
+            return "Option summary" if key == "desc" else default
+
+    class OptWithoutLongDesc:
+        def get(self, key, default=None):
+            return "Simple option summary" if key == "desc" else default
+
+    monkeypatch.setattr(
+        helpmod.registry,
+        "options",
+        {
+            "opt_full": OptWithLongDesc(),
+            "opt_simple": OptWithoutLongDesc(),
+        },
+    )
+
+    helpmod._print_output_options_help(mock_hprint)
+
+    printed_texts = [call[0][0] for call in mock_hprint.call_args_list]
+    assert any("Detailed option explanation" in t for t in printed_texts)
+
+
+def test_print_help_paging_and_non_paging(monkeypatch):
+    """Verify interactive TTY paging and non-TTY streaming execution paths without terminal output spam."""
+    mock_page_context = MagicMock()
+    monkeypatch.setattr(
+        "pdftl.cli.help_render.page_captured_output",
+        MagicMock(return_value=mock_page_context),
+    )
+
+    # Mock the core printer so no text is sent to stdout/console
+    monkeypatch.setattr(helpmod, "_print_help_core", MagicMock())
+
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        # 1. Paged path (isatty = True) -> enters page_captured_output context manager
+        monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+        helpmod._HELP_RECURSION_DEPTH = 0
+        helpmod.print_help(command="combine", dest=None, raw=False)
+
+        mock_page_context.__enter__.assert_called_once()
+        mock_page_context.__exit__.assert_called_once()
+
+        # 2. Non-paged path (isatty = False) -> streams directly without invoking pager
+        monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+        helpmod.print_help(command="combine", dest=None, raw=False)
+
+
+def test_print_help_non_tty_and_dest_paths(monkeypatch):
+    """Verify non-paging and stream destination output paths."""
+    fake_console = Console(file=io.StringIO())
+    monkeypatch.setattr(helpmod, "get_console", lambda: fake_console)
+
+    fake_stdout = io.StringIO()
+    fake_stdout.isatty = lambda: False
+    monkeypatch.setattr(sys, "stdout", fake_stdout)
+
+    monkeypatch.setattr(helpmod, "_HELP_RECURSION_DEPTH", 0)
+
+    helpmod.print_help(command=None, dest=None, raw=False)
+
+    dest_stream = io.StringIO()
+    helpmod.print_help(command="combine", dest=dest_stream, raw=True)
+    assert len(dest_stream.getvalue()) > 0
+
+
+def test_print_help_all_combinations(monkeypatch):
+    """Verify print_help execution across all parameter and TTY branch combinations."""
+    fake_console = Console(file=io.StringIO())
+    monkeypatch.setattr(helpmod, "get_console", lambda: fake_console)
+
+    mock_page = MagicMock()
+    monkeypatch.setattr(
+        "pdftl.cli.help_render.page_captured_output",
+        MagicMock(return_value=mock_page),
+    )
+
+    for is_tty in (True, False):
+        fake_stdout = io.StringIO()
+        fake_stdout.isatty = lambda: is_tty
+        monkeypatch.setattr(sys, "stdout", fake_stdout)
+
+        for cmd in (None, "combine"):
+            for raw_val in (True, False):
+                for dest_val in (None, io.StringIO()):
+                    helpmod.print_help(command=cmd, dest=dest_val, raw=raw_val)

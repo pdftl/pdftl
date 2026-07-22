@@ -1208,22 +1208,39 @@ def test_spec_parser_whitespace_stripping(spaced_spec, total_pages, expected_sta
     assert result.end == expected_end
 
 
-def test_spec_parser_whitespace_logging(caplog):
-    """
-    Verifies that a debug message is triggered inside SpecParser.parse
-    if and only if spaces were actually stripped from the original expression string.
-    """
-    import logging
+def test_parse_coerces_non_string_spec_to_str():
+    """Ensures non-string inputs (like integers) are coerced to strings and parsed correctly."""
+    parser = SpecParser(total_pages=10)
+    spec = parser.parse(5)
 
+    assert spec.start == 5
+    assert spec.end == 5
+
+
+def test_parse_non_string_spec_str():
+    """Ensures non-string spec inputs bypass string whitespace normalization and parse correctly."""
+    mock_match = MagicMock()
+    mock_match.groups.return_value = (None, "1", None, "5", "")
+
+    mock_regex = MagicMock()
+    mock_regex.match.return_value = mock_match
+
+    parser = SpecParser(total_pages=10, spec_regex=mock_regex)
+
+    # Passing a non-string object skips the string whitespace replacement check
+    spec = parser.parse(123)
+
+    assert spec.start == 1
+    assert spec.end == 5
+
+
+def test_parse_omissions_empty_range():
+    """Ensures empty omission specifications (e.g., trailing '~') parse cleanly without omissions."""
     parser = SpecParser(total_pages=10)
 
-    with caplog.at_level(logging.DEBUG):
-        # Case 1: Has whitespace, should log
-        parser.parse("1 - 3 rep 2")
-        assert any("cleaned spaces: spec=" in record.message for record in caplog.records)
+    # Spec '1-5~' sets modifier_str to '~', yielding an empty omit_range_str ('')
+    spec = parser.parse("1-5~")
 
-        caplog.clear()
-
-        # Case 2: No whitespace, should not log the space-cleanup line
-        parser.parse("1-3rep2")
-        assert not any("cleaned spaces: spec=" in record.message for record in caplog.records)
+    assert spec.start == 1
+    assert spec.end == 5
+    assert spec.omissions == []

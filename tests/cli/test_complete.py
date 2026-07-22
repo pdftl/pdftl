@@ -18,10 +18,9 @@ from pdftl.cli.complete import (
     get_cache_path,
     is_package_newer_than_cache,
     load_simple_cache,
-)
-from pdftl.cli.complete import main
-from pdftl.cli.complete import main as complete_main
-from pdftl.cli.complete import (
+    main,
+    main as complete_main,
+    output_candidates,
     rebuild_cache,
     resolve_candidates,
     simple_cache_key,
@@ -30,10 +29,8 @@ from pdftl.cli.complete import (
 
 
 def test_complete_main_integration(tmp_path, monkeypatch):
-    # Mock cache dir to avoid messing with user's real cache
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
 
-    # Simulate: pdftl help <TAB>
     with patch.object(sys, "argv", ["complete.py", "help", ""]):
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
             complete_main()
@@ -48,19 +45,16 @@ def test_rebuild_on_corrupt_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     cache_file = get_cache_path()
 
-    # Create a garbage pickle file
     os.makedirs(os.path.dirname(cache_file), exist_ok=True)
     with open(cache_file, "wb") as f:
         f.write(b"NOT_A_PICKLE")
 
-    # This should not crash, it should catch the Exception and rebuild
     parser = get_parser()
     assert parser is not None
 
 
 def test_rebuild_cache_handles_missing_dependencies():
     """Ensure rebuild_cache fails gracefully when required parsing dependencies are unavailable."""
-    # We poison the sys.modules for cloudpickle to trigger the ImportError
     with patch.dict("sys.modules", {"cloudpickle": None}):
         result = rebuild_cache()
         assert result is None
@@ -81,10 +75,8 @@ def test_resolve_dynamic_token_safely_handles_missing_parser():
 
 def test_main_gracefully_exits_on_empty_args_or_parser_failure(monkeypatch):
     """Ensure the CLI entrypoint exits cleanly when provided no arguments or when the parser fails."""
-    # Simulate zero arguments passed to the script
     monkeypatch.setattr(sys, "argv", ["complete.py"])
 
-    # Mock get_parser to return None
     with patch("pdftl.cli.complete.get_parser", return_value=None):
         with patch("sys.stdout", new_callable=io.StringIO):
             result = complete_main()
@@ -95,7 +87,6 @@ def test_module_execution_as_main_script(capsys):
     """Ensure the module can be executed directly as a script without raising unhandled errors."""
     import sys
 
-    # We use a context manager to ignore the specific runpy warning
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message=".*found in sys.modules.*"
@@ -105,7 +96,6 @@ def test_module_execution_as_main_script(capsys):
             with patch("pdftl.cli.complete.get_parser", return_value=None):
                 runpy.run_module("pdftl.cli.complete", run_name="__main__")
 
-    # This "swallows" the printed output so it doesn't spam your terminal
     capsys.readouterr()
 
 
@@ -113,24 +103,18 @@ def test_get_cache_dir_logic_branching():
     """Manually test both branches without causing path-separator collisions."""
     from pdftl.cli import complete
 
-    # 1. Test Windows logic branch
     with patch("pdftl.cli.complete.os") as mock_os:
         mock_os.name = "nt"
         mock_os.environ.get.return_value = None
         mock_os.path.expanduser.return_value = "C:\\Users\\test"
-        # Manually control join to return a Windows-looking string
         mock_os.path.join.return_value = "C:\\Users\\test\\AppData\\Local\\pdftl\\Cache"
 
         cache_dir = complete.get_cache_dir()
         assert "AppData\\Local" in cache_dir
 
-    # 2. Test POSIX logic branch
     with patch("pdftl.cli.complete.os") as mock_os:
         mock_os.name = "posix"
         mock_os.environ.get.return_value = "/custom/cache"
-
-        # Use posixpath.join to force forward slashes,
-        # even when running on Windows.
         mock_os.path.join.side_effect = posixpath.join
 
         cache_dir = complete.get_cache_dir()
@@ -142,7 +126,7 @@ def test_get_cache_dir_logic_branching():
 
 @pytest.fixture(autouse=True)
 def reset_global_cache():
-    """Wipes the memoization dict before/after every test to prevent 'leaky' state."""
+    """Wipes the memoization dict before/after every test to prevent state leaks."""
     from pdftl.cli.complete import _cache_check_results
 
     _cache_check_results.clear()
@@ -185,13 +169,20 @@ def test_simple_cache_key_generation(context, expected):
 
 def test_cache_io_lifecycle(mock_cache_env):
     """Verifies cache saving, auto-directory creation, and successful retrieval."""
-    # 1. Update (creates dir if missing)
     update_simple_cache("key", ["val"])
     assert mock_cache_env.exists()
 
-    # 2. Load Success
     with patch("pdftl.cli.complete.is_package_newer_than_cache", return_value=False):
         assert load_simple_cache() == {"key": ["val"]}
+
+
+def test_load_simple_cache_when_cache_file_missing():
+    """Verify load_simple_cache returns an empty dictionary when package is fresh but cache path does not exist."""
+    with (
+        patch("pdftl.cli.complete.is_package_newer_than_cache", return_value=False),
+        patch("os.path.exists", return_value=False),
+    ):
+        assert load_simple_cache() == {}
 
 
 def test_load_simple_cache_handles_corruption_safely():
@@ -210,7 +201,6 @@ def test_load_simple_cache_handles_corruption_safely():
 
 def test_update_simple_cache_bubbles_disk_errors():
     """Ensure cache generation bubbles up unwritable disk permission errors properly."""
-    # We mock load_simple_cache to return a dummy dict first
     with patch("pdftl.cli.complete.load_simple_cache", return_value={}):
         with patch("os.makedirs", side_effect=OSError("Permission Denied")):
             with pytest.raises(OSError, match="Permission Denied"):
@@ -226,14 +216,12 @@ def test_package_freshness_invalidation(tmp_path):
     with open(cache_file, "w") as f:
         f.write("data")
 
-    # Memoization hit test
     from pdftl.cli.complete import _cache_check_results
 
     _cache_check_results[cache_file] = "sentinel"
     assert is_package_newer_than_cache(cache_file) == "sentinel"
     _cache_check_results.clear()
 
-    # Package root is newer test
     with patch("os.path.getmtime", side_effect=[1000, 2000]):
         assert is_package_newer_than_cache(cache_file) is True
 
@@ -241,8 +229,23 @@ def test_package_freshness_invalidation(tmp_path):
 def test_windows_environment_appdata_resolution():
     """Verifies fallback cache directory structures handle Windows APPDATA paths correctly."""
     with patch("os.name", "nt"), patch.dict("os.environ", {"APPDATA": "C:\\App"}):
-        # We just need it to execute without crashing
         is_package_newer_than_cache("fake")
+
+
+def test_package_freshness_check_on_windows_systems(tmp_path):
+    """Verifies cache staleness checking logic on Windows platforms when the cache file exists."""
+    cache_file = str(tmp_path / "cache.bin")
+    with open(cache_file, "w") as f:
+        f.write("data")
+
+    with (
+        patch("os.name", "nt"),
+        patch.dict("os.environ", {"APPDATA": str(tmp_path)}),
+        patch("os.path.exists", return_value=True),
+        patch("os.path.getmtime", return_value=100),
+        patch("pdftl.cli.complete._any_path_newer_than", return_value=False),
+    ):
+        assert is_package_newer_than_cache(cache_file) is False
 
 
 # --- MAIN & PARSER FALLBACK TESTS ---
@@ -250,7 +253,6 @@ def test_windows_environment_appdata_resolution():
 
 def test_main_cli_cache_fast_path_and_parser_fallback(capsys):
     """Verifies main application logic respects cache shortcuts and handles fallback failures."""
-    # Fast-path hit in main
     with (
         patch("sys.argv", ["pdftl", "cat", ""]),
         patch("pdftl.cli.complete.simple_cache_key", return_value="k"),
@@ -259,13 +261,62 @@ def test_main_cli_cache_fast_path_and_parser_fallback(capsys):
         main()
         assert "--opt" in capsys.readouterr().out
 
-    # Parser failure path in main
     with (
         patch("sys.argv", ["pdftl", "cat", ""]),
         patch("pdftl.cli.complete.simple_cache_key", return_value=None),
         patch("pdftl.cli.complete.get_parser", return_value=None),
     ):
-        main()  # Should return early
+        main()
+
+
+def test_main_falls_back_to_parser_on_cache_miss():
+    """Verifies main proceeds to load parser when simple_context_key is valid but missing from cache."""
+    with (
+        patch("sys.argv", ["pdftl", "help", ""]),
+        patch("pdftl.cli.complete.simple_cache_key", return_value="__help"),
+        patch("pdftl.cli.complete.load_simple_cache", return_value={}),
+        patch("pdftl.cli.complete.get_parser", return_value=None) as mock_get_parser,
+    ):
+        main()
+        mock_get_parser.assert_called_once()
+
+
+def test_autocompletion_entrypoint_with_empty_context_and_cache_miss():
+    """Verify completion parser correctly handles execution with empty context during cache miss."""
+    from lark.exceptions import UnexpectedEOF
+
+    mock_parser = MagicMock()
+    exc = UnexpectedEOF(expected={"KW_EACH"})
+    mock_parser.parse.side_effect = exc
+
+    with (
+        patch("sys.argv", ["complete.py", ""]),
+        patch("pdftl.cli.complete.load_simple_cache", return_value={}),
+        patch("pdftl.cli.complete.get_parser", return_value=mock_parser),
+        patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+    ):
+        main()
+        output = mock_stdout.getvalue()
+        assert "EACH" in output
+
+
+def test_main_handles_parser_errors_without_unkeyable_context():
+    """Verifies parsing exception handling behavior when context produces no simple cache key."""
+    from lark.exceptions import UnexpectedToken
+
+    mock_parser = MagicMock()
+    exc = UnexpectedToken(token=MagicMock(), expected={"HELP_KW"})
+    mock_parser.parse.side_effect = exc
+
+    with (
+        patch("sys.argv", ["pdftl", "input.pdf", "unknown_cmd", ""]),
+        patch("pdftl.cli.complete.simple_cache_key", return_value=None),
+        patch("pdftl.cli.complete.get_parser", return_value=mock_parser),
+        patch("pdftl.cli.complete.update_simple_cache") as mock_update,
+        patch("sys.stdout", new_callable=io.StringIO),
+    ):
+        main()
+        mock_update.assert_not_called()
 
 
 def test_staleness_invalidation_via_critical_directory():
@@ -274,7 +325,6 @@ def test_staleness_invalidation_via_critical_directory():
 
     cache_file = "fake.cache"
 
-    # Sequence of mtimes designed to trigger specific invalidation thresholds
     with patch("os.path.exists", return_value=True):
         with patch("os.path.getmtime", side_effect=[1000, 500, 2000]):
             assert is_package_newer_than_cache(cache_file) is True
@@ -284,14 +334,12 @@ def test_windows_appdata_stale_cache_resolution():
     """Verify script logic correctly navigates Windows APPDATA structures during staleness checks."""
     from pdftl.cli.complete import is_package_newer_than_cache
 
-    # Force os.name to 'nt' to enter Windows path handling
     with (
         patch("os.name", "nt"),
         patch.dict("os.environ", {"APPDATA": "C:\\Users\\Test\\AppData"}),
         patch("os.path.exists", return_value=True),
         patch("os.path.getmtime", return_value=100),
     ):
-        # Result not needed, just confirming the target block executes safely
         is_package_newer_than_cache("fake.cache")
 
 
@@ -299,15 +347,12 @@ def test_cache_invalidates_when_script_is_modified(tmp_path):
     """Verify that updates strictly to the executing script reliably invalidate the cache."""
     from pdftl.cli.complete import _cache_check_results, is_package_newer_than_cache
 
-    # 1. Setup a dummy cache file
     cache_file = str(tmp_path / "cache.bin")
     with open(cache_file, "w") as f:
         f.write("test")
 
-    # 2. Reset global state
     _cache_check_results.clear()
 
-    # 3. Mtime mock generator to simulate an updated script file against an older cache
     def mtime_mock(path):
         if "complete.py" in str(path) or "__file__" in str(path):
             return 5000
@@ -323,14 +368,13 @@ def test_cache_invalidates_when_script_is_modified(tmp_path):
 
 
 def test_script_modification_takes_precedence_in_cache_checks():
-    """Ensure that the local script file's modification time unconditionally supersedes stale caches."""
+    """Ensure local script modification time unconditionally supersedes older cached state."""
     from pdftl.cli.complete import _cache_check_results, is_package_newer_than_cache
 
     _cache_check_results.clear()
     cache_file = os.path.abspath("must_be_newer.cache")
 
     def mtime_logic(path):
-        # Normalize paths for comparison
         path = os.path.abspath(str(path))
 
         if path == cache_file:
@@ -346,24 +390,36 @@ def test_script_modification_takes_precedence_in_cache_checks():
         patch("os.path.getmtime", side_effect=mtime_logic),
     ):
         result = is_package_newer_than_cache(cache_file)
-
-        if not result:
-            import pdb
-
-            pdb.set_trace()
-
         assert result is True
 
 
 def test_resolve_candidates_includes_args_flag_literal():
-    """Regression: ARGS_FLAG must resolve to the literal '--args' string."""
+    """Verify ARGS_FLAG correctly maps to the literal option flag."""
     mock_parser = MagicMock()
     candidates = resolve_candidates({"ARGS_FLAG"}, mock_parser)
     assert "--args" in candidates
 
 
 def test_resolve_candidates_args_flag_and_file_path_together():
-    """Simulate the state just after '--args' is typed: only FILE_PATH should be offered."""
+    """Verify option boundary handling when expecting file path parameters."""
     mock_parser = MagicMock()
     candidates = resolve_candidates({"FILE_PATH"}, mock_parser)
     assert candidates == {"__FILE__"}
+
+
+def test_resolve_dynamic_token_handles_unmatched_grammar_terminals():
+    """Ensure missing terminal definitions safely return empty candidate sets."""
+    mock_terminal = MagicMock()
+    mock_terminal.name = "UNRELATED_TERMINAL"
+    mock_parser = MagicMock()
+    mock_parser.terminals = [mock_terminal]
+
+    assert resolve_candidates({"HELP_SUB_KW"}, mock_parser) == set()
+    assert resolve_candidates({"KW_NONEXISTENT"}, mock_parser) == set()
+
+
+def test_output_candidates_filters_unmatched_prefix(capsys):
+    """Verify candidate output streaming filters items that do not match the typed prefix."""
+    output_candidates(["apple", "banana"], current_partial="b")
+    captured = capsys.readouterr().out.splitlines()
+    assert captured == ["banana"]

@@ -4,6 +4,17 @@ if TYPE_CHECKING:
     pass
 
 
+def _get_obj_id(obj) -> int:
+    """Extracts a non-zero indirect PDF object ID, returning 0 for direct or invalid objects."""
+    try:
+        objgen = getattr(obj, "objgen", None)
+        if objgen and objgen[0] != 0:
+            return int(objgen[0])
+    except (AttributeError, TypeError, IndexError):
+        pass
+    return 0
+
+
 def get_xobject_ocg_ids(xobj) -> set:
     """Extracts a set of OCG object IDs from an XObject's /OC dictionary."""
     import pikepdf
@@ -19,10 +30,9 @@ def get_xobject_ocg_ids(xobj) -> set:
     if oc.get("/Type") == "/OCMD":
         return _ocg_ids_from_ocmd(oc.get("/OCGs"), pikepdf.Array)
 
-    # Sometimes it's just a direct reference to an OCG
-    if oc.get("/Type") == "/OCG" or hasattr(oc, "objgen"):
-        if oc.objgen[0] != 0:
-            return {int(oc.objgen[0])}
+    obj_id = _get_obj_id(oc)
+    if obj_id:
+        return {obj_id}
 
     return set()
 
@@ -31,10 +41,13 @@ def _ocg_ids_from_ocmd(ocgs, pikepdf_array):
     ocg_ids = set()
     if isinstance(ocgs, pikepdf_array):
         for o in ocgs:
-            if hasattr(o, "objgen"):
-                ocg_ids.add(int(o.objgen[0]))
-    elif hasattr(ocgs, "objgen"):
-        ocg_ids.add(int(ocgs.objgen[0]))
+            obj_id = _get_obj_id(o)
+            if obj_id:
+                ocg_ids.add(obj_id)
+    else:
+        obj_id = _get_obj_id(ocgs)
+        if obj_id:
+            ocg_ids.add(obj_id)
     return ocg_ids
 
 
@@ -53,18 +66,28 @@ def get_page_layer_map(resources) -> tuple[dict, dict]:
 
     # 1. Map /Properties (Used for inline BDC tags)
     if "/Properties" in resources:
-        for local_name, pdf_obj in resources.Properties.items():
-            if isinstance(pdf_obj, pikepdf.Dictionary) and pdf_obj.get("/Type") == "/OCG":
-                prop_map[str(local_name)] = int(pdf_obj.objgen[0])
+        _copy_to_prop_map(resources.Properties, prop_map, pikepdf.Dictionary)
 
     # 2. Map /XObject (Used for 'Do' commands)
     if "/XObject" in resources:
-        for local_name, xobj in resources.XObject.items():
-            ocg_ids = get_xobject_ocg_ids(xobj)
-            if ocg_ids:
-                xobj_map[str(local_name)] = ocg_ids
+        _copy_to_xobj_map(resources.XObject, xobj_map)
 
     return prop_map, xobj_map
+
+
+def _copy_to_prop_map(resources_properties, prop_map, pikepdf_dictionary):
+    for local_name, pdf_obj in resources_properties.items():
+        if isinstance(pdf_obj, pikepdf_dictionary) and pdf_obj.get("/Type") == "/OCG":
+            obj_id = _get_obj_id(pdf_obj)
+            if obj_id:
+                prop_map[str(local_name)] = obj_id
+
+
+def _copy_to_xobj_map(resources_xobject, xobj_map):
+    for local_name, xobj in resources_xobject.items():
+        ocg_ids = get_xobject_ocg_ids(xobj)
+        if ocg_ids:
+            xobj_map[str(local_name)] = ocg_ids
 
 
 def _remove_targets_from_array(node, target_ids: set):
@@ -77,8 +100,9 @@ def _remove_targets_from_array(node, target_ids: set):
             _remove_targets_from_array(item, target_ids)
             if len(item) == 0:
                 del node[i]
-        elif hasattr(item, "objgen"):
-            if item.objgen[0] in target_ids:
+        else:
+            obj_id = _get_obj_id(item)
+            if obj_id and obj_id in target_ids:
                 del node[i]
 
 
@@ -182,9 +206,7 @@ def set_layer_state(pdf, target_ids: set, action: str):
         return d_dict[key]
 
     ocgs = pdf.Root.OCProperties.get("/OCGs", [])
-    target_ocgs = [
-        ocg for ocg in ocgs if hasattr(ocg, "objgen") and int(ocg.objgen[0]) in target_ids
-    ]
+    target_ocgs = [ocg for ocg in ocgs if _get_obj_id(ocg) in target_ids]
 
     if not target_ocgs:
         return
@@ -222,7 +244,7 @@ def set_layer_usage(pdf, target_ids: set, action: str):
 
 
 def _process_ocg_layer_usage(ocg, action, target_ids, pikepdf_dictionary, pikepdf_name):
-    if not (hasattr(ocg, "objgen") and int(ocg.objgen[0]) in target_ids):
+    if _get_obj_id(ocg) not in target_ids:
         return
 
     if "/Usage" not in ocg:

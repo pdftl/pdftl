@@ -338,3 +338,106 @@ def test_set_layer_usage_skip_unmatched_targets():
 
     # Assert the layer was skipped and NOT modified
     assert "/Usage" not in l1
+
+
+def test_get_xobject_ocg_ids_other_dict_type():
+    """Ensures XObjects referencing non-OCG dictionaries without indirect object IDs return an empty set."""
+    xobj = pikepdf.Dictionary(OC=pikepdf.Dictionary(Type="/OtherType"))
+    assert get_xobject_ocg_ids(xobj) == set()
+
+
+def test_ocg_ids_from_ocmd_branches():
+    """Ensures OCMD parser safely handles items or collections lacking indirect object IDs."""
+    from pdftl.utils.ocg import _ocg_ids_from_ocmd
+
+    class ItemWithoutObjgen:
+        pass
+
+    # 1. Element in array without objgen (covers branch 34->33)
+    assert _ocg_ids_from_ocmd([ItemWithoutObjgen()], list) == set()
+
+    # 2. Non-array object without objgen (covers branch 36->38)
+    assert _ocg_ids_from_ocmd(ItemWithoutObjgen(), list) == set()
+
+
+def test_get_page_layer_map_non_ocg_properties_and_empty_xobj_ocg():
+    """Ensures page layer mapping skips non-OCG property entries and XObjects without OCG IDs."""
+    pdf = pikepdf.Pdf.new()
+    xobj = pdf.make_stream(b"")  # No /OC, so get_xobject_ocg_ids(xobj) returns set()
+
+    resources = pikepdf.Dictionary(
+        Properties=pikepdf.Dictionary(
+            NotAnOCG=pikepdf.Dictionary(Type="/NotOCG"),
+            SimpleVal=123,
+        ),
+        XObject=pikepdf.Dictionary(Fm0=xobj),
+    )
+
+    prop_map, xobj_map = get_page_layer_map(resources)
+    assert prop_map == {}
+    assert xobj_map == {}
+
+
+def test_clean_ocproperties_missing_ocgs_and_config_keys():
+    """Ensures OCProperties cleaning handles missing OCG lists and incomplete config dictionaries gracefully."""
+    pdf = pikepdf.Pdf.new()
+    # OCProperties exists without OCGs key, and Configs array contains an empty dictionary
+    pdf.Root.OCProperties = pikepdf.Dictionary(Configs=pikepdf.Array([pikepdf.Dictionary()]))
+
+    clean_ocproperties(pdf, {1})
+
+
+def test_set_layer_state_unknown_action():
+    """Ensures set_layer_state safely ignores unrecognized layer actions."""
+    pdf = pikepdf.Pdf.new()
+    l1 = create_layer(pdf, "Layer1")
+    id1 = int(l1.objgen[0])
+
+    set_layer_state(pdf, {id1}, "invalid_action")
+
+
+def test_set_layer_usage_unknown_action():
+    """Ensures set_layer_usage safely ignores unrecognized usage actions."""
+    pdf = pikepdf.Pdf.new()
+    l1 = create_layer(pdf, "Layer1")
+    id1 = int(l1.objgen[0])
+
+    set_layer_usage(pdf, {id1}, "invalid_action")
+
+
+def test_get_xobject_ocg_ids_ignores_non_ocg_dictionary():
+    """Ensures XObjects referencing non-OCG dictionaries return an empty set."""
+    xobj = pikepdf.Dictionary(OC=pikepdf.Dictionary(Type=pikepdf.Name("/OtherType")))
+    assert get_xobject_ocg_ids(xobj) == set()
+
+
+from pdftl.utils.ocg import _get_obj_id
+
+
+def test_get_obj_id_returns_zero_on_malformed_objgen():
+    """Ensures _get_obj_id handles objects with empty or malformed objgen tuples gracefully."""
+
+    class MalformedObjgen:
+        objgen = ()
+
+    assert _get_obj_id(MalformedObjgen()) == 0
+
+
+def test_get_page_layer_map_ignores_direct_ocg_properties():
+    """Ensures direct (unattached) OCG dictionaries are excluded from the property map."""
+    direct_ocg = pikepdf.Dictionary(Type=pikepdf.Name.OCG)
+    resources = pikepdf.Dictionary(Properties=pikepdf.Dictionary(Layer1=direct_ocg))
+
+    prop_map, xobj_map = get_page_layer_map(resources)
+
+    assert prop_map == {}
+    assert xobj_map == {}
+
+
+def test_get_obj_id_returns_zero_on_invalid_objgen_types():
+    """Ensures _get_obj_id gracefully handles objects containing non-integer objgen values."""
+
+    class InvalidObjgen:
+        objgen = (None,)
+
+    assert _get_obj_id(InvalidObjgen()) == 0

@@ -1457,3 +1457,37 @@ class TestGeneratorDataResultUnpacking:
         # closing it because pipeline_pdf is a generator, not a Pdf.
         source_pdf.close.assert_not_called()
         assert manager.pipeline_pdf is generator_holder["gen"]
+
+
+def test_pipeline_run_no_pdf_in_finally():
+    """Ensures pipeline cleanup executes safely when pipeline_pdf remains uninitialized."""
+    manager = PipelineManager(stages=[], input_context=MagicMock(), is_inline=False)
+    manager.run()
+    assert manager.pipeline_pdf is None
+
+
+def test_output_targets_info_first_stage_no_inputs():
+    """Ensures _output_targets_info handles initial pipeline stages without input specifications."""
+    stage = CliStage(inputs=[])
+    manager = PipelineManager(stages=[], input_context=MagicMock())
+    manager._output_targets_info(stage, is_first=True)
+
+
+def test_get_subpipeline_output_pdf_handle_branch_skips(monkeypatch):
+    """Ensures subpipeline handle resolution safely skips out-of-bounds or future stage handles."""
+    parent_stage = CliStage(handles={"H_FUTURE": 5, "H_OUT_OF_BOUNDS": 0})
+    inline_item = InlineSubPipeline(stages=[])
+    manager = PipelineManager(stages=[parent_stage], input_context=MagicMock())
+
+    def simulate_inline_run(self_instance):
+        self_instance.pipeline_pdf = MagicMock()
+
+    monkeypatch.setattr(PipelineManager, "run", simulate_inline_run)
+
+    res = manager._get_subpipeline_output_pdf(
+        stage=parent_stage,
+        item_idx=1,
+        item=inline_item,
+        opened_pdfs=[],
+    )
+    assert res is not None
