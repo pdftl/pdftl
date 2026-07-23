@@ -92,4 +92,4 @@ echo "Constructing pytest run..."
 echo "Running: pytest ${TEST_PATHS[*]} ${COV_ARGS[*]} --cov-report=term-missing ${EXTRA_ARGS[*]}"
 echo "----------------------------------------------------------------------"
 
-pytest "${TEST_PATHS[@]}" "${COV_ARGS[@]}" --cov-report=term-missing "${EXTRA_ARGS[@]}"
+pytest "${TEST_PATHS[@]}" "${COV_ARGS[@]}" --cov-branch --cov-report=term-missing "${EXTRA_ARGS[@]}"
