@@ -48,6 +48,30 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _install_fast_eexec_decrypt() -> None:
+    """Replaces fontTools.misc.eexec.decrypt with an optimized bytearray
+    implementation on first call, avoiding millions of Python function call
+    frames during Type 1 eexec decryption."""
+    import fontTools.misc.eexec as ft_eexec
+
+    if getattr(ft_eexec, "_pdftl_fast_patched", False):
+        return
+
+    def _fast_decrypt(cipherstring: bytes | str, R: int) -> tuple[bytes, int]:
+        if isinstance(cipherstring, str):
+            cipherstring = cipherstring.encode("latin-1")
+        res = bytearray(len(cipherstring))
+        m1, m2 = 52845, 22719
+        mask16, mask8 = 0xFFFF, 0xFF
+        for i, c in enumerate(cipherstring):
+            res[i] = (c ^ (R >> 8)) & mask8
+            R = ((c + R) * m1 + m2) & mask16
+        return bytes(res), int(R)
+
+    ft_eexec.decrypt = _fast_decrypt
+    ft_eexec._pdftl_fast_patched = True
+
+
 # The standard Type 1 cleartext trailer (Adobe Type 1 Font Format,
 # Chapter 7): 512 zero characters as 8 lines of 64, followed by
 # `cleartomark`. fontTools.t1Lib's own EEXECEND regex requires exactly
@@ -83,6 +107,7 @@ def open_type1_font_bytes(t1_bytes: bytes) -> Any | None:
     exactly that error is retried once with a synthesized trailer
     (_SYNTHETIC_TYPE1_TRAILER) appended, before giving up.
     """
+    _install_fast_eexec_decrypt()
     from fontTools.misc.psLib import PSError, PSTokenError
     from fontTools.t1Lib import T1Error, T1Font
 

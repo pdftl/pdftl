@@ -486,3 +486,44 @@ class TestType1ToCffCoverageExtensions:
         names = _glyph_names_in_cff(result)
         assert "A" in names
         assert ".notdef" in names
+
+
+from unittest.mock import patch
+
+
+class TestType1ToCffExceptionHandling:
+    def test_open_type1_font_bytes_handles_index_error(self, three_glyph_type1_bytes):
+        """Ensures open_type1_font_bytes catches IndexError raised during parsing
+
+        and cleanly returns None.
+        """
+        with patch(
+            "fontTools.t1Lib.T1Font.parse", side_effect=IndexError("simulated index error")
+        ):
+            result = open_type1_font_bytes(three_glyph_type1_bytes)
+            assert result is None
+
+
+import fontTools.misc.eexec as ft_eexec
+from pdftl.fonts.type1_to_cff import _install_fast_eexec_decrypt
+
+
+class TestFastEexecDecrypt:
+    def test_fast_decrypt_accepts_str_cipherstring(self):
+        """Exercises line 62 by passing a str cipherstring to the patched
+
+        ft_eexec.decrypt function, verifying latin-1 string encoding.
+        """
+        _install_fast_eexec_decrypt()
+
+        cipher_str = "abcd"
+        R_initial = 55665
+
+        # Call with str input to trigger `isinstance(cipherstring, str)`
+        result_bytes, R_out = ft_eexec.decrypt(cipher_str, R_initial)
+
+        # Compare against calling directly with bytes
+        expected_bytes, expected_R = ft_eexec.decrypt(cipher_str.encode("latin-1"), R_initial)
+
+        assert result_bytes == expected_bytes
+        assert R_out == expected_R

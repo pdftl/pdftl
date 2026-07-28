@@ -33,6 +33,8 @@ never drift out of sync with its own surviving glyph set.
 
 from __future__ import annotations
 
+import random
+import string
 import dataclasses
 import logging
 import tempfile
@@ -60,6 +62,7 @@ from pdftl.operations.helpers.font_ops_shared import get_target_pages
 from pdftl.operations.helpers.font_subset_scan import collect_used_codes
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.keyval_parser import parse_keyval_list
+from pdftl.fonts.font_extraction_utils import SUBSET_PREFIX_RE
 
 if TYPE_CHECKING:
     import pikepdf
@@ -230,6 +233,86 @@ def _descriptor_identity(descriptor: Any) -> Any:
     if objgen and objgen != (0, 0):
         return objgen
     return id(descriptor)
+
+
+def _generate_subset_tag() -> str:
+    """A random 6-uppercase-letter subset tag per ISO 32000-2 9.6.4.3
+    ("AAAAAA+FontName"). Six letters gives 26**6 (~309M) combinations,
+    which is plenty to make an accidental collision between two
+    different subsets in the same document negligible."""
+    return "".join(random.choices(string.ascii_uppercase, k=6))
+
+
+def _tag_name(raw_name: str, tag: str) -> str:
+    """Prepends `tag` to `raw_name`, replacing any existing subset tag
+    rather than stacking a second one on top of it."""
+    base = raw_name.split("+", 1)[-1] if SUBSET_PREFIX_RE.match(raw_name) else raw_name
+    return f"{tag}+{base}"
+
+
+def _update_descendant_font(font_obj: Any, new_name: str | None, pikepdf_mod: Any) -> None:
+    if (
+        not new_name
+        or str(font_obj.get("/Subtype", "")) != "/Type0"
+        or "/DescendantFonts" not in font_obj
+    ):
+        return
+    try:
+        descendant = font_obj.DescendantFonts[0]
+        descendant["/BaseFont"] = pikepdf_mod.Name(f"/{new_name}")
+    except (AttributeError, IndexError, TypeError):
+        pass
+
+
+def _update_descriptor(
+    descriptor: Any,
+    raw_base: str,
+    tag: str,
+    seen_descriptors: dict[Any, None],
+    pikepdf_mod: Any,
+) -> None:
+    if descriptor is None:
+        return
+    desc_key = _descriptor_identity(descriptor)
+    if desc_key in seen_descriptors:
+        return
+    seen_descriptors[desc_key] = None
+
+    desc_raw = str(descriptor.get("/FontName", "")).lstrip("/") or raw_base
+    desc_new = _tag_name(desc_raw, tag) if desc_raw else None
+    if desc_new:
+        descriptor["/FontName"] = pikepdf_mod.Name(f"/{desc_new}")
+
+
+def _apply_subset_tag(group_entries: list[tuple[Any, Any, set[int]]], pikepdf_mod: Any) -> None:
+    """
+    Ensures every distinct /Font dict (and its /FontDescriptor, and any
+    Type0 descendant CIDFont) in a just-subsetted group carries a subset
+    tag reflecting that its embedded program no longer contains the full
+    original glyph set -- per ISO 32000-2 9.6.4.3. A single tag is
+    generated ONCE per group (not per /Font dict), since every entry in
+    group_entries shares one physical, now-unioned font program: giving
+    them different tags would violate the spec's "same tag <=> same
+    glyph set" requirement just as surely as leaving them untagged does.
+
+    A /Font dict that already carries a tag is re-tagged too, since
+    subsetting further shrinks its underlying program's glyph set to a
+    (possibly different) subset of what the old tag was assigned for.
+    """
+    tag = _generate_subset_tag()
+
+    seen_descriptors: dict[Any, None] = {}
+    for font_obj, descriptor, _codes in group_entries:
+        raw_base = str(font_obj.get("/BaseFont", "")).lstrip("/")
+        new_name = _tag_name(raw_base, tag) if raw_base else None
+
+        # BaseFont lives on the individual /Font dict -- write it for
+        # EVERY entry, even when several entries share one descriptor.
+        if new_name:
+            font_obj["/BaseFont"] = pikepdf_mod.Name(f"/{new_name}")
+
+        _update_descendant_font(font_obj, new_name, pikepdf_mod)
+        _update_descriptor(descriptor, raw_base, tag, seen_descriptors, pikepdf_mod)
 
 
 def _subset_type1_font_group_binary(group_entries: list[tuple[Any, Any, set[int]]]) -> bool:
@@ -607,6 +690,8 @@ def _subset_and_resync_group(
 
     if not rewrote:
         return 0, None
+
+    _apply_subset_tag(group_entries, pikepdf_mod)
 
     resynced = 0
     for font_obj, descriptor, _codes in group_entries:

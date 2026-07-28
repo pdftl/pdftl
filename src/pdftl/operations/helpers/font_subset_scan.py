@@ -108,12 +108,6 @@ class _PageFontCodeScanner:
         self._current_font_key = _font_key(font_obj, scope_key=(id(self._font_dict), str(name)))
         subtype = str(font_obj.get("/Subtype", ""))
         self._current_bytes_per_code = 2 if subtype == "/Type0" else 1
-        logger.debug(
-            "[SCANNER] Selected font '%s' -> key: %s, subtype: %s",
-            name,
-            self._current_font_key,
-            subtype,
-        )
 
     def record_string(self, data: bytes) -> None:
         if self._current_font_obj is None:
@@ -125,12 +119,6 @@ class _PageFontCodeScanner:
         for i in range(0, len(data) - step + 1, step):
             codes.add(int.from_bytes(data[i : i + step], "big"))
         self._resolved[font_key] = self._current_font_obj
-        logger.debug(
-            "[SCANNER] Recorded %d bytes for font key %s (total unique codes: %d)",
-            len(data),
-            font_key,
-            len(codes),
-        )
 
     def handle_do(self, name: Any) -> None:
         if self._xobject_dict is None:
@@ -187,7 +175,6 @@ def _handle_TJ_operator(scanner: _PageFontCodeScanner, operands: list, pikepdf_m
     if not operands:
         return
     for item in operands[0]:
-        logger.debug("[SCANNER] TJ array item type: %s, value: %r", type(item), item)
         if isinstance(item, (pikepdf_mod.String, bytes)):
             scanner.record_string(bytes(item))
 
@@ -252,7 +239,7 @@ def _scan_stream(
     try:
         instructions = pikepdf.parse_content_stream(stream_obj)
         for operands, operator in instructions:
-            logger.debug("[AP STREAM OP] %s : %r", operator, operands)
+            # logger.debug("[AP STREAM OP] %s : %r", operator, operands)
             _apply_text_showing_operator(scanner, str(operator), list(operands), pikepdf)
     except (pikepdf.PdfError, ValueError, TypeError, AttributeError) as e:
         # A malformed content stream shouldn't abort scanning every other

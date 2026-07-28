@@ -31,6 +31,7 @@ from pdftl.operations.subset_fonts import (
     _widths_cid_to_gid_map,
     subset_fonts,
 )
+from pdftl.operations import subset_fonts as sf
 
 
 def _create_dummy_cid_ttf() -> bytes:
@@ -984,12 +985,6 @@ def test_get_simple_font_encoding_differences_without_base_encoding():
     assert base is None
 
 
-# --- append to tests/operations/test_subset_fonts.py ---
-
-
-from pdftl.operations import subset_fonts as sf
-
-
 def test_named_base_encoding_without_differences_uses_encoding_path():
     """/Encoding /WinAnsiEncoding as a bare Name (no /Differences dict)
     must still resolve glyphs via the PDF's own encoding table, not the
@@ -1060,9 +1055,6 @@ def test_bare_cff_always_uses_encoding_path_regardless_of_encoding():
 
     via_enc.assert_called_once()
     via_cmap.assert_not_called()
-
-
-# --- append to tests/operations/test_subset_fonts.py ---
 
 
 def test_log_subset_stat_type1_conversion_branch():
@@ -1161,3 +1153,585 @@ def test_subset_fonts_end_to_end_mixes_a_skipped_and_a_successful_group():
 
     result = subset_fonts(pdf, [])
     assert result.success
+
+
+# --- append to tests/operations/test_subset_fonts.py ---
+
+
+def test_generate_subset_tag_shape():
+    """Tag must be exactly 6 uppercase ASCII letters, per ISO 32000-2 9.6.4.3."""
+    import re
+
+    from pdftl.operations.subset_fonts import _generate_subset_tag
+
+    for _ in range(20):
+        tag = _generate_subset_tag()
+        assert re.fullmatch(r"[A-Z]{6}", tag), f"tag {tag!r} doesn't match AAAAAA shape"
+
+
+def test_tag_name_untagged_name_gets_prefixed():
+    from pdftl.operations.subset_fonts import _tag_name
+
+    assert _tag_name("Helvetica-Bold", "QWERTY") == "QWERTY+Helvetica-Bold"
+
+
+def test_tag_name_replaces_existing_tag_rather_than_stacking():
+    """A name that already carries a subset tag must have that tag
+    REPLACED by the new one, not have a second tag prepended in front
+    of it (which would produce an invalid, doubly-tagged BaseFont)."""
+    from pdftl.operations.subset_fonts import _tag_name
+
+    assert _tag_name("ABCDEF+Helvetica-Bold", "QWERTY") == "QWERTY+Helvetica-Bold"
+
+
+def test_tag_name_only_matches_true_subset_prefix_shape():
+    """A name that merely CONTAINS a '+' but doesn't match the strict
+    6-uppercase-letter subset-prefix shape (e.g. a font family name
+    that legitimately contains a plus sign) must be treated as
+    untagged -- the whole string is the base name, not split on '+'."""
+    from pdftl.operations.subset_fonts import _tag_name
+
+    # "ABCDE+Rest" -- only 5 letters before '+', not 6 -- must NOT match
+    assert _tag_name("ABCDE+Rest", "QWERTY") == "QWERTY+ABCDE+Rest"
+    # lowercase letters before '+' must NOT match either
+    assert _tag_name("abcdef+Rest", "QWERTY") == "QWERTY+abcdef+Rest"
+
+
+def test_apply_subset_tag_single_simple_font():
+    """A single simple (non-Type0) /Font dict gets BaseFont tagged, and
+    its FontDescriptor's /FontName gets the SAME tag."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/TestFont"),
+            }
+        )
+    )
+    font_obj = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/TrueType"),
+                "/BaseFont": pikepdf.Name("/TestFont"),
+                "/FontDescriptor": descriptor,
+            }
+        )
+    )
+
+    _apply_subset_tag([(font_obj, descriptor, {65})], pikepdf)
+
+    new_base = str(font_obj["/BaseFont"]).lstrip("/")
+    new_desc_name = str(descriptor["/FontName"]).lstrip("/")
+
+    assert new_base.endswith("+TestFont")
+    assert new_desc_name.endswith("+TestFont")
+    # Same tag on both.
+    assert new_base.split("+")[0] == new_desc_name.split("+")[0]
+    assert len(new_base.split("+")[0]) == 6
+
+
+def test_apply_subset_tag_type0_tags_descendant_cidfont_basefont_too():
+    """A Type0 wrapper font's descendant CIDFont /BaseFont must be
+    tagged with the SAME tag as the Type0 wrapper's own /BaseFont."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/TestCIDFont"),
+            }
+        )
+    )
+    cid_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/BaseFont": pikepdf.Name("/TestCIDFont"),
+                "/FontDescriptor": descriptor,
+            }
+        )
+    )
+    type0_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/Type0"),
+                "/BaseFont": pikepdf.Name("/TestCIDFont"),
+                "/DescendantFonts": pikepdf.Array([cid_font]),
+            }
+        )
+    )
+
+    _apply_subset_tag([(type0_font, descriptor, {65})], pikepdf)
+
+    wrapper_base = str(type0_font["/BaseFont"]).lstrip("/")
+    descendant = type0_font["/DescendantFonts"][0]
+    descendant_base = str(descendant["/BaseFont"]).lstrip("/")
+
+    assert wrapper_base.endswith("+TestCIDFont")
+    assert descendant_base == wrapper_base, (
+        "Type0 wrapper and its descendant CIDFont must carry the identical tagged BaseFont"
+    )
+
+
+def test_apply_subset_tag_type0_missing_descendant_fonts_array_entry_is_safe():
+    """A malformed Type0 dict whose /DescendantFonts array is present
+    but empty must not raise -- the try/except around descendant
+    access must swallow the IndexError."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/FontDescriptor")}))
+    type0_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/Type0"),
+                "/BaseFont": pikepdf.Name("/TestCIDFont"),
+                "/DescendantFonts": pikepdf.Array([]),
+            }
+        )
+    )
+
+    # Must not raise.
+    _apply_subset_tag([(type0_font, descriptor, {65})], pikepdf)
+    assert str(type0_font["/BaseFont"]).lstrip("/").endswith("+TestCIDFont")
+
+
+def test_apply_subset_tag_already_tagged_font_gets_retagged_not_stacked():
+    """A /Font dict that arrives already carrying an old subset tag
+    (e.g. from a prior subsetting pass, or produced pre-tagged by
+    another tool) must have that OLD tag replaced by the fresh one --
+    never have the new tag stacked in front of the old one."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/OLDTAG+TestFont"),
+            }
+        )
+    )
+    font_obj = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/BaseFont": pikepdf.Name("/OLDTAG+TestFont"),
+                "/FontDescriptor": descriptor,
+            }
+        )
+    )
+
+    _apply_subset_tag([(font_obj, descriptor, {65})], pikepdf)
+
+    new_base = str(font_obj["/BaseFont"]).lstrip("/")
+    assert new_base.endswith("+TestFont")
+    assert new_base.count("+") == 1, "old tag must be replaced, not stacked"
+    assert not new_base.startswith("OLDTAG+")
+
+
+def test_apply_subset_tag_regression_shared_descriptor_all_dicts_tagged_identically():
+    """
+    Regression test for the exact bug shape found in review: N distinct
+    /Font dictionaries sharing ONE physical font program (and therefore
+    one FontDescriptor object) must ALL end up with:
+      - their own /BaseFont tagged (every entry, not just the first)
+      - the identical 6-letter tag across all N (same glyph set <=>
+        same tag, per spec)
+      - the shared /FontDescriptor's /FontName written with that SAME
+        tag exactly once (not once per entry)
+
+    This is precisely the case the first-pass implementation got wrong:
+    deduping by descriptor identity accidentally skipped the per-font
+    BaseFont write for every entry after the first, leaving only 1 of N
+    dicts sharing one program actually tagged.
+    """
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    shared_descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/MnSymbol9"),
+            }
+        )
+    )
+
+    N = 5
+    font_dicts = []
+    for i in range(N):
+        font_dicts.append(
+            pdf.make_indirect(
+                pikepdf.Dictionary(
+                    {
+                        "/Type": pikepdf.Name("/Font"),
+                        "/Subtype": pikepdf.Name("/Type1"),
+                        "/BaseFont": pikepdf.Name("/MnSymbol9"),
+                        "/FontDescriptor": shared_descriptor,
+                    }
+                )
+            )
+        )
+
+    group_entries = [(f, shared_descriptor, {65 + i}) for i, f in enumerate(font_dicts)]
+
+    with patch("pdftl.operations.subset_fonts._generate_subset_tag", return_value="FHRRVH"):
+        _apply_subset_tag(group_entries, pikepdf)
+
+    # Every one of the N /Font dicts must be tagged -- not just the first.
+    tagged_basefonts = {str(f["/BaseFont"]).lstrip("/") for f in font_dicts}
+    assert tagged_basefonts == {"FHRRVH+MnSymbol9"}, (
+        f"expected all {N} /Font dicts tagged identically, got {tagged_basefonts}"
+    )
+
+    # The shared descriptor's /FontName carries the SAME tag.
+    assert str(shared_descriptor["/FontName"]).lstrip("/") == "FHRRVH+MnSymbol9"
+
+
+def test_apply_subset_tag_shared_descriptor_writes_fontname_once_not_per_entry():
+    """The shared /FontDescriptor's /FontName write must happen exactly
+    ONCE per distinct descriptor object, even with N entries pointing
+    at it -- verified here by spying on dict.__setitem__-equivalent
+    write count via a wrapping mock rather than just checking the final
+    value (which would pass even if it were written N times with the
+    same tag, masking a wasteful-write regression)."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    shared_descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/MnSymbol6"),
+            }
+        )
+    )
+    font_dicts = [
+        pdf.make_indirect(
+            pikepdf.Dictionary(
+                {
+                    "/Type": pikepdf.Name("/Font"),
+                    "/BaseFont": pikepdf.Name("/MnSymbol6"),
+                    "/FontDescriptor": shared_descriptor,
+                }
+            )
+        )
+        for _ in range(4)
+    ]
+    group_entries = [(f, shared_descriptor, {65}) for f in font_dicts]
+
+    write_count = {"n": 0}
+    real_setitem = pikepdf.Object.__setitem__
+
+    def counting_setitem(self, key, value):
+        if self is shared_descriptor and key == "/FontName":
+            write_count["n"] += 1
+        return real_setitem(self, key, value)
+
+    with patch.object(pikepdf.Object, "__setitem__", counting_setitem):
+        _apply_subset_tag(group_entries, pikepdf)
+
+    assert write_count["n"] == 1, (
+        f"expected exactly 1 write to the shared descriptor's /FontName, got {write_count['n']}"
+    )
+
+
+def test_apply_subset_tag_two_independent_groups_get_different_tags():
+    """Two SEPARATE calls to _apply_subset_tag (i.e. two distinct font
+    programs / groups in the same document) must not collide on the
+    same tag in the overwhelmingly common case -- confirms a fresh tag
+    is generated per call, not memoized/reused across groups."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+
+    def make_entry(name):
+        descriptor = pdf.make_indirect(
+            pikepdf.Dictionary(
+                {"/Type": pikepdf.Name("/FontDescriptor"), "/FontName": pikepdf.Name(f"/{name}")}
+            )
+        )
+        font_obj = pdf.make_indirect(
+            pikepdf.Dictionary(
+                {
+                    "/Type": pikepdf.Name("/Font"),
+                    "/BaseFont": pikepdf.Name(f"/{name}"),
+                    "/FontDescriptor": descriptor,
+                }
+            )
+        )
+        return font_obj, descriptor
+
+    font_a, desc_a = make_entry("FontA")
+    font_b, desc_b = make_entry("FontB")
+
+    _apply_subset_tag([(font_a, desc_a, {65})], pikepdf)
+    _apply_subset_tag([(font_b, desc_b, {66})], pikepdf)
+
+    tag_a = str(font_a["/BaseFont"]).lstrip("/").split("+")[0]
+    tag_b = str(font_b["/BaseFont"]).lstrip("/").split("+")[0]
+    # Not a hard guarantee (26**6 space), but any test failure here on
+    # a random seed would itself be a red flag worth looking at.
+    assert tag_a != tag_b
+
+
+def test_apply_subset_tag_no_basefont_leaves_no_basefont_key():
+    """A /Font dict with no /BaseFont at all (legal, if unusual, PDF)
+    must not have a spurious /BaseFont key created out of thin air --
+    new_name is None and the write is skipped entirely."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {"/Type": pikepdf.Name("/FontDescriptor"), "/FontName": pikepdf.Name("/Fallback")}
+        )
+    )
+    font_obj = pdf.make_indirect(
+        pikepdf.Dictionary({"/Type": pikepdf.Name("/Font"), "/FontDescriptor": descriptor})
+    )
+
+    _apply_subset_tag([(font_obj, descriptor, {65})], pikepdf)
+
+    assert "/BaseFont" not in font_obj
+    # FontDescriptor still gets tagged, falling back to its own /FontName.
+    assert str(descriptor["/FontName"]).lstrip("/").endswith("+Fallback")
+
+
+def test_apply_subset_tag_descriptor_falls_back_to_basefont_when_no_fontname():
+    """A FontDescriptor with no /FontName of its own must fall back to
+    the /Font dict's /BaseFont as the name to tag, per the `or raw_base`
+    fallback in _apply_subset_tag."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/FontDescriptor")}))
+    font_obj = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/BaseFont": pikepdf.Name("/OnlyOnFontDict"),
+                "/FontDescriptor": descriptor,
+            }
+        )
+    )
+
+    _apply_subset_tag([(font_obj, descriptor, {65})], pikepdf)
+
+    assert str(descriptor["/FontName"]).lstrip("/").endswith("+OnlyOnFontDict")
+
+
+def test_apply_subset_tag_no_descriptor_at_all_only_tags_basefont():
+    """group_entries can carry descriptor=None in principle (defensive
+    per the `if descriptor is not None` guard) -- must tag /BaseFont
+    without raising trying to touch a None descriptor."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    font_obj = pdf.make_indirect(
+        pikepdf.Dictionary({"/Type": pikepdf.Name("/Font"), "/BaseFont": pikepdf.Name("/Solo")})
+    )
+
+    _apply_subset_tag([(font_obj, None, {65})], pikepdf)
+
+    assert str(font_obj["/BaseFont"]).lstrip("/").endswith("+Solo")
+
+
+def test_subset_and_resync_group_end_to_end_applies_tag_after_successful_rewrite():
+    """Integration-level check through _subset_and_resync_group (the
+    real call site of _apply_subset_tag): a successful CIDFontType2
+    subset must leave the resulting /Font dict's BaseFont tagged,
+    proving _apply_subset_tag is actually wired into the real subsetting
+    path rather than only unit-testable in isolation."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(612, 792))
+
+    ttf_bytes = _create_dummy_cid_ttf()
+    font_stream = pdf.make_stream(ttf_bytes)
+
+    cid_font_dict = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.CIDFontType2,
+        BaseFont=pikepdf.Name.TestCIDFont,
+        CIDSystemInfo=pikepdf.Dictionary(Registry="Adobe", Ordering="Identity", Supplement=0),
+        CIDToGIDMap=pikepdf.Name.Identity,
+        FontDescriptor=pikepdf.Dictionary(
+            Type=pikepdf.Name.FontDescriptor,
+            FontName=pikepdf.Name.TestCIDFont,
+            FontFile2=font_stream,
+        ),
+    )
+    type0_font = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.Type0,
+        BaseFont=pikepdf.Name.TestCIDFont,
+        Encoding=pikepdf.Name("/Identity-H"),
+        DescendantFonts=pikepdf.Array([cid_font_dict]),
+    )
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=type0_font))
+    page.Contents = pdf.make_stream(b"/F1 12 Tf <0003> Tj")
+
+    subset_fonts(pdf, [])
+
+    resolved_type0 = pdf.pages[0].Resources.Font.F1
+    resolved_cid = resolved_type0.DescendantFonts[0]
+
+    wrapper_base = str(resolved_type0["/BaseFont"]).lstrip("/")
+    descendant_base = str(resolved_cid["/BaseFont"]).lstrip("/")
+    descriptor_name = str(resolved_cid.FontDescriptor["/FontName"]).lstrip("/")
+
+    import re
+
+    assert re.match(r"^[A-Z]{6}\+TestCIDFont$", wrapper_base), wrapper_base
+    assert descendant_base == wrapper_base
+    assert descriptor_name == wrapper_base
+
+
+# --- append to tests/operations/test_subset_fonts.py ---
+
+
+def test_apply_subset_tag_type0_no_wrapper_basefont_skips_descendant_write():
+    """Covers the `if new_name:` guard before the Type0 descendant
+    /BaseFont write (285->294): when the Type0 WRAPPER dict has no
+    /BaseFont of its own, new_name is None, so the descendant CIDFont's
+    /BaseFont must be left untouched entirely -- not written as
+    "/None" or similar -- while the shared descriptor still gets
+    tagged via its own /FontName."""
+    import pikepdf
+
+    from pdftl.operations.subset_fonts import _apply_subset_tag
+
+    pdf = pikepdf.new()
+    descriptor = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/FontDescriptor"),
+                "/FontName": pikepdf.Name("/TestCIDFont"),
+            }
+        )
+    )
+    cid_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/BaseFont": pikepdf.Name("/TestCIDFont"),
+                "/FontDescriptor": descriptor,
+            }
+        )
+    )
+    # Deliberately NO /BaseFont on the Type0 wrapper itself.
+    type0_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/Type0"),
+                "/DescendantFonts": pikepdf.Array([cid_font]),
+            }
+        )
+    )
+
+    _apply_subset_tag([(type0_font, descriptor, {65})], pikepdf)
+
+    assert "/BaseFont" not in type0_font
+    # The descendant's own /BaseFont must be left completely untouched.
+    descendant = type0_font["/DescendantFonts"][0]
+    assert str(descendant["/BaseFont"]).lstrip("/") == "TestCIDFont"
+    # Descriptor still gets tagged via its own /FontName.
+    assert str(descriptor["/FontName"]).lstrip("/").endswith("+TestCIDFont")
+
+
+def test_subset_fonts_loop_continues_past_a_none_stat_group_to_the_next():
+    """Covers the false branch of `if stat is not None` looping back to
+    the next group (817->814): a Type3 font that DOES reach the
+    grouping stage (has a /FontDescriptor with an embedded stream, so
+    _group_fonts_by_stream doesn't drop it before the loop even starts)
+    must be skipped (stat stays None, nothing appended) while the loop
+    still proceeds on to process a second, real font group in the same
+    run -- distinct from the existing end-to-end test, where the Type3
+    font has no /FontDescriptor at all and never reaches this loop."""
+    pdf = pikepdf.new()
+
+    type3_stream = pdf.make_stream(b"irrelevant type3 glyph procs")
+    type3_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Font"),
+                "/Subtype": pikepdf.Name("/Type3"),
+                "/BaseFont": pikepdf.Name("/SomeType3Font"),
+                "/FontDescriptor": pikepdf.Dictionary(
+                    {
+                        "/Type": pikepdf.Name("/FontDescriptor"),
+                        "/FontFile3": type3_stream,
+                    }
+                ),
+            }
+        )
+    )
+
+    ttf_bytes = _create_dummy_cid_ttf()
+    font_stream = pdf.make_stream(ttf_bytes)
+    cid_font_dict = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.CIDFontType2,
+        BaseFont=pikepdf.Name.TestCIDFont,
+        CIDSystemInfo=pikepdf.Dictionary(Registry="Adobe", Ordering="Identity", Supplement=0),
+        CIDToGIDMap=pikepdf.Name.Identity,
+        FontDescriptor=pikepdf.Dictionary(
+            Type=pikepdf.Name.FontDescriptor,
+            FontName=pikepdf.Name.TestCIDFont,
+            FontFile2=font_stream,
+        ),
+    )
+    type0_font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.Type0,
+            BaseFont=pikepdf.Name.TestCIDFont,
+            Encoding=pikepdf.Name("/Identity-H"),
+            DescendantFonts=pikepdf.Array([cid_font_dict]),
+        )
+    )
+
+    page = pdf.add_blank_page(page_size=(612, 792))
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=type3_font, F2=type0_font))
+    page.Contents = pdf.make_stream(b"/F1 12 Tf (X) Tj /F2 12 Tf <0003> Tj")
+
+    result = subset_fonts(pdf, [])
+    assert result.success
+
+    # The real font must still have been subsetted and tagged despite
+    # the Type3 group ahead of it in iteration producing no stat.
+    resolved_type0 = pdf.pages[0].Resources.Font.F2
+    resolved_base = str(resolved_type0["/BaseFont"]).lstrip("/")
+    assert resolved_base.endswith("+TestCIDFont")

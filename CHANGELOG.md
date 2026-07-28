@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## Unreleased
+
+### Fixed
+
+- `subset_fonts`: add subset tags to font names
+
+### Changed
+
+- `subset_fonts`: improve Type 1 conversion performance
+
 ## [0.26.0] - 2026-07-28
 
 ### Added
