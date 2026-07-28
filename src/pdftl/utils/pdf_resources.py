@@ -125,6 +125,60 @@ def _yield_extgstate_fonts(
                     yield f"{str(gs_key)}_ExtGState", font_arr[0], page_num
 
 
+def _iter_appearance_streams(ap_entry: Any) -> Generator[Any, None, None]:
+    """Yields the actual stream object(s) referenced by an /AP /N, /D, or /R
+    entry, which per spec can either be a stream directly, or a sub-dictionary
+    keyed by appearance state (e.g. /N << /Off ... /On ... >>)."""
+    import pikepdf
+
+    if not isinstance(ap_entry, pikepdf.Object):
+        return
+
+    if ap_entry.get("/Subtype") == "/Form":
+        yield ap_entry
+        return
+
+    # Otherwise assume it's a dict of appearance states
+    with suppress(TypeError, KeyError, AttributeError, pikepdf.PdfError):
+        for _, state_obj in ap_entry.items():
+            if isinstance(state_obj, pikepdf.Object):
+                yield state_obj
+
+
+def _yield_annot_fonts(
+    annot: Any, page_num: int, visited: set[int]
+) -> Generator[tuple[str, Any, int], None, None]:
+    """Yields fonts found across a single annotation's /AP /N, /D, and /R
+    appearance stream(s)."""
+    ap = annot.AP
+    for ap_key in ("/N", "/D", "/R"):
+        if ap_key not in ap:
+            continue
+        for stream_obj in _iter_appearance_streams(ap[ap_key]):
+            if stream_obj.objgen in visited:
+                continue
+            visited.add(stream_obj.objgen)
+            yield from _walk_container(stream_obj, page_num, visited)
+
+
+def _yield_annotation_fonts(
+    page: Any, page_num: int, visited: set[int]
+) -> Generator[tuple[str, Any, int], None, None]:
+    """Walks a page's /Annots array and yields fonts found inside each
+    annotation's appearance stream(s) (/AP /N, /D, /R), since these are
+    never part of the page's own /Resources dict."""
+    import pikepdf
+
+    if "/Annots" not in page:
+        return
+
+    with suppress(TypeError, KeyError, AttributeError, pikepdf.PdfError):
+        for annot in page.Annots:
+            if not isinstance(annot, pikepdf.Object) or "/AP" not in annot:
+                continue
+            yield from _yield_annot_fonts(annot, page_num, visited)
+
+
 def _walk_container(
     container: Any, page_num: int, visited: set[int]
 ) -> Generator[tuple[str, Any, int], None, None]:
@@ -154,6 +208,7 @@ def get_all_fonts_recursive(
             page = pdf.pages[page_num - 1]
             visited = set()
             yield from _walk_container(page, page_num, visited)
+            yield from _yield_annotation_fonts(page, page_num, visited)
         except (
             IndexError,
             TypeError,

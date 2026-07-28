@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.26.0] - 2026-07-28
 
 ### Added
 
@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - server pipeline now takes understands `@A` per-operation arguments, allowing use of `stamp`, for example
 
 ### Fixed
+
+- `dump_fonts` and `export_fonts` now correctly scan annotation appearances for fonts
 
 - `unpack_files` now correctly returns a zip archive when called via the server
 

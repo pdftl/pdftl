@@ -1,11 +1,13 @@
 """Tests for pdftl.utils.pdf_resources"""
 
 import logging
+from unittest.mock import MagicMock
 
 import pikepdf
 
 from pdftl.utils.pdf_resources import (
     _next_xobject_match,
+    _iter_appearance_streams,
     find_resource_recursive,
     get_all_fonts_recursive,
 )
@@ -21,6 +23,222 @@ class TestPdfResources:
         if "/Resources" in doc.pages[0]:
             del doc.pages[0].Resources
         assert find_resource_recursive(doc, "/Font", "/F1") is None
+
+    # --- annotation appearance stream fonts ---
+
+    def test_get_all_fonts_annotation_appearance_stream(self):
+        """Test extracting fonts used only inside an annotation's /AP /N form,
+        not present anywhere in the page's own /Resources/Font dict."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        font = pikepdf.Dictionary({"/Type": "/Font", "/BaseFont": "/Arimo"})
+
+        ap_form = doc.make_stream(b"")
+        ap_form.Subtype = pikepdf.Name("/Form")
+        ap_form.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F2": font})})
+
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/FreeText"),
+                "/AP": pikepdf.Dictionary({"/N": ap_form}),
+            }
+        )
+
+        doc.pages[0].Annots = pikepdf.Array([annot])
+        # Page resources deliberately have no /Font at all.
+
+        fonts = list(get_all_fonts_recursive(doc))
+        assert len(fonts) == 1
+        assert fonts[0][0] == "/F2"
+        assert fonts[0][2] == 1
+
+    def test_get_all_fonts_annotation_appearance_state_dict(self):
+        """Test /AP /N as a sub-dictionary keyed by appearance state (e.g. /Off, /On)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        font = pikepdf.Dictionary({"/Type": "/Font", "/BaseFont": "/Helv"})
+
+        on_form = doc.make_stream(b"")
+        on_form.Subtype = pikepdf.Name("/Form")
+        on_form.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/Widget"),
+                "/AP": pikepdf.Dictionary({"/N": pikepdf.Dictionary({"/On": on_form})}),
+            }
+        )
+
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        fonts = list(get_all_fonts_recursive(doc))
+        assert len(fonts) == 1
+        assert fonts[0][0] == "/F1"
+
+    def test_get_all_fonts_annotation_no_annots(self):
+        """Test pages with no /Annots key are unaffected."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        fonts = list(get_all_fonts_recursive(doc))
+        assert len(fonts) == 0
+
+    # --- _iter_appearance_streams direct unit tests ---
+
+    def test_iter_appearance_streams_non_object_entry(self):
+        """Test a non-pikepdf.Object ap_entry (e.g. a plain str) yields nothing."""
+        assert list(_iter_appearance_streams("just_a_string")) == []
+
+    def test_iter_appearance_streams_skips_non_object_state_values(self):
+        """Test dict-of-states entries whose values aren't pikepdf.Object are
+        skipped without yielding, and the loop continues to completion."""
+        fake_entry = MagicMock(spec=pikepdf.Object)
+        fake_entry.get.return_value = None  # not /Form -- falls into state-dict branch
+        fake_entry.items.return_value = [("/Off", "not_a_pikepdf_object")]
+
+        assert list(_iter_appearance_streams(fake_entry)) == []
+
+    def test_get_all_fonts_annotation_missing_ap(self):
+        """Test annotations lacking /AP entirely are skipped without error."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/FreeText"),
+                # Deliberately no /AP key
+            }
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        fonts = list(get_all_fonts_recursive(doc))
+        assert len(fonts) == 0
+
+    def test_get_all_fonts_annotation_non_object_entry(self):
+        """Test /Annots arrays containing non-pikepdf-object entries are skipped."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        # A raw string in the Annots array can't be isinstance-checked as a
+        # pikepdf.Object with /AP, so it must be safely skipped.
+        doc.pages[0].Annots = pikepdf.Array(["not_an_annotation"])
+
+        fonts = list(get_all_fonts_recursive(doc))
+        assert len(fonts) == 0
+
+    def test_get_all_fonts_annotation_dedup_shared_appearance(self):
+        """Test two annotations referencing the *same* AP form only yield fonts once."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        font = pikepdf.Dictionary({"/Type": "/Font", "/BaseFont": "/Helv"})
+
+        shared_form = doc.make_stream(b"")
+        shared_form.Subtype = pikepdf.Name("/Form")
+        shared_form.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+
+        annot1 = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/Widget"),
+                "/AP": pikepdf.Dictionary({"/N": shared_form}),
+            }
+        )
+        annot2 = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/Widget"),
+                "/AP": pikepdf.Dictionary({"/N": shared_form, "/D": shared_form}),
+            }
+        )
+
+        doc.pages[0].Annots = pikepdf.Array([annot1, annot2])
+
+        fonts = list(get_all_fonts_recursive(doc))
+        # Same underlying stream objgen visited only once, despite three references.
+        assert len(fonts) == 1
+        assert fonts[0][0] == "/F1"
+
+    def test_get_all_fonts_annotation_iteration_exception(self, caplog):
+        """Test malformed /Annots (non-iterable) is caught by the suppress block
+        and doesn't blow up font extraction for the rest of the page."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        font = pikepdf.Dictionary({"/Type": "/Font", "/BaseFont": "/Helv"})
+        doc.pages[0].Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+        # /Annots present but not an array -- iterating raises inside the
+        # suppress(...) block in _yield_annotation_fonts.
+        doc.pages[0].Annots = pikepdf.Dictionary({"/Bogus": True})
+
+        fonts = list(get_all_fonts_recursive(doc))
+        # Page-level font extraction still succeeds; annotation walk fails silently.
+        assert len(fonts) == 1
+        assert fonts[0][0] == "/F1"
+
+    def test_next_xobject_match_all_non_form_exhausts_loop(self):
+        """Test the loop iterates past every non-/Form XObject and falls through
+        to return None, exercising the false branch of the /Subtype check on
+        every iteration (no early return via a matching /Form entry)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        img1 = doc.make_stream(b"")
+        img1.Subtype = pikepdf.Name("/Image")
+
+        img2 = doc.make_stream(b"")
+        img2.Subtype = pikepdf.Name("/Image")
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Img1": img1, "/Img2": img2})}
+        )
+
+        assert find_resource_recursive(doc, "/Font", "/F1") is None
+
+    def test_next_xobject_match_skips_non_form_then_matches(self):
+        """Test the XObject loop continues past a non-/Form entry to find a later match."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        font = pikepdf.Dictionary({"/Type": "/Font"})
+
+        not_form = doc.make_stream(b"")
+        not_form.Subtype = pikepdf.Name("/Image")  # not /Form -- loop must skip and continue
+
+        form = doc.make_stream(b"")
+        form.Subtype = pikepdf.Name("/Form")
+        form.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Img": not_form, "/Frm": form})}
+        )
+
+        assert find_resource_recursive(doc, "/Font", "/F1") is not None
+
+    def test_get_all_fonts_xobject_skips_non_form_then_matches(self):
+        """Test _yield_xobject_fonts continues past a non-/Form XObject to a later Form one."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        font = pikepdf.Dictionary({"/Type": "/Font"})
+
+        not_form = doc.make_stream(b"")
+        not_form.Subtype = pikepdf.Name("/Image")
+
+        form = doc.make_stream(b"")
+        form.Subtype = pikepdf.Name("/Form")
+        form.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Img": not_form, "/Frm": form})}
+        )
+
+        fonts = list(get_all_fonts_recursive(doc))
+        assert len(fonts) == 1
+        assert fonts[0][0] == "/F1"
 
     def test_find_resource_immediate(self):
         """Test locating a resource directly on the page level."""
