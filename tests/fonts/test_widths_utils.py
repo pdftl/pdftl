@@ -1,8 +1,8 @@
+# tests/fonts/test_widths_utils.py
+
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-# tests/fonts/test_widths_utils.py
 
 import pikepdf
 from pdftl.fonts.widths_utils import (
@@ -397,4 +397,69 @@ def test_extract_cid_to_gid_map_read_bytes_raises_degrades_to_identity():
 
     cid_font = {"/Subtype": "/CIDFontType2", "/CIDToGIDMap": _RaisingStream()}
     font = {"/Subtype": "/Type0", "/DescendantFonts": [cid_font]}
+    assert extract_cid_to_gid_map(font) == "Identity"
+
+
+def test_composite_widths_str_next_val():
+    """Exercises line 135: native Python str or bytes as next_val in raw dict /W array."""
+    cid_font = {
+        "/Subtype": "/CIDFontType2",
+        "/W": [10, "string_val", 500],
+    }
+    font = {
+        "/Subtype": "/Type0",
+        "/DescendantFonts": [cid_font],
+    }
+    assert extract_font_widths(font) == {}
+
+
+def test_update_composite_widths_empty_map_no_existing_w():
+    """Exercises branch 235->237: empty widths_map when /W is absent in CIDFont."""
+    cid_font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/CIDFontType2")})
+    font = pikepdf.Dictionary(
+        {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+    )
+    update_font_widths(font, {}, pikepdf)
+    assert "/W" not in cid_font
+
+
+def test_update_composite_widths_invalid_keys_no_existing_w():
+    """Exercises branch 248->250: normalized_map is empty when /W is absent in CIDFont."""
+    cid_font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/CIDFontType2")})
+    font = pikepdf.Dictionary(
+        {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+    )
+    update_font_widths(font, {"ZZZZ": 100.0}, pikepdf)
+    assert "/W" not in cid_font
+
+
+# --- append to tests/fonts/test_widths_utils.py ---
+
+import pytest
+
+
+def test_extract_cid_to_gid_map_read_bytes_pdferror_degrades_to_identity():
+    """A genuine pikepdf.PdfError from read_bytes() (e.g. an unfilterable
+    stream due to an invalid /Filter) must degrade to Identity, same as
+    the AttributeError/TypeError cases already covered. This is distinct
+    from test_extract_cid_to_gid_map_read_bytes_raises_degrades_to_identity,
+    whose _RaisingStream fails the isinstance(c2g, pikepdf.Stream) check
+    up front and never reaches read_bytes() at all -- it needs a real
+    pikepdf.Stream to actually exercise the except branch."""
+    pdf = pikepdf.new()
+    stream = pdf.make_stream(b"\x00\x05\x00\x0a")
+    stream.Filter = pikepdf.Name("/FakeFilterDoesNotExist")
+
+    cid_font = pikepdf.Dictionary(
+        {"/Subtype": pikepdf.Name("/CIDFontType2"), "/CIDToGIDMap": stream}
+    )
+    font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+    )
+
+    with pytest.raises(pikepdf.PdfError):
+        stream.read_bytes()  # sanity check this really raises PdfError, not something else
+
     assert extract_cid_to_gid_map(font) == "Identity"

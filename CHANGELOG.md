@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `style_text`: use `stroke=none` to remove text stroke
 
+- `subset_fonts` operation
+
 ### Changed
 
 - `style_text`: adding a stroke, by default, now uses the text fill color (if any) as the stroke color

@@ -910,3 +910,162 @@ class TestFontExtractionCoverage:
 
         result = process_single_font("F1", parent_obj)
         assert result is None
+
+
+class TestFontExtractionRemainingBranches:
+    def test_dict_encoding_no_base_encoding_attr_or_key(self):
+        """Neither a .BaseEncoding attribute nor a '/BaseEncoding' key is
+        present -- falls all the way through to the Custom default."""
+
+        class PlainEnc(dict):
+            pass  # No .BaseEncoding attribute, no /Differences, no /BaseEncoding key
+
+        obj = pikepdf.Dictionary({"/Encoding": PlainEnc({})})
+        assert get_encoding_name(obj) == "Custom"
+
+    def test_refine_subtype_fontfile3_other_subtype_unchanged(self):
+        """A /FontFile3 whose /Subtype is neither Type1C nor CIDFontType0C
+        (e.g. OpenType) leaves the base subtype mapping untouched."""
+        doc = pikepdf.Pdf.new()
+        ff3 = doc.make_stream(b"")
+        ff3.Subtype = pikepdf.Name("/OpenType")
+
+        desc = pikepdf.Dictionary({"/FontFile3": ff3})
+        obj = pikepdf.Dictionary(
+            {
+                "/BaseFont": pikepdf.Name("/MyFont"),
+                "/Subtype": pikepdf.Name("/Type1"),
+                "/FontDescriptor": desc,
+            }
+        )
+        result = process_single_font("/F1", obj)
+        assert result["subtype"] == "Type 1"
+
+    def test_descriptor_present_without_font_name(self):
+        """A /FontDescriptor exists but has no /FontName entry -- descriptor_font
+        stays empty rather than raising."""
+        desc = pikepdf.Dictionary({"/Type": pikepdf.Name("/FontDescriptor")})
+        obj = pikepdf.Dictionary(
+            {
+                "/BaseFont": pikepdf.Name("/MyFont"),
+                "/Subtype": pikepdf.Name("/Type1"),
+                "/FontDescriptor": desc,
+            }
+        )
+        result = process_single_font("/F1", obj)
+        assert result["descriptor_font"] == ""
+
+    def test_xobject_without_resources_skipped(self):
+        """An XObject present in /XObject but carrying no /Resources of its
+        own is visited without attempting to crawl into it further."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        xobj = doc.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/XObject")}))
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Im1": xobj})}
+        )
+
+        assert extract_document_fonts(doc) == []
+
+    def test_pattern_without_resources_skipped(self):
+        """A Pattern present in /Pattern but carrying no /Resources of its
+        own is visited without attempting to crawl into it further."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        pat = doc.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/Pattern")}))
+        doc.pages[0].Resources = pikepdf.Dictionary({"/Pattern": pikepdf.Dictionary({"/P1": pat})})
+
+        assert extract_document_fonts(doc) == []
+
+    def test_extgstate_font_array_empty(self):
+        """An ExtGState with an empty /Font array is skipped rather than
+        indexing into it."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        gs = doc.make_indirect(
+            pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/Font": pikepdf.Array([])})
+        )
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+        )
+
+        assert extract_document_fonts(doc) == []
+
+    def test_annot_without_ap_skipped(self):
+        """An annotation with no /AP entry at all is skipped without
+        attempting to crawl any appearance streams."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        annot = pikepdf.Dictionary({"/Type": pikepdf.Name("/Annot")})
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        assert extract_document_fonts(doc) == []
+
+    def test_unwrap_physical_font_descendant_access_raises(self):
+        """DescendantFonts access itself raises (not just indexing into an
+        empty array) -- exercises the suppress() catching an exception
+        raised while resolving the /DescendantFonts array itself, not
+        just an IndexError from an empty one."""
+        from pdftl.fonts.font_extraction_utils import _unwrap_physical_font
+
+        class RaisingDescendants(dict):
+            @property
+            def DescendantFonts(self):
+                raise AttributeError("cannot resolve descendants")
+
+        parent = RaisingDescendants({"/Subtype": "/Type0", "/DescendantFonts": True})
+        assert _unwrap_physical_font(parent) is parent
+
+    def test_page_with_annots_but_no_resources(self):
+        """A page carrying /Annots but no /Resources entry at all still
+        gets its annotations crawled -- the /Resources and /Annots checks
+        in crawl_page are independent, not an if/elif."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        if "/Resources" in doc.pages[0]:
+            del doc.pages[0].Resources
+
+        font = doc.make_indirect(
+            pikepdf.Dictionary(
+                {"/BaseFont": pikepdf.Name("/NoResPageFont"), "/Subtype": pikepdf.Name("/Type1")}
+            )
+        )
+        ap_stream = doc.make_stream(b"")
+        ap_stream.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+        annot = pikepdf.Dictionary(
+            {"/Type": pikepdf.Name("/Annot"), "/AP": pikepdf.Dictionary({"/N": ap_stream})}
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        result = extract_document_fonts(doc)
+        assert len(result) == 1
+        assert result[0]["base_font"] == "NoResPageFont"
+
+    def test_annots_ap_substate_dict_multiple_entries(self):
+        """An appearance-state subdictionary with more than one entry --
+        e.g. a checkbox's /Off and /On states -- has every entry visited,
+        not just the first, exercising a second loop iteration."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        font = doc.make_indirect(
+            pikepdf.Dictionary(
+                {"/BaseFont": pikepdf.Name("/MultiStateFont"), "/Subtype": pikepdf.Name("/Type1")}
+            )
+        )
+
+        off_stream = doc.make_stream(b"")  # No /Resources -- should be skipped harmlessly
+        on_stream = doc.make_stream(b"")
+        on_stream.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font})})
+
+        ap_state = pikepdf.Dictionary({"/Off": off_stream, "/On": on_stream})
+        annot = pikepdf.Dictionary({"/AP": pikepdf.Dictionary({"/N": ap_state})})
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        result = extract_document_fonts(doc)
+        assert len(result) == 1
+        assert result[0]["base_font"] == "MultiStateFont"

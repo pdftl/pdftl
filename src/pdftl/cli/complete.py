@@ -98,6 +98,7 @@ HARDCODED_KEYWORDS = {
     "stamp",
     "stamp_fields",
     "style_text",
+    "subset_fonts",
     "tag",
     "unpack_files",
     "unpause",

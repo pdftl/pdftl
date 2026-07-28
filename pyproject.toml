@@ -59,6 +59,7 @@ replacement-font = ["fonttools>=4.0,<5.0"]
 shell-completion = ["lark", "cloudpickle"]
 signing = ["pyhanko"]
 simplify-vectors = ["numpy", "numba"]
+subset-fonts = ["fonttools>=4.0,<5.0"]
 tag = ["opendataloader_pdf"]
 yaml-bookmarks = ["pyyaml"]
 
@@ -81,6 +82,7 @@ extras = [
     "pdftl[shell-completion]",
     "pdftl[signing]",
     "pdftl[simplify-vectors]",
+    "pdftl[subset-fonts]",
     "pdftl[tag]",
     "pdftl[yaml-bookmarks]",
 ]

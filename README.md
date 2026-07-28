@@ -283,6 +283,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |
 | [`stamp_fields`](https://pdftl.readthedocs.io/en/latest/operations/stamp_fields.html)                   | Stamp PDF content into form fields                              |
 | [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html)                       | Change appearance of text                                       |
+| [`subset_fonts`](https://pdftl.readthedocs.io/en/latest/operations/subset_fonts.html)                   | Shrink embedded fonts to only the glyphs actually used          |
 | [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html)                                     | Auto-tag a PDF for accessibility using OpenDataLoader           |
 | [`unpack_files`](https://pdftl.readthedocs.io/en/latest/operations/unpack_files.html)                   | Unpack file attachments                                         |
 | [`unpause`](https://pdftl.readthedocs.io/en/latest/operations/unpause.html)                             | Remove 'pause' frames from a slide deck                         |

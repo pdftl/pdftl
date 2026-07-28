@@ -25,6 +25,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from unittest.mock import patch
 
 import pytest
 
@@ -228,6 +229,29 @@ class TestPatchCffWidths:
         assert set(reread.keys()) == set(original.keys())
         assert reread["A"] == 750.0
         assert reread["B"] == original["B"]
+
+    def test_original_matrices_none_skips_splice(self, simple_cff_path):
+        """The common case (Simple, non-CID font with no FontMatrix
+        tracking) must not attempt a splice at all."""
+        with patch("pdftl.fonts.cff_fontmatrix_splice.splice_top_font_matrix") as mock_splice:
+            patch_cff_widths(simple_cff_path, {"A": 999.0})
+            mock_splice.assert_not_called()
+
+    def test_original_matrices_with_top_key_triggers_splice(self, simple_cff_path):
+        """When original_matrices carries a 'top' entry, patch_cff_widths
+        must run the recompiled bytes through splice_top_font_matrix and
+        return ITS result, not the raw compiled bytes."""
+        with patch(
+            "pdftl.fonts.cff_fontmatrix_splice.splice_top_font_matrix",
+            return_value=b"spliced",
+        ) as mock_splice:
+            result = patch_cff_widths(
+                simple_cff_path,
+                {"A": 999.0},
+                original_matrices={"top": (0.001, 0, 0, 0.001, 0, 0)},
+            )
+            mock_splice.assert_called_once()
+            assert result == b"spliced"
 
 
 class TestCidHelpers:

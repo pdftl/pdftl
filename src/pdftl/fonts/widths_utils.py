@@ -130,13 +130,15 @@ def _extract_composite_widths(font_obj: Any) -> dict[str, float]:
         # depending on version/context (e.g. pikepdf.Array vs a generic
         # pikepdf.Object of array type), so checking the class name or
         # `isinstance(..., list)` is unreliable. Instead, duck-type: numeric
-        # PDF objects (ints/reals) are not iterable and raise TypeError when
-        # passed to list(), while array-typed objects iterate fine.
-        try:
-            seq_items = list(next_val)
-            is_sequence = True
-        except TypeError:
+        # PDF objects (ints/reals) and strings/bytes are not sequence arrays.
+        if isinstance(next_val, (str, bytes)):
             is_sequence = False
+        else:
+            try:
+                seq_items = list(next_val)
+                is_sequence = True
+            except TypeError:
+                is_sequence = False
 
         if is_sequence:
             _extract_seq_widths(start_cid, seq_items, widths)
@@ -359,13 +361,18 @@ def extract_cid_to_gid_map(font_obj: Any) -> dict[int, int] | str | None:
 
     c2g = cid_font["/CIDToGIDMap"]
 
-    if not hasattr(c2g, "read_bytes"):
+    import pikepdf
+
+    if not isinstance(c2g, pikepdf.Stream):
         # /CIDToGIDMap is a bare Name (typically /Identity, but any other
         # Name value is non-conformant and treated the same way: there is
-        # no explicit table to read).
+        # no explicit table to read). hasattr(c2g, "read_bytes") is NOT a
+        # reliable test here -- read_bytes is defined on pikepdf's common
+        # Object base class, so it's present (and hasattr-true) on a Name
+        # too; it only raises pikepdf.PdfError once actually called on a
+        # non-stream object, which is what the isinstance check below
+        # avoids ever attempting in the first place.
         return "Identity"
-
-    import pikepdf
 
     try:
         raw = c2g.read_bytes()
@@ -405,8 +412,10 @@ def update_cid_to_gid_map(
     if existing is not None and hasattr(existing, "write"):
         existing.write(compiled)
     else:
-        if pdf is None:
+        pdf_ctx = pdf or getattr(cid_font, "owner", None) or getattr(font_obj, "owner", None)
+        if pdf_ctx is not None and hasattr(pdf_ctx, "make_stream"):
+            cid_font["/CIDToGIDMap"] = pdf_ctx.make_stream(compiled)
+        else:
             raise ValueError(
                 "A valid pikepdf.Pdf context must be provided to create a new CIDToGIDMap stream."
             )
-        cid_font["/CIDToGIDMap"] = pdf.make_stream(compiled)

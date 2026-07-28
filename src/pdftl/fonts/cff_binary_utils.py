@@ -76,6 +76,9 @@ def _is_cid_keyed(topdict: Any) -> bool:
     return hasattr(topdict, "ROS")
 
 
+is_cid_keyed = _is_cid_keyed  # noqa: E305 -- public alias for cross-module callers
+
+
 def _resolve_cff_cid_to_gid(topdict: Any, cid: int) -> int | None:
     """
     Resolves a CID to a GID for a CIDFontType0C (CFF-based) CIDFont, per ISO
@@ -569,9 +572,19 @@ def _patch_single_cff_width(topdict: Any, glyph_name: str, new_width: float) -> 
 
 
 def patch_cff_widths(
-    filepath: Path, pdf_widths: dict[str, float], cid_to_gid_map: str | None = None
+    filepath: Path,
+    pdf_widths: dict[str, float],
+    cid_to_gid_map: str | None = None,
+    original_matrices: dict[str, tuple] | None = None,
 ) -> bytes | None:
     """
+
+    `original_matrices`, if supplied (see
+    font_subsetting.capture_font_matrix), forces the Top DICT's
+    FontMatrix back in via a post-compile byte splice
+    (cff_fontmatrix_splice.splice_top_font_matrix) whenever the compiled
+    bytes would otherwise have dropped it -- see that module's docstring
+    for why this can't be fixed by editing rawDict pre-compile.
     Patches advance widths in a bare CFF font program (Type1C or
     CIDFontType0C) in-memory, returning the recompiled bare CFF bytes, or
     None if nothing was patched (either because no code/CID in `pdf_widths`
@@ -608,7 +621,13 @@ def patch_cff_widths(
         logger.warning("Failed to recompile patched bare CFF font program: %s", e)
         return None
 
+    compiled = buf.getvalue()
+    if original_matrices and "top" in original_matrices:
+        from pdftl.fonts.cff_fontmatrix_splice import splice_top_font_matrix
+
+        compiled = splice_top_font_matrix(compiled, original_matrices["top"])
+
     logger.info(
         "Successfully patched advance widths in memory for bare CFF program %s", filepath.name
     )
-    return buf.getvalue()
+    return compiled

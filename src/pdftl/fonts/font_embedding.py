@@ -68,8 +68,6 @@ def embed_truetype_font(
 
     from fontTools.ttLib import TTFont, TTLibError  # type: ignore
 
-    logging.getLogger("fontTools.ttLib").setLevel(logging.ERROR)
-
     try:
         tt = TTFont(path)
     except TTLibError as e:

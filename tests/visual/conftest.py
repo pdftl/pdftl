@@ -26,6 +26,49 @@ def render_pdf_to_images(pdf_data, dpi=150):
     return images
 
 
+def compare_rendered_pages(images_a, images_b, tmp_path, label: str, max_diff_threshold=2):
+    """
+    Page-by-page visual comparison shared by assert_pdf_match (baseline
+    vs. test) and any direct A-vs-B comparison (e.g. a corpus PDF vs. its
+    own post-operation output, where there's no baseline file to store).
+
+    Raises via pytest.fail on a page-count mismatch or any page whose max
+    per-channel pixel delta exceeds `max_diff_threshold`, saving a
+    brightness-amplified diff image plus the offending page for
+    inspection under tmp_path. Returns nothing on a clean match.
+    """
+    if len(images_a) != len(images_b):
+        pytest.fail(
+            f"Page count mismatch for {label}! A has {len(images_a)}, B has {len(images_b)}."
+        )
+
+    for i, (img_a, img_b) in enumerate(zip(images_a, images_b)):
+        img_a = img_a.convert("RGB")
+        img_b = img_b.convert("RGB")
+
+        diff = ImageChops.difference(img_a, img_b)
+        if not diff.getbbox():
+            continue
+
+        stat = ImageStat.Stat(diff)
+        max_diff = max(extrema[1] for extrema in stat.extrema)
+        if max_diff <= max_diff_threshold:
+            continue
+
+        diff_visible = ImageEnhance.Brightness(diff).enhance(100.0)
+        page_suffix = f"_page_{i + 1}" if len(images_a) > 1 else ""
+        diff_path = tmp_path / f"FAILED_DIFF_{label}{page_suffix}.png"
+        output_img_path = tmp_path / f"FAILED_OUTPUT_{label}{page_suffix}.png"
+        diff_visible.save(diff_path)
+        img_b.save(output_img_path)
+
+        pytest.fail(
+            f"Visual regression detected on page {i + 1}! (Max pixel delta: {max_diff}/255)\n"
+            f"  Diff image: {diff_path}\n"
+            f"  Actual output image: {output_img_path}"
+        )
+
+
 @pytest.fixture()
 def assert_pdf_match(request, tmp_path):
     """
@@ -67,55 +110,12 @@ def assert_pdf_match(request, tmp_path):
         test_images = render_pdf_to_images(test_pdf_bytes)
         baseline_images = render_pdf_to_images(baseline_pdf_path)
 
-        # --- Define output PDF path for failures ---
-        # (baseline_name already includes '.pdf' extension)
         output_pdf_path = tmp_path / f"FAILED_OUTPUT_{baseline_name}"
-
-        # --- 4. Assert Page Count ---
-        if len(test_images) != len(baseline_images):
+        try:
+            compare_rendered_pages(baseline_images, test_images, tmp_path, baseline_name)
+        except Exception:
             output_pdf_path.write_bytes(test_pdf_bytes)
-            pytest.fail(
-                f"Page count mismatch for {baseline_name}! "
-                f"Baseline has {len(baseline_images)}, Output has {len(test_images)}.\n"
-                f"  Actual output PDF saved to: {output_pdf_path}"
-            )
-
-        # --- 5. Compare Visually Page-by-Page ---
-        for i, (base_img, test_img) in enumerate(zip(baseline_images, test_images)):
-            # Ensure strict RGB to avoid alpha-channel transparency math bugs
-            base_img = base_img.convert("RGB")
-            test_img = test_img.convert("RGB")
-
-            diff = ImageChops.difference(base_img, test_img)
-
-            if diff.getbbox():
-                # Get the maximum difference in any color channel
-                stat = ImageStat.Stat(diff)
-                # stat.extrema gives [(min_r, max_r), (min_g, max_g), (min_b, max_b)]
-                max_diff = max([extrema[1] for extrema in stat.extrema])
-
-                # Tolerance: Ignore microscopic anti-aliasing/rendering shifts
-                if max_diff > 2:
-                    # Amplify the diff image by 100x so human eyes can actually see the errors
-                    diff_visible = ImageEnhance.Brightness(diff).enhance(100.0)
-
-                    # If multipage, attach the page number (1-indexed) to the failure artifacts
-                    page_suffix = f"_page_{i + 1}" if len(test_images) > 1 else ""
-
-                    diff_path = tmp_path / f"FAILED_DIFF_{baseline_name}{page_suffix}.png"
-                    output_img_path = tmp_path / f"FAILED_OUTPUT_{baseline_name}{page_suffix}.png"
-
-                    diff_visible.save(diff_path)
-                    test_img.save(output_img_path)
-
-                    output_pdf_path.write_bytes(test_pdf_bytes)
-
-                    pytest.fail(
-                        f"Visual regression detected on page {i + 1}! (Max pixel delta: {max_diff}/255)\n"
-                        f"  Diff image: {diff_path}\n"
-                        f"  Actual output image: {output_img_path}\n"
-                        f"  Actual output PDF: {output_pdf_path}"
-                    )
+            raise
 
     yield _checker
 

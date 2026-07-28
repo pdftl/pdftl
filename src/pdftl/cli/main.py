@@ -72,6 +72,11 @@ def _setup_logging(cli_args):
     # Allow logs to propagate naturally to the root logger where they are handled
     logging.getLogger("pdftl").setLevel(level)
 
+    if not debug:
+        # silence fontTools noisy WARNING logging
+        logging.getLogger("fontTools.ttLib").setLevel(logging.ERROR)
+        logging.getLogger("fontTools.subset").setLevel(logging.ERROR)
+
 
 def main(argv=None):
     """Main entry point for the command-line interface."""
