@@ -15,6 +15,7 @@ error on instantiation. This isolates the optional dependency.
 import io
 import logging
 import os
+import struct
 from collections import namedtuple
 from typing import Any
 
@@ -114,6 +115,37 @@ DEFAULT_FONT_SIZE = 12.0
 DEFAULT_COLOR_TUPLE = (0, 0, 0)  # (r, g, b)
 
 
+def _is_reportlab_compatible_font(filepath: str) -> bool:
+    """
+    States TextDrawer's requirement to file_locator: only glyf-outline
+    (quadratic) TrueType tables are usable, since that's the only outline
+    format ReportLab's TTFont loader accepts. CFF/PostScript-outline fonts
+    -- including CFF-flavored .otf files -- and bare Type 1 (.pfb) fonts
+    are rejected here so resolve_system_font_path keeps searching for an
+    alternate match instead of settling for the first name match found.
+
+    This is a cheap sfnt table-directory check, not a full font parse.
+    On any read failure, or if we simply can't tell, this returns
+    True (permissive) rather than False -- the real registration attempt
+    in _register_external_font remains the authoritative check and will
+    still safely fall back to the default font if this was wrong.
+    """
+    if filepath.lower().endswith(".pfb"):
+        return False  # bare Type 1: no sfnt table directory, never loadable here
+
+    try:
+        with open(filepath, "rb") as f:
+            header = f.read(12)
+            if len(header) < 12:
+                return True
+            num_tables = struct.unpack(">H", header[4:6])[0]
+            table_dir = f.read(16 * num_tables)
+            tags = {table_dir[i : i + 4] for i in range(0, len(table_dir), 16)}
+            return b"CFF " not in tags
+    except OSError:
+        return True
+
+
 class TextDrawer:
     """
     A class that encapsulates all reportlab drawing logic.
@@ -184,7 +216,7 @@ class TextDrawer:
             return self._register_external_font(font_name, font_name)
 
         # Attempt OS-level system resolution
-        target_path = resolve_system_font_path(font_name)
+        target_path = resolve_system_font_path(font_name, predicate=_is_reportlab_compatible_font)
         if target_path:
             return self._register_external_font(font_name, target_path)
 

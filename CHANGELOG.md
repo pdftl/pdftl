@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `subset_fonts`: add subset tags to font names
 
+- `add_text`: improve system font matching
+
 ### Changed
 
 - `subset_fonts`: improve Type 1 conversion performance

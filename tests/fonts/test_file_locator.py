@@ -263,7 +263,7 @@ def test_resolve_system_font_path_falls_through_to_scan():
     ):
         path = resolve_system_font_path("ScanMeFont")
         assert path == "/mock/path/Font.ttf"
-        mock_scan.assert_called_once_with("scanmefont", file_locator._get_font_directories())
+        mock_scan.assert_called_once_with("scanmefont", file_locator._get_font_directories(), None)
 
 
 def test_resolve_system_font_path_custom_dirs_priority():
@@ -278,7 +278,7 @@ def test_resolve_system_font_path_custom_dirs_priority():
     ):
         path = resolve_system_font_path("MyFont", custom_dirs=["/custom"])
         assert path == "/custom/font.ttf"
-        mock_scan.assert_called_once_with("myfont", ["/custom"])
+        mock_scan.assert_called_once_with("myfont", ["/custom"], None)
         mock_fc.assert_not_called()
 
 
@@ -352,3 +352,177 @@ def test_resolve_regular_font_does_not_match_bold_italic_file(tmp_path):
         # It should correctly bypass NimbusSans-BoldItalic.otf and find NimbusSans-Regular.otf
         assert resolved_path is not None
         assert Path(resolved_path).name == "NimbusSans-Regular.otf"
+
+
+# --- Coverage gap: _is_acceptable_alias substring-in-search-term branch (line 79) ---
+
+
+def test_is_acceptable_alias_name_is_substring_of_search_term():
+    """Covers the `name in search_term` True branch distinctly from base alias matches."""
+    assert _is_acceptable_alias("helveticaneue", "helvetica") is True
+
+
+# --- Coverage gap: design-variant blocklist continue branch (line 83) ---
+
+
+def test_is_acceptable_alias_rejects_design_variant_residual():
+    """
+    A candidate name containing the search term as a substring must still be
+    rejected if the leftover text matches a blocklisted decorative/special-purpose
+    design marker (e.g. "garamondinitials" is not an acceptable match for
+    "garamond" even though it contains it).
+    """
+    assert _is_acceptable_alias("garamond", "garamondinitials") is False
+    assert _is_acceptable_alias("garamond", {"garamondinitials"}) is False
+
+
+def test_is_acceptable_alias_rejects_design_variant_but_falls_through_to_other_name():
+    """
+    Ensures the blocklist `continue` doesn't short-circuit the whole function -
+    if a later candidate name in the set is a clean match, it should still succeed.
+    """
+    assert _is_acceptable_alias("garamond", {"garamondinitials", "garamond"}) is True
+
+
+# --- Coverage gap: name-table record nameID filtering (line 109->107) ---
+
+
+def test_get_internal_font_names_skips_unwanted_name_ids():
+    """
+    Ensures records with nameID outside (1, 4, 6) - e.g. nameID=2 (subfamily,
+    "Bold"/"Italic" style descriptor) - are iterated over but not collected.
+    """
+    mock_record_skipped = MagicMock()
+    mock_record_skipped.nameID = 2
+    mock_record_skipped.toUnicode.return_value = "Bold"
+
+    mock_record_kept = MagicMock()
+    mock_record_kept.nameID = 1
+    mock_record_kept.toUnicode.return_value = "Good Font"
+
+    mock_tt = MagicMock()
+    mock_tt.__contains__.return_value = True
+    mock_tt.__getitem__.return_value.names = [mock_record_skipped, mock_record_kept]
+    mock_tt.__enter__.return_value = mock_tt
+
+    with patch("fontTools.ttLib.TTFont", return_value=mock_tt):
+        names = _get_internal_font_names("dummy.ttf")
+        assert names == {"goodfont"}
+
+
+# --- Coverage gap: fc-match resolves an acceptable name but bad file (line 166->172) ---
+
+
+def test_resolve_linux_fontconfig_acceptable_name_but_bad_extension():
+    """
+    Covers the case where fc-match returns a family name that passes
+    _is_acceptable_alias, but the file path doesn't end in a supported font
+    extension - the function must fall through and return None rather than
+    return the bogus path.
+    """
+    mock_res = MagicMock(stdout="/usr/share/fonts/arial.conf|Arial")
+    with patch("sys.platform", "linux"), patch("subprocess.run", return_value=mock_res):
+        assert _resolve_linux_fontconfig("Arial") is None
+
+
+def test_resolve_linux_fontconfig_acceptable_name_but_missing_file():
+    """
+    Covers the case where fc-match returns an acceptable name and a
+    correctly-extensioned path, but os.path.isfile is False (e.g. a stale
+    fontconfig cache entry) - must fall through to return None.
+    """
+    mock_res = MagicMock(stdout="/usr/share/fonts/arial.ttf|Arial")
+    with (
+        patch("sys.platform", "linux"),
+        patch("subprocess.run", return_value=mock_res),
+        patch("os.path.isfile", return_value=False),
+    ):
+        assert _resolve_linux_fontconfig("Arial") is None
+
+
+# --- Coverage gap: custom_dirs miss falls through to system resolution (line 232->236) ---
+
+
+def test_resolve_system_font_path_custom_dirs_miss_falls_through():
+    """
+    When custom_dirs is provided but yields no match, execution must continue
+    past the custom-dirs block into the normal system resolution path (fontconfig
+    fast-path, then full directory crawl) rather than returning None early.
+    """
+    with (
+        patch.object(file_locator, "_scan_system_font_dirs") as mock_scan,
+        patch.object(
+            file_locator, "_resolve_linux_fontconfig", return_value="/sys/font.ttf"
+        ) as mock_fc,
+    ):
+        mock_scan.return_value = None  # custom dir scan finds nothing
+
+        path = resolve_system_font_path("MyFont", custom_dirs=["/custom"])
+
+        assert path == "/sys/font.ttf"
+        mock_scan.assert_called_once_with("myfont", ["/custom"], None)
+        mock_fc.assert_called_once_with("MyFont", None)
+
+
+def test_resolve_linux_fontconfig_predicate_rejects_falls_through():
+    """
+    Covers branch 169->180: fc-match returns a name-acceptable, well-formed,
+    existing font file, but the caller's predicate rejects it (e.g. wrong
+    outline format) - must fall through to the final `return None` rather
+    than returning the path, so resolve_system_font_path can try the
+    directory crawl for an alternate.
+    """
+    mock_res = MagicMock(stdout="/usr/share/fonts/arial.ttf|Arial")
+    with (
+        patch("sys.platform", "linux"),
+        patch("subprocess.run", return_value=mock_res),
+        patch("os.path.isfile", return_value=True),
+    ):
+        result = _resolve_linux_fontconfig("Arial", predicate=lambda p: False)
+        assert result is None
+
+
+def test_resolve_linux_fontconfig_predicate_accepts_returns_path():
+    """Sanity-check the accepting side of the same branch, for contrast."""
+    mock_res = MagicMock(stdout="/usr/share/fonts/arial.ttf|Arial")
+    with (
+        patch("sys.platform", "linux"),
+        patch("subprocess.run", return_value=mock_res),
+        patch("os.path.isfile", return_value=True),
+    ):
+        result = _resolve_linux_fontconfig("Arial", predicate=lambda p: True)
+        assert result == "/usr/share/fonts/arial.ttf"
+
+
+def test_scan_system_font_dirs_predicate_rejects_first_accepts_second():
+    with (
+        patch.object(
+            file_locator,
+            "_iter_system_font_files",
+            return_value=iter(
+                [
+                    ("/fonts/Bliss2R.otf", "Bliss2R.otf"),
+                    ("/fonts/Bliss2-Regular.ttf", "Bliss2-Regular.ttf"),
+                ]
+            ),
+        ),
+        patch.object(file_locator, "_has_fonttools", return_value=False),
+    ):
+        result = _scan_system_font_dirs(
+            "bliss2", ["/fonts"], predicate=lambda p: not p.endswith(".otf")
+        )
+    assert result == "/fonts/Bliss2-Regular.ttf"
+
+
+def test_get_internal_font_names_handles_ttlib_error():
+    """TTLibError (malformed/unsupported font) must be caught like the other parse errors."""
+    from fontTools.ttLib import TTLibError
+
+    with patch("fontTools.ttLib.TTFont", side_effect=TTLibError("bad font")):
+        names = _get_internal_font_names("dummy.ttf")
+        assert names == set()
+
+
+def test_is_acceptable_alias_ordinary_suffix_not_blocked():
+    """Sanity check: normal non-decorative suffixes aren't accidentally blocklisted."""
+    assert _is_acceptable_alias("garamond", "garamondpro") is True

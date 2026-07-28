@@ -95,8 +95,8 @@ def test_get_font_name_logic(drawer, monkeypatch, caplog):
 
     # Hammer down EVERY possible namespace reference to the system resolver
     # to guarantee it NEVER touches the disk scan loop.
-    monkeypatch.setattr(fl, "resolve_system_font_path", lambda _: None)
-    monkeypatch.setattr(td, "resolve_system_font_path", lambda _: None)
+    monkeypatch.setattr(fl, "resolve_system_font_path", lambda _, **kwargs: None)
+    monkeypatch.setattr(td, "resolve_system_font_path", lambda _, **kwargs: None)
 
     assert inst.get_font_name("Helvetica") == "Helvetica"
     assert inst.get_font_name("times-bold") == "Times-Bold"
@@ -428,7 +428,7 @@ def test_get_font_name_external_registry(monkeypatch):
     monkeypatch.setattr(
         text_drawer,
         "resolve_system_font_path",
-        lambda _: None,
+        lambda _, **kwargs: None,
     )
 
     with patch("reportlab.pdfbase.pdfmetrics.getFont") as mock_get_font:
@@ -603,7 +603,7 @@ def test_get_font_name_resolves_system_font(monkeypatch):
     monkeypatch.setattr(
         text_drawer,
         "resolve_system_font_path",
-        lambda _: "/fake/fonts/MyFont.ttf",
+        lambda _, **kwargs: "/fake/fonts/MyFont.ttf",
     )
 
     monkeypatch.setattr(
@@ -679,3 +679,53 @@ def test_text_drawer_preserves_page_boundaries_when_a_page_draws_nothing():
         # Must be 3 distinct pages — page 2's empty output must not get
         # folded into page 3's canvas page.
         assert len(overlay_pdf.pages) == 3
+
+
+import struct
+
+from pdftl.operations.helpers.text_drawer import _is_reportlab_compatible_font
+
+
+def _make_sfnt(tags, tmp_path, name="font.otf"):
+    """Builds a minimal valid sfnt header/table-directory for testing."""
+    num_tables = len(tags)
+    header = struct.pack(">4sHHHH", b"OTTO", num_tables, 0, 0, 0)
+    table_dir = b""
+    for tag in tags:
+        # tag(4) + checksum(4) + offset(4) + length(4) = 16 bytes
+        table_dir += struct.pack(">4sIII", tag, 0, 0, 0)
+    path = tmp_path / name
+    path.write_bytes(header + table_dir)
+    return str(path)
+
+
+def test_is_reportlab_compatible_font_rejects_pfb():
+    """Bare Type 1 (.pfb) is rejected outright without opening the file."""
+    assert _is_reportlab_compatible_font("/fake/path/Font.pfb") is False
+
+
+def test_is_reportlab_compatible_font_rejects_cff_outline(tmp_path):
+    """An sfnt-wrapped font with a CFF table (CFF-flavored OTF) is rejected."""
+    path = _make_sfnt([b"CFF ", b"cmap", b"head"], tmp_path)
+    assert _is_reportlab_compatible_font(path) is False
+
+
+def test_is_reportlab_compatible_font_accepts_glyf_outline(tmp_path):
+    """A normal glyf-outline TrueType font (no CFF table) is accepted."""
+    path = _make_sfnt([b"glyf", b"cmap", b"head"], tmp_path, name="font.ttf")
+    assert _is_reportlab_compatible_font(path) is True
+
+
+def test_is_reportlab_compatible_font_permissive_on_short_header(tmp_path):
+    """A file too small to contain a full sfnt header (<12 bytes) is treated
+    permissively (True) rather than rejected -- we can't tell, and the real
+    registration attempt downstream is the authoritative check."""
+    path = tmp_path / "tiny.ttf"
+    path.write_bytes(b"\x00\x01\x00\x00")  # only 4 bytes
+    assert _is_reportlab_compatible_font(str(path)) is True
+
+
+def test_is_reportlab_compatible_font_permissive_on_missing_file():
+    """A nonexistent path raises OSError on open() - must be caught and
+    treated permissively (True), not propagate."""
+    assert _is_reportlab_compatible_font("/definitely/not/a/real/path.ttf") is True

@@ -12,7 +12,7 @@ import logging
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,69 @@ _STANDARD_ALIASES = {
     "zapfdingbats": ["dingbats", "urwdingbats", "d050000l"],
 }
 
+# Suffixes/fragments that indicate a font is a distinct decorative or
+# special-purpose design rather than a weight/style variant of the
+# requested family. A substring match against these residuals (e.g.
+# "garamond" matching inside "garamondinitials") must be rejected even
+# though the base name is contained within it.
+_DESIGN_VARIANT_BLOCKLIST = {
+    "initials",
+    "caps",
+    "titling",
+    "swash",
+    "ornaments",
+    "ornament",
+    "expert",
+    "alternate",
+    "alt",
+    "stencil",
+    "outline",
+    "shadow",
+    "decorative",
+    "engraved",
+    "fraktur",
+    "text",
+    "display",
+    "poster",
+    "sc",  # small caps abbreviation
+}
+
+
+def _style_traits_match(search_term: str, found_names: set[str]) -> bool:
+    """
+    Ensures bold/italic style traits implied by the search term match
+    those implied by the candidate's names.
+    """
+    is_bold_req = "bold" in search_term
+    is_italic_req = "italic" in search_term or "oblique" in search_term
+
+    font_is_bold = any("bold" in name for name in found_names)
+    font_is_italic = any("italic" in name or "oblique" in name for name in found_names)
+
+    return is_bold_req == font_is_bold and is_italic_req == font_is_italic
+
+
+def _is_direct_name_match(search_term: str, name: str) -> bool:
+    """
+    Checks whether a single candidate name is an acceptable direct (non-alias)
+    match for the search term, applying the design-variant blocklist to
+    substring matches where the candidate name is more specific.
+    """
+    if search_term == name or name in search_term:
+        return True
+    if search_term in name:
+        residual = name.replace(search_term, "", 1)
+        return not any(marker in residual for marker in _DESIGN_VARIANT_BLOCKLIST)
+    return False
+
+
+def _matches_standard_alias(search_term: str, found_names: set[str]) -> bool:
+    """Checks whether the search term matches via a known metric-compatible alias."""
+    for base, aliases in _STANDARD_ALIASES.items():
+        if base in search_term and any(alias in name for alias in aliases for name in found_names):
+            return True
+    return False
+
 
 def _is_acceptable_alias(search_term: str, found_names: set[str] | str) -> bool:
     """
@@ -49,31 +112,20 @@ def _is_acceptable_alias(search_term: str, found_names: set[str] | str) -> bool:
     if isinstance(found_names, str):
         found_names = {found_names}
 
-    is_bold_req = "bold" in search_term
-    is_italic_req = "italic" in search_term or "oblique" in search_term
-
-    font_is_bold = any("bold" in name for name in found_names)
-    font_is_italic = any("italic" in name or "oblique" in name for name in found_names)
-
-    if is_bold_req != font_is_bold or is_italic_req != font_is_italic:
+    if not _style_traits_match(search_term, found_names):
         return False
 
-    if any(search_term in name or name in search_term for name in found_names):
+    if any(_is_direct_name_match(search_term, name) for name in found_names):
         return True
 
-    for base, aliases in _STANDARD_ALIASES.items():
-        if base in search_term:
-            if any(alias in name for alias in aliases for name in found_names):
-                return True
-
-    return False
+    return _matches_standard_alias(search_term, found_names)
 
 
 def _get_internal_font_names(filepath: str) -> set[str]:
     """Uses fontTools to read the internal names of a font file."""
     names = set()
     try:
-        from fontTools.ttLib import TTFont
+        from fontTools.ttLib import TTFont, TTLibError
     except ImportError:
         return names
 
@@ -90,7 +142,7 @@ def _get_internal_font_names(filepath: str) -> set[str]:
                         names.add(decoded.lower().replace(" ", ""))
                     except UnicodeError:
                         continue
-    except (OSError, KeyError, AttributeError, ValueError, TypeError) as e:
+    except (OSError, KeyError, AttributeError, ValueError, TypeError, TTLibError) as e:
         logger.debug("FontTools failed to read %s: %s", filepath, e)
 
     return names
@@ -117,7 +169,42 @@ def _get_font_directories() -> list[str]:
     ]
 
 
-def _resolve_linux_fontconfig(font_name: str) -> str | None:
+def _parse_fc_match_output(output: str) -> tuple[str, str] | None:
+    """Splits fc-match's `%{file}|%{family}` output into (path, family)."""
+    if not output or "|" not in output:
+        return None
+    path, family = output.split("|", 1)
+    return path, family
+
+
+def _fc_candidate_path(
+    font_name: str, path: str, family: str, predicate: Callable[[str], bool] | None
+) -> str | None:
+    """
+    Validates a single fc-match candidate: name-acceptable, well-formed
+    font extension, existing file, and (if given) predicate-acceptable.
+    Returns the path if all checks pass, else None.
+    """
+    search_term = font_name.lower().replace(" ", "")
+    family_clean = family.lower().replace(" ", "")
+    path_clean = os.path.basename(path).lower().replace(" ", "")
+
+    if not _is_acceptable_alias(search_term, {family_clean, path_clean}):
+        return None
+    if not path.lower().endswith((".ttf", ".otf", ".ttc", ".pfb")) or not os.path.isfile(path):
+        return None
+    if predicate is not None and not predicate(path):
+        # fc-match's single best guess didn't satisfy the caller's
+        # requirements (e.g. wrong outline format) - let the caller fall
+        # through to the full directory crawl for an alternate match,
+        # rather than giving up on the name entirely.
+        return None
+    return path
+
+
+def _resolve_linux_fontconfig(
+    font_name: str, predicate: Callable[[str], bool] | None = None
+) -> str | None:
     """Attempts to use Linux's fc-match to find a font accurately."""
     if not sys.platform.startswith("linux"):
         return None
@@ -129,25 +216,13 @@ def _resolve_linux_fontconfig(font_name: str) -> str | None:
             text=True,
             check=True,
         )
-        output = result.stdout.strip()
-        if not output or "|" not in output:
+        parsed = _parse_fc_match_output(result.stdout.strip())
+        if parsed is None:
             return None
-
-        path, family = output.split("|", 1)
-
-        search_term = font_name.lower().replace(" ", "")
-        family_clean = family.lower().replace(" ", "")
-        path_clean = os.path.basename(path).lower().replace(" ", "")
-
-        # Verify the OS didn't just hand us a generic fallback like "Noto Sans"
-        if _is_acceptable_alias(search_term, {family_clean, path_clean}):
-            if path.lower().endswith((".ttf", ".otf", ".ttc", ".pfb")) and os.path.isfile(path):
-                return path
-
+        path, family = parsed
+        return _fc_candidate_path(font_name, path, family, predicate)
     except (FileNotFoundError, subprocess.CalledProcessError, OSError):
-        pass  # locator command unavailable or failed; fall through to None
-
-    return None
+        return None  # locator command unavailable or failed
 
 
 def _has_fonttools() -> bool:
@@ -172,7 +247,13 @@ def _iter_system_font_files(dirs_to_scan: list[str]) -> Iterator[tuple[str, str]
                     yield os.path.join(root, file), file
 
 
-def _is_font_match(filepath: str, filename: str, search_term: str, use_fonttools: bool) -> bool:
+def _is_font_match(
+    filepath: str,
+    filename: str,
+    search_term: str,
+    use_fonttools: bool,
+    predicate: Callable[[str], bool] | None = None,
+) -> bool:
     """Checks if a specific file matches the requested font search term."""
     clean_name = os.path.splitext(filename)[0].lower().replace(" ", "")
     found_names = {clean_name}
@@ -180,33 +261,47 @@ def _is_font_match(filepath: str, filename: str, search_term: str, use_fonttools
     if use_fonttools:
         found_names.update(_get_internal_font_names(filepath))
 
-    return _is_acceptable_alias(search_term, found_names)
+    if not _is_acceptable_alias(search_term, found_names):
+        return False
+    return predicate is None or predicate(filepath)
 
 
-def _scan_system_font_dirs(search_term: str, dirs_to_scan: list[str]) -> str | None:
+def _scan_system_font_dirs(
+    search_term: str,
+    dirs_to_scan: list[str],
+    predicate: Callable[[str], bool] | None = None,
+) -> str | None:
     """Scans specified directories to find a matching font file."""
     use_fonttools = _has_fonttools()
 
     for filepath, filename in _iter_system_font_files(dirs_to_scan):
-        if _is_font_match(filepath, filename, search_term, use_fonttools):
+        if _is_font_match(filepath, filename, search_term, use_fonttools, predicate):
             return filepath
 
     return None
 
 
 def resolve_system_font_path(
-    font_name: str, custom_dirs: list[str] | None = None, use_system: bool = True
+    font_name: str,
+    custom_dirs: list[str] | None = None,
+    use_system: bool = True,
+    predicate: Callable[[str], bool] | None = None,
 ) -> str | None:
     """
     Attempts to resolve a font name to an absolute file path across different OS.
     Prioritizes user-provided custom directories over system fonts.
+    If `predicate` is given, only paths for which `predicate(path)` is True
+    are considered acceptable matches; the search keeps going past any
+    name-matching-but-rejected candidate (whether surfaced by fc-match or
+    found during the directory crawl) rather than stopping at the first
+    name match.
     Returns None if the font cannot be found.
     """
     search_term = font_name.lower().replace(" ", "")
 
     # 1. Always prioritize custom user directories if provided
     if custom_dirs:
-        custom_match = _scan_system_font_dirs(search_term, custom_dirs)
+        custom_match = _scan_system_font_dirs(search_term, custom_dirs, predicate)
         if custom_match:
             return custom_match
 
@@ -215,9 +310,9 @@ def resolve_system_font_path(
         return None
 
     # 3. Fast-path lookup for Linux
-    fc_path = _resolve_linux_fontconfig(font_name)
+    fc_path = _resolve_linux_fontconfig(font_name, predicate)
     if fc_path:
         return fc_path
 
     # 4. Fallback exhaustive crawl of standard OS font directories
-    return _scan_system_font_dirs(search_term, _get_font_directories())
+    return _scan_system_font_dirs(search_term, _get_font_directories(), predicate)
