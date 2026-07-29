@@ -222,19 +222,19 @@ def test_clean_registry_does_not_break_class_identity():
     SimplifiedPath / Path isinstance failures in
     test_simplify_vectors_stream.py and test_path_geometry.py).
     """
-    from pdftl.operations.helpers.simplify_vectors_stream import (
+    from pdftl.utils.path_segmentation import (
         SimplifiedPath as SimplifiedPathBefore,
     )
-    from pdftl.operations.helpers.simplify_vectors_stream import Path as PathBefore
+    from pdftl.utils.path_segmentation import Path as PathBefore
 
     if hasattr(reg_init.initialize_registry, "initialized"):
         delattr(reg_init.initialize_registry, "initialized")
     reg_init.initialize_registry()
 
-    from pdftl.operations.helpers.simplify_vectors_stream import (
+    from pdftl.utils.path_segmentation import (
         SimplifiedPath as SimplifiedPathAfter,
     )
-    from pdftl.operations.helpers.simplify_vectors_stream import Path as PathAfter
+    from pdftl.utils.path_segmentation import Path as PathAfter
 
     assert SimplifiedPathBefore is SimplifiedPathAfter, (
         "SimplifiedPath class identity changed after initialize_registry() — "

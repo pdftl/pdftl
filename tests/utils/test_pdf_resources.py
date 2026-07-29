@@ -10,6 +10,8 @@ from pdftl.utils.pdf_resources import (
     _iter_appearance_streams,
     find_resource_recursive,
     get_all_fonts_recursive,
+    walk_content_streams,
+    StreamContext,
 )
 
 
@@ -485,3 +487,479 @@ class TestPdfResources:
 
         fonts = list(get_all_fonts_recursive(MockDoc()))
         assert len(fonts) == 0
+
+
+class TestWalkContentStreams:
+    """Tests for the canonical walk_content_streams recursive walker."""
+
+    def _make_form(self, doc, content=b"", resources=None):
+        form = doc.make_stream(content)
+        form.Subtype = pikepdf.Name("/Form")
+        if resources is not None:
+            form.Resources = resources
+        return form
+
+    # --- basic page-level ---
+
+    def test_walk_page_contents_only(self):
+        """Test a bare page with a content stream and no nested resources
+        yields exactly the page stream, kind='page', depth=0."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"1 0 0 RG")
+
+        results = list(walk_content_streams(doc))
+        assert len(results) == 1
+        stream, ctx = results[0]
+        assert ctx.kind == "page"
+        assert ctx.depth == 0
+        assert ctx.page_num == 1
+
+    def test_walk_no_contents_no_resources(self):
+        """Test a page with neither /Contents nor /Resources yields nothing."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        if "/Contents" in doc.pages[0]:
+            del doc.pages[0].Contents
+        if "/Resources" in doc.pages[0]:
+            del doc.pages[0].Resources
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == []
+
+    # --- Form XObject recursion ---
+
+    def test_walk_form_xobject_recursive(self):
+        """Test a Form XObject is yielded with kind='form', depth=1, and its
+        own nested Form (depth 2) is also yielded."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        inner = self._make_form(doc, b"inner")
+        outer_res = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/In": inner})})
+        outer = self._make_form(doc, b"outer", resources=outer_res)
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Out": outer})}
+        )
+
+        results = list(walk_content_streams(doc))
+        kinds_depths = sorted((ctx.kind, ctx.depth) for _, ctx in results)
+        assert kinds_depths == [("form", 1), ("form", 2), ("page", 0)]
+
+    def test_walk_form_skips_non_form_xobject(self):
+        """Test Image XObjects are not yielded as content streams."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        img = doc.make_stream(b"\xff")
+        img.Subtype = pikepdf.Name("/Image")
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Img": img})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_form_dedup_shared_xobject(self):
+        """Test the same Form referenced twice on one page is yielded once."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        shared = self._make_form(doc, b"shared")
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/A": shared, "/B": shared})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert len([r for r in results if r[1].kind == "form"]) == 1
+
+    def test_walk_form_self_reference_no_infinite_loop(self):
+        """Test a self-referencing Form XObject terminates via the visited set."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        form = self._make_form(doc, b"self")
+        form.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Self": form})})
+
+        doc.pages[0].Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/F": form})})
+
+        results = list(walk_content_streams(doc))
+        assert len([r for r in results if r[1].kind == "form"]) == 1
+
+    # --- Pattern recursion ---
+
+    def test_walk_tiling_pattern_yielded(self):
+        """Test a type-1 tiling Pattern's content stream is yielded, kind='pattern'."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        pat = doc.make_stream(b"pattern content")
+        pat.PatternType = 1
+
+        doc.pages[0].Resources = pikepdf.Dictionary({"/Pattern": pikepdf.Dictionary({"/P1": pat})})
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["page", "pattern"]
+
+    def test_walk_shading_pattern_skipped(self):
+        """Test a type-2 shading Pattern (no content stream) is not yielded."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        pat = doc.make_stream(b"")
+        pat.PatternType = 2
+
+        doc.pages[0].Resources = pikepdf.Dictionary({"/Pattern": pikepdf.Dictionary({"/P1": pat})})
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_pattern_malformed_type_skipped(self):
+        """Test a Pattern with a non-integer /PatternType is safely skipped."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        pat = doc.make_stream(b"")
+        pat.PatternType = pikepdf.Name("/Bogus")
+
+        doc.pages[0].Resources = pikepdf.Dictionary({"/Pattern": pikepdf.Dictionary({"/P1": pat})})
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    # --- ExtGState /SMask recursion ---
+
+    def test_walk_smask_group_yielded(self):
+        """Test an ExtGState /SMask /G Form group is recursed into, kind='smask'."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        group = self._make_form(doc, b"mask content")
+        group.Group = pikepdf.Dictionary({"/S": pikepdf.Name("/Transparency")})
+        smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+        gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+        )
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["page", "smask"]
+
+    def test_walk_smask_none_skipped(self):
+        """Test /SMask == /None (the common no-op case) is skipped without error."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        gs = pikepdf.Dictionary(
+            {"/Type": pikepdf.Name("/ExtGState"), "/SMask": pikepdf.Name("/None")}
+        )
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_extgstate_no_smask_key(self):
+        """Test ExtGState dicts without /SMask at all are handled cleanly."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState")})
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    # --- Annotation /AP recursion ---
+
+    def test_walk_annotation_appearance_stream(self):
+        """Test an annotation's /AP /N stream is yielded, kind='annotation'."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        ap_form = self._make_form(doc, b"annot content")
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/FreeText"),
+                "/AP": pikepdf.Dictionary({"/N": ap_form}),
+            }
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["annotation", "page"]
+
+    def test_walk_annotation_nested_form_recursion(self):
+        """Test a Form nested inside an annotation's AP stream resources is
+        also recursed into (depth increments past the annotation stream)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        nested = self._make_form(doc, b"nested")
+        ap_res = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/N1": nested})})
+        ap_form = self._make_form(doc, b"annot content", resources=ap_res)
+
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/FreeText"),
+                "/AP": pikepdf.Dictionary({"/N": ap_form}),
+            }
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["annotation", "form", "page"]
+
+    def test_walk_annotation_no_annots(self):
+        """Test pages with no /Annots key are unaffected."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_annotation_missing_ap(self):
+        """Test annotations lacking /AP entirely are skipped without error."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        annot = pikepdf.Dictionary(
+            {"/Type": pikepdf.Name("/Annot"), "/Subtype": pikepdf.Name("/FreeText")}
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_annotation_non_object_entry(self):
+        """Test /Annots arrays containing non-object entries are skipped."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Annots = pikepdf.Array(["not_an_annotation"])
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_annotation_malformed_annots_suppressed(self):
+        """Test a malformed (non-iterable) /Annots value is caught by the
+        suppress block and doesn't blow up the rest of the walk."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page content")
+        doc.pages[0].Annots = pikepdf.Dictionary({"/Bogus": True})
+
+        results = list(walk_content_streams(doc))
+        assert len(results) == 1
+        assert results[0][1].kind == "page"
+
+    # --- combined / cross-cutting ---
+
+    def test_walk_page_indices_filter(self):
+        """Test only the requested page_indices are walked."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page1")
+        doc.pages[1].Contents = doc.make_stream(b"page2")
+
+        results = list(walk_content_streams(doc, page_indices=[2]))
+        assert len(results) == 1
+        assert results[0][1].page_num == 2
+
+    def test_walk_page_out_of_range_logged(self, caplog):
+        """Test an out-of-range page index is logged and skipped, not raised."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        with caplog.at_level(logging.WARNING):
+            results = list(walk_content_streams(doc, page_indices=[999]))
+
+        assert results == []
+        assert "walk_content_streams: page 999 out of range" in caplog.text
+
+    def test_walk_combined_all_kinds_one_page(self):
+        """Test a page combining a Form, a Pattern, an SMask group, and an
+        annotation AP stream all in one Resources dict yields all four kinds
+        with correct dedup and no cross-contamination."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page content")
+
+        form = self._make_form(doc, b"form content")
+
+        pat = doc.make_stream(b"pattern content")
+        pat.PatternType = 1
+
+        smask_group = self._make_form(doc, b"mask content")
+        smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": smask_group})
+        gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {
+                "/XObject": pikepdf.Dictionary({"/F1": form}),
+                "/Pattern": pikepdf.Dictionary({"/P1": pat}),
+                "/ExtGState": pikepdf.Dictionary({"/GS1": gs}),
+            }
+        )
+
+        ap_form = self._make_form(doc, b"annot content")
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/FreeText"),
+                "/AP": pikepdf.Dictionary({"/N": ap_form}),
+            }
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["annotation", "form", "page", "pattern", "smask"]
+
+    def test_stream_context_is_dataclass_with_expected_fields(self):
+        """Test StreamContext exposes the expected attribute surface."""
+        ctx = StreamContext(page_num=1, depth=0, kind="page", resources=None)
+        assert ctx.page_num == 1
+        assert ctx.depth == 0
+        assert ctx.kind == "page"
+        assert ctx.resources is None
+
+    def test_walk_pattern_dedup_shared_pattern(self):
+        """Test the same Pattern referenced under two names is only yielded
+        once, covering the already-visited continue branch."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        pat = doc.make_stream(b"pattern content")
+        pat.PatternType = 1
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/Pattern": pikepdf.Dictionary({"/P1": pat, "/P2": pat})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert len([r for r in results if r[1].kind == "pattern"]) == 1
+
+    def test_walk_pattern_with_own_resources_recurses(self):
+        """Test a Pattern with its own /Resources dict recurses into a
+        nested Form XObject, covering the pattern-resources recursion call."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        nested = self._make_form(doc, b"nested in pattern")
+        pat_res = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/N1": nested})})
+        pat = doc.make_stream(b"pattern content")
+        pat.PatternType = 1
+        pat.Resources = pat_res
+
+        doc.pages[0].Resources = pikepdf.Dictionary({"/Pattern": pikepdf.Dictionary({"/P1": pat})})
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["form", "page", "pattern"]
+
+    def test_walk_extgstate_dedup_shared_gs(self):
+        """Test the same ExtGState dict referenced under two names is only
+        processed once, covering the already-visited continue branch."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        group = self._make_form(doc, b"mask content")
+        smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+        gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs, "/GS2": gs})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert len([r for r in results if r[1].kind == "smask"]) == 1
+
+    def test_walk_smask_group_dedup_shared_group(self):
+        """Test two distinct ExtGStates whose /SMask /G points to the same
+        Form group only yield the smask group once, covering the
+        already-visited continue on the group objgen check."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        group = self._make_form(doc, b"shared mask content")
+        smask1 = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+        smask2 = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+        gs1 = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask1})
+        gs2 = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask2})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs1, "/GS2": gs2})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert len([r for r in results if r[1].kind == "smask"]) == 1
+
+    def test_walk_smask_group_not_pikepdf_object(self):
+        """Test /SMask /G that isn't a valid pikepdf.Object (malformed) is
+        skipped without error, covering the isinstance-false half of the
+        compound continue condition (as opposed to the already-visited half)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": 123})
+        gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+        )
+
+        results = list(walk_content_streams(doc))
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_walk_smask_group_with_own_resources_recurses(self):
+        """Test an SMask group with its own /Resources dict recurses into a
+        nested Form XObject, covering the smask-resources recursion call."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        nested = self._make_form(doc, b"nested in smask")
+        group_res = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/N1": nested})})
+        group = self._make_form(doc, b"mask content", resources=group_res)
+        smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+        gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+        )
+
+        results = list(walk_content_streams(doc))
+        kinds = sorted(ctx.kind for _, ctx in results)
+        assert kinds == ["form", "page", "smask"]
+
+    def test_walk_annotation_dedup_shared_appearance_stream(self):
+        """Test the same appearance stream referenced under both /N and /D
+        on one annotation is only yielded once, covering the already-visited
+        continue branch in _walk_annotation_streams."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+
+        shared_form = self._make_form(doc, b"shared annot content")
+        annot = pikepdf.Dictionary(
+            {
+                "/Type": pikepdf.Name("/Annot"),
+                "/Subtype": pikepdf.Name("/Widget"),
+                "/AP": pikepdf.Dictionary({"/N": shared_form, "/D": shared_form}),
+            }
+        )
+        doc.pages[0].Annots = pikepdf.Array([annot])
+
+        results = list(walk_content_streams(doc))
+        assert len([r for r in results if r[1].kind == "annotation"]) == 1

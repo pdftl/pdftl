@@ -33,7 +33,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.path_geometry import simplify_path
 from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig
-from pdftl.operations.helpers.simplify_vectors_stream import segment, serialize
+from pdftl.utils.path_segmentation import segment, serialize
 
 logger = logging.getLogger(__name__)
 

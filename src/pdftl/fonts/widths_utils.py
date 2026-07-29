@@ -22,6 +22,8 @@ corresponding GIDs are themselves contiguous.
 from __future__ import annotations
 
 import logging
+from pdftl.fonts.standard14_metrics import STANDARD_14_WIDTHS
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -61,7 +63,7 @@ def _extract_simple_widths(font_obj: Any) -> dict[str, float]:
     """Extract flat /Widths array from Simple fonts as hex keys (e.g. '41')."""
     widths: dict[str, float] = {}
     if "/Widths" not in font_obj or "/FirstChar" not in font_obj:
-        return widths
+        return _standard14_fallback_widths(font_obj)
 
     try:
         first_char = int(font_obj["/FirstChar"])
@@ -78,6 +80,25 @@ def _extract_simple_widths(font_obj: Any) -> dict[str, float]:
             pass  # skip entries with non-numeric width data
 
     return widths
+
+
+def _standard14_fallback_widths(font_obj: Any) -> dict[str, float]:
+    """A non-embedded Standard-14 font (e.g. plain /Helvetica) legally omits
+    /Widths entirely -- the spec says the viewer supplies the built-in AFM
+    metrics instead. Without this, every glyph in such a font silently
+    measures as 0-width, which breaks any caller relying on advance widths
+    (e.g. excise's glyph-position bbox test never advances the pen, so a
+    whole run of text tests at its start position only). Falls back to
+    STANDARD_14_WIDTHS keyed by /BaseFont name (subset prefix stripped)
+    when it names one of the 14 standard fonts; returns {} otherwise so
+    callers' existing "unknown width -> 0.0" behavior is unchanged for
+    genuinely unresolvable fonts.
+    """
+    base_font = str(font_obj.get("/BaseFont", "")).lstrip("/").split("+")[-1]
+    table = STANDARD_14_WIDTHS.get(base_font)
+    if table is None:
+        return {}
+    return {f"{code:02X}": w for code, w in table.items()}
 
 
 def _extract_seq_widths(start_cid: int, seq_items: list, widths: dict[str, float]) -> None:
@@ -419,3 +440,247 @@ def update_cid_to_gid_map(
             raise ValueError(
                 "A valid pikepdf.Pdf context must be provided to create a new CIDToGIDMap stream."
             )
+
+
+# ============================================================================
+# Vertical writing mode: /DW2 and /W2
+# ============================================================================
+#
+# A CIDFont used in vertical writing mode (WMode 1) carries vertical glyph
+# metrics entirely separately from the horizontal /W table:
+#
+#   /DW2 [v_y w1]  -- default vertical metrics applied to any CID with no
+#                     explicit /W2 entry. Per ISO 32000-2 9.7.4.3, if /DW2
+#                     itself is absent the spec default is [880, -1000].
+#
+#   /W2  -- per-CID overrides, in the same two encoding shapes as /W, but
+#           each "width" is a (w1y, vx, vy) TRIPLE instead of a single
+#           number:
+#             sequence form:  c [w1y_1 vx_1 vy_1  w1y_2 vx_2 vy_2 ...]
+#             range form:     cFirst cLast w1y vx vy
+#
+# Where (per spec):
+#   w1y  = vertical displacement (glyph advance along the vertical axis,
+#          i.e. the vertical analogue of a horizontal /W width)
+#   vx, vy = position vector: the vertical origin of the glyph, relative to
+#          the horizontal origin, in glyph space (1/1000 units)
+#
+# This table is functionally independent of /W and /CIDToGIDMap: /W is
+# keyed by width equality, /CIDToGIDMap by GID identity, /W2 by (w1y, vx,
+# vy) triple equality. All three are extracted, edited, and recompiled as
+# entirely separate concerns even though they share the same descendant
+# CIDFont dictionary.
+
+_SPEC_DEFAULT_DW2 = (880.0, -1000.0)  # (v_y, w1) per ISO 32000-2 9.7.4.3
+
+
+def get_default_vertical_metrics(cid_font: Any) -> tuple[float, float]:
+    """
+    Reads a descendant CIDFont's /DW2 default vertical metrics.
+
+    Returns (v_y, w1) -- the position-vector y-component and the default
+    vertical displacement applied to any CID absent from /W2. Falls back
+    to the spec default (880, -1000) if /DW2 is missing or malformed,
+    matching the same "degrade to the documented default" pattern used
+    elsewhere in this module (e.g. update_cid_to_gid_map's Identity
+    fallback).
+    """
+    if cid_font is None or "/DW2" not in cid_font:
+        return _SPEC_DEFAULT_DW2
+    try:
+        dw2 = cid_font["/DW2"]
+        return float(dw2[0]), float(dw2[1])
+    except (IndexError, TypeError, ValueError):
+        logger.warning("Malformed /DW2 entry, falling back to spec default.")
+        return _SPEC_DEFAULT_DW2
+
+
+def _extract_vertical_seq(
+    start_cid: int, seq_items: list, metrics: dict[str, tuple[float, float, float]]
+) -> None:
+    """Helper: populate vertical metrics from a /W2 sequence-form entry,
+    where seq_items is a flat run of (w1y, vx, vy) triples."""
+    n_triples = len(seq_items) // 3
+    for i in range(n_triples):
+        cid = start_cid + i
+        try:
+            w1y = float(seq_items[3 * i])
+            vx = float(seq_items[3 * i + 1])
+            vy = float(seq_items[3 * i + 2])
+            metrics[f"{cid:04X}"] = (w1y, vx, vy)
+        except (ValueError, TypeError):
+            pass  # skip malformed triples rather than aborting the whole run
+
+
+def _extract_vertical_range(
+    start_cid: int,
+    end_val: Any,
+    w1y_val: Any,
+    vx_val: Any,
+    vy_val: Any,
+    metrics: dict[str, tuple[float, float, float]],
+) -> None:
+    """Helper: populate vertical metrics from a /W2 range-form entry."""
+    try:
+        end_cid = int(end_val)
+        w1y = float(w1y_val)
+        vx = float(vx_val)
+        vy = float(vy_val)
+        for cid in range(start_cid, end_cid + 1):
+            metrics[f"{cid:04X}"] = (w1y, vx, vy)
+    except (ValueError, TypeError):
+        pass  # non-numeric range entry; skip this range
+
+
+def extract_vertical_widths(font_obj: Any) -> dict[str, tuple[float, float, float]]:
+    """
+    Extracts a Type0 font's /W2 vertical metrics into a flat dict.
+
+    Maps CID (hex string, e.g. "001C") -> (w1y, vx, vy). Returns an empty
+    dict for non-Type0 fonts, fonts with no descendant CIDFont, or a
+    CIDFont with no /W2 entry -- callers should fall back to
+    get_default_vertical_metrics() for any CID not present here.
+
+    Mirrors _extract_composite_widths' sequence/range dispatch shape
+    (including the same duck-typed "is this a nested array?" detection,
+    since pikepdf may wrap nested /W2 arrays in different concrete types
+    depending on context), but each entry is a 3-tuple instead of a
+    single width.
+    """
+    metrics: dict[str, tuple[float, float, float]] = {}
+    cid_font = _get_descendant_cid_font(font_obj)
+    if cid_font is None or "/W2" not in cid_font:
+        return metrics
+
+    w2_array = cid_font["/W2"]
+    idx = 0
+    while idx < len(w2_array):
+        try:
+            start_cid = int(w2_array[idx])
+        except (ValueError, TypeError):
+            idx += 1
+            continue
+
+        if idx + 1 >= len(w2_array):
+            break
+
+        next_val = w2_array[idx + 1]
+
+        if isinstance(next_val, (str, bytes)):
+            is_sequence = False
+        else:
+            try:
+                seq_items = list(next_val)
+                is_sequence = True
+            except TypeError:
+                is_sequence = False
+
+        if is_sequence:
+            _extract_vertical_seq(start_cid, seq_items, metrics)
+            idx += 2
+        elif idx + 4 < len(w2_array):
+            _extract_vertical_range(
+                start_cid,
+                next_val,
+                w2_array[idx + 2],
+                w2_array[idx + 3],
+                w2_array[idx + 4],
+                metrics,
+            )
+            idx += 5
+        else:
+            idx += 1
+
+    return metrics
+
+
+def build_vertical_metrics_lookup(font_obj: Any) -> VerticalMetricsLookup:
+    """
+    Builds a reusable lookup for a font's vertical metrics: parses /W2 and
+    /DW2 ONCE and returns a small callable-like object, rather than every
+    per-glyph call re-parsing the whole /W2 array from scratch (which is
+    what an earlier version of this module did -- O(glyphs * W2 size)
+    instead of O(glyphs)). Callers iterating glyphs across a page (e.g.
+    `trim`'s per-glyph bbox test) should call this once per font and reuse
+    the result, not call extract_vertical_widths()/get_default_vertical_metrics()
+    per glyph.
+
+    Also resolves spec-exact vx (position-vector x-component) defaulting:
+    per ISO 32000-2 9.7.4.3, vx defaults to w0/2 where w0 is the glyph's
+    HORIZONTAL displacement from /W -- not 0.0. This function pulls
+    /W (via extract_font_widths) alongside /W2/DW2 specifically so that
+    default can be computed correctly, rather than punting it to the
+    caller or silently defaulting to 0.0.
+    """
+    cid_font = _get_descendant_cid_font(font_obj)
+    w2_map = extract_vertical_widths(font_obj)
+    dw2 = get_default_vertical_metrics(cid_font)
+    horizontal_widths = extract_font_widths(font_obj)  # for spec-exact vx default
+    return VerticalMetricsLookup(w2_map=w2_map, dw2=dw2, horizontal_widths=horizontal_widths)
+
+
+@dataclass(frozen=True)
+class VerticalMetricsLookup:
+    """Pre-parsed /W2 + /DW2 + /W state for O(1) per-glyph vertical metric
+    lookups. Build via build_vertical_metrics_lookup(font_obj); don't
+    construct directly."""
+
+    w2_map: dict[str, tuple[float, float, float]]
+    dw2: tuple[float, float]  # (v_y, w1)
+    horizontal_widths: dict[str, float]
+
+    def get(self, cid_hex: str) -> tuple[float, float, float]:
+        """Returns (w1y, vx, vy) for one CID. O(1) dict lookups only --
+        no re-parsing of /W2 on every call."""
+        if cid_hex in self.w2_map:
+            return self.w2_map[cid_hex]
+        v_y, w1 = self.dw2
+        w0 = self.horizontal_widths.get(cid_hex, 0.0)
+        return (w1, w0 / 2.0, v_y)
+
+
+def is_vertical_writing_mode(font_obj: Any) -> bool:
+    """
+    Detects whether a Type0 font uses vertical writing mode (WMode 1).
+
+    Checks, in order:
+      1. /Encoding as a Name ending in "-V" (e.g. /Identity-V) -- the
+         common case for predefined CMaps.
+      2. /Encoding as an embedded CMap Stream with an explicit /WMode
+         key equal to 1.
+
+    Returns False for non-Type0 fonts, fonts with no /Encoding, or any
+    case that can't be determined (degrade-to-horizontal is the safe
+    default, since horizontal is far more common and a false negative
+    here just means vertical glyphs get slightly wrong extents rather
+    than crashing).
+
+    KNOWN GAP: does not resolve /Encoding given as a Name that refers to
+    a non-predefined, PDF-registered CMap resource (i.e. some Name other
+    than one of the spec's predefined CMap names like /Identity-H,
+    /Identity-V, or the various */UCS2 etc. names) whose actual WMode
+    would require looking up a CMap resource elsewhere in the PDF and
+    parsing its /WMode. That resolution path is not implemented; such a
+    font will be (incorrectly) treated as horizontal. This is considered
+    rare enough in practice to defer, but any caller hitting mis-detected
+    vertical text on a real-world PDF should suspect this path first.
+    """
+    if str(font_obj.get("/Subtype", "")) != "/Type0":
+        return False
+    if "/Encoding" not in font_obj:
+        return False
+
+    encoding = font_obj["/Encoding"]
+
+    import pikepdf
+
+    if isinstance(encoding, pikepdf.Name):
+        return str(encoding).endswith("-V")
+
+    if isinstance(encoding, pikepdf.Stream):
+        try:
+            return int(encoding.get("/WMode", 0)) == 1
+        except (TypeError, ValueError):
+            return False
+
+    return False

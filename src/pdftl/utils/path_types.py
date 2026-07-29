@@ -59,6 +59,16 @@ class Subpath:
     ctm_scale: float = 1.0
     original_op_count: int = 0
 
+    # Populated only when segment() is called with track_instructions=True
+    # (opt-in; simplify_vectors never sets this, so it costs nothing there).
+    # Holds this subpath's own slice of raw (operands, operator) tuples from
+    # the parent Path.original_instructions, EXCLUDING the trailing paint
+    # operator (which is path-level, not subpath-level). Any ops that don't
+    # start a new subpath (e.g. stray W/W* clip markers) are attributed to
+    # whichever subpath most recently started, matching where they appear
+    # in a well-formed content stream.
+    instructions: list | None = None
+
 
 # ---------------------------------------------------------------------------
 # Complete path (one 'm...paint_op' sequence)

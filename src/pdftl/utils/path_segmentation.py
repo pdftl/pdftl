@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# src/pdftl/operations/helpers/simplify_vectors_stream.py
+# src/pdftl/utils/path_segmentation.py
 
 from __future__ import annotations
 
@@ -23,15 +23,23 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def segment(instructions: list[Any], config: SimplifyConfig) -> list[Path | Any]:
+def segment(
+    instructions: list[Any], config: SimplifyConfig, track_instructions: bool = False
+) -> list[Path | Any]:
     """Convert a raw instruction list into a mixed list of Path objects and
     pass-through instructions.
 
     Graphics state operators (q, Q, cm, w, W, W*) are tracked to keep the
     current CTM and line width accurate; they still appear as pass-through
     instructions in the output so the content stream remains valid.
+
+    track_instructions: if True, each resulting Path's subpaths are also
+    tagged with their own slice of raw instructions (Subpath.instructions),
+    at the cost of one extra linear scan per flushed Path. Default False
+    and used only by callers needing per-subpath deletion (e.g. `trim`);
+    simplify_vectors leaves this off and is completely unaffected.
     """
-    mixed = _Segmenter(config).process(instructions)
+    mixed = _Segmenter(config, track_instructions=track_instructions).process(instructions)
     if config.coalesce_strokes:
         mixed = _coalesce_strokes(mixed)
     return mixed
@@ -41,8 +49,9 @@ class _Segmenter:
     """State machine that segments a PDF instruction list into Path objects
     and pass-through instructions."""
 
-    def __init__(self, config: SimplifyConfig) -> None:
+    def __init__(self, config: SimplifyConfig, track_instructions: bool = False) -> None:
         self._config = config
+        self._track_instructions = track_instructions
         self._gs_stack = GraphicsStateStack()
         # Cache tolerance locally; only update when CTM changes via q/Q/cm
         self._current_tolerance = self._gs_stack.current.user_space_tolerance(
@@ -246,6 +255,10 @@ class _Segmenter:
     def _flush_path(self, paint_op: str | None, operands: Any) -> None:
         self._flush_subpath(closed=False)
         is_clip = self._gs_stack.current.consume_clipping()
+        if self._track_instructions and self._subpaths:
+            groups = _split_instructions_per_subpath(self._current_path_ops, len(self._subpaths))
+            for sp, grp in zip(self._subpaths, groups):
+                sp.instructions = grp
         path = Path(
             subpaths=list(self._subpaths),
             paint_op=paint_op,
@@ -257,6 +270,38 @@ class _Segmenter:
         self._out.append(path)
         self._current_path_ops.clear()
         self._subpaths.clear()
+
+
+# ---------------------------------------------------------------------------
+# Per-subpath instruction provenance (opt-in; used by trim, not simplify_vectors)
+# ---------------------------------------------------------------------------
+
+
+def _split_instructions_per_subpath(ops: list[Any], n_subpaths: int) -> list[list[Any]]:
+    """Splits a flat list of raw (operands, operator) tuples -- everything
+    that built up one multi-subpath Path, excluding the trailing paint op --
+    into n_subpaths groups, one per Subpath, in encounter order.
+
+    Each 'm' or 're' starts a new group (re is always a single-instruction
+    subpath on its own). Any instruction that doesn't itself start a new
+    subpath (l/c/v/y/h, and stray W/W* clip markers) is attributed to
+    whichever subpath most recently started -- which is also where such
+    markers actually sit in a well-formed stream (immediately trailing the
+    last subpath, just before the paint operator).
+    """
+    if n_subpaths <= 0:
+        return []
+    groups: list[list[Any]] = [[] for _ in range(n_subpaths)]
+    idx = 0
+    started = False
+    for item in ops:
+        op_str = str(item[1])
+        if op_str in ("m", "re"):
+            if started:
+                idx = min(idx + 1, n_subpaths - 1)
+            started = True
+        groups[idx].append(item)
+    return groups
 
 
 # ---------------------------------------------------------------------------

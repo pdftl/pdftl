@@ -1,6 +1,6 @@
-# tests/operations/helpers/test_simplify_vectors_stream.py
+# tests/utils/test_path_segmentation.py
 
-"""Tests for pdftl.operations.helpers.simplify_vectors_stream.
+"""Tests for pdftl.utils.path_segmentation.
 
 The segment() and serialize() functions operate on (operands, operator) pairs.
 segment() only calls str(operator), so plain strings work as operators — no
@@ -9,7 +9,12 @@ pikepdf dependency needed for most tests.
 
 import pytest
 
-from pdftl.operations.helpers.simplify_vectors_stream import segment, serialize, _connects
+from pdftl.utils.path_segmentation import (
+    segment,
+    serialize,
+    _connects,
+    _split_instructions_per_subpath,
+)
 from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig, Subpath
 
 
@@ -669,7 +674,7 @@ class TestCoalesceInternals:
     def test_collect_stroke_group_seeds_from_missing_state_snapshot(self):
         """If state_snapshot is missing or malformed, fall back to permissive sentinels
         rather than crashing on the seed step."""
-        from pdftl.operations.helpers.simplify_vectors_stream import _collect_stroke_group
+        from pdftl.utils.path_segmentation import _collect_stroke_group
 
         p1 = Path(
             subpaths=[Subpath(points=[(0.0, 0.0), (1.0, 0.0)], original_op_count=2)],
@@ -687,7 +692,7 @@ class TestCoalesceInternals:
         construction) must not crash _merge_stroke_group with an
         IndexError when accessing merged_subpaths[-1]; it should simply
         be skipped while merging the remaining valid paths."""
-        from pdftl.operations.helpers.simplify_vectors_stream import _merge_stroke_group
+        from pdftl.utils.path_segmentation import _merge_stroke_group
 
         degenerate = Path(
             subpaths=[],  # no subpaths at all
@@ -781,3 +786,125 @@ class TestBezierOpsWithoutPriorM:
         instrs = [_op("l", 1.0, 0.0), _op("S")]
         result = segment(instrs, _default_config())
         assert result is not None
+
+
+class TestSplitInstructionsPerSubpath:
+    """Direct unit tests for _split_instructions_per_subpath."""
+
+    def test_zero_subpaths_returns_empty(self):
+        """Test n_subpaths <= 0 returns [] regardless of ops content."""
+        ops = [([1, 2], "m"), ([3, 4], "l")]
+        assert _split_instructions_per_subpath(ops, 0) == []
+
+    def test_single_subpath_gets_all_ops(self):
+        """Test one m-started subpath with several draws all land in one group."""
+        ops = [([0, 0], "m"), ([1, 1], "l"), ([2, 2], "l")]
+        groups = _split_instructions_per_subpath(ops, 1)
+        assert groups == [ops]
+
+    def test_two_subpaths_split_on_second_m(self):
+        """Test a second 'm' starts a new group, not appended to the first."""
+        ops = [
+            ([0, 0], "m"),
+            ([1, 1], "l"),
+            ([5, 5], "m"),
+            ([6, 6], "l"),
+        ]
+        groups = _split_instructions_per_subpath(ops, 2)
+        assert groups[0] == [([0, 0], "m"), ([1, 1], "l")]
+        assert groups[1] == [([5, 5], "m"), ([6, 6], "l")]
+
+    def test_re_is_its_own_single_instruction_group(self):
+        """Test 're' both starts and fully constitutes one subpath's group."""
+        ops = [([0, 0], "m"), ([1, 1], "l"), ([0, 0, 5, 5], "re")]
+        groups = _split_instructions_per_subpath(ops, 2)
+        assert groups[0] == [([0, 0], "m"), ([1, 1], "l")]
+        assert groups[1] == [([0, 0, 5, 5], "re")]
+
+    def test_h_attaches_to_current_group_not_a_new_one(self):
+        """Test a closing 'h' stays with the subpath it closes, not a fresh group."""
+        ops = [([0, 0], "m"), ([1, 1], "l"), ([], "h")]
+        groups = _split_instructions_per_subpath(ops, 1)
+        assert groups[0] == ops
+
+    def test_trailing_clip_marker_attaches_to_last_subpath(self):
+        """Test a stray W/W* clip-marker op trailing after the last subpath's
+        geometry is attributed to that last subpath, not dropped or misplaced."""
+        ops = [
+            ([0, 0], "m"),
+            ([1, 1], "l"),
+            ([5, 5], "m"),
+            ([6, 6], "l"),
+            ([], "W"),
+        ]
+        groups = _split_instructions_per_subpath(ops, 2)
+        assert groups[1][-1] == ([], "W")
+        assert ([], "W") not in groups[0]
+
+    def test_more_m_ops_than_declared_subpaths_clamps_to_last(self):
+        """Test a malformed/mismatched count (more m's than n_subpaths) clamps
+        the index rather than raising an IndexError."""
+        ops = [
+            ([0, 0], "m"),
+            ([5, 5], "m"),
+            ([9, 9], "m"),
+        ]
+        groups = _split_instructions_per_subpath(ops, 2)
+        assert len(groups) == 2
+        assert groups[1] == [([5, 5], "m"), ([9, 9], "m")]
+
+
+class TestSegmentTrackInstructions:
+    """Integration tests: segment(..., track_instructions=True) end-to-end."""
+
+    def test_default_track_instructions_off_leaves_subpath_instructions_none(self):
+        """Test the default (track_instructions=False, simplify_vectors's call
+        shape) never populates Subpath.instructions -- confirms zero behavior
+        change for the existing caller."""
+        instructions = [
+            ([0, 0], "m"),
+            ([1, 1], "l"),
+            ([5, 5], "m"),
+            ([6, 6], "l"),
+            ([], "S"),
+        ]
+        config = SimplifyConfig()
+        mixed = segment(instructions, config)
+        paths = [item for item in mixed if isinstance(item, Path)]
+        assert len(paths) == 1
+        for sp in paths[0].subpaths:
+            assert sp.instructions is None
+
+    def test_track_instructions_true_populates_per_subpath(self):
+        """Test track_instructions=True splits raw ops across each subpath,
+        with the paint op excluded (it stays at the Path level)."""
+        instructions = [
+            ([0, 0], "m"),
+            ([1, 1], "l"),
+            ([5, 5], "m"),
+            ([6, 6], "l"),
+            ([], "S"),
+        ]
+        config = SimplifyConfig(coalesce_strokes=False)
+        mixed = segment(instructions, config, track_instructions=True)
+        paths = [item for item in mixed if isinstance(item, Path)]
+        assert len(paths) == 1
+        sp0, sp1 = paths[0].subpaths
+        assert sp0.instructions == [([0, 0], "m"), ([1, 1], "l")]
+        assert sp1.instructions == [([5, 5], "m"), ([6, 6], "l")]
+        # Paint op must not leak into either subpath's own instruction list.
+        assert ([], "S") not in sp0.instructions
+        assert ([], "S") not in sp1.instructions
+
+    def test_track_instructions_true_single_subpath_path(self):
+        """Test the common single-subpath case (e.g. a simple filled shape)
+        still populates instructions correctly."""
+        instructions = [
+            ([0, 0, 10, 10], "re"),
+            ([], "f"),
+        ]
+        config = SimplifyConfig()
+        mixed = segment(instructions, config, track_instructions=True)
+        paths = [item for item in mixed if isinstance(item, Path)]
+        assert len(paths) == 1
+        assert paths[0].subpaths[0].instructions == [([0, 0, 10, 10], "re")]

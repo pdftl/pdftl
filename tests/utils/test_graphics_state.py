@@ -550,3 +550,266 @@ class TestGraphicsStateStackTextState:
         assert gs.font_size == pytest.approx(12.0)
         assert clone.font_name == "/F2"
         assert clone.font_size == pytest.approx(24.0)
+
+
+class TestDecodeCodes:
+    """Direct unit tests for GraphicsState._decode_codes."""
+
+    def test_single_byte_mode_returns_raw_bytes(self):
+        gs = GraphicsState()
+        assert gs._decode_codes(b"ABC", two_byte=False) == [65, 66, 67]
+
+    def test_two_byte_mode_pairs_big_endian(self):
+        gs = GraphicsState()
+        raw = bytes([0x00, 0x41, 0x30, 0x0C])
+        assert gs._decode_codes(raw, two_byte=True) == [0x0041, 0x300C]
+
+    def test_two_byte_mode_drops_trailing_odd_byte(self):
+        gs = GraphicsState()
+        raw = bytes([0x00, 0x41, 0xFF])  # trailing unpaired byte
+        assert gs._decode_codes(raw, two_byte=True) == [0x0041]
+
+    def test_two_byte_mode_empty_input(self):
+        gs = GraphicsState()
+        assert gs._decode_codes(b"", two_byte=True) == []
+
+    def test_single_byte_mode_empty_input(self):
+        gs = GraphicsState()
+        assert gs._decode_codes(b"", two_byte=False) == []
+
+
+class TestShowTextStringComposite:
+    """Covers the is_composite_font_fn plumbing through _show_text_string
+    and the text-showing operators (Tj/TJ/'/")."""
+
+    def _width_fn(self, font_name, code):
+        # Fixed 500/1000 em width for every glyph, regardless of code,
+        # to keep advance math simple and predictable in assertions.
+        return 500.0
+
+    def _gs_ready_for_text(self, font_size=10.0):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", font_size])
+        return gs
+
+    def test_simple_font_decodes_one_byte_per_glyph(self):
+        gs = self._gs_ready_for_text()
+        seen = []
+        gs.apply_text_op(
+            "Tj",
+            [b"AB"],
+            glyph_width_fn=self._width_fn,
+            is_composite_font_fn=lambda name: False,
+            glyph_callback=lambda name, code, trm: seen.append(code),
+        )
+        assert seen == [65, 66]
+
+    def test_composite_font_decodes_two_bytes_per_glyph(self):
+        gs = self._gs_ready_for_text()
+        seen = []
+        raw = bytes([0x00, 0x41, 0x30, 0x0C])  # two CIDs: 0x0041, 0x300C
+        gs.apply_text_op(
+            "Tj",
+            [raw],
+            glyph_width_fn=self._width_fn,
+            is_composite_font_fn=lambda name: True,
+            glyph_callback=lambda name, code, trm: seen.append(code),
+        )
+        assert seen == [0x0041, 0x300C]
+
+    def test_no_is_composite_font_fn_defaults_to_single_byte(self):
+        """If is_composite_font_fn is omitted entirely, behavior must be
+        unchanged from before this feature existed: one byte per glyph."""
+        gs = self._gs_ready_for_text()
+        seen = []
+        gs.apply_text_op(
+            "Tj",
+            [b"AB"],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: seen.append(code),
+        )
+        assert seen == [65, 66]
+
+    def test_word_spacing_applies_to_single_byte_code_32_only(self):
+        """Tw must bump the advance for a lone space in a simple font."""
+        gs = self._gs_ready_for_text()
+        gs.apply_text_op("Tw", [200.0])  # large word spacing for visibility
+        gs.apply_text_op(
+            "Tj",
+            [b" "],
+            glyph_width_fn=self._width_fn,
+            is_composite_font_fn=lambda name: False,
+        )
+        tx_with_ws = gs.text_matrix[4]
+
+        gs2 = self._gs_ready_for_text()
+        gs2.apply_text_op(
+            "Tj",
+            [b"A"],  # non-space single byte, no word spacing bump expected
+            glyph_width_fn=self._width_fn,
+            is_composite_font_fn=lambda name: False,
+        )
+        tx_without_ws = gs2.text_matrix[4]
+
+        assert tx_with_ws > tx_without_ws
+
+    def test_word_spacing_never_applies_to_composite_codes(self):
+        """Per spec 9.3.3, Tw must NOT apply to 2-byte composite codes even
+        if the low byte happens to equal 32 (0x0020)."""
+        gs = self._gs_ready_for_text()
+        gs.apply_text_op("Tw", [200.0])
+        raw = bytes([0x00, 0x20])  # CID 0x0020 -- low byte is 32
+        gs.apply_text_op(
+            "Tj",
+            [raw],
+            glyph_width_fn=self._width_fn,
+            is_composite_font_fn=lambda name: True,
+        )
+        tx_composite = gs.text_matrix[4]
+
+        gs2 = self._gs_ready_for_text()
+        raw2 = bytes([0x00, 0x21])  # different CID, no word-spacing edge case
+        gs2.apply_text_op(
+            "Tj",
+            [raw2],
+            glyph_width_fn=self._width_fn,
+            is_composite_font_fn=lambda name: True,
+        )
+        tx_composite2 = gs2.text_matrix[4]
+
+        # Same width_fn return (500) for both, same single-glyph advance,
+        # so both text matrices should land in the same place -- proving
+        # Tw was NOT applied to the 0x0020 composite code.
+        assert tx_composite == pytest.approx(tx_composite2)
+
+
+class TestGlyphCallback:
+    """Covers glyph_callback firing order, count, and matrix contents."""
+
+    def _width_fn(self, font_name, code):
+        return 1000.0  # exactly one em per glyph for easy math
+
+    def test_callback_fires_once_per_glyph(self):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 12.0])
+        calls = []
+        gs.apply_text_op(
+            "Tj",
+            [b"ABC"],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: calls.append((name, code)),
+        )
+        assert calls == [("/F1", 65), ("/F1", 66), ("/F1", 67)]
+
+    def test_callback_receives_pre_advance_matrix(self):
+        """The render matrix passed to the callback for glyph N must
+        reflect position BEFORE glyph N's own width is applied -- i.e.
+        the second glyph's callback tx should equal one full em advance
+        from the first, not two."""
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])  # font_size=10, width=1000/1000 -> tx step = 10
+        matrices = []
+        gs.apply_text_op(
+            "Tj",
+            [b"AB"],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: matrices.append(trm),
+        )
+        tx_glyph0 = matrices[0][4]
+        tx_glyph1 = matrices[1][4]
+        assert tx_glyph0 == pytest.approx(0.0)
+        assert tx_glyph1 == pytest.approx(10.0)
+
+    def test_callback_not_invoked_outside_bt_et_block(self):
+        """If text_matrix is None (outside BT...ET), text_render_matrix is
+        None too, and the callback must not be invoked with a None matrix."""
+        gs = GraphicsState()
+        gs.apply_text_op("Tf", ["/F1", 10.0])  # no BT first
+        calls = []
+        gs.apply_text_op(
+            "Tj",
+            [b"A"],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: calls.append(trm),
+        )
+        assert calls == []
+
+    def test_callback_omitted_is_still_backward_compatible(self):
+        """Existing callers that never pass glyph_callback (e.g. any code
+        written before this feature) must see identical text_matrix
+        results with or without the parameter being available at all."""
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        gs.apply_text_op("Tj", [b"AB"], glyph_width_fn=self._width_fn)
+        assert gs.text_matrix[4] == pytest.approx(20.0)
+
+    def test_callback_fires_across_TJ_array_elements(self):
+        """TJ mixes strings and numeric kerning adjustments -- the callback
+        must fire only for actual glyphs, not for the numeric adjustments,
+        and in the correct interleaved order."""
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        calls = []
+        gs.apply_text_op(
+            "TJ",
+            [[b"A", -50.0, b"B"]],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: calls.append(code),
+        )
+        assert calls == [65, 66]  # only the two glyphs, not the -50 adjustment
+
+    def test_callback_fires_for_quote_operator(self):
+        """' (quote) delegates to _tj internally -- confirm the callback
+        plumbing survives that delegation."""
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        gs.apply_text_op("TL", [12.0])  # leading, so T* has somewhere to go
+        calls = []
+        gs.apply_text_op(
+            "'",
+            [b"A"],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: calls.append(code),
+        )
+        assert calls == [65]
+
+    def test_callback_fires_for_dquote_operator(self):
+        """ " (dquote) delegates to _tj after setting aw/ac -- confirm the
+        callback plumbing survives that delegation too."""
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        gs.apply_text_op("TL", [12.0])
+        calls = []
+        gs.apply_text_op(
+            '"',
+            [0.0, 0.0, b"A"],
+            glyph_width_fn=self._width_fn,
+            glyph_callback=lambda name, code, trm: calls.append(code),
+        )
+        assert calls == [65]
+
+
+class TestApplyTextOpDispatchUnchanged:
+    """Guards that routing Tj/TJ/'/" through the new _TEXT_SHOW_HANDLERS
+    table didn't silently break dispatch for the OTHER text-state ops,
+    which must still go through _TEXT_OP_HANDLERS untouched."""
+
+    def test_tm_still_dispatches_correctly(self):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tm", [2.0, 0.0, 0.0, 2.0, 5.0, 5.0])
+        assert gs.text_matrix == (2.0, 0.0, 0.0, 2.0, 5.0, 5.0)
+
+    def test_unrecognized_op_is_noop(self):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        before = gs.text_matrix
+        gs.apply_text_op("XYZ_not_real", [1, 2, 3])
+        assert gs.text_matrix == before

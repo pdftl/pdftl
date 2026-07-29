@@ -93,6 +93,7 @@ Some features also require system software such as `java`.
 ### Advanced
 
 * **Content streams:** [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html) parts of content streams, [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html) PDF operators, or inspect with [`dump_streams`](https://pdftl.readthedocs.io/en/latest/operations/dump_streams.html), edit and import with [`import_streams`](https://pdftl.readthedocs.io/en/latest/operations/import_streams.html).
+* **Selective content deletion:** [`excise`](https://pdftl.readthedocs.io/en/latest/operations/excise.html) removes page content (images, vector paths, and text glyphs) inside a given rectangle, or alternatively, outside that rectangle.
 * **Fonts:** [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html), edit as needed and then [`import_fonts`](https://pdftl.readthedocs.io/en/latest/operations/import_fonts.html). And [`embed_fonts`](https://pdftl.readthedocs.io/en/latest/operations/embed_fonts.html), or [`subset_fonts`](https://pdftl.readthedocs.io/en/latest/operations/subset_fonts.html).
 * **Dynamic text:** [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html) for Bates stamping, page numbers, etc., and [`style_text`](https://pdftl.readthedocs.io/en/latest/operations/style_text.html) to change appearance.
 * **Cleanup:** [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html) and [`linearize`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#linearize).
@@ -247,6 +248,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html)                         | Inspect the PDF structure tree and reading order                |
 | [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html)                         | Print PDF text data to the console or a file                    |
 | [`embed_fonts`](https://pdftl.readthedocs.io/en/latest/operations/embed_fonts.html)                     | Automatically locate and embed missing system fonts             |
+| [`excise`](https://pdftl.readthedocs.io/en/latest/operations/excise.html)                               | Delete page content inside or outside a rectangle              |
 | [`export_fonts`](https://pdftl.readthedocs.io/en/latest/operations/export_fonts.html)                   | Export fonts and a JSON manifest for external editing           |
 | [`export_images`](https://pdftl.readthedocs.io/en/latest/operations/export_images.html)                 | Export images and a JSON manifest for external editing          |
 | [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html)                         | Fill a PDF form                                                 |

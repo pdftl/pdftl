@@ -70,6 +70,17 @@ _IDENTITY_CTM: tuple[float, ...] = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 # Text-showing operators that advance the text matrix.
 _TEXT_SHOW_OPS = frozenset({"Tj", "TJ", "'", '"'})
 
+# Callback invoked once per shown glyph, BEFORE the text matrix is advanced
+# past it: (font_name, char_code, device_space_render_matrix) -> None.
+# char_code is the raw 1- or 2-byte code as it appears in the string (NOT
+# yet mapped through any font's cmap/ToUnicode -- callers needing glyph
+# *identity* rather than *position* must do that mapping themselves).
+# device_space_render_matrix is this glyph's text_render_matrix at the
+# moment it is about to be painted, i.e. before advancing for its own
+# width -- this is the matrix trim/redact use to transform a glyph-local
+# bbox into device space for overlap testing.
+GlyphCallback = Callable[[str, int, tuple], None]
+
 
 def _multiply_ctm(m: tuple[float, ...], n: tuple[float, ...]) -> tuple[float, ...]:
     """Concatenate two 6-element affine matrices.
@@ -186,6 +197,8 @@ class GraphicsState:
         op: str,
         operands: list,
         glyph_width_fn: Callable[[str, int], float] | None = None,
+        is_composite_font_fn: Callable[[str], bool] | None = None,
+        glyph_callback: GlyphCallback | None = None,
     ) -> None:
         """Dispatch a single text-state/text-showing operator.
 
@@ -203,11 +216,38 @@ class GraphicsState:
                 (i.e. the text matrix is left unchanged) — callers that
                 only need e.g. Tf tracking (not glyph positions) can
                 skip supplying it.
+            is_composite_font_fn: Optional, text-showing operators only.
+                Called as is_composite_font_fn(font_name) -> bool. When
+                True, shown strings are decoded 2 bytes per code (the
+                Identity-H/CID convention) instead of the default 1 byte
+                per code (simple fonts). A trailing odd byte in a
+                composite string is dropped (malformed-PDF tolerance,
+                matching this module's existing degrade-not-raise style).
+                If omitted, all fonts are treated as single-byte.
+            glyph_callback: Optional, text-showing operators only. Called
+                once per decoded glyph, before that glyph's width is
+                applied to the text matrix, as
+                glyph_callback(font_name, char_code, render_matrix) where
+                render_matrix is this GraphicsState's text_render_matrix
+                at that glyph's (not-yet-advanced) position. Callers that
+                need per-glyph device-space position -- e.g. `trim`
+                testing each glyph against a redaction rectangle -- pass
+                this instead of trying to reconstruct positions after
+                the fact from the final advanced matrix.
 
         Unrecognized operators are ignored. Malformed operands degrade to
         a no-op for that operator rather than raising, consistent with
         the other setters on this class (e.g. set_line_width).
         """
+        if op in _TEXT_SHOW_OPS:
+            # _TEXT_SHOW_OPS and _TEXT_SHOW_HANDLERS' keys are identical by
+            # construction (see the dict literal below), so this lookup can
+            # never miss -- no None-guard needed, unlike the general
+            # _TEXT_OP_HANDLERS.get(op) lookup below for unknown operators.
+            _TEXT_SHOW_HANDLERS[op](
+                self, operands, glyph_width_fn, is_composite_font_fn, glyph_callback
+            )
+            return
         handler = _TEXT_OP_HANDLERS.get(op)
         if handler is None:
             return
@@ -272,6 +312,17 @@ class GraphicsState:
         except (IndexError, TypeError, ValueError):
             pass
 
+    def decode_text_codes(self, raw: bytes, two_byte: bool) -> list:
+        """Public wrapper around _decode_codes for external callers (e.g.
+        trim's per-glyph deletion, which needs to decode a shown string's
+        codes itself rather than going through apply_text_op's full
+        advance/callback machinery)."""
+        return self._decode_codes(raw, two_byte)
+
+    def advance_horizontal_by_1000(self, width_1000: float) -> None:
+        """Public alias for _advance_by_width_1000 -- see that method."""
+        self._advance_by_width_1000(width_1000)
+
     def _tw(self, operands, _glyph_width_fn) -> None:
         try:
             self.word_spacing = float(operands[0])
@@ -308,42 +359,130 @@ class GraphicsState:
         translation = (1.0, 0.0, 0.0, 1.0, tx, 0.0)
         self.text_matrix = _multiply_ctm(translation, self.text_matrix)
 
-    def _show_text_string(self, s: bytes | str, glyph_width_fn) -> None:
+    def advance_vertical_by_1000(self, width_1000: float) -> None:
+        """Advance the text matrix along the vertical (Y) axis by a
+        glyph's vertical displacement w1y, expressed in thousandths of
+        text space units (spec §9.7.4.3, the vertical analogue of
+        _advance_by_width_1000). Unlike horizontal advance,
+        horizontal_scale (Tz) is NOT applied -- Tz only affects
+        horizontal writing per spec."""
+        if self.text_matrix is None:
+            return
+        ty = width_1000 / 1000.0 * self.font_size
+        translation = (1.0, 0.0, 0.0, 1.0, 0.0, ty)
+        self.text_matrix = _multiply_ctm(translation, self.text_matrix)
+
+    def vertical_render_matrix(self, vx: float, vy: float) -> tuple[float, ...] | None:
+        """Device-space matrix mapping glyph-local space to page space
+        for a glyph shown in VERTICAL writing mode, incorporating the
+        glyph's position-vector offset (vx, vy) -- see
+        fonts.widths_utils.VerticalMetricsLookup, which supplies vx/vy
+        per spec §9.7.4.3 (defaulting vx to w0/2 from the horizontal /W
+        table when no /W2 override exists).
+
+        A vertical glyph's origin is the horizontal origin shifted by
+        -(vx, vy)/1000 in glyph space, scaled by font size like any other
+        glyph-space quantity -- folded directly into the parameter
+        matrix's translation component alongside the usual Tfs/Th/Trise
+        scaling used by text_render_matrix, rather than as a second
+        matrix multiply, since both live in the same pre-Tm frame.
+
+        Returns None outside a BT...ET block, matching text_render_matrix.
+        """
+        if self.text_matrix is None:
+            return None
+        param_m = (
+            self.font_size * self.horizontal_scale,
+            0.0,
+            0.0,
+            self.font_size,
+            -vx / 1000.0 * self.font_size,
+            self.text_rise - vy / 1000.0 * self.font_size,
+        )
+        return _multiply_ctm(_multiply_ctm(param_m, self.text_matrix), self.ctm)
+
+    def _decode_codes(self, raw: bytes, two_byte: bool) -> list:
+        """Splits raw string bytes into a list of integer character codes,
+        1 byte per code for simple fonts or 2 bytes (big-endian) per code
+        for composite/Identity-H fonts. A trailing unpaired byte on a
+        two_byte string is dropped rather than raising -- consistent with
+        this module's existing malformed-input tolerance."""
+        if not two_byte:
+            return list(raw)
+        n_pairs = len(raw) // 2
+        return [(raw[2 * i] << 8) | raw[2 * i + 1] for i in range(n_pairs)]
+
+    def _show_one_glyph(
+        self,
+        code: int,
+        glyph_width_fn,
+        is_composite_font_fn,
+        two_byte: bool,
+        glyph_callback,
+    ) -> None:
+        """Handles one decoded glyph: fires glyph_callback (if any) at its
+        current, not-yet-advanced position, then advances the text matrix
+        by its width (spec 9.3.3 word-spacing carve-out for single-byte
+        code 32 included)."""
+        if glyph_callback is not None:
+            trm = self.text_render_matrix
+            if trm is not None:
+                glyph_callback(self.font_name, code, trm)
+        w = glyph_width_fn(self.font_name, code)
+        w += self.char_spacing / self.font_size * 1000.0 if self.font_size else 0.0
+        if code == 32 and not two_byte:
+            w += self.word_spacing / self.font_size * 1000.0 if self.font_size else 0.0
+        self._advance_by_width_1000(w)
+
+    def _show_text_string(
+        self,
+        s: bytes | str,
+        glyph_width_fn,
+        is_composite_font_fn=None,
+        glyph_callback=None,
+    ) -> None:
         if glyph_width_fn is None or self.font_name is None:
             return
         raw = s if isinstance(s, (bytes, bytearray)) else str(s).encode("latin-1", "replace")
-        for code in raw:
-            w = glyph_width_fn(self.font_name, code)
-            w += self.char_spacing / self.font_size * 1000.0 if self.font_size else 0.0
-            if code == 32:
-                w += self.word_spacing / self.font_size * 1000.0 if self.font_size else 0.0
-            self._advance_by_width_1000(w)
+        two_byte = bool(is_composite_font_fn and is_composite_font_fn(self.font_name))
+        for code in self._decode_codes(raw, two_byte):
+            self._show_one_glyph(
+                code, glyph_width_fn, is_composite_font_fn, two_byte, glyph_callback
+            )
 
-    def _tj(self, operands, glyph_width_fn) -> None:
+    def _tj(
+        self, operands, glyph_width_fn, is_composite_font_fn=None, glyph_callback=None
+    ) -> None:
         if not operands:
             return
-        self._show_text_string(operands[0], glyph_width_fn)
+        self._show_text_string(operands[0], glyph_width_fn, is_composite_font_fn, glyph_callback)
 
-    def _tj_array(self, operands, glyph_width_fn) -> None:
+    def _tj_array(
+        self, operands, glyph_width_fn, is_composite_font_fn=None, glyph_callback=None
+    ) -> None:
         if not operands:
             return
         for elem in operands[0]:
             try:
                 adj = float(elem)
             except (TypeError, ValueError):
-                self._show_text_string(elem, glyph_width_fn)
+                self._show_text_string(elem, glyph_width_fn, is_composite_font_fn, glyph_callback)
             else:
                 # TJ numeric adjustments are subtractive and already in
                 # thousandths of text space units — no per-glyph spacing
                 # applies to a pure kerning adjustment.
                 self._advance_by_width_1000(-adj)
 
-    def _quote(self, operands, glyph_width_fn) -> None:
+    def _quote(
+        self, operands, glyph_width_fn, is_composite_font_fn=None, glyph_callback=None
+    ) -> None:
         # ' is `T* string Tj` — move to next line, then show.
         self._t_star(None, None)
-        self._tj(operands, glyph_width_fn)
+        self._tj(operands, glyph_width_fn, is_composite_font_fn, glyph_callback)
 
-    def _dquote(self, operands, glyph_width_fn) -> None:
+    def _dquote(
+        self, operands, glyph_width_fn, is_composite_font_fn=None, glyph_callback=None
+    ) -> None:
         # " is `aw ac string aw Tw ac Tc T* string Tj`.
         try:
             self.word_spacing = float(operands[0])
@@ -351,7 +490,7 @@ class GraphicsState:
         except (IndexError, TypeError, ValueError):
             pass
         self._t_star(None, None)
-        self._tj(operands[2:], glyph_width_fn)
+        self._tj(operands[2:], glyph_width_fn, is_composite_font_fn, glyph_callback)
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -425,6 +564,17 @@ _TEXT_OP_HANDLERS: dict[str, Callable] = {
     "Tz": GraphicsState._tz,
     "TL": GraphicsState._tl,
     "Ts": GraphicsState._ts,
+    "Tj": GraphicsState._tj,
+    "TJ": GraphicsState._tj_array,
+    "'": GraphicsState._quote,
+    '"': GraphicsState._dquote,
+}
+
+# Separate dispatch table for the text-SHOWING operators only (Tj/TJ/'/"),
+# which take the wider (glyph_width_fn, is_composite_font_fn, glyph_callback)
+# signature. Kept apart from _TEXT_OP_HANDLERS so the other dozen text-state
+# operators (Tm/Td/Tf/Tc/etc.) don't need their signatures touched at all.
+_TEXT_SHOW_HANDLERS: dict[str, Callable] = {
     "Tj": GraphicsState._tj,
     "TJ": GraphicsState._tj_array,
     "'": GraphicsState._quote,

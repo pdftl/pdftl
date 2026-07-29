@@ -463,3 +463,318 @@ def test_extract_cid_to_gid_map_read_bytes_pdferror_degrades_to_identity():
         stream.read_bytes()  # sanity check this really raises PdfError, not something else
 
     assert extract_cid_to_gid_map(font) == "Identity"
+
+
+# ============================================================================
+# Vertical writing mode: /DW2, /W2, VerticalMetricsLookup, is_vertical_writing_mode
+# ============================================================================
+
+from pdftl.fonts.widths_utils import (
+    build_vertical_metrics_lookup,
+    extract_vertical_widths,
+    get_default_vertical_metrics,
+    is_vertical_writing_mode,
+    _SPEC_DEFAULT_DW2,
+)
+
+
+class TestGetDefaultVerticalMetrics:
+    def test_missing_dw2_returns_spec_default(self):
+        cid_font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/CIDFontType2")})
+        assert get_default_vertical_metrics(cid_font) == _SPEC_DEFAULT_DW2
+
+    def test_none_cid_font_returns_spec_default(self):
+        assert get_default_vertical_metrics(None) == _SPEC_DEFAULT_DW2
+
+    def test_explicit_dw2_parsed(self):
+        cid_font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/CIDFontType2"), "/DW2": pikepdf.Array([900.0, -1050.0])}
+        )
+        assert get_default_vertical_metrics(cid_font) == (900.0, -1050.0)
+
+    def test_malformed_dw2_too_short_falls_back(self):
+        cid_font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/CIDFontType2"), "/DW2": pikepdf.Array([900.0])}
+        )
+        assert get_default_vertical_metrics(cid_font) == _SPEC_DEFAULT_DW2
+
+    def test_malformed_dw2_non_numeric_falls_back(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/DW2": pikepdf.Array([pikepdf.Name("/Bad"), -1000.0]),
+            }
+        )
+        assert get_default_vertical_metrics(cid_font) == _SPEC_DEFAULT_DW2
+
+
+class TestExtractVerticalWidths:
+    def test_non_type0_returns_empty(self):
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/TrueType")})
+        assert extract_vertical_widths(font) == {}
+
+    def test_no_descendant_returns_empty(self):
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0")})
+        assert extract_vertical_widths(font) == {}
+
+    def test_no_w2_key_returns_empty(self):
+        cid_font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/CIDFontType2")})
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_vertical_widths(font) == {}
+
+    def test_sequence_form_single_triple(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array([10, pikepdf.Array([500.0, 250.0, 880.0])]),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_vertical_widths(font) == {"000A": (500.0, 250.0, 880.0)}
+
+    def test_sequence_form_multiple_triples(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array(
+                    [10, pikepdf.Array([500.0, 250.0, 880.0, 600.0, 300.0, 900.0])]
+                ),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        result = extract_vertical_widths(font)
+        assert result == {
+            "000A": (500.0, 250.0, 880.0),
+            "000B": (600.0, 300.0, 900.0),
+        }
+
+    def test_range_form(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array([10, 12, 500.0, 250.0, 880.0]),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        result = extract_vertical_widths(font)
+        assert result == {
+            "000A": (500.0, 250.0, 880.0),
+            "000B": (500.0, 250.0, 880.0),
+            "000C": (500.0, 250.0, 880.0),
+        }
+
+    def test_range_form_bad_end_cid_skips_range(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array([10, pikepdf.Name("/Bad"), 500.0, 250.0, 880.0]),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_vertical_widths(font) == {}
+
+    def test_sequence_form_malformed_triple_skipped(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array([10, pikepdf.Array([500.0, 250.0, pikepdf.Name("/Bad")])]),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_vertical_widths(font) == {}
+
+    def test_trailing_single_entry_breaks(self):
+        cid_font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/CIDFontType2"), "/W2": pikepdf.Array([10])}
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_vertical_widths(font) == {}
+
+    def test_range_form_truncated_missing_vy_advances_by_one(self):
+        """A /W2 array long enough to look like the start of a range-form
+        entry (numeric next_val) but too short to hold all of w1y/vx/vy
+        must not IndexError -- it falls through to the `else: idx += 1`
+        branch and that single malformed start_cid is simply skipped."""
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array([10, 500.0, 250.0]),  # only 3 elements total
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_vertical_widths(font) == {}
+
+    def test_bad_start_cid_skipped(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array(
+                    [pikepdf.Name("/Bad"), 10, pikepdf.Array([500.0, 250.0, 880.0])]
+                ),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        # First entry (bad start_cid) skipped via idx += 1; remaining
+        # [10, [500, 250, 880]] parses as a valid sequence entry.
+        assert extract_vertical_widths(font) == {"000A": (500.0, 250.0, 880.0)}
+
+    def test_str_next_val_treated_as_non_sequence(self):
+        cid_font = {
+            "/Subtype": "/CIDFontType2",
+            "/W2": [10, "not_an_array", 500.0, 250.0, 880.0],
+        }
+        font = {"/Subtype": "/Type0", "/DescendantFonts": [cid_font]}
+        result = extract_vertical_widths(font)
+        # "not_an_array" is a str, so is_sequence=False -> routes to the
+        # range-form branch, where int("not_an_array") as end_cid raises
+        # and the whole range is skipped -- mirrors
+        # test_composite_widths_str_next_val's identical /W case.
+        assert result == {}
+
+
+class TestVerticalMetricsLookup:
+    def test_w2_hit_returned_directly(self):
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/W2": pikepdf.Array([10, pikepdf.Array([500.0, 250.0, 880.0])]),
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        lookup = build_vertical_metrics_lookup(font)
+        assert lookup.get("000A") == (500.0, 250.0, 880.0)
+
+    def test_miss_falls_back_to_dw2_with_zero_horizontal_width(self):
+        cid_font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/CIDFontType2"), "/DW2": pikepdf.Array([880.0, -1000.0])}
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        lookup = build_vertical_metrics_lookup(font)
+        # No /W at all -> horizontal width defaults to 0.0 -> vx = 0/2 = 0.0
+        assert lookup.get("0099") == (-1000.0, 0.0, 880.0)
+
+    def test_miss_uses_spec_exact_vx_from_horizontal_width(self):
+        """The whole point of build_vertical_metrics_lookup over the naive
+        approach: vx defaults to w0/2 using the REAL /W entry, not 0.0."""
+        cid_font = pikepdf.Dictionary(
+            {
+                "/Subtype": pikepdf.Name("/CIDFontType2"),
+                "/DW2": pikepdf.Array([880.0, -1000.0]),
+                "/W": pikepdf.Array(
+                    [20, pikepdf.Array([600.0])]
+                ),  # sequence form: CID 0x14 -> width 600
+            }
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        lookup = build_vertical_metrics_lookup(font)
+        # CID 20 = 0x0014, has no /W2 entry, so falls back to DW2 with
+        # vx = horizontal_width / 2 = 600 / 2 = 300.0
+        assert lookup.get("0014") == (-1000.0, 300.0, 880.0)
+
+    def test_lookup_is_frozen_dataclass(self):
+        import pytest
+        import dataclasses
+
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/TrueType")})
+        lookup = build_vertical_metrics_lookup(font)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            lookup.w2_map = {}
+
+    def test_build_on_non_type0_font_still_works_with_empty_maps(self):
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/TrueType")})
+        lookup = build_vertical_metrics_lookup(font)
+        v_y, w1 = _SPEC_DEFAULT_DW2
+        assert lookup.get("0041") == (w1, 0.0, v_y)
+
+
+class TestIsVerticalWritingMode:
+    def test_non_type0_returns_false(self):
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/TrueType")})
+        assert is_vertical_writing_mode(font) is False
+
+    def test_no_encoding_returns_false(self):
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0")})
+        assert is_vertical_writing_mode(font) is False
+
+    def test_identity_v_name_returns_true(self):
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/Encoding": pikepdf.Name("/Identity-V")}
+        )
+        assert is_vertical_writing_mode(font) is True
+
+    def test_identity_h_name_returns_false(self):
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/Encoding": pikepdf.Name("/Identity-H")}
+        )
+        assert is_vertical_writing_mode(font) is False
+
+    def test_other_predefined_v_suffix_name_returns_true(self):
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/Encoding": pikepdf.Name("/UniGB-UCS2-V")}
+        )
+        assert is_vertical_writing_mode(font) is True
+
+    def test_embedded_cmap_stream_wmode_1_returns_true(self):
+        pdf = pikepdf.new()
+        cmap_stream = pdf.make_stream(b"%CMap fake content")
+        cmap_stream.WMode = 1
+        font = pdf.make_indirect(
+            pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0"), "/Encoding": cmap_stream})
+        )
+        assert is_vertical_writing_mode(font) is True
+
+    def test_embedded_cmap_stream_wmode_0_returns_false(self):
+        pdf = pikepdf.new()
+        cmap_stream = pdf.make_stream(b"%CMap fake content")
+        cmap_stream.WMode = 0
+        font = pdf.make_indirect(
+            pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0"), "/Encoding": cmap_stream})
+        )
+        assert is_vertical_writing_mode(font) is False
+
+    def test_embedded_cmap_stream_no_wmode_defaults_false(self):
+        pdf = pikepdf.new()
+        cmap_stream = pdf.make_stream(b"%CMap fake content")
+        font = pdf.make_indirect(
+            pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0"), "/Encoding": cmap_stream})
+        )
+        assert is_vertical_writing_mode(font) is False
+
+    def test_embedded_cmap_stream_malformed_wmode_returns_false(self):
+        pdf = pikepdf.new()
+        cmap_stream = pdf.make_stream(b"%CMap fake content")
+        cmap_stream.WMode = pikepdf.Name("/Bad")
+        font = pdf.make_indirect(
+            pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0"), "/Encoding": cmap_stream})
+        )
+        assert is_vertical_writing_mode(font) is False
+
+    def test_encoding_neither_name_nor_stream_returns_false(self):
+        """Malformed PDF: /Encoding as e.g. a plain integer. Should degrade
+        to False rather than raising."""
+        font = {"/Subtype": "/Type0", "/Encoding": 42}
+        assert is_vertical_writing_mode(font) is False

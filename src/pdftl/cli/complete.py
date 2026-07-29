@@ -62,6 +62,7 @@ HARDCODED_KEYWORDS = {
     "dump_tags",
     "dump_text",
     "embed_fonts",
+    "excise",
     "export_fonts",
     "export_images",
     "fill_form",
