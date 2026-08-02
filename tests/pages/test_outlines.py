@@ -474,6 +474,7 @@ def test_copy_item_preserves_formatting_and_state_integration():
 
     from pdftl.pages.add_pages import add_pages
     from pdftl.utils.page_specs.spec_types import PageTransform
+    from pdftl.utils.pikepdf_compatibility_utils import set_outline_item_style_compat
 
     # --- Build a source PDF with formatted bookmarks ---
     src = Pdf.new()
@@ -500,10 +501,10 @@ def test_copy_item_preserves_formatting_and_state_integration():
 
     with src.open_outline() as outline:
         parent = outline.root[0]
-        # UPDATE the existing obj instead of overwriting it
-        parent.obj[Name.F] = 3  # bold + italic
-        parent.obj[Name.C] = Array([1.0, 0.0, 0.0])  # red
-        parent.obj[Name.Count] = -1  # closed
+        # UPDATE the existing item via the version-compatible helper: raw
+        # obj[Name.F]/obj[Name.C] mutation is silently dropped on pikepdf
+        # >= 10.11.0 once this item is reassigned into outline.root below.
+        set_outline_item_style_compat(parent, color=(1.0, 0.0, 0.0), bold=True, italic=True)
         parent.is_closed = True
 
         # Pass the actual page object for the child
@@ -515,8 +516,7 @@ def test_copy_item_preserves_formatting_and_state_integration():
         # UPDATE the existing obj
         parent = outline.root[0]
         child = parent.children[0]
-        child.obj[Name.F] = 1  # italic
-        child.obj[Name.C] = Array([0.0, 0.0, 1.0])  # blue
+        set_outline_item_style_compat(child, color=(0.0, 0.0, 1.0), italic=True)
         child.is_closed = False
 
     # --- Run through add_pages ---

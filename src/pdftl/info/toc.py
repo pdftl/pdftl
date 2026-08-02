@@ -10,12 +10,14 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from pdftl.exceptions import OperationError
+
 from pdftl.utils.destinations import (
     _dest_from_outline_item,
     get_named_destinations,
     get_page_map,
     resolve_dest_to_page_num,
 )
+from pdftl.utils.pikepdf_compatibility_utils import set_outline_item_style_compat
 
 if TYPE_CHECKING:
     import pikepdf
@@ -238,17 +240,15 @@ def _filter_and_warn_bookmarks(items) -> list:
 
 
 def _build_item(node: dict, pdf) -> "pikepdf.OutlineItem":
-    import pikepdf
-
     item = _build_basic_item(node, pdf)
     item.to_dictionary_object(pdf)
     if item.obj is None:
         raise OperationError("Invalid item (no obj)")
     # Apply styling
-    if "color" in node and len(node["color"]) == 3:
-        item.obj.C = pikepdf.Array(node["color"])
-    if node.get("bold") or node.get("italic"):
-        item.obj.F = (2 if node.get("bold") else 0) + (1 if node.get("italic") else 0)
+    color = node["color"] if "color" in node and len(node["color"]) == 3 else None
+    set_outline_item_style_compat(
+        item, color=color, bold=bool(node.get("bold")), italic=bool(node.get("italic"))
+    )
 
     # Process children
     for child_node in node.get("children", []):

@@ -19,6 +19,8 @@ from pdftl.info.toc import (
     build_toc_tree,
     extract_toc_tree,
 )
+from pdftl.utils.pikepdf_compatibility_utils import set_outline_item_style_compat
+from pdftl.utils.pikepdf_compatibility_utils import outline_item_has_style_properties
 
 
 @pytest.fixture
@@ -41,8 +43,12 @@ def exotic_pdf():
         # 2. Styled
         item2 = pikepdf.OutlineItem("2. Styled", 1)
         item2.to_dictionary_object(pdf)
-        item2.obj.C = pikepdf.Array([1.0, 0.0, 0.0])
-        item2.obj.F = 3  # Bold + Italic
+        if outline_item_has_style_properties():
+            item2.color = (1.0, 0.0, 0.0)
+            item2.bold = True
+            item2.italic = True  # Bold + Italic
+        else:
+            set_outline_item_style_compat(item2, color=(1.0, 0.0, 0.0), bold=True, italic=True)
         outline.root.append(item2)
 
         # 3. Explicit View
