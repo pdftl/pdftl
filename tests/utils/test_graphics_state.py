@@ -577,6 +577,50 @@ class TestDecodeCodes:
         gs = GraphicsState()
         assert gs._decode_codes(b"", two_byte=False) == []
 
+    def test_decode_text_codes_public_wrapper(self):
+        """decode_text_codes is a thin public wrapper around _decode_codes
+        for callers (e.g. trim) that need to decode a shown string's codes
+        without going through the full apply_text_op machinery."""
+        gs = GraphicsState()
+        assert gs.decode_text_codes(b"AB", two_byte=False) == [65, 66]
+
+
+class TestAdvanceAliasesAndVertical:
+    """Covers the public advance_horizontal_by_1000/advance_vertical_by_1000
+    aliases and vertical_render_matrix, which aren't exercised via the
+    normal Tj/TJ text-showing operator dispatch tested elsewhere."""
+
+    def test_advance_horizontal_by_1000_public_alias(self):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        gs.advance_horizontal_by_1000(500.0)
+        assert gs.text_matrix[4] == pytest.approx(5.0)
+
+    def test_advance_vertical_by_1000_advances_y(self):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        gs.advance_vertical_by_1000(500.0)
+        assert gs.text_matrix[5] == pytest.approx(5.0)
+
+    def test_advance_vertical_by_1000_noop_outside_text_object(self):
+        gs = GraphicsState()
+        gs.advance_vertical_by_1000(500.0)
+        assert gs.text_matrix is None
+
+    def test_vertical_render_matrix_none_outside_text_object(self):
+        gs = GraphicsState()
+        assert gs.vertical_render_matrix(100.0, 200.0) is None
+
+    def test_vertical_render_matrix_computes_correctly(self):
+        gs = GraphicsState()
+        gs.apply_text_op("BT", [])
+        gs.apply_text_op("Tf", ["/F1", 10.0])
+        m = gs.vertical_render_matrix(500.0, 880.0)
+        assert m is not None
+        assert m == pytest.approx((10.0, 0.0, 0.0, 10.0, -5.0, -8.8))
+
 
 class TestShowTextStringComposite:
     """Covers the is_composite_font_fn plumbing through _show_text_string

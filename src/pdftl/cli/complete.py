@@ -88,6 +88,7 @@ HARDCODED_KEYWORDS = {
     "place",
     "recolor_images",
     "recolor_vectors",
+    "redact",
     "render",
     "replace",
     "resample_images",

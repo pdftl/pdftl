@@ -59,6 +59,40 @@ def extract_font_widths(font_obj: Any) -> dict[str, float]:
     return _extract_simple_widths(font_obj)
 
 
+def extract_default_width(font_obj: Any) -> float:
+    """Returns the width to assume for any code/CID absent from the
+    font's extracted width table: /DW (spec default 1000, ISO 32000-2
+    9.7.4.3) for Type0 composite fonts, or /MissingWidth from
+    /FontDescriptor (spec default 0) for Simple fonts.
+
+    Used as FontCache.glyph_width's fallback instead of a blanket 0.0.
+    A blanket 0.0 doesn't just under-report glyph width for cosmetic
+    purposes -- callers (e.g. excise) also feed it into their own pen-
+    advance simulation, so a genuinely-missing width silently desyncs
+    every SUBSEQUENT glyph's simulated position from where it actually
+    renders. Falling back to the font's own declared default keeps that
+    simulation aligned with real renderers for the common "CID legitimately
+    not covered by /W" case; the true spec defaults (1000 / 0) are used
+    only when even /DW or /MissingWidth themselves are absent or malformed.
+    """
+    subtype = str(font_obj.get("/Subtype", ""))
+    if subtype == "/Type0":
+        cid_font = _get_descendant_cid_font(font_obj)
+        if cid_font is not None and "/DW" in cid_font:
+            try:
+                return float(cid_font["/DW"])
+            except (TypeError, ValueError):
+                pass
+        return 1000.0
+    descriptor = font_obj.get("/FontDescriptor")
+    if descriptor is not None and "/MissingWidth" in descriptor:
+        try:
+            return float(descriptor["/MissingWidth"])
+        except (TypeError, ValueError):
+            pass
+    return 0.0
+
+
 def _extract_simple_widths(font_obj: Any) -> dict[str, float]:
     """Extract flat /Widths array from Simple fonts as hex keys (e.g. '41')."""
     widths: dict[str, float] = {}

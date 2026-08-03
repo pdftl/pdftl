@@ -9,6 +9,7 @@ from pdftl.fonts.widths_utils import (
     _get_descendant_cid_font,
     compile_cid_to_gid_map,
     extract_cid_to_gid_map,
+    extract_default_width,
     extract_font_widths,
     parse_cid_to_gid_map,
     update_cid_to_gid_map,
@@ -778,3 +779,58 @@ class TestIsVerticalWritingMode:
         to False rather than raising."""
         font = {"/Subtype": "/Type0", "/Encoding": 42}
         assert is_vertical_writing_mode(font) is False
+
+
+class TestExtractDefaultWidth:
+    def test_type0_with_valid_dw(self):
+        cid_font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/CIDFontType2"), "/DW": 750.0})
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_default_width(font) == 750.0
+
+    def test_type0_with_malformed_dw_falls_back_to_1000(self):
+        cid_font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/CIDFontType2"), "/DW": pikepdf.Name("/Bad")}
+        )
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_default_width(font) == 1000.0
+
+    def test_type0_without_dw_falls_back_to_1000(self):
+        cid_font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/CIDFontType2")})
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/Type0"), "/DescendantFonts": pikepdf.Array([cid_font])}
+        )
+        assert extract_default_width(font) == 1000.0
+
+    def test_simple_font_with_valid_missing_width(self):
+        descriptor = pikepdf.Dictionary({"/MissingWidth": 250.0})
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/TrueType"), "/FontDescriptor": descriptor}
+        )
+        assert extract_default_width(font) == 250.0
+
+    def test_simple_font_with_malformed_missing_width_falls_back_to_0(self):
+        descriptor = pikepdf.Dictionary({"/MissingWidth": pikepdf.Name("/Bad")})
+        font = pikepdf.Dictionary(
+            {"/Subtype": pikepdf.Name("/TrueType"), "/FontDescriptor": descriptor}
+        )
+        assert extract_default_width(font) == 0.0
+
+    def test_simple_font_without_descriptor_falls_back_to_0(self):
+        font = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/TrueType")})
+        assert extract_default_width(font) == 0.0
+
+
+def test_standard14_fallback_widths_known_font():
+    """Exercises line 135: a non-embedded Standard-14 font with no
+    /Widths/FirstChar falls back to the built-in AFM metrics table,
+    keyed by hex code, instead of returning {}."""
+    font = pikepdf.Dictionary(
+        {"/Subtype": pikepdf.Name("/TrueType"), "/BaseFont": pikepdf.Name("/Helvetica")}
+    )
+    widths = extract_font_widths(font)
+    assert widths  # non-empty
+    assert all(len(k) == 2 for k in widths)  # 2-digit uppercase hex keys

@@ -28,6 +28,20 @@ def _as_matrix_array(m: "Matrix | tuple[float, ...] | list[float]") -> list[floa
     return [float(x) for x in m]
 
 
+# Rectangles reaching rects_overlap are typically the product of a chain
+# of floating-point matrix multiplications (nested CTM concatenation,
+# glyph text-render-matrix composition, corner transform + min/max).
+# Two geometrically-abutting edges (e.g. adjacent glyphs with zero true
+# gap) will therefore rarely be bit-identical after that arithmetic --
+# they differ by a few ULPs, occasionally enough to tip a strict `<=`/
+# `>=` comparison the wrong way and register as "overlapping" when
+# nothing actually overlaps. This tolerance absorbs that noise without
+# affecting any real overlap/redaction rect, which is always at least
+# several orders of magnitude larger than this in practice (grep's
+# smallest default pad alone is 1.0pt).
+_OVERLAP_EPSILON = 1e-6
+
+
 def rects_overlap(rect_a: list[float], rect_b: list[float]) -> bool:
     """
     Strict boolean overlap test between two axis-aligned rectangles
@@ -40,12 +54,21 @@ def rects_overlap(rect_a: list[float], rect_b: list[float]) -> bool:
 
     Rectangles that only touch at an edge or corner (zero-width or
     zero-height intersection) are treated as NOT overlapping, since
-    a shared boundary contains no actual content to delete.
+    a shared boundary contains no actual content to delete. A small
+    fixed epsilon (_OVERLAP_EPSILON) absorbs floating-point noise from
+    upstream matrix-transform chains so that two rects which are
+    mathematically meant to merely touch don't spuriously register as
+    overlapping due to rounding -- see module comment above.
     """
     ax1, ay1, ax2, ay2 = rect_a
     bx1, by1, bx2, by2 = rect_b
 
-    return not (ax2 <= bx1 or ax1 >= bx2 or ay2 <= by1 or ay1 >= by2)
+    return not (
+        ax2 <= bx1 + _OVERLAP_EPSILON
+        or ax1 >= bx2 - _OVERLAP_EPSILON
+        or ay2 <= by1 + _OVERLAP_EPSILON
+        or ay1 >= by2 - _OVERLAP_EPSILON
+    )
 
 
 def rect_contains(inner: list[float], outer: list[float]) -> bool:

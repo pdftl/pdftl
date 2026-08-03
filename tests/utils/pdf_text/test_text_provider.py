@@ -346,6 +346,41 @@ class TestLoadPage:
 
         assert data["py_to_pdf"] is not None
 
+    def test_index_map_correctly_offset_across_crlf_boundary(self):
+        """Regression test: raw pdfium text "a\\r\\nb" (4 chars) normalizes
+        to "a\\nb" (3 chars) -- py_to_pdf[i] must map each NORMALIZED-text
+        index to its correct RAW-text (pdfium) index, not the identity
+        mapping a naive iterate-the-normalized-text loop would produce.
+        The dropped '\\r' consumes a raw-text/utf16 slot but gets no
+        py_to_pdf entry of its own; the 'b' after it is raw index 3, not 2."""
+        tp, textpage = self._make_tp("a\r\nb", num_chars=4)
+        # Raw pdfium text is "a\r\nb" -> raw indices: a=0, \r=1, \n=2, b=3.
+        tp.pdfium_c.FPDFText_GetCharIndexFromTextIndex.side_effect = lambda _tp, i: i
+        tp._page_cache.clear()
+        data = tp.get_page_data(0)
+
+        assert data["text"] == "a\nb"
+        # Normalized index 0 ('a') -> raw index 0.
+        # Normalized index 1 ('\n', replacing the \r\n pair) -> raw index 2
+        # (the \n itself, not the dropped \r at raw index 1).
+        # Normalized index 2 ('b') -> raw index 3, NOT 2 -- this is exactly
+        # the off-by-one the fix corrects.
+        assert data["py_to_pdf"] == [0, 2, 3]
+
+    def test_index_map_multiple_crlf_boundaries_cumulative_offset(self):
+        """Each additional \\r\\n pair adds one more to the cumulative
+        offset between normalized-text and raw-pdfium-text indices --
+        this would fail immediately if the offset only applied once."""
+        tp, textpage = self._make_tp("a\r\nb\r\nc", num_chars=7)
+        # Raw: a=0 \r=1 \n=2 b=3 \r=4 \n=5 c=6
+        tp.pdfium_c.FPDFText_GetCharIndexFromTextIndex.side_effect = lambda _tp, i: i
+        tp._page_cache.clear()
+        data = tp.get_page_data(0)
+
+        assert data["text"] == "a\nb\nc"
+        # Normalized: a=0 \n=1 b=2 \n=3 c=4
+        assert data["py_to_pdf"] == [0, 2, 3, 5, 6]
+
     def test_index_map_falls_back_to_none_on_exception(self):
         tp, textpage = self._make_tp("a\r\nb", num_chars=4)
         tp.pdfium_c.FPDFText_GetCharIndexFromTextIndex.side_effect = OSError("boom")

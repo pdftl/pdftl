@@ -92,18 +92,41 @@ class TextProvider:
     ) -> list[int] | None:
         """
         Build py→pdf map using PDFium's own text-index→char-index API.
+
+        Must walk PDFium's RAW text (the same text `num_chars`/utf16_offset
+        index into), not the CRLF-normalized text -- `full_text` is shorter
+        whenever the raw text contains "\\r\\n" (normalized to one "\\n"),
+        so iterating the normalized string here would query pdfium offsets
+        that are increasingly behind by one for every such pair seen so
+        far, silently misaligning every mapped index after the first line
+        break. The dropped "\\r" of a "\\r\\n" pair gets no entry of its own
+        (it has no corresponding position in full_text to map FROM), but
+        pdfium's own indexing still needs to step over it, so utf16_offset
+        still advances for it.
         """
         try:
             _get_char_idx = self.pdfium_c.FPDFText_GetCharIndexFromTextIndex
-            py_to_pdf_list = []
+            raw_text = textpage.get_text_range(0, num_chars)
+            py_to_pdf_list: list[int] = []
             utf16_offset = 0
+            i = 0
+            raw_len = len(raw_text)
 
-            for ch in textpage.get_text_range(0, num_chars):
+            while i < raw_len:
+                ch = raw_text[i]
+                if ch == "\r" and i + 1 < raw_len and raw_text[i + 1] == "\n":
+                    # Dropped by \r\n -> \n normalization: no py-index maps
+                    # to this char, but pdfium's own text still counts it.
+                    utf16_offset += 1
+                    i += 1
+                    continue
+
                 char_idx = _get_char_idx(textpage, utf16_offset)
                 py_to_pdf_list.append(max(char_idx, 0))  # -1 means no mapping, clamp to 0
 
                 # Advance by UTF-16 code units: non-BMP chars are 2 units
                 utf16_offset += 2 if ord(ch) > 0xFFFF else 1
+                i += 1
 
             return py_to_pdf_list
         except (OSError, ctypes.ArgumentError, AttributeError, OverflowError) as e:

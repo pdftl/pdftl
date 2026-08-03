@@ -14,10 +14,24 @@ from dataclasses import dataclass
 
 @dataclass
 class ExciseRect:
-    """One page's target rectangle in unrotated PDF user-space points,
-    plus the delete/partial direction for that rectangle."""
+    """One page's target region in unrotated PDF user-space points, plus
+    the delete/partial direction for that region.
 
-    rect: list[float]  # [x0, y0, x1, y1]
+    The region is `rect` plus, optionally, `extra_rects` -- a UNION of
+    axis-aligned boxes rather than a single one. This is what lets
+    `redact` hand excise's engine several disjoint match boxes on one
+    page (e.g. every occurrence of an SSN pattern) as a single
+    ExciseRect, without the deletion engine needing to know or care that
+    the target region isn't a single rectangle: every geometry test
+    (`excise_geometry._matches`) is written against the full `rects`
+    list, and `rect` is kept as a plain field (rather than folded into
+    `extra_rects`) so existing single-rect callers/tests that construct
+    `ExciseRect(rect=[...])` and read back `.rect` keep working
+    unchanged -- excise itself never sets `extra_rects`.
+    """
+
+    rect: list[float]  # [x0, y0, x1, y1] -- always present, the "first" box
+    extra_rects: list[list[float]] | None = None  # additional boxes, union
     delete: str = "inside"  # "inside" | "outside" -- content INSIDE the box
     #                          is deleted when delete="inside" (default,
     #                          the redaction use case); "outside" deletes
@@ -29,6 +43,13 @@ class ExciseRect:
     #                           same as a fully-outside unit (i.e. only
     #                           units ENTIRELY inside the box count as
     #                           inside).
+
+    @property
+    def rects(self) -> list[list[float]]:
+        """The full union of target boxes: `rect` plus `extra_rects`."""
+        if not self.extra_rects:
+            return [self.rect]
+        return [self.rect, *self.extra_rects]
 
 
 @dataclass

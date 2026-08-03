@@ -68,7 +68,7 @@ Some features also require system software such as `java`.
 
 ### Text, forms and annotations
 
-* **Search and comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html).
+* **Search, redaction and comparison:** [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html) and [`redact`](https://pdftl.readthedocs.io/en/latest/operations/redact.html) and [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html).
 * **Extraction:** [`dump_text`](https://pdftl.readthedocs.io/en/latest/operations/dump_text.html), [`dump_tables`](https://pdftl.readthedocs.io/en/latest/operations/dump_tables.html), and [`dump_fonts`](https://pdftl.readthedocs.io/en/latest/operations/dump_fonts.html).
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html) and [`stamp_fields`](https://pdftl.readthedocs.io/en/latest/operations/stamp_fields.html).
 * **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html).
@@ -272,6 +272,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html)                         | Reformat page content streams                                   |
 | [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html)             | Optimize images                                                 |
 | [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                             |
+| [`redact`](https://pdftl.readthedocs.io/en/latest/operations/redact.html)                               | Find and destroy text matching a pattern, optionally boxing it out |
 | [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                                      |
 | [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html)               | Convert images to grayscale                                     |
 | [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html)             | Make non-image page content gray                                |

@@ -865,13 +865,17 @@ class TestExciseContentTextDeletionSimpleFont:
         (excise_text.py lines 203-204). Both glyphs must be in the SAME
         string element (unlike a TJ-array split by a numeric adjustment,
         which flushes via a different call site in filter_show_elements
-        instead) -- so the font's advance width is inflated to 2000/1000
-        em (double the font size) to keep each glyph's nominal 1em box
-        from overlapping its neighbor's, letting one rect isolate just
-        the second glyph."""
+        instead).
+
+        Since glyph boxes are now sized to each glyph's real advance
+        (not a fixed 1em), a normal 500/1000-em width font is enough to
+        isolate the two glyphs: at Tf 100, glyph A's box is x:[10,60],
+        glyph B's is x:[60,110] -- a rect starting just past x=60 covers
+        only B.
+        """
         content = b"BT /F1 100 Tf 1 0 0 1 10 10 Tm (AB) Tj ET"
-        pdf = _make_pdf_with_content(content, resources=_simple_font_resources(width=2000.0))
-        excise_content(pdf, ["1(abs,200,0,320,120)"])  # 'A' box: 10-110; 'B' box: 210-310
+        pdf = _make_pdf_with_content(content, resources=_simple_font_resources(width=500.0))
+        excise_content(pdf, ["1(abs,65,0,200,120)"])  # 'A' box: 10-60; 'B' box: 60-110
         show_ops = _get_show_ops(pdf)
         op_str, operands = show_ops[0]
         assert op_str == "TJ"
@@ -1011,7 +1015,7 @@ class TestRewriteTextShowDirect:
 class TestGlyphShouldDeleteDirect:
     def test_none_render_matrix_never_deletes(self):
         rect = ExciseRect(rect=[0, 0, 300, 300], delete="inside")
-        assert _glyph_should_delete(None, rect) is False
+        assert _glyph_should_delete(None, 0.0, False, rect) is False
 
 
 class TestFilterAnnotsMalformedRect:

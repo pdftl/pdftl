@@ -53,13 +53,25 @@ def path_bbox(path: Path, ctm: tuple[float, ...]) -> list[float] | None:
 
 
 def _matches(bbox: list[float], excise_rect: ExciseRect) -> bool:
-    """Whether a unit's device-space bbox counts as INSIDE excise_rect, per
-    excise_rect.partial: "inside" (default) = any overlap at all counts as
-    inside; "outside" = only a unit entirely contained within the rect
-    counts as inside."""
+    """Whether a unit's device-space bbox counts as INSIDE excise_rect's
+    target region, per excise_rect.partial: "inside" (default) = any
+    overlap with ANY box in the region counts as inside; "outside" = the
+    unit must be entirely contained within at least one single box in
+    the region to count as inside.
+
+    The region is a UNION of one or more boxes (excise_rect.rects --
+    ordinarily just [excise_rect.rect], but redact hands in several
+    boxes per page as one ExciseRect). Containment is tested per-box
+    rather than against each box's own bbox union, since a box straddling
+    two disjoint regions of the union isn't "contained" in either one --
+    e.g. with partial=outside, a unit spanning two separate redaction
+    boxes should NOT count as inside just because it's inside their
+    combined bounding box.
+    """
+    rects = excise_rect.rects
     if excise_rect.partial == "outside":
-        return rect_contains(bbox, excise_rect.rect)
-    return rects_overlap(bbox, excise_rect.rect)
+        return any(rect_contains(bbox, r) for r in rects)
+    return any(rects_overlap(bbox, r) for r in rects)
 
 
 def overlap_means_delete(bbox: list[float], excise_rect: ExciseRect) -> bool:
