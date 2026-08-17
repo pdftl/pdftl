@@ -33,6 +33,9 @@ from pdftl.operations.excise import (
     _process_page,
     excise_content,
 )
+from pdftl.operations.helpers.excise_geometry import (
+    resolve_box_rect as _resolve_box_rect,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -42,27 +45,28 @@ from pdftl.operations.excise import (
 
 class TestParseSingleSpec:
     def test_basic_abs_spec_defaults_keep_outside(self):
-        page_range, tr = _parse_single_spec("1-5(abs,10,20,110,220)", total_pages=10)
+        page_range, tr, box_name = _parse_single_spec("1-5(abs,10,20,110,220)", total_pages=10)
         assert page_range == "1-5"
         assert tr.rect == [10.0, 20.0, 110.0, 220.0]
         assert tr.delete == "inside"
         assert tr.partial == "inside"
+        assert box_name is None
 
     def test_keep_inside_parsed(self):
-        _, tr = _parse_single_spec("1(abs,0,0,100,100,delete=outside)", total_pages=1)
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100,delete=outside)", total_pages=1)
         assert tr.delete == "outside"
 
     def test_keep_outside_explicit(self):
-        _, tr = _parse_single_spec("1(abs,0,0,100,100,delete=inside)", total_pages=1)
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100,delete=inside)", total_pages=1)
         assert tr.delete == "inside"
 
     def test_dimension_suffix_pt_accepted(self):
-        _, tr = _parse_single_spec("1(abs,10pt,10pt,200pt,100pt)", total_pages=1)
+        _, tr, _ = _parse_single_spec("1(abs,10pt,10pt,200pt,100pt)", total_pages=1)
         assert tr.rect == [10.0, 10.0, 200.0, 100.0]
 
     def test_reversed_coordinates_normalized(self):
         """x0>x1 or y0>y1 should normalize into a proper min/max rect."""
-        _, tr = _parse_single_spec("1(abs,100,100,0,0)", total_pages=1)
+        _, tr, _ = _parse_single_spec("1(abs,100,100,0,0)", total_pages=1)
         assert tr.rect == [0.0, 0.0, 100.0, 100.0]
 
     def test_missing_parens_raises(self):
@@ -100,15 +104,15 @@ class TestParseSingleSpec:
             _parse_single_spec("1(abs,10,10,100,100)", total_pages=1)
 
     def test_no_page_range_before_paren_defaults_to_all_pages(self):
-        page_range, _ = _parse_single_spec("(abs,0,0,100,100)", total_pages=1)
+        page_range, _, _ = _parse_single_spec("(abs,0,0,100,100)", total_pages=1)
         assert page_range == "-"
 
     def test_partial_outside_parsed_via_spec_string(self):
-        _, tr = _parse_single_spec("1(abs,0,0,100,100,partial=outside)", total_pages=1)
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100,partial=outside)", total_pages=1)
         assert tr.partial == "outside"
 
     def test_partial_inside_explicit_via_spec_string(self):
-        _, tr = _parse_single_spec("1(abs,0,0,100,100,partial=inside)", total_pages=1)
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100,partial=inside)", total_pages=1)
         assert tr.partial == "inside"
 
     def test_bad_delete_value_raises(self):
@@ -120,14 +124,157 @@ class TestParseSingleSpec:
             _parse_single_spec("1(abs,0,0,100,100,partial=sideways)", total_pages=1)
 
 
+class TestParseSingleSpecBox:
+    def test_box_media_parsed(self):
+        _, tr, box_name = _parse_single_spec("1(box=media)", total_pages=1)
+        assert box_name == "media"
+        assert tr.delete == "inside"
+        assert tr.partial == "inside"
+
+    def test_box_crop_parsed(self):
+        _, _, box_name = _parse_single_spec("1(box=crop)", total_pages=1)
+        assert box_name == "crop"
+
+    def test_box_trim_parsed(self):
+        _, _, box_name = _parse_single_spec("1(box=trim)", total_pages=1)
+        assert box_name == "trim"
+
+    def test_box_bleed_and_art_parsed(self):
+        assert _parse_single_spec("1(box=bleed)", total_pages=1)[2] == "bleed"
+        assert _parse_single_spec("1(box=art)", total_pages=1)[2] == "art"
+
+    def test_box_with_delete_and_partial(self):
+        _, tr, box_name = _parse_single_spec(
+            "1(box=trim,delete=outside,partial=outside)", total_pages=1
+        )
+        assert box_name == "trim"
+        assert tr.delete == "outside"
+        assert tr.partial == "outside"
+
+    def test_box_page_range_defaults_to_all(self):
+        page_range, _, box_name = _parse_single_spec("(box=crop)", total_pages=3)
+        assert page_range == "-"
+        assert box_name == "crop"
+
+    def test_unknown_box_name_raises(self):
+        with pytest.raises(InvalidArgumentError, match="'box'"):
+            _parse_single_spec("1(box=bogus)", total_pages=1)
+
+    def test_box_with_extra_coordinates_raises(self):
+        with pytest.raises(InvalidArgumentError, match="no coordinates"):
+            _parse_single_spec("1(box=crop,10,10,100,100)", total_pages=1)
+
+    def test_box_repeated_raises(self):
+        with pytest.raises(InvalidArgumentError, match="only appear once"):
+            _parse_single_spec("1(box=crop,box=trim)", total_pages=1)
+
+    def test_neither_abs_nor_box_raises(self):
+        with pytest.raises(InvalidArgumentError, match="'abs' or 'box="):
+            _parse_single_spec("1(0,0,100,100)", total_pages=1)
+
+
+class TestResolveBoxRect:
+    def _page_with_boxes(self, **boxes):
+        # NB: return (pdf, page), and callers must keep `pdf` alive for
+        # as long as `page` is used -- pikepdf tears down a Page's
+        # underlying dictionary access once its owning Pdf is garbage
+        # collected, even though `page` itself is still referenced.
+        pdf = pikepdf.new()
+        pdf.add_blank_page(page_size=(300, 400))
+        page = pdf.pages[0]
+        for name, rect in boxes.items():
+            setattr(page, name, pikepdf.Array(rect))
+        return pdf, page
+
+    def test_media_box_resolved(self):
+        pdf, page = self._page_with_boxes(mediabox=[0, 0, 300, 400])
+        assert _resolve_box_rect(page, "media") == [0.0, 0.0, 300.0, 400.0]
+
+    def test_crop_box_resolved_when_present(self):
+        pdf, page = self._page_with_boxes(mediabox=[0, 0, 300, 400], cropbox=[10, 10, 290, 390])
+        assert _resolve_box_rect(page, "crop") == [10.0, 10.0, 290.0, 390.0]
+
+    def test_trim_box_falls_back_to_crop_when_absent(self):
+        pdf, page = self._page_with_boxes(mediabox=[0, 0, 300, 400], cropbox=[5, 5, 295, 395])
+        assert _resolve_box_rect(page, "trim") == [5.0, 5.0, 295.0, 395.0]
+
+    def test_trim_box_falls_back_to_media_when_no_crop_either(self):
+        pdf, page = self._page_with_boxes(mediabox=[0, 0, 300, 400])
+        assert _resolve_box_rect(page, "trim") == [0.0, 0.0, 300.0, 400.0]
+
+    def test_bleed_and_art_also_fall_back_to_crop(self):
+        pdf, page = self._page_with_boxes(mediabox=[0, 0, 300, 400], cropbox=[1, 1, 299, 399])
+        assert _resolve_box_rect(page, "bleed") == [1.0, 1.0, 299.0, 399.0]
+        assert _resolve_box_rect(page, "art") == [1.0, 1.0, 299.0, 399.0]
+
+    def test_reversed_box_coordinates_normalized(self):
+        pdf, page = self._page_with_boxes(mediabox=[300, 400, 0, 0])
+        assert _resolve_box_rect(page, "media") == [0.0, 0.0, 300.0, 400.0]
+
+
+class TestExciseBoxEndToEnd:
+    def test_box_crop_keeps_only_content_inside_cropbox(self):
+        pdf = pikepdf.new()
+        pdf.add_blank_page(page_size=(300, 300))
+        page = pdf.pages[0]
+        page.CropBox = pikepdf.Array([50, 50, 150, 150])
+        page.Contents = pdf.make_stream(b"q 60 60 40 40 re f Q q 200 200 40 40 re f Q")
+        excise_content(pdf, ["1(box=crop,delete=outside)"])
+        instructions = pikepdf.parse_content_stream(page.Contents)
+        fill_ops = [op for _, op in instructions if str(op) == "f"]
+        assert len(fill_ops) == 1
+
+    def test_box_per_page_differing_boxes_each_resolved_independently(self):
+        pdf = pikepdf.new()
+        pdf.add_blank_page(page_size=(300, 300))
+        pdf.add_blank_page(page_size=(300, 300))
+        pdf.pages[0].TrimBox = pikepdf.Array([0, 0, 100, 100])
+        pdf.pages[1].TrimBox = pikepdf.Array([200, 200, 300, 300])
+        fill = b"q 60 60 30 30 re f Q"
+        pdf.pages[0].Contents = pdf.make_stream(fill)
+        pdf.pages[1].Contents = pdf.make_stream(fill)
+
+        excise_content(pdf, ["1-2(box=trim,delete=outside)"])
+
+        ops0 = [str(op) for _, op in pikepdf.parse_content_stream(pdf.pages[0].Contents)]
+        ops1 = [str(op) for _, op in pikepdf.parse_content_stream(pdf.pages[1].Contents)]
+        assert "f" in ops0
+        assert "f" not in ops1
+
+    def test_box_spec_page_not_reassigned_by_later_non_box_spec(self):
+        """A later abs,... sfor the same page must clear that page's
+        entry from the box_name side-map, or the stale box_name would
+        cause _process_page to wrongly re-resolve/override the later
+        spec's explicit rect."""
+        pdf = pikepdf.new()
+        pdf.add_blank_page(page_size=(300, 300))
+        page = pdf.pages[0]
+        page.TrimBox = pikepdf.Array([0, 0, 10, 10])  # would keep almost nothing
+        page.Contents = pdf.make_stream(b"q 60 60 30 30 re f Q")
+        # First spec: box=trim,delete=outside (would delete the fill,
+        # since it's outside the tiny TrimBox). Second spec for the same
+        # page overrides with an abs rect that DOES cover the fill.
+        excise_content(
+            pdf,
+            [
+                "1(box=trim,delete=outside)",
+                "1(abs,0,0,300,300,delete=outside)",
+            ],
+        )
+        ops = [str(op) for _, op in pikepdf.parse_content_stream(page.Contents)]
+        assert "f" in ops  # last spec (abs) won, fill survives
+
+
 class TestParseArgs:
     def test_single_spec_applies_to_matching_pages(self):
-        result = _parse_args(["1-3(abs,0,0,10,10)"], total_pages=5)
+        result, _box_names = _parse_args(["1-3(abs,0,0,10,10)"], total_pages=5)
         assert set(result.keys()) == {1, 2, 3}
         assert all(tr.rect == [0.0, 0.0, 10.0, 10.0] for tr in result.values())
 
     def test_later_spec_overrides_earlier_for_same_page(self):
-        result = _parse_args(["1-5(abs,0,0,10,10)", "3(abs,50,50,60,60)"], total_pages=5)
+        result, _box_names = _parse_args(
+            ["1-5(abs,0,0,10,10)", "3(abs,50,50,60,60)"], total_pages=5
+        )
         assert result[3].rect == [50.0, 50.0, 60.0, 60.0]
         assert result[1].rect == [0.0, 0.0, 10.0, 10.0]
 

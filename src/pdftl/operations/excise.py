@@ -45,6 +45,10 @@ from pdftl.operations.helpers.excise_types import ExciseRect, ExciseStats
 from pdftl.operations.helpers.excise_geometry import (
     overlap_means_delete as _overlap_means_delete,
 )
+from pdftl.operations.helpers.excise_geometry import (
+    resolve_box_rect as _resolve_box_rect,
+    PAGE_BOX_NAMES as _PAGE_BOX_NAMES,
+)
 from pdftl.operations.helpers.excise_stream import (
     _copy_resource_dict as _copy_resource_dict,
 )
@@ -82,6 +86,10 @@ _EXAMPLES = [
         "desc": "Delete content overlapping the box on pages 1-5",
     },
     {
+        "cmd": "in.pdf excise 1-end(box=trim,delete=outside) output out.pdf",
+        "desc": "Keep only content inside each page's own TrimBox, per page",
+    },
+    {
         "cmd": "in.pdf excise 1(abs,0,0,300pt,300pt,delete=outside) output out.pdf",
         "desc": "Keep ONLY content inside the box on page 1, delete everything outside",
     },
@@ -99,10 +107,21 @@ units are physically removed from the PDF.
 ## Specification format for `<spec>`
 
     <pages>(abs,<x0>,<y0>,<x1>,<y1>[,delete=inside|outside][,partial=inside|outside])
+    <pages>(box=media|crop|trim|bleed|art[,delete=inside|outside][,partial=inside|outside])
 
 - `<pages>` follows the same page-spec syntax as other operations
   (e.g. `1-5`, `1,3,5-end`).
-- `<x0>,<y0>,<x1>,<y1>` are absolute coordinates in unrotated PDF
+- The rectangle can be given either as explicit absolute coordinates
+  (`abs,<x0>,<y0>,<x1>,<y1>`) or, more conveniently, as one of the
+  page's own box entries via `box=<name>`, where `<name>` is one of
+  `media`, `crop`, `trim`, `bleed`, `art`. excise then uses that box's
+  own extent as the rectangle, resolved separately for each matching
+  page (so it tracks each page's actual MediaBox/CropBox/etc., even
+  when pages differ). If a page lacks the requested box, excise falls
+  back the way the PDF spec itself defines these boxes to default
+  (Trim/Bleed/Art -> Crop -> Media). `abs,...` and `box=...` are
+  mutually exclusive within one spec.
+- `<x0>,<y0>,<x1>,<y1>` (the `abs` form) are absolute coordinates in unrotated PDF
   user-space points (dimension suffixes like `pt`/`in`/`cm`/`mm` are
   accepted, matching `rebox`'s dimension parsing).
 - `delete` defines which units are deleted: either those classified as
@@ -149,11 +168,11 @@ def excise_content(pdf, args) -> OpResult:
     if not args:
         raise InvalidArgumentError("excise: at least one <pages>(abs,...) spec is required")
 
-    page_rects = _parse_args(args, len(pdf.pages))
+    page_rects, page_box_names = _parse_args(args, len(pdf.pages))
     stats = ExciseStats()
 
     for page_num, excise_rect in page_rects.items():
-        _process_page(pdf, page_num, excise_rect, stats)
+        _process_page(pdf, page_num, excise_rect, stats, page_box_names.get(page_num))
 
     _log_stats(stats)
     return OpResult(success=True, pdf=pdf)
@@ -164,22 +183,36 @@ def excise_content(pdf, args) -> OpResult:
 # ---------------------------------------------------------------------------
 
 
-def _parse_args(args: list[str], total_pages: int) -> dict[int, ExciseRect]:
+def _parse_args(args: list[str], total_pages: int) -> tuple[dict[int, ExciseRect], dict[int, str]]:
     """Parses excise's spec strings into a {page_num (1-based): ExciseRect} map.
 
     Later specs overwrite earlier ones for the same page number (last
     spec wins), matching the general "later args override" convention
     used by rebox_parser.specs_to_page_rules.
+
+    Also returns a second {page_num: box_name} map, populated only for
+    pages whose winning spec used `box=<name>` instead of `abs,...` --
+    for those pages the ExciseRect in the first map carries a placeholder
+    `rect` (see _parse_single_spec) that _process_page must overwrite
+    with a per-page-resolved rect before use; box_name entries follow
+    the same last-spec-wins rule as page_rects, and a page reassigned
+    from a box= spec to a later abs,... spec (or vice versa) is removed
+    from / added to this second map accordingly.
     """
     page_rects: dict[int, ExciseRect] = {}
+    page_box_names: dict[int, str] = {}
     for spec in args:
-        page_range_str, excise_rect = _parse_single_spec(spec, total_pages)
+        page_range_str, excise_rect, box_name = _parse_single_spec(spec, total_pages)
         for page_num in page_numbers_matching_page_spec(page_range_str, total_pages):
             page_rects[page_num] = excise_rect
-    return page_rects
+            if box_name is None:
+                page_box_names.pop(page_num, None)
+            else:
+                page_box_names[page_num] = box_name
+    return page_rects, page_box_names
 
 
-def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect]:
+def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect, str | None]:
     if "(" not in spec or not spec.endswith(")"):
         raise InvalidArgumentError(
             f"excise: invalid spec '{spec}'. "
@@ -189,19 +222,51 @@ def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect]:
     content_str = content_str[:-1]  # strip trailing ')'
     parts = [p.strip() for p in content_str.split(",")]
 
-    if not parts or parts[0].lower() != "abs":
-        raise InvalidArgumentError(
-            f"excise: content '{content_str}' in spec '{spec}' must start with 'abs'."
-        )
+    box_name, rest = _parse_spec_prefix(parts, content_str, spec)
+    delete, partial, numeric_parts = _parse_spec_modifiers(rest, spec)
 
+    if box_name is not None:
+        return _build_box_result(page_range_str, box_name, numeric_parts, delete, partial, spec)
+
+    return _build_abs_result(page_range_str, numeric_parts, delete, partial, spec)
+
+
+def _parse_spec_prefix(
+    parts: list[str], content_str: str, spec: str
+) -> tuple[str | None, list[str]]:
+    """Determines whether the spec opens with 'box=<name>' or 'abs', and
+    returns (box_name or None, remaining parts after the prefix)."""
+    first = parts[0]
+    if first.lower().startswith("box="):
+        box_name = first.split("=", 1)[1].strip().lower()
+        if box_name not in _PAGE_BOX_NAMES:
+            raise InvalidArgumentError(
+                f"excise: 'box' must be one of {', '.join(_PAGE_BOX_NAMES)}, "
+                f"got '{box_name}' in spec '{spec}'."
+            )
+        return box_name, parts[1:]
+    if first.lower() == "abs":
+        return None, parts[1:]
+    raise InvalidArgumentError(
+        f"excise: content '{content_str}' in spec '{spec}' must start with 'abs' or 'box=<name>'."
+    )
+
+
+def _parse_spec_modifiers(rest: list[str], spec: str) -> tuple[str, str, list[str]]:
+    """Splits the remaining spec parts into delete=/partial= modifiers
+    (with defaults) and leftover numeric coordinate parts."""
     delete = "inside"
     partial = "inside"
     numeric_parts = []
-    for p in parts[1:]:
+    for p in rest:
         if p.lower().startswith("delete="):
             delete = p.split("=", 1)[1].strip().lower()
         elif p.lower().startswith("partial="):
             partial = p.split("=", 1)[1].strip().lower()
+        elif p.lower().startswith("box="):
+            raise InvalidArgumentError(
+                f"excise: 'box=' may only appear once, at the start of the spec, in spec '{spec}'."
+            )
         else:
             numeric_parts.append(p)
 
@@ -213,7 +278,32 @@ def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect]:
         raise InvalidArgumentError(
             f"excise: 'partial' must be 'inside' or 'outside', got '{partial}' in spec '{spec}'."
         )
+    return delete, partial, numeric_parts
 
+
+def _build_box_result(
+    page_range_str: str,
+    box_name: str,
+    numeric_parts: list[str],
+    delete: str,
+    partial: str,
+    spec: str,
+) -> tuple[str, ExciseRect, str | None]:
+    if numeric_parts:
+        raise InvalidArgumentError(
+            f"excise: 'box=<name>' spec takes no coordinates, got "
+            f"{len(numeric_parts)} extra value(s) in spec '{spec}'."
+        )
+    # Placeholder rect -- _process_page overwrites this with the
+    # actual per-page box extent (see box_name in page_box_names)
+    # before any geometry test ever reads it.
+    placeholder = ExciseRect(rect=[0.0, 0.0, 0.0, 0.0], delete=delete, partial=partial)
+    return page_range_str or "-", placeholder, box_name
+
+
+def _build_abs_result(
+    page_range_str: str, numeric_parts: list[str], delete: str, partial: str, spec: str
+) -> tuple[str, ExciseRect, str | None]:
     if len(numeric_parts) != 4:
         raise InvalidArgumentError(
             f"excise: expected 4 coordinates (x0,y0,x1,y1) in spec '{spec}', "
@@ -234,7 +324,7 @@ def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect]:
         raise InvalidArgumentError(f"excise: invalid coordinate in spec '{spec}': {e}") from e
 
     rect = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
-    return page_range_str or "-", ExciseRect(rect=rect, delete=delete, partial=partial)
+    return page_range_str or "-", ExciseRect(rect=rect, delete=delete, partial=partial), None
 
 
 # ---------------------------------------------------------------------------
@@ -242,10 +332,28 @@ def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect]:
 # ---------------------------------------------------------------------------
 
 
-def _process_page(pdf, page_num: int, excise_rect: ExciseRect, stats: ExciseStats) -> None:
+def _process_page(
+    pdf,
+    page_num: int,
+    excise_rect: ExciseRect,
+    stats: ExciseStats,
+    box_name: str | None = None,
+) -> None:
     import pikepdf
 
     page = pdf.pages[page_num - 1]
+
+    if box_name is not None:
+        # box= specs carry a placeholder rect from _parse_single_spec --
+        # resolve THIS page's own box extent now, since different pages
+        # matched by the same spec (e.g. "1-end(box=trim,...)") can have
+        # different TrimBox/CropBox/etc. geometry.
+        excise_rect = ExciseRect(
+            rect=_resolve_box_rect(page, box_name),
+            delete=excise_rect.delete,
+            partial=excise_rect.partial,
+        )
+
     _filter_annots(page, excise_rect, stats)
 
     if "/Contents" not in page:

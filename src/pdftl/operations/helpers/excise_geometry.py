@@ -19,6 +19,63 @@ from pdftl.operations.helpers.excise_types import ExciseRect, ExciseStats
 IDENTITY_CTM: tuple[float, ...] = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
+# ---------------------------------------------------------------------------
+# Page box (Media/Crop/Trim/Bleed/Art) resolution for excise's `box=` spec
+# ---------------------------------------------------------------------------
+
+# Names excise's `box=` keyword accepts, each mapped to the pikepdf.Page
+# convenience property that resolves it (already handling inheritance
+# from ancestor /Pages nodes), in unrotated PDF user-space -- the same
+# coordinate space excise's `abs,x0,y0,x1,y1` rects already use.
+PAGE_BOX_NAMES = ("media", "crop", "trim", "bleed", "art")
+
+_BOX_ATTR = {
+    "media": "mediabox",
+    "crop": "cropbox",
+    "trim": "trimbox",
+    "bleed": "bleedbox",
+    "art": "artbox",
+}
+
+# PDF-spec-defined fallback chain for a box absent on a page: Trim/Bleed/
+# Art -> Crop -> Media. pikepdf's own .cropbox already falls back to
+# mediabox internally; this chain covers trim/bleed/art, which pikepdf
+# does NOT fall back on by itself.
+_BOX_FALLBACK = {
+    "art": "crop",
+    "bleed": "crop",
+    "trim": "crop",
+    "crop": "media",
+    "media": None,
+}
+
+
+def resolve_box_rect(page: Any, box_name: str) -> list[float]:
+    """Resolves a `box=` name (one of PAGE_BOX_NAMES) into a concrete
+    [x0, y0, x1, y1] rect in unrotated PDF user-space points for `page`,
+    following the box-not-present fallback chain above, normalized into
+    min/max order the same way excise.py normalizes `abs,...` rects.
+
+    Deliberately does NOT account for /Rotate: excise's geometry pipeline
+    (device-space bbox testing against ExciseRect.rects, see _matches)
+    already operates in the page's own unrotated user-space, and a
+    page's box entries are themselves always stored unrotated -- so no
+    rotation adjustment belongs here.
+    """
+    name: str | None = box_name
+    while name is not None:
+        box = getattr(page, _BOX_ATTR[name], None)
+        if box is not None:
+            try:
+                r = [float(v) for v in box]
+            except (TypeError, ValueError):
+                r = None
+            if r is not None and len(r) == 4:
+                return [min(r[0], r[2]), min(r[1], r[3]), max(r[0], r[2]), max(r[1], r[3])]
+        name = _BOX_FALLBACK[name]
+    raise ValueError(f"excise: page has no resolvable /{box_name}Box (or fallback)")
+
+
 def transform_point_local(x: float, y: float, ctm: tuple[float, ...]) -> tuple[float, float]:
     """Applies a raw 6-tuple CTM to a single (x, y) user-space point.
 
