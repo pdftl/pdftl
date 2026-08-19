@@ -89,7 +89,9 @@ def run_parallel_image_job(
 # --- REUSABLE BOILERPLATE BOOTSTRAPS ---
 
 
-def encode_and_update_pdf_image(ctx: Any, pil_img: Any, quality: int) -> None:
+def encode_and_update_pdf_image(
+    ctx: Any, pil_img: Any, quality: int, forced_codec: str | None = None
+) -> None:
     """Encodes a PIL image and updates the PDF XObject stream by matching the
     original image's specific PDF filter and structural characteristics exactly.
 
@@ -105,9 +107,13 @@ def encode_and_update_pdf_image(ctx: Any, pil_img: Any, quality: int) -> None:
     attempts to maintain lossy /DCTDecode or /JPXDecode where applicable, and
     safely falls back to lossless /FlateDecode for everything else.
     """
-    import pikepdf
     from PIL import Image
     from pdftl.utils.images.pil_to_pdf import get_colorspace_dict
+
+    # 1a. Quantize BEFORE colorspace/bpc are derived, so ColorSpace correctly
+    # reflects the resulting Indexed palette rather than the pre-quantization mode.
+    if forced_codec == "png8" and pil_img.mode != "1":
+        pil_img = pil_img.convert("P", palette=Image.ADAPTIVE)
 
     # 1. Update basic structural dimensions
     ctx.xobj.Width = pil_img.width
@@ -118,9 +124,36 @@ def encode_and_update_pdf_image(ctx: Any, pil_img: Any, quality: int) -> None:
     ctx.xobj.ColorSpace = cs
     ctx.xobj.BitsPerComponent = bpc
 
-    # logger.debug("pik_img.mode=%s, ctx=%s", pil_img.mode, ctx)
+    # 3. Try an explicit override first; otherwise fall through to the
+    # original mode/filter-based heuristic.
+    if _try_forced_codec(ctx, pil_img, quality, forced_codec):
+        return
 
-    # 3. Read the original filter schema
+    _encode_via_heuristic(ctx, pil_img, quality)
+
+
+def _try_forced_codec(ctx: Any, pil_img: Any, quality: int, forced_codec: str | None) -> bool:
+    """Applies an explicit format= override if one applies to this image.
+    Returns True if encoding was handled, False to fall through to the
+    default heuristic."""
+    if forced_codec == "png":
+        _handle_flate_fallback(ctx, pil_img)
+        return True
+    if forced_codec == "png8" and pil_img.mode == "P":
+        _handle_flate_fallback(ctx, pil_img)
+        return True
+    if forced_codec == "jpeg" and pil_img.mode != "1":
+        _handle_dct_encode(ctx, pil_img, quality)
+        return True
+    return False
+
+
+def _encode_via_heuristic(ctx: Any, pil_img: Any, quality: int) -> None:
+    """Original mode/filter-based routing: matches the incoming PDF filter
+    where possible, falls back to lossless Flate otherwise."""
+    import pikepdf
+    from PIL import Image
+
     filters = ctx.xobj.get("/Filter")
     filter_list = []
     if isinstance(filters, pikepdf.Name):
@@ -128,7 +161,6 @@ def encode_and_update_pdf_image(ctx: Any, pil_img: Any, quality: int) -> None:
     elif isinstance(filters, pikepdf.Array):
         filter_list = [str(f) for f in filters]
 
-    # 4. Route serialization with precise exception boundaries
     if pil_img.mode == "1":
         try:
             _handle_1bit_optimized_encode(ctx, pil_img)

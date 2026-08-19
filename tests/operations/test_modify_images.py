@@ -90,10 +90,11 @@ def test_compile_pipeline_steps_valid(mock_registry):
     mock_cmd = MagicMock()
     mock_cmd.operations = [mock_op]
 
-    steps, have_image_modifiers = _compile_pipeline_steps(mock_cmd)
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
 
     assert have_image_modifiers is True
     assert steps == [("contrast", 1.5)]
+    assert forced_codec is None
     mock_plugin.validator.assert_called_with("1.5")
 
 
@@ -120,8 +121,89 @@ def test_compile_pipeline_steps_empty_val_to_true(mock_registry):
     mock_cmd = MagicMock()
     mock_cmd.operations = [mock_op]
 
-    steps, have_image_modifiers = _compile_pipeline_steps(mock_cmd)
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
     mock_plugin.validator.assert_called_with("true")
+    assert have_image_modifiers is True
+    assert forced_codec is None
+
+
+def test_compile_pipeline_steps_format_png(mock_registry):
+    mock_registry.image_modifiers = {}
+    mock_op = MagicMock()
+    mock_op.name = "format"
+    mock_op.params = {"value": "png"}
+
+    mock_cmd = MagicMock()
+    mock_cmd.operations = [mock_op]
+
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
+
+    assert steps == []
+    assert have_image_modifiers is True
+    assert forced_codec == "png"
+
+
+def test_compile_pipeline_steps_format_jpg_normalizes_to_jpeg(mock_registry):
+    mock_registry.image_modifiers = {}
+    mock_op = MagicMock()
+    mock_op.name = "format"
+    mock_op.params = {"value": "JPG"}
+
+    mock_cmd = MagicMock()
+    mock_cmd.operations = [mock_op]
+
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
+
+    assert forced_codec == "jpeg"
+    assert have_image_modifiers is True
+
+
+def test_compile_pipeline_steps_format_missing_value(mock_registry):
+    mock_registry.image_modifiers = {}
+    mock_op = MagicMock()
+    mock_op.name = "format"
+    mock_op.params = {"value": "  "}
+
+    mock_cmd = MagicMock()
+    mock_cmd.operations = [mock_op]
+
+    with pytest.raises(InvalidArgumentError, match="Image modifier 'format': missing value"):
+        _compile_pipeline_steps(mock_cmd)
+
+
+def test_compile_pipeline_steps_format_invalid_value(mock_registry):
+    mock_registry.image_modifiers = {}
+    mock_op = MagicMock()
+    mock_op.name = "format"
+    mock_op.params = {"value": "gif"}
+
+    mock_cmd = MagicMock()
+    mock_cmd.operations = [mock_op]
+
+    with pytest.raises(InvalidArgumentError, match="Image modifier 'format':.*must be one of"):
+        _compile_pipeline_steps(mock_cmd)
+
+
+def test_compile_pipeline_steps_format_plus_modifier(mock_registry):
+    mock_plugin = MagicMock()
+    mock_plugin.validator.return_value = 2
+    mock_registry.image_modifiers = {"posterize": mock_plugin}
+
+    format_op = MagicMock()
+    format_op.name = "format"
+    format_op.params = {"value": "png"}
+
+    posterize_op = MagicMock()
+    posterize_op.name = "posterize"
+    posterize_op.params = {"value": "2"}
+
+    mock_cmd = MagicMock()
+    mock_cmd.operations = [posterize_op, format_op]
+
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
+
+    assert steps == [("posterize", 2)]
+    assert forced_codec == "png"
     assert have_image_modifiers is True
 
 
@@ -152,8 +234,9 @@ def test_compile_pipeline_steps_all_false_image_modifiers(mock_registry):
     mock_cmd = MagicMock()
     mock_cmd.operations = [mock_op]
 
-    steps, have_image_modifiers = _compile_pipeline_steps(mock_cmd)
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
     assert have_image_modifiers is False
+    assert forced_codec is None
 
 
 # --- TESTS FOR _discover_target_images ---
@@ -247,7 +330,7 @@ def test_build_callbacks(
     mock_ctx = MagicMock()
     success = commit_cb(mock_ctx, "processed_pil", {})
     assert success is True
-    mock_encode.assert_called_with(mock_ctx, "processed_pil", 80)
+    mock_encode.assert_called_with(mock_ctx, "processed_pil", 80, None)
 
 
 # --- TESTS FOR modify_images_operation (Orchestrator) ---
@@ -277,7 +360,7 @@ def test_modify_images_operation_full_success(
     mock_cmd.page_spec = "1"
     mock_parse_args.return_value = [mock_cmd]
 
-    mock_compile.return_value = ([("contrast", 1)], True)
+    mock_compile.return_value = ([("contrast", 1)], True, None)
     mock_page_match.return_value = [1]
     mock_discover.return_value = [{"xobj": MagicMock()}]
     mock_build_cbs.return_value = ("prep", "work", "commit")
@@ -318,7 +401,7 @@ def test_modify_images_operation_no_target_pages(
     mock_cmd = MagicMock()
     mock_cmd.page_spec = "99"
     mock_parse_args.return_value = [mock_cmd]
-    mock_compile.return_value = ([], True)
+    mock_compile.return_value = ([], True, None)
     mock_page_match.return_value = []  # No pages match
 
     res = modify_images_operation(mock_pdf, ["99(contrast=1)"])
@@ -334,7 +417,7 @@ def test_modify_images_operation_no_images_discovered(
 ):
     mock_cmd = MagicMock()
     mock_parse_args.return_value = [mock_cmd]
-    mock_compile.return_value = ([], True)
+    mock_compile.return_value = ([], True, None)
     mock_page_match.return_value = [1]
     mock_discover.return_value = []  # No images found
 

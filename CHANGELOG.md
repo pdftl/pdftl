@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `excise` operation
 
+- add image format selection to `modify_images`
+
 ### Fixed
 
 - `subset_fonts`: add subset tags to font names

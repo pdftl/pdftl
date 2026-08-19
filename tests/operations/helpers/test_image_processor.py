@@ -194,6 +194,82 @@ def test_encode_routing(mock_flate, mock_jpx, mock_dct, mock_ccitt):
     mock_flate.assert_called_once_with(ctx, pil_img)
 
 
+@patch("pdftl.operations.helpers.image_processor._handle_1bit_optimized_encode")
+@patch("pdftl.operations.helpers.image_processor._handle_dct_encode")
+@patch("pdftl.operations.helpers.image_processor._handle_flate_fallback")
+def test_encode_routing_forced_codec_png(mock_flate, mock_dct, mock_ccitt):
+    """forced_codec='png' must short-circuit straight to Flate, regardless of
+    the original PDF filter or image mode, and never consult the heuristic."""
+    ctx = MagicMock()
+    pil_img = MagicMock()
+    pil_img.width = 100
+    pil_img.height = 200
+    pil_img.mode = "RGB"
+    ctx.xobj.get.return_value = pikepdf.Name("/DCTDecode")
+
+    encode_and_update_pdf_image(ctx, pil_img, 75, forced_codec="png")
+
+    mock_flate.assert_called_once_with(ctx, pil_img)
+    mock_dct.assert_not_called()
+    mock_ccitt.assert_not_called()
+
+
+@patch("pdftl.operations.helpers.image_processor._handle_dct_encode")
+@patch("pdftl.operations.helpers.image_processor._handle_flate_fallback")
+def test_encode_routing_forced_codec_jpeg(mock_flate, mock_dct):
+    """forced_codec='jpeg' must route to DCT for a non-1-bit image, even when
+    the original PDF filter was something else entirely."""
+    ctx = MagicMock()
+    pil_img = MagicMock()
+    pil_img.width = 100
+    pil_img.height = 200
+    pil_img.mode = "RGB"
+    ctx.xobj.get.return_value = pikepdf.Name("/FlateDecode")
+
+    encode_and_update_pdf_image(ctx, pil_img, 90, forced_codec="jpeg")
+
+    mock_dct.assert_called_once_with(ctx, pil_img, 90)
+    mock_flate.assert_not_called()
+
+
+@patch("pdftl.operations.helpers.image_processor._handle_1bit_optimized_encode")
+@patch("pdftl.operations.helpers.image_processor._handle_dct_encode")
+def test_encode_routing_forced_codec_jpeg_ignored_for_1bit(mock_dct, mock_ccitt):
+    """forced_codec='jpeg' must NOT override the 1-bit optimized path - JPEG
+    can't represent mode '1', so the existing CCITT/Flate routing wins."""
+    ctx = MagicMock()
+    pil_img = MagicMock()
+    pil_img.width = 100
+    pil_img.height = 200
+    pil_img.mode = "1"
+    ctx.xobj.get.return_value = pikepdf.Name("/CCITTFaxDecode")
+
+    encode_and_update_pdf_image(ctx, pil_img, 75, forced_codec="jpeg")
+
+    mock_ccitt.assert_called_once_with(ctx, pil_img)
+    mock_dct.assert_not_called()
+
+
+@patch("pdftl.operations.helpers.image_processor._handle_1bit_optimized_encode")
+@patch("pdftl.operations.helpers.image_processor._handle_dct_encode")
+@patch("pdftl.operations.helpers.image_processor._handle_flate_fallback")
+def test_encode_routing_forced_codec_none_uses_heuristic(mock_flate, mock_dct, mock_ccitt):
+    """forced_codec=None (the default) must fall through unchanged to the
+    existing mode/filter-based heuristic - covers the default-arg branch."""
+    ctx = MagicMock()
+    pil_img = MagicMock()
+    pil_img.width = 100
+    pil_img.height = 200
+    pil_img.mode = "RGB"
+    ctx.xobj.get.return_value = pikepdf.Name("/DCTDecode")
+
+    encode_and_update_pdf_image(ctx, pil_img, 75)
+
+    mock_dct.assert_called_once_with(ctx, pil_img, 75)
+    mock_flate.assert_not_called()
+    mock_ccitt.assert_not_called()
+
+
 # --- 4. Deep Encoding Function Tests ---
 
 
@@ -309,6 +385,49 @@ class MockXObjDict(dict):
         if name == "DecodeParms":
             return self.get("/DecodeParms")
         raise AttributeError(name)
+
+
+def test_png8_forced_codec_writes_consistent_indexed_stream():
+    """
+    format=png8 on a non-1-bit image must quantize BEFORE ColorSpace/
+    BitsPerComponent are derived, so the XObject dict actually matches the
+    written pixel data. Currently (bug): ColorSpace is derived from the
+    original RGB image (-> /DeviceRGB, 8 bpc, 3 bytes/pixel) while the
+    written stream is the quantized 1-byte/pixel palette-indexed data -
+    a structurally invalid, unrenderable image.
+    """
+    pdf = pikepdf.Pdf.new()
+    xobj_stream = pdf.make_stream(b"dummy_data_to_be_overwritten")
+    xobj_stream.Type = pikepdf.Name("/XObject")
+    xobj_stream.Subtype = pikepdf.Name("/Image")
+
+    ctx = ImageContext(xobj=xobj_stream, smask_xobj=None, orig_size=1024, img_dict={}, page_num=1)
+
+    # A real RGB image with more than 256 colors, so quantization is
+    # meaningful (not a no-op) and the byte-count mismatch would be visible.
+    img = Image.new("RGB", (16, 16))
+    pixels = img.load()
+    for x in range(16):
+        for y in range(16):
+            pixels[x, y] = (x * 16, y * 16, (x + y) * 8)
+
+    encode_and_update_pdf_image(ctx, img, quality=90, forced_codec="png8")
+
+    # ColorSpace must reflect the quantized Indexed result, not the
+    # original RGB mode.
+    assert isinstance(ctx.xobj.ColorSpace, pikepdf.Array), (
+        "ColorSpace must be an Indexed Array for png8 output, not /DeviceRGB"
+    )
+    assert ctx.xobj.ColorSpace[0] == pikepdf.Name("/Indexed")
+
+    # The written stream must be 1 byte/pixel (palette indices), matching
+    # what BitsPerComponent/ColorSpace claim - not 3 bytes/pixel RGB data.
+    decoded = zlib.decompress(ctx.xobj.read_raw_bytes())
+    assert len(decoded) == img.width * img.height, (
+        "Written stream size doesn't match 1-byte-per-pixel indexed data - "
+        "ColorSpace/BitsPerComponent don't match the actual encoded bytes"
+    )
+    assert ctx.xobj.Filter == pikepdf.Name("/FlateDecode")
 
 
 def _make_ctx_and_img(ccitt_payload, raw_bytes):

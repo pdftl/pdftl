@@ -52,6 +52,17 @@ Arguments:
   * `threads=<n>`: Explicit parallel execution worker thread limit count.
   * `quality=<q>`: Output JPEG stream lossy compression value (1-100). Default: 75
 
+Output Control (not pixel modifiers - control output encoding only):
+
+  * `format=<codec>`: Forces the re-embedded image to be saved with a specific
+                       codec, overriding automatic format selection. One of:
+
+    - `png`  : lossless, raw pixel data (any color count)
+    - `png8` : lossy, palette-quantized to <=256 colors (often
+        much smaller than `png` for high-detail images)
+    - `jpeg` : lossy DCT compression (ignored for 1-bit images)
+        Example: `1-5(posterize=2; format=png8)`
+
 Available Image Modifiers:"""
 
         image_modifiers_map = getattr(registry, "image_modifiers", {})
@@ -121,7 +132,7 @@ def modify_images_operation(pdf: Any, args: list[str]) -> OpResult:
         page_spec_str = cmd.page_spec
 
         # 3. Perform string-to-primitive casting natively on the main thread
-        steps, have_image_modifiers = _compile_pipeline_steps(cmd)
+        steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(cmd)
 
         total_pages = len(pdf.pages)
         target_pages = page_numbers_matching_page_spec(page_spec_str, total_pages)
@@ -136,7 +147,9 @@ def modify_images_operation(pdf: Any, args: list[str]) -> OpResult:
             continue
 
         # 5. Build local task callbacks leveraging the shared boilerplate helper
-        prepare_cb, worker_cb, commit_cb = _build_callbacks(have_image_modifiers, steps, quality)
+        prepare_cb, worker_cb, commit_cb = _build_callbacks(
+            have_image_modifiers, steps, quality, forced_codec
+        )
 
         logger.info("Initializing multi-threaded image pipeline engine processing job...")
 
@@ -178,35 +191,67 @@ def _parse_operational_args(args: list[str]) -> tuple[int | None, int, list[str]
     return threads_val, quality, clean_args
 
 
-def _compile_pipeline_steps(cmd: Any) -> tuple[list[tuple[str, Any]], bool]:
-    """Validates commands and identifies if any mutations are actively requested."""
+def _to_format(val: str) -> str:
+    """Validates and normalizes an explicit output codec override."""
+    v = val.strip().lower()
+    if v not in ("jpeg", "jpg", "png", "png8"):
+        raise InvalidArgumentError(f"Format '{val}' must be one of: png, png8, jpeg")
+    return "jpeg" if v == "jpg" else v
+
+
+def _compile_pipeline_steps(cmd: Any) -> tuple[list[tuple[str, Any]], bool, str | None]:
+    """Validates commands, extracts an explicit format override if present, and
+    identifies if any mutations are actively requested."""
     steps = []
+    forced_codec: str | None = None
     for op in cmd.operations:
-        if op.name not in registry.image_modifiers:
-            raise InvalidArgumentError(f"Unknown image modifier plugin context: '{op.name}'")
-
-        plugin = registry.image_modifiers[op.name]
-
-        # Handle standalone flags! If no value is provided, treat it as "true"
-        raw_val = op.params.get("value")
-        if raw_val is None or str(raw_val).strip() == "":
-            raw_val = "true"
-
-        try:
-            coerced_val = plugin.validator(raw_val)
-        except InvalidArgumentError as exc:
-            raise InvalidArgumentError(f"Image modifier '{op.name}': {exc}") from exc
-
-        steps.append((op.name, coerced_val))
-
-    have_image_modifiers = False
-    for name, val in steps:
-        if isinstance(val, bool) and not val:
+        if op.name == "format":
+            forced_codec = _parse_format_op(op)
             continue
-        have_image_modifiers = True
-        break
 
-    return steps, have_image_modifiers
+        steps.append(_compile_one_step(op))
+
+    have_image_modifiers = forced_codec is not None
+    if not have_image_modifiers:
+        for name, val in steps:
+            if isinstance(val, bool) and not val:
+                continue
+            have_image_modifiers = True
+            break
+
+    return steps, have_image_modifiers, forced_codec
+
+
+def _parse_format_op(op: Any) -> str:
+    """Validates and normalizes a `format=` directive's value."""
+    raw_val = op.params.get("value")
+    if raw_val is None or str(raw_val).strip() == "":
+        raise InvalidArgumentError("Image modifier 'format': missing value")
+    try:
+        return _to_format(raw_val)
+    except InvalidArgumentError as exc:
+        raise InvalidArgumentError(f"Image modifier 'format': {exc}") from exc
+
+
+def _compile_one_step(op: Any) -> tuple[str, Any]:
+    """Validates a single pixel-modifier op against the registry and coerces
+    its value via the plugin's validator."""
+    if op.name not in registry.image_modifiers:
+        raise InvalidArgumentError(f"Unknown image modifier plugin context: '{op.name}'")
+
+    plugin = registry.image_modifiers[op.name]
+
+    # Handle standalone flags! If no value is provided, treat it as "true"
+    raw_val = op.params.get("value")
+    if raw_val is None or str(raw_val).strip() == "":
+        raw_val = "true"
+
+    try:
+        coerced_val = plugin.validator(raw_val)
+    except InvalidArgumentError as exc:
+        raise InvalidArgumentError(f"Image modifier '{op.name}': {exc}") from exc
+
+    return (op.name, coerced_val)
 
 
 def _discover_target_images(pdf: Any, target_pages: list[int], total_pages: int) -> list[dict]:
@@ -225,7 +270,10 @@ def _discover_target_images(pdf: Any, target_pages: list[int], total_pages: int)
 
 
 def _build_callbacks(
-    have_image_modifiers: bool, steps: list[tuple[str, Any]], quality: int
+    have_image_modifiers: bool,
+    steps: list[tuple[str, Any]],
+    quality: int,
+    forced_codec: str | None = None,
 ) -> tuple[Callable, Callable, Callable]:
     """Generates the three required orchestrator callbacks bound with local execution state."""
     import pikepdf
@@ -289,7 +337,7 @@ def _build_callbacks(
         return pil_img
 
     def commit_callback(ctx: ImageContext, result_pil_img: Any, payload: dict) -> bool:
-        encode_and_update_pdf_image(ctx, result_pil_img, quality)
+        encode_and_update_pdf_image(ctx, result_pil_img, quality, forced_codec)
         return True
 
     return prepare_callback, worker_callback, commit_callback
