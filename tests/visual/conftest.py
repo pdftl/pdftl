@@ -69,6 +69,27 @@ def compare_rendered_pages(images_a, images_b, tmp_path, label: str, max_diff_th
         )
 
 
+# --- Generic "dump what I was holding if the test failed" plumbing ---
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Stashes each phase's TestReport on the item so fixture finalizers
+    (which only run during teardown, with no direct access to the test
+    outcome) can check the item to see whether the test they're tearing
+    down actually failed. Standard pytest pattern for failure-conditional
+    fixture cleanup."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+
+def _test_failed(request) -> bool:
+    """True if the just-run test's call phase failed (or errored)."""
+    rep_call = getattr(request.node, "rep_call", None)
+    return bool(rep_call is not None and rep_call.failed)
+
+
 @pytest.fixture()
 def assert_pdf_match(request, tmp_path):
     """
@@ -76,6 +97,7 @@ def assert_pdf_match(request, tmp_path):
     Supports multi-page PDFs.
     """
     created_baselines = []
+    last_pdf_bytes: dict[str, bytes] = {}
 
     def _checker(pdf_input, custom_name: str = None, suffix: str = None):
         baseline_name = custom_name if custom_name else request.node.name
@@ -99,6 +121,12 @@ def assert_pdf_match(request, tmp_path):
         else:
             raise TypeError(f"Unsupported PDF input type: {type(pdf_input)}")
 
+        # Remember the bytes so the automatic failure-dump teardown below
+        # can write them out if this test ends up failing -- for any
+        # reason, not just a compare_rendered_pages mismatch.
+        last_pdf_bytes["name"] = baseline_name
+        last_pdf_bytes["bytes"] = test_pdf_bytes
+
         # --- 2. First-run helper ---
         if not baseline_pdf_path.exists():
             baseline_pdf_path.write_bytes(test_pdf_bytes)
@@ -110,14 +138,18 @@ def assert_pdf_match(request, tmp_path):
         test_images = render_pdf_to_images(test_pdf_bytes)
         baseline_images = render_pdf_to_images(baseline_pdf_path)
 
-        output_pdf_path = tmp_path / f"FAILED_OUTPUT_{baseline_name}"
-        try:
-            compare_rendered_pages(baseline_images, test_images, tmp_path, baseline_name)
-        except Exception:
-            output_pdf_path.write_bytes(test_pdf_bytes)
-            raise
+        compare_rendered_pages(baseline_images, test_images, tmp_path, baseline_name)
 
     yield _checker
+
+    # --- Automatic failure dump ---
+    # Runs regardless of *why* the test failed (a compare_rendered_pages
+    # pytest.fail, an unrelated assertion later in the test, etc.) -- the
+    # caller never has to remember to opt in, and compare_rendered_pages
+    # itself stays free of any PDF-writing responsibility.
+    if _test_failed(request) and "bytes" in last_pdf_bytes:
+        dump_path = tmp_path / f"FAILED_OUTPUT_{last_pdf_bytes['name']}"
+        dump_path.write_bytes(last_pdf_bytes["bytes"])
 
     # --- TEARDOWN ---
     # If the test finishes and we had to create baselines, fail it now.

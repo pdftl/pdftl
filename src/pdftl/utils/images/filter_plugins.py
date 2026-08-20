@@ -538,11 +538,22 @@ def filter_levels(img: Any, points: list[float]) -> Any:
 @preserve_alpha
 @preserve_indexed_palette
 def filter_posterize(img: Any, bits: int) -> Any:
-    from PIL import ImageOps
-
     if img.mode == "1":
         return img
-    return ImageOps.posterize(convert_to_continuous(img), bits)
+
+    img = convert_to_continuous(img)
+
+    if bits == 8:
+        return img
+
+    # Map truncated bit values back to full 0..255 scale
+    max_level = (1 << bits) - 1
+    shift = 8 - bits
+    lut = [round((i >> shift) * (255.0 / max_level)) for i in range(256)]
+
+    # Repeat lookup table for each active channel (e.g. RGB or L)
+    lut_list = lut * len(img.getbands())
+    return img.point(lut_list)
 
 
 @register_image_modifier(

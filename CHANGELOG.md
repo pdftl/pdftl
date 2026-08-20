@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `add_text`: improve system font matching
 
+- `modify_images`: improved `posterize` to make colors more faithful
+
 ### Changed
 
 - `subset_fonts`: improve Type 1 conversion performance
