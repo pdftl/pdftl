@@ -156,6 +156,50 @@ class PageMediaEntry:
         return asdict(self, dict_factory=camel_case_dict_factory)
 
 
+def _map_pdf_ids(d: dict) -> None:
+    """Normalizes the two possible /PdfID representations (legacy
+    PdfID0/PdfID1 stanza vs JSON PdfID dict) into d['ids'] in place --
+    extracted from PdfInfo.from_dict's own body."""
+    if "PdfID0" in d:
+        # Case A: Legacy Stanza (PdfID0, PdfID1)
+        d["ids"] = [d.pop("PdfID0", None), d.pop("PdfID1", None)]
+    elif "PdfID" in d and isinstance(d["PdfID"], dict):
+        # Case B: JSON (PdfID: {"0": "...", "1": "..."})
+        pdf_id = d.pop("PdfID")
+        # Sort by keys '0', '1' to ensure order
+        d["ids"] = [pdf_id.get(k) for k in sorted(pdf_id.keys())]
+
+
+def _map_pdf_bookmarks(d: dict) -> None:
+    """Normalizes either possible bookmarks key ('BookmarkList' or the
+    factory's own 'Bookmarks') into d['bookmarks'] in place, using
+    BookmarkEntry.from_dict for the recursion -- extracted from
+    PdfInfo.from_dict's own body."""
+    if "BookmarkList" in d:
+        raw_list = d.pop("BookmarkList")
+        d["bookmarks"] = [BookmarkEntry.from_dict(b) for b in raw_list]
+    if "Bookmarks" in d:
+        raw_list = d.pop("Bookmarks")
+        d["bookmarks"] = [BookmarkEntry.from_dict(b) for b in raw_list]
+
+
+def _map_pdf_simple_lists(d: dict) -> None:
+    """Normalizes every container-name -> field-name simple list mapping
+    (PageMediaList/PageMedia -> page_media, PageLabelList/PageLabels ->
+    page_labels) via fuzzy_create, in place -- extracted from
+    PdfInfo.from_dict's own body."""
+    list_mappings = [
+        ("PageMediaList", "page_media", PageMediaEntry),
+        ("PageLabelList", "page_labels", PageLabelEntry),
+        ("PageMedia", "page_media", PageMediaEntry),
+        ("PageLabels", "page_labels", PageLabelEntry),
+    ]
+    for json_key, field_name, item_cls in list_mappings:
+        if json_key in d:
+            raw_list = d.pop(json_key)
+            d[field_name] = [_fuzzy_create(item_cls, item) for item in raw_list]
+
+
 @dataclass
 class PdfInfo:
     pages: int | None = None
@@ -178,50 +222,16 @@ class PdfInfo:
             del d["Info"]
 
         # 2. Map IDs
-        # Case A: Legacy Stanza (PdfID0, PdfID1)
-        if "PdfID0" in d:
-            d["ids"] = [d.pop("PdfID0", None), d.pop("PdfID1", None)]
-        # Case B: JSON (PdfID: {"0": "...", "1": "..."})
-        elif "PdfID" in d and isinstance(d["PdfID"], dict):
-            pdf_id = d.pop("PdfID")
-            # Sort by keys '0', '1' to ensure order
-            d["ids"] = [pdf_id.get(k) for k in sorted(pdf_id.keys())]
+        _map_pdf_ids(d)
 
         # 3. Map NumberOfPages -> pages
         if "NumberOfPages" in d:
             d["pages"] = d.pop("NumberOfPages")
 
-        # 4. Process Lists
-        # We just map the Container Name (JSON) -> Field Name (Python)
-        list_mappings = [
-            ("PageMediaList", "page_media", PageMediaEntry),
-            ("PageLabelList", "page_labels", PageLabelEntry),
-        ]
-
-        # A. Bookmarks (needs .from_dict for recursion)
-        if "BookmarkList" in d:
-            raw_list = d.pop("BookmarkList")
-            d["bookmarks"] = [BookmarkEntry.from_dict(b) for b in raw_list]
-
-        # B. Simple Lists (use fuzzy create)
-        for json_key, field_name, item_cls in list_mappings:
-            if json_key in d:
-                raw_list = d.pop(json_key)
-                d[field_name] = [_fuzzy_create(item_cls, item) for item in raw_list]
-
-        # Handle case where JSON output used 'PageMedia' but legacy read expects 'PageMediaList'
-        # The factory outputs 'PageMedia'.
-        if "PageMedia" in d:
-            raw_list = d.pop("PageMedia")
-            d["page_media"] = [_fuzzy_create(PageMediaEntry, item) for item in raw_list]
-
-        if "PageLabels" in d:
-            raw_list = d.pop("PageLabels")
-            d["page_labels"] = [_fuzzy_create(PageLabelEntry, item) for item in raw_list]
-
-        if "Bookmarks" in d:
-            raw_list = d.pop("Bookmarks")
-            d["bookmarks"] = [BookmarkEntry.from_dict(b) for b in raw_list]
+        # 4. Process Lists (bookmarks need .from_dict for recursion;
+        #    the rest use fuzzy_create)
+        _map_pdf_bookmarks(d)
+        _map_pdf_simple_lists(d)
 
         return _fuzzy_create(cls, d)
 

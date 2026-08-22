@@ -5,6 +5,7 @@ from pdftl.exceptions import InvalidArgumentError
 from pdftl.core.registry import registry
 from pdftl.utils.images.filter_plugins import (
     register_image_modifier,
+    _ensure_image_modifiers_registry,
     _to_bool,
     _to_float,
     _to_percent,
@@ -638,3 +639,35 @@ def test_filter_adaptive_threshold(rgb_img, rgba_img):
     # Ensure @preserve_alpha wrapper integrates cleanly without regression
     res_rgba = filter_adaptive_threshold(rgba_img, (5, 5))
     assert res_rgba.mode == "RGBA"
+
+
+def test_filter_posterize_full_bits_passthrough(rgb_img):
+    """bits == 8 is a no-op identity passthrough, since the image is
+    already at full 8-bit depth and there's nothing to reduce."""
+    res = filter_posterize(rgb_img, 8)
+    assert res is rgb_img
+
+
+def test_ensure_image_modifiers_registry_preserves_existing_attr(monkeypatch):
+    """`_ensure_image_modifiers_registry` should leave a pre-existing
+    `image_modifiers` dict on the real registry alone rather than
+    clobbering it with a fresh one."""
+    sentinel = {"marker": "preexisting"}
+    monkeypatch.setattr(registry, "image_modifiers", sentinel, raising=False)
+
+    _ensure_image_modifiers_registry()
+
+    assert registry.image_modifiers is sentinel
+
+
+def test_ensure_image_modifiers_registry_sets_missing_attr(monkeypatch):
+    """`_ensure_image_modifiers_registry` creates `image_modifiers` when
+    it's absent entirely -- the branch this guard exists for."""
+    monkeypatch.delattr(registry, "image_modifiers", raising=False)
+
+    _ensure_image_modifiers_registry()
+
+    assert registry.image_modifiers == {}
+    # Restore real filter registrations for any tests that run after
+    # this one and expect the module's own plugins to be present.
+    monkeypatch.undo()

@@ -17,10 +17,12 @@ from pdftl.operations.annots_filters import (
     _data_item_to_string_helper,
     _delete_annots_in_page,
     _get_all_annots_data,
+    _key_value_lines,
     _lines_from_datum,
     _values_equal,
     delete_annots,
     dump_annots,
+    dump_annots_cli_hook,
     dump_data_annots,
     dump_data_annots_cli_hook,
 )
@@ -443,3 +445,108 @@ def test_values_equal_fallback():
 
     # None types fall straight to line 368
     assert _values_equal(None, None) is True
+
+
+# ---------------------------------------------------------------------------
+# Coverage for previously-untested lines/branches
+# ---------------------------------------------------------------------------
+
+
+def test_dump_annots_cli_hook_writes_json(simple_pdf, tmp_path):
+    """Lines 131-145: dump_annots_cli_hook serializes result.data to a
+    compacted JSON string and writes it with a trailing newline."""
+    output_file = tmp_path / "annots.json"
+    result = dump_annots(simple_pdf, output_file=str(output_file))
+    dump_annots_cli_hook(result, None, None)
+
+    text = output_file.read_text()
+    assert '"annotations"' in text
+    assert text.endswith("\n")
+
+
+def test_dump_annots_no_specs(simple_pdf):
+    """Line 170->173: dump_annots without specs skips rule building and
+    returns all annotations, unfiltered."""
+    result = dump_annots(simple_pdf)
+    assert result.success is True
+    assert len(result.data) == 2
+
+
+def test_generate_pdftk_annots_report_with_uri_base():
+    """Line 216: PdfUriBase, when present, is included in the first
+    block of the pdftk-style report."""
+    from pdftl.operations.annots_filters import _generate_pdftk_annots_report
+
+    data = {
+        "NumberOfPages": 1,
+        "PdfUriBase": "http://example.com/",
+        "Annotations": [],
+    }
+    report = _generate_pdftk_annots_report(data)
+    assert "PdfUriBase: http://example.com/" in report
+
+
+def test_dump_data_annots_with_uri_base(simple_pdf):
+    """Line 267: dump_data_annots includes PdfUriBase when present on the
+    PDF Root."""
+    simple_pdf.Root.URI = pikepdf.Dictionary(Base=pikepdf.String("http://example.com/"))
+    result = dump_data_annots(simple_pdf)
+    assert result.data["PdfUriBase"] == "http://example.com/"
+
+
+def test_get_all_annots_data_with_named_dests(simple_pdf):
+    """Line 398: named destinations are loaded via NameTree when
+    Root.Names.Dests is present."""
+    simple_pdf.Root.Names = pikepdf.Dictionary(Dests=pikepdf.Dictionary())
+
+    with patch("pikepdf.NameTree", return_value={"mydest": "target"}):
+        data = _get_all_annots_data(simple_pdf, compat=False)
+
+    assert isinstance(data, list)
+
+
+def test_lines_from_datum_no_subtype():
+    """Line 447: an entry without '/Subtype' yields no lines."""
+    datum = {"Page": 1, "AnnotationIndex": 1, "Properties": {}}
+    assert _lines_from_datum(datum, str) == []
+
+
+def test_lines_from_datum_javascript_action_excluded():
+    """Line 460: an annotation whose /A action is JavaScript yields no
+    lines."""
+    datum = {
+        "Page": 1,
+        "AnnotationIndex": 1,
+        "Properties": {
+            "/Subtype": "/Link",
+            "/A": {"/S": "/JavaScript", "/JS": "app.alert('hi')"},
+        },
+    }
+    assert _lines_from_datum(datum, str) == []
+
+
+def test_key_value_lines_action_dict():
+    """Line 487: '/A' values are expanded into one line per action key."""
+    lines = _key_value_lines("/A", {"/S": "/URI", "/URI": "http://example.com"}, "Annot", str)
+    assert "AnnotActionSubtype: URI" in lines
+    assert "AnnotActionURI: http://example.com" in lines
+
+
+def test_key_value_lines_notimplementederror_is_caught(caplog):
+    """Lines 497-499: a string_convert that raises NotImplementedError is
+    caught and logged, yielding no lines for that key."""
+
+    def bad_convert(x):
+        raise NotImplementedError("unsupported")
+
+    with caplog.at_level(logging.WARNING):
+        lines = _key_value_lines("/LongEnoughKey", "value", "Annot", bad_convert)
+
+    assert lines == []
+    assert "Skipping unsupported annotation key" in caplog.text
+
+
+def test_data_item_to_string_helper_key_s_becomes_subtype():
+    """Line 518: key 'S' is renamed to 'Subtype'."""
+    result = _data_item_to_string_helper("S", "/URI", "AnnotAction", str)
+    assert result == "AnnotActionSubtype: URI"

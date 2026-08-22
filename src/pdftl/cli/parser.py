@@ -302,6 +302,36 @@ def parse_cli_stage(stage_args, is_first_stage):
     return stage
 
 
+def _build_inline_sub_pipeline(token, is_named_sub, arg_iter, depth):
+    """Consumes and parses one JOB...DONE inline sub-pipeline (named or
+    unnamed) -- extracted from _recursive_group_pipelines's own loop
+    body so that function's own control flow stays flat."""
+    inner_args = _recursive_group_pipelines(arg_iter, depth + 1)
+    inner_stages_raw = _split_flat_by_separator(inner_args, "---")
+    inner_stages_parsed = [
+        parse_cli_stage(s, is_first_stage=(k == 0)) for k, s in enumerate(inner_stages_raw)
+    ]
+    pipeline_obj = InlineSubPipeline(stages=inner_stages_parsed)
+
+    if is_named_sub:
+        # token is like "B=JOB", split at the LAST '=' to be safe,
+        # though strictly handles are usually simple.
+        # Using maxsplit=1 from the left is consistent with your other parsing.
+        handle, _ = token.split("=", 1)
+        pipeline_obj.handle_name = handle
+
+    return pipeline_obj
+
+
+def _build_each_sub_pipeline(arg_iter, depth):
+    """Consumes and parses one EACH...DONE sub-pipeline -- extracted
+    from _recursive_group_pipelines's own loop body."""
+    inner_args = _recursive_group_pipelines(arg_iter, depth + 1)
+    inner_stages_raw = _split_flat_by_separator(inner_args, "---")
+    inner_stages_parsed = [parse_cli_stage(s, is_first_stage=False) for s in inner_stages_raw]
+    return EachSubPipeline(stages=inner_stages_parsed)
+
+
 def _recursive_group_pipelines(arg_iter, depth=0):
     """
     Recursively consumes an iterator of arguments.
@@ -319,38 +349,9 @@ def _recursive_group_pipelines(arg_iter, depth=0):
 
         is_named_sub = isinstance(token, str) and token.endswith("=" + SUB_START)
         if token == SUB_START or is_named_sub:
-            # Recurse
-            inner_args = _recursive_group_pipelines(arg_iter, depth + 1)
-
-            # Now we must PARSE these args into Stages immediately,
-            # because InlinePipeline expects list[CliStage]
-
-            # 1. Split inner args by '---' (handles nested separators naturally
-            #    because the recursive call already consumed the nested JOB DONE)
-            inner_stages_raw = _split_flat_by_separator(inner_args, "---")
-
-            # 2. Parse into CliStage objects
-            #    We assume the inner pipeline starts fresh (is_first=True for its first stage)
-            inner_stages_parsed = [
-                parse_cli_stage(s, is_first_stage=(k == 0)) for k, s in enumerate(inner_stages_raw)
-            ]
-            pipeline_obj = InlineSubPipeline(stages=inner_stages_parsed)
-
-            if is_named_sub:
-                # token is like "B=JOB", split at the LAST '=' to be safe,
-                # though strictly handles are usually simple.
-                # Using maxsplit=1 from the left is consistent with your other parsing.
-                handle, _ = token.split("=", 1)
-                pipeline_obj.handle_name = handle
-
-            result.append(pipeline_obj)
+            result.append(_build_inline_sub_pipeline(token, is_named_sub, arg_iter, depth))
         elif token == SUB_EACH:
-            inner_args = _recursive_group_pipelines(arg_iter, depth + 1)
-            inner_stages_raw = _split_flat_by_separator(inner_args, "---")
-            inner_stages_parsed = [
-                parse_cli_stage(s, is_first_stage=False) for s in inner_stages_raw
-            ]
-            result.append(EachSubPipeline(stages=inner_stages_parsed))
+            result.append(_build_each_sub_pipeline(arg_iter, depth))
         elif token == SUB_END:
             _validate_final_depth(depth)
             return result

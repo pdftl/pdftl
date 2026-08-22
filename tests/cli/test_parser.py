@@ -5,6 +5,7 @@ import pytest
 # --- Import module and functions to test ---
 from pdftl.cli import parser
 from pdftl.cli import parser as parser_module
+from pdftl.cli.constants import SUB_EACH, SUB_END, SUB_START
 from pdftl.cli.parser import (
     _assign_passwords,
     _find_operation_and_split,
@@ -611,3 +612,90 @@ def test_parser_implicit_cat_coverage():
     stage = parse_cli_stage(["file1.pdf", "file2.pdf"], is_first_stage=True)
 
     assert stage.operation == "cat"
+
+
+# --- Coverage for extracted / previously-untested branches ---
+
+
+def test_find_operation_and_split_skips_non_str_token(mock_registry):
+    """Line 46: a non-str token (e.g. an already-parsed sub-pipeline
+    object) is skipped while searching for the operation keyword."""
+    non_str = object()
+    args = [non_str, "cat", "output"]
+    op, pre, post = _find_operation_and_split(args)
+    assert op == "cat"
+    assert pre == [non_str]
+    assert post == ["output"]
+
+
+def test_parse_options_and_specs_non_str_arg(mock_constants):
+    """Lines 136-138: a non-str arg (e.g. an inline sub-pipeline object)
+    is appended directly to specs."""
+    non_str = object()
+    specs, options = parse_options_and_specs([non_str, "1-end"])
+    assert specs == [non_str, "1-end"]
+    assert options == {}
+
+
+def test_parse_file_handles_non_str_with_handle_name():
+    """Lines 188-190: a non-str arg carrying a handle_name attribute is
+    registered as a handle."""
+
+    class FakeSubPipeline:
+        handle_name = "B"
+
+    fake = FakeSubPipeline()
+    inputs, handles = _parse_file_handles(["in1.pdf", fake])
+    assert inputs == ["in1.pdf", fake]
+    assert handles == {"B": 1}
+
+
+def test_parse_file_handles_non_str_without_handle_name():
+    """Lines 188-190: a non-str arg with no handle_name is appended
+    without registering a handle."""
+
+    class FakeSubPipeline:
+        handle_name = None
+
+    fake = FakeSubPipeline()
+    inputs, handles = _parse_file_handles([fake])
+    assert inputs == [fake]
+    assert handles == {}
+
+
+def test_handle_pipeline_input_underscore_already_present():
+    """Line 200->203: when '_' is already a registered handle, the
+    suppress(ValueError) block is skipped entirely."""
+    inputs, handles = _handle_pipeline_input(["_", "in.pdf"], {"_": 0}, False)
+    assert inputs == ["_", "in.pdf"]
+    assert handles == {"_": 0}
+
+
+def test_recursive_group_pipelines_inline_sub_pipeline(mock_registry):
+    """Lines 310-323, 359, 367->exit: a real JOB...DONE inline sub-pipeline
+    is parsed into an InlineSubPipeline, and closing it hits the normal
+    (non-raising) return path of _validate_final_depth."""
+    from pdftl.cli.pipeline import InlineSubPipeline
+
+    args = [SUB_START, "in.pdf", "cat", SUB_END, "output", "out.pdf"]
+    grouped = _recursive_group_pipelines(iter(args))
+    assert isinstance(grouped[0], InlineSubPipeline)
+    assert grouped[1:] == ["output", "out.pdf"]
+
+
+def test_recursive_group_pipelines_named_inline_sub_pipeline(mock_registry):
+    """Lines 310-323: a named 'B=JOB...DONE' sub-pipeline sets handle_name."""
+    token = "B=" + SUB_START
+    args = [token, "in.pdf", "cat", SUB_END]
+    grouped = _recursive_group_pipelines(iter(args))
+    assert grouped[0].handle_name == "B"
+
+
+def test_recursive_group_pipelines_each_sub_pipeline(mock_registry):
+    """Lines 329-334, 356: a real EACH...DONE sub-pipeline is parsed into
+    an EachSubPipeline."""
+    from pdftl.cli.pipeline import EachSubPipeline
+
+    args = [SUB_EACH, "in.pdf", "cat", SUB_END]
+    grouped = _recursive_group_pipelines(iter(args))
+    assert isinstance(grouped[0], EachSubPipeline)

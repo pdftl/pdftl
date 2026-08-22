@@ -15,9 +15,16 @@ from pdftl.core.registry import registry
 from pdftl.exceptions import InvalidArgumentError
 
 
-# Dynamically anchor our custom container to the existing global registry
-if not hasattr(registry, "image_modifiers"):
-    registry.image_modifiers = {}
+def _ensure_image_modifiers_registry() -> None:
+    """Dynamically anchor our custom container to the existing global
+    registry. Extracted into a function (rather than bare module-level
+    code) so it can be called -- and its guard branch genuinely
+    exercised -- independently of module import/reload."""
+    if not hasattr(registry, "image_modifiers"):
+        registry.image_modifiers = {}
+
+
+_ensure_image_modifiers_registry()
 
 
 def _is_grayscale_palette(img: Any) -> bool:

@@ -213,3 +213,90 @@ def test_get_active_usage_map_coverage():
     assert int(ocg1.objgen[0]) in result["Print"]
     assert int(ocg1.objgen[0]) in result["Export"]
     assert int(ocg2.objgen[0]) in result["View"]
+
+
+# ---------------------------------------------------------------------------
+# Coverage for previously-untested lines/branches
+# ---------------------------------------------------------------------------
+
+
+def test_dump_layers_usage_custom_category_no_active_flag(tmp_path):
+    """Line 126->129: a /Usage sub-dictionary whose key isn't one of the
+    standard categories (Print/View/Export/Zoom) is passed through
+    without an 'active' flag."""
+    pdf = pikepdf.new()
+    output_file = tmp_path / "usage_custom.json"
+
+    ocg = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.OCG,
+            Name="Layer",
+            Usage=pikepdf.Dictionary(CustomCategory=pikepdf.Dictionary(Foo=pikepdf.Name.Bar)),
+        )
+    )
+    pdf.Root.OCProperties = pikepdf.Dictionary(OCGs=[ocg], D=pikepdf.Dictionary())
+
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None, None)
+
+    with open(output_file) as f:
+        res = json.load(f)
+
+    usage = res["layers"][0]["usage"]
+    assert "active" not in usage["CustomCategory"]
+
+
+def test_get_active_usage_map_shared_category():
+    """Line 165->167: two /AS entries mapping to the same category merge
+    their bound OCG ids into the same, already-existing set."""
+    pdf = pikepdf.Pdf.new()
+    ocg1 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+    ocg2 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+
+    d_dict = pikepdf.Dictionary()
+    d_dict.AS = pikepdf.Array(
+        [
+            pikepdf.Dictionary({"/Event": pikepdf.Name("/Print"), "/OCGs": pikepdf.Array([ocg1])}),
+            pikepdf.Dictionary({"/Event": pikepdf.Name("/Print"), "/OCGs": pikepdf.Array([ocg2])}),
+        ]
+    )
+
+    result = _get_active_usage_map(d_dict)
+    assert int(ocg1.objgen[0]) in result["Print"]
+    assert int(ocg2.objgen[0]) in result["Print"]
+
+
+def test_dump_layers_no_default_config(tmp_path):
+    """Line 210: OCProperties with OCGs but no /D at all still produces
+    layer data, with an empty active-usage map / default_config."""
+    pdf = pikepdf.new()
+    output_file = tmp_path / "no_d.json"
+
+    ocg = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name="Layer"))
+    pdf.Root.OCProperties = pikepdf.Dictionary(OCGs=[ocg])
+
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None, None)
+
+    with open(output_file) as f:
+        res = json.load(f)
+
+    assert res["layers"][0]["name"] == "Layer"
+    assert res["default_config"] == {}
+
+
+def test_dump_layers_no_ocgs_key(tmp_path):
+    """Line 249->254: OCProperties with a /D but no /OCGs key produces an
+    empty layers list without error."""
+    pdf = pikepdf.new()
+    output_file = tmp_path / "no_ocgs.json"
+
+    pdf.Root.OCProperties = pikepdf.Dictionary(D=pikepdf.Dictionary(BaseState=pikepdf.Name.ON))
+
+    result = dump_layers(pdf, output_file=str(output_file))
+    dump_layers_cli_hook(result, None, None)
+
+    with open(output_file) as f:
+        res = json.load(f)
+
+    assert res["layers"] == []

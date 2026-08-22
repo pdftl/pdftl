@@ -201,18 +201,39 @@ def dump_layers(pdf, output_file=None) -> OpResult:
     return OpResult(success=True, data=results, meta={c.META_OUTPUT_FILE: output_file})
 
 
+def _populate_default_config(results, ocprops):
+    """Handles the /D (default configuration) branch of
+    _extract_ocproperties -- extracted from that function's own body.
+    Mutates `results` in place and returns the active_usage_map derived
+    from /D, or {} if /D is absent."""
+    if "/D" not in ocprops:
+        return {}
+    results["default_config"] = _parse_config(ocprops.D)
+    if "ui_hierarchy" in results["default_config"]:
+        results["ui_hierarchy"] = results["default_config"]["ui_hierarchy"]
+    # Grab the active usage mapping from the D dictionary
+    return _get_active_usage_map(ocprops.D)
+
+
+def _build_layer_entry(ocg, off_ids, active_usage_map):
+    """Builds one layer's JSON entry from its OCG dictionary --
+    extracted from _extract_ocproperties's own /OCGs loop body."""
+    obj_id = int(ocg.objgen[0])
+    return {
+        "name": str(ocg.get("/Name", "Unnamed")),
+        "obj_id": obj_id,
+        "default_state": "OFF" if obj_id in off_ids else "ON",
+        "intent": ([_clean_val(i) for i in ocg.get("/Intent", [])] if "/Intent" in ocg else None),
+        # Pass the id and active map down
+        "usage": _parse_usage(ocg, obj_id, active_usage_map),
+    }
+
+
 def _extract_ocproperties(ocprops):
     results = {"has_layers": True, "layers": [], "default_config": {}}
-    active_usage_map = {}
 
     # 1. Capture Default Configuration (D) first
-    if "/D" in ocprops:
-        results["default_config"] = _parse_config(ocprops.D)
-        if "ui_hierarchy" in results["default_config"]:
-            results["ui_hierarchy"] = results["default_config"]["ui_hierarchy"]
-
-        # Grab the active usage mapping from the D dictionary
-        active_usage_map = _get_active_usage_map(ocprops.D)
+    active_usage_map = _populate_default_config(results, ocprops)
 
     # 2. Capture Alternate Configurations
     if "/Configs" in ocprops:
@@ -225,19 +246,7 @@ def _extract_ocproperties(ocprops):
     # Iterate OCGs
     if "/OCGs" in ocprops:
         off_ids = results["default_config"].get("off_list_ids", [])
-
-        for ocg in ocprops.OCGs:
-            obj_id = int(ocg.objgen[0])
-
-            layer_data = {
-                "name": str(ocg.get("/Name", "Unnamed")),
-                "obj_id": obj_id,
-                "default_state": "OFF" if obj_id in off_ids else "ON",
-                "intent": (
-                    [_clean_val(i) for i in ocg.get("/Intent", [])] if "/Intent" in ocg else None
-                ),
-                # Pass the id and active map down
-                "usage": _parse_usage(ocg, obj_id, active_usage_map),
-            }
-            results["layers"].append(layer_data)
+        results["layers"] = [
+            _build_layer_entry(ocg, off_ids, active_usage_map) for ocg in ocprops.OCGs
+        ]
     return results

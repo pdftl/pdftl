@@ -305,3 +305,24 @@ def test_safe_create_ignores_extra_args():
     entry = _fuzzy_create(PageMediaEntry, data)
     assert entry.page_number == 1
     assert not hasattr(entry, "garbage_key")
+
+
+# --- Coverage for extracted / previously-untested branches ---
+
+
+def test_fuzzy_create_alias_target_not_in_fields():
+    """Line 81->71: an alias whose target field doesn't exist on this
+    particular class is silently skipped, rather than assigned."""
+    entry = _fuzzy_create(PageLabelEntry, {"NewIndex": 1, "Rect": [0, 0, 1, 1]})
+    assert entry.new_index == 1
+    assert not hasattr(entry, "media_rect")
+
+
+def test_pdf_info_to_dict_without_info_or_ids():
+    """Lines 246->250, 250->253: to_dict without doc_info or ids exercises
+    the false branch of both post-hoc patch-up checks."""
+    info = PdfInfo(pages=3)
+    d = info.to_dict()
+    assert "Info" not in d
+    assert "PdfID" not in d
+    assert d["NumberOfPages"] == 3

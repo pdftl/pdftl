@@ -375,6 +375,19 @@ def _annot_passes_rule(annot: dict, rule) -> bool:
     return True
 
 
+def _annots_for_page_filtered(page, page_num, page_object_to_num_map, named_dests, compat, rules):
+    """Returns one page's annotation JSON entries, filtered by `rules`
+    if given -- extracted from _get_all_annots_data's own loop body so
+    that function's own control flow stays flat."""
+    page_annots = _annots_json_for_page(
+        page, page_num, page_object_to_num_map, named_dests, compat
+    )
+    if not rules:
+        return page_annots
+    page_rules = [r for r in rules if page_num in r.page_numbers]
+    return [a for a in page_annots if any(_annot_passes_rule(a, r) for r in page_rules)]
+
+
 def _get_all_annots_data(pdf: "Pdf", compat=True, rules=None):
     """Get all annotations data for a PDF, optionally filtered by selection rules."""
     from pikepdf import Name, NameTree
@@ -390,15 +403,11 @@ def _get_all_annots_data(pdf: "Pdf", compat=True, rules=None):
     for page_num, page in enumerate(pdf.pages, 1):
         if included_pages is not None and page_num not in included_pages:
             continue
-        page_annots = _annots_json_for_page(
-            page, page_num, page_object_to_num_map, named_dests, compat
+        all_annots_data.extend(
+            _annots_for_page_filtered(
+                page, page_num, page_object_to_num_map, named_dests, compat, rules
+            )
         )
-        if rules:
-            page_rules = [r for r in rules if page_num in r.page_numbers]
-            page_annots = [
-                a for a in page_annots if any(_annot_passes_rule(a, r) for r in page_rules)
-            ]
-        all_annots_data.extend(page_annots)
     return all_annots_data
 
 
