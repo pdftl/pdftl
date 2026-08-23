@@ -175,7 +175,12 @@ def _parse_bfrange_block(tokens: list[str], start_idx: int, mappings: dict[str, 
                 )
             elif dst_token.startswith("<") and dst_token.endswith(">"):
                 _parse_bfrange_sequential(
-                    src_start_hex, dst_token[1:-1], start_code, end_code, code_len, mappings
+                    src_start_hex,
+                    dst_token[1:-1],
+                    start_code,
+                    end_code,
+                    code_len,
+                    mappings,
                 )
                 idx += 3
             else:

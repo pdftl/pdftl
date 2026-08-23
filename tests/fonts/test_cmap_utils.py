@@ -8,8 +8,8 @@ from pdftl.fonts.cmap_utils import (
     _parse_hex,
     _to_hex_str,
     _try_parse_bfchar_item,
-    parse_to_unicode_cmap,
     compile_to_unicode_cmap,
+    parse_to_unicode_cmap,
 )
 
 
@@ -204,3 +204,45 @@ def test_detect_predefined_identity_encoding_pikepdf_dictionary():
         {"/Subtype": pikepdf.Name("/Type0"), "/Encoding": pikepdf.Name("/Identity-H")}
     )
     assert detect_predefined_identity_encoding(font) == "Identity-H"
+
+
+# ---------------------------------------------------------------------------
+# Branch Coverage Edge Cases
+# ---------------------------------------------------------------------------
+
+
+def test_parse_bfchar_invalid_dst_hex_falsey_val():
+    """Handles single-character mapping entries where destination hex fails decoding,
+    ensuring unparsable destination strings are skipped rather than stored."""
+    cmap = b"""
+    beginbfchar
+    <01> <123>
+    endbfchar
+    """
+    assert parse_to_unicode_cmap(cmap) == {}
+
+
+def test_parse_bfrange_array_overflow_and_invalid_val():
+    """Handles range array blocks containing invalid hex values and items exceeding
+    the declared range capacity."""
+    cmap = b"""
+    beginbfrange
+    <01> <02> [ <123> <0042> <0043> ]
+    endbfrange
+    """
+    # - <123> is invalid hex, so _parse_hex returns an empty string and skips assignment.
+    # - <0042> validly maps to code 02 ("B").
+    # - <0043> is ignored because the array provides more items than the start/end range allows.
+    res = parse_to_unicode_cmap(cmap)
+    assert res == {"02": "B"}
+
+
+def test_parse_bfrange_sequential_invalid_val():
+    """Handles sequential range entries where destination hex evaluates to an un-decodable
+    UTF-16 sequence (such as an unpaired surrogate)."""
+    cmap = b"""
+    beginbfrange
+    <01> <01> <D800>
+    endbfrange
+    """
+    assert parse_to_unicode_cmap(cmap) == {}

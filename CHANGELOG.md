@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `modify_images`: improved `posterize` to make colors more faithful
 
+- `dump_text`: correctly handle type 3 fonts without /ToUnicode where possible
+
 ### Changed
 
 - `subset_fonts`: improve Type 1 conversion performance
