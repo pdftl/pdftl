@@ -700,3 +700,23 @@ def test_update_bookmarks_stdin_yaml(tmp_path):
     assert len(final_bookmarks) == 2
     assert final_bookmarks[0]["title"] == "Stdin YAML Chapter"
     assert final_bookmarks[1]["title"] == "Chapter 2"
+
+
+def test_update_bookmarks_auto_mode(six_page_pdf):
+    """Tests AUTO mode execution path in update_bookmarks."""
+    with patch("pdftl.operations.update_bookmarks.auto_bookmark_pdf") as mock_auto:
+        mock_auto.return_value = "mock_pdf"
+        with pikepdf.open(six_page_pdf) as pdf:
+            res = update_toc(pdf, ["AUTO"])
+            assert res.success is True
+            assert res.pdf == "mock_pdf"
+            mock_auto.assert_called_once_with(pdf)
+
+
+def test_update_bookmarks_valid_color(tmp_path, six_page_pdf):
+    """Tests successful processing of bookmarks configured with valid RGB colors."""
+    good_file = tmp_path / "valid_color.json"
+    good_file.write_text(json.dumps([{"title": "Colored", "page": 1, "color": [0.0, 0.5, 1.0]}]))
+    with pikepdf.open(six_page_pdf) as pdf:
+        res = update_toc(pdf, [str(good_file)])
+        assert res.success is True

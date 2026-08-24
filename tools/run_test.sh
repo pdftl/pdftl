@@ -87,7 +87,24 @@ for INPUT in "$@"; do
     COV_ARGS+=("--cov=$COV_MOD")
 done
 
-# 6. Print and execute the single massive command
+# 6. Default to --cov=pdftl if no coverage flags were generated or passed
+HAS_COV=false
+if [ ${#COV_ARGS[@]} -gt 0 ]; then
+    HAS_COV=true
+else
+    for arg in "${EXTRA_ARGS[@]}"; do
+        if [[ "$arg" == --cov* ]]; then
+            HAS_COV=true
+            break
+        fi
+    done
+fi
+
+if [ "$HAS_COV" = false ]; then
+    COV_ARGS+=("--cov=pdftl")
+fi
+
+# 7. Print and execute the single massive command
 echo "Constructing pytest run..."
 echo "Running: pytest ${TEST_PATHS[*]} ${COV_ARGS[*]} --cov-report=term-missing ${EXTRA_ARGS[*]}"
 echo "----------------------------------------------------------------------"
