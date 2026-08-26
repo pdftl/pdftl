@@ -171,3 +171,20 @@ def test_chop_raises_on_unexpected_rotation():
 
     with pytest.raises(OperationError, match="Unexpected rotation"):
         _apply_chop_to_page(pdf, page, "cols2")
+
+
+def test_chop_with_overlap_end_to_end(two_page_pdf):
+    """The two chopped pieces should overlap, so their widths sum to
+    more than the original page width by the overlap amount."""
+    with pikepdf.open(two_page_pdf) as pdf:
+        page_width = float(pdf.pages[0].mediabox[2]) - float(pdf.pages[0].mediabox[0])
+
+        result = chop_pages(pdf, ["cols2+20pt"]).pdf
+
+        box0 = result.pages[0].mediabox
+        box1 = result.pages[1].mediabox
+        w0 = float(box0[2]) - float(box0[0])
+        w1 = float(box1[2]) - float(box1[0])
+
+        assert w0 + w1 == pytest.approx(page_width + 20)
+        assert w0 == pytest.approx(w1)

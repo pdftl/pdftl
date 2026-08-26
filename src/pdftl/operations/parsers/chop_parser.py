@@ -7,6 +7,7 @@
 """Parser for chop arguments"""
 
 import logging
+import math
 import re
 from typing import TYPE_CHECKING
 
@@ -26,11 +27,13 @@ def parse_chop_spec(spec_str: str, page_rect: "Array"):
     Parses a chop spec string with flexible syntax into a list of
     pikepdf.Rectangle objects representing the desired chops.
     """
-    content, direction = _parse_chop_spec_prep(spec_str)
+    content, direction, overlap_str = _parse_chop_spec_prep(spec_str)
 
     page_width = abs(float(page_rect[2]) - float(page_rect[0]))
     page_height = abs(float(page_rect[3]) - float(page_rect[1]))
     total_dim = page_width if direction == "cols" else page_height
+
+    overlap = _parse_overlap_value(overlap_str, total_dim)
 
     # now try each parsing strategy in turn
     try:
@@ -48,7 +51,7 @@ def parse_chop_spec(spec_str: str, page_rect: "Array"):
             final_sizes, delete_flags = _parse_comma_spec(content_parts, total_dim)
 
     # final geometry construction
-    return _build_rects(final_sizes, delete_flags, direction, page_width, page_height)
+    return _build_rects(final_sizes, delete_flags, direction, page_width, page_height, overlap)
 
 
 def parse_chop_specs_to_rules(specs, total_pages):
@@ -105,28 +108,97 @@ def _parse_chop_spec_prep(spec_str: str):
     # default to chopping into 2 equal pieces
     content = spec_str[4:] if len(spec_str) > 4 else "2"
 
+    # Extract an optional trailing overlap modifier, e.g. "cols3+10pt" or
+    # "rows(1:2)+5%". The '+' is unambiguous: it never appears in the
+    # integer/ratio/comma-list size formats.
+    overlap_str = None
+    plus_idx = content.find("+")
+    if plus_idx != -1:
+        overlap_str = content[plus_idx + 1 :]
+        content = content[:plus_idx] or "2"
+
+        # Guard against a '+' accidentally placed inside the parens,
+        # e.g. "cols(1:2+10pt)" instead of "cols(1:2)+10pt".
+        if content.count("(") != content.count(")"):
+            raise ValueError(
+                f"Unbalanced parentheses around overlap in chop spec: '{spec_str}'. "
+                "Did you mean to put '+<overlap>' outside the parentheses?"
+            )
+
     # Strip outer parentheses if present
     if content.startswith("(") and content.endswith(")"):
         content = content[1:-1]
 
-    return content, direction
+    return content, direction, overlap_str
 
 
-def _build_rects(final_sizes, delete_flags, direction, page_width, page_height):
-    """Builds a list of pikepdf.Array rectangles from calculated sizes."""
+def _parse_overlap_value(overlap_str, total_dim):
+    """
+    Parses the '+<overlap>' modifier into an absolute size (points).
+
+    Accepts the same unit formats as a single comma-list entry: a bare
+    number (points), a '%' of total_dim, or a named unit like 'cm'.
+    Returns 0.0 if no overlap was specified.
+    """
+    if overlap_str is None or overlap_str == "":
+        return 0.0
+
+    if overlap_str.endswith("%"):
+        try:
+            value = total_dim * (float(overlap_str[:-1]) / 100.0)
+        except ValueError as exc:
+            raise ValueError(f"Invalid overlap value: '{overlap_str}'") from exc
+    elif unit_name := _find_unit(overlap_str):
+        n = len(unit_name)
+        try:
+            value = float(overlap_str[:-n]) * UNITS[unit_name]
+        except ValueError as exc:
+            raise ValueError(f"Invalid overlap value: '{overlap_str}'") from exc
+    else:
+        try:
+            value = float(overlap_str)
+        except ValueError as exc:
+            raise ValueError(f"Invalid overlap value: '{overlap_str}'") from exc
+
+    if math.isnan(value) or math.isinf(value):
+        raise ValueError(f"Overlap must be a finite number: '{overlap_str}'")
+
+    if value < 0:
+        raise ValueError(f"Overlap must be non-negative: '{overlap_str}'")
+
+    return value
+
+
+def _build_rects(final_sizes, delete_flags, direction, page_width, page_height, overlap=0.0):
+    """
+    Builds a list of pikepdf.Array rectangles from calculated sizes.
+
+    `overlap` (points) is added to each internal seam between two pieces
+    that are BOTH kept (not flagged for deletion), split evenly: the
+    earlier piece grows by overlap/2 into the later one, and the later
+    piece grows by overlap/2 into the earlier one. Outer page edges and
+    seams touching a discarded piece are never expanded.
+    """
     from pikepdf import Array
 
     rects = []
     current_offset = 0
+    n = len(final_sizes)
     for i, size in enumerate(final_sizes):
         if not delete_flags[i]:
+            start_offset = current_offset
+            end_offset = current_offset + size
+            if i > 0 and not delete_flags[i - 1]:
+                start_offset -= overlap / 2
+            if i < n - 1 and not delete_flags[i + 1]:
+                end_offset += overlap / 2
             if direction == "cols":
-                x0, y0 = current_offset, 0
-                x1, y1 = current_offset + size, page_height
+                x0, y0 = start_offset, 0
+                x1, y1 = end_offset, page_height
                 rects.append(Array([x0, y0, x1, y1]))
             else:  # direction == "rows"
-                x0, y0 = 0, page_height - current_offset - size
-                x1, y1 = page_width, page_height - current_offset
+                x0, y0 = 0, page_height - end_offset
+                x1, y1 = page_width, page_height - start_offset
                 rects.append(Array([x0, y0, x1, y1]))
         current_offset += size
     return rects

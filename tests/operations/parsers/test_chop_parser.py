@@ -20,20 +20,55 @@ def mock_page_rect():
 
 
 def test_parse_chop_spec_prep_cols_default():
-    content, direction = cp._parse_chop_spec_prep("cols")
+    content, direction, overlap_str = cp._parse_chop_spec_prep("cols")
     assert direction == "cols"
     assert content == "2"  # default to 2 pieces
+    assert overlap_str is None
 
 
 def test_parse_chop_spec_prep_rows_paren():
-    content, direction = cp._parse_chop_spec_prep("rows(1:3)")
+    content, direction, overlap_str = cp._parse_chop_spec_prep("rows(1:3)")
     assert direction == "rows"
     assert content == "1:3"
+    assert overlap_str is None
 
 
 def test_parse_chop_spec_prep_invalid_start():
     with pytest.raises(ValueError):
         cp._parse_chop_spec_prep("bad(3)")
+
+
+def test_parse_chop_spec_prep_with_overlap_simple():
+    content, direction, overlap_str = cp._parse_chop_spec_prep("cols3+10pt")
+    assert direction == "cols"
+    assert content == "3"
+    assert overlap_str == "10pt"
+
+
+def test_parse_chop_spec_prep_with_overlap_and_parens():
+    content, direction, overlap_str = cp._parse_chop_spec_prep("rows(1:2)+5%")
+    assert direction == "rows"
+    assert content == "1:2"
+    assert overlap_str == "5%"
+
+
+def test_parse_chop_spec_prep_overlap_only_no_size():
+    # No size before '+' -> falls back to default "2"
+    content, direction, overlap_str = cp._parse_chop_spec_prep("cols+10pt")
+    assert direction == "cols"
+    assert content == "2"
+    assert overlap_str == "10pt"
+
+
+def test_parse_chop_spec_prep_unbalanced_parens_with_overlap():
+    with pytest.raises(ValueError, match="Unbalanced parentheses"):
+        cp._parse_chop_spec_prep("cols(1:2+10pt)")
+
+
+def test_parse_chop_spec_prep_balanced_parens_with_overlap_ok():
+    content, direction, overlap_str = cp._parse_chop_spec_prep("cols(1:2)+10pt")
+    assert content == "1:2"
+    assert overlap_str == "10pt"
 
 
 # ---------------------------
@@ -68,6 +103,80 @@ def test_parse_ratio_spec_valid():
 def test_parse_ratio_spec_invalid():
     with pytest.raises(ValueError):
         cp._parse_ratio_spec("1:a", 200)
+
+
+# ---------------------------
+# _parse_overlap_value
+# ---------------------------
+
+
+def test_parse_overlap_value_none():
+    assert cp._parse_overlap_value(None, 200) == 0.0
+
+
+def test_parse_overlap_value_empty_string():
+    assert cp._parse_overlap_value("", 200) == 0.0
+
+
+def test_parse_overlap_value_percent():
+    assert cp._parse_overlap_value("10%", 200) == pytest.approx(20.0)
+
+
+def test_parse_overlap_value_percent_invalid():
+    with pytest.raises(ValueError, match="Invalid overlap value"):
+        cp._parse_overlap_value("abc%", 200)
+
+
+def test_parse_overlap_value_unit(monkeypatch):
+    monkeypatch.setattr(cp, "UNITS", {"pt": 1.0, "cm": 28.35})
+    assert cp._parse_overlap_value("2cm", 200) == pytest.approx(56.7)
+
+
+def test_parse_overlap_value_unit_invalid_number(monkeypatch):
+    monkeypatch.setattr(cp, "UNITS", {"pt": 1.0, "cm": 28.35})
+    with pytest.raises(ValueError, match="Invalid overlap value"):
+        cp._parse_overlap_value("xcm", 200)
+
+
+def test_parse_overlap_value_plain_number():
+    assert cp._parse_overlap_value("15", 200) == 15.0
+
+
+def test_parse_overlap_value_plain_invalid():
+    with pytest.raises(ValueError, match="Invalid overlap value"):
+        cp._parse_overlap_value("abc", 200)
+
+
+def test_parse_overlap_value_negative_plain():
+    with pytest.raises(ValueError, match="must be non-negative"):
+        cp._parse_overlap_value("-5", 200)
+
+
+def test_parse_overlap_value_negative_percent():
+    with pytest.raises(ValueError, match="must be non-negative"):
+        cp._parse_overlap_value("-10%", 200)
+
+
+def test_parse_overlap_value_nan_plain():
+    with pytest.raises(ValueError, match="must be a finite number"):
+        cp._parse_overlap_value("nan", 200)
+
+
+def test_parse_overlap_value_inf_plain():
+    with pytest.raises(ValueError, match="must be a finite number"):
+        cp._parse_overlap_value("inf", 200)
+
+
+def test_parse_overlap_value_neg_inf_plain():
+    # -inf is finite=False so it should hit the finiteness check,
+    # not silently pass the (value < 0) check as a "valid negative".
+    with pytest.raises(ValueError, match="must be a finite number"):
+        cp._parse_overlap_value("-inf", 200)
+
+
+def test_parse_overlap_value_nan_percent():
+    with pytest.raises(ValueError, match="must be a finite number"):
+        cp._parse_overlap_value("nan%", 200)
 
 
 # ---------------------------
@@ -106,6 +215,13 @@ def test_parse_comma_spec_part_first_pass_fill():
     parsed, is_fill, delete = cp._parse_comma_spec_part_first_pass("fill")
     assert is_fill
     assert parsed["type"] == "fill"
+    assert not delete
+
+
+def test_parse_comma_spec_part_first_pass_plain_number():
+    parsed, is_fill, delete = cp._parse_comma_spec_part_first_pass("50")
+    assert parsed == {"type": "pt", "value": 50.0}
+    assert not is_fill
     assert not delete
 
 
@@ -157,6 +273,74 @@ def test_build_rects_rows_with_delete(mock_page_rect):
     # only one rect (second, not deleted)
     assert len(rects) == 1
     assert rects[0][1] == 200  # y0 = page_height - offset - size
+
+
+def test_build_rects_cols_with_overlap(mock_page_rect):
+    final_sizes = [200, 400]
+    delete_flags = [False, False]
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 600, 800, overlap=20)
+    # seam grows 10 into each side
+    assert rects[0][2] == 210  # x1 of piece 0
+    assert rects[1][0] == 190  # x0 of piece 1
+
+
+def test_build_rects_rows_with_overlap(mock_page_rect):
+    final_sizes = [400, 400]
+    delete_flags = [False, False]
+    rects = cp._build_rects(final_sizes, delete_flags, "rows", 600, 800, overlap=80)
+    # piece 0 (top): y0 shrinks by 40 (grows downward)
+    assert rects[0][1] == 360
+    # piece 1 (bottom): y1 grows by 40 (grows upward)
+    assert rects[1][3] == 440
+
+
+def test_build_rects_overlap_skips_deleted_seam(mock_page_rect):
+    # Middle piece deleted: first and third pieces are not adjacent,
+    # so no overlap should be applied between them.
+    final_sizes = [100, 100, 100]
+    delete_flags = [False, True, False]
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 300, 800, overlap=20)
+    assert len(rects) == 2
+    assert rects[0][2] == 100  # unchanged: neighbor (index 1) is deleted
+    assert rects[1][0] == 200  # unchanged: neighbor (index 1) is deleted
+
+
+def test_build_rects_overlap_no_outer_growth(mock_page_rect):
+    final_sizes = [200, 400]
+    delete_flags = [False, False]
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 600, 800, overlap=50)
+    assert rects[0][0] == 0  # left outer edge never grows
+    assert rects[-1][2] == 600  # right outer edge never grows
+
+
+def test_build_rects_default_overlap_is_zero(mock_page_rect):
+    final_sizes = [200, 400]
+    delete_flags = [False, False]
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 600, 800)
+    assert rects[0][2] == 200
+    assert rects[1][0] == 200
+
+
+# ---------------------------
+# parse_chop_spec (overlap integration)
+# ---------------------------
+
+
+def test_parse_chop_spec_with_overlap_cols(mock_page_rect):
+    rects = cp.parse_chop_spec("cols2+10pt", mock_page_rect)
+    assert rects[0][2] == 305
+    assert rects[1][0] == 295
+
+
+def test_parse_chop_spec_with_overlap_percent_rows(mock_page_rect):
+    rects = cp.parse_chop_spec("rows2+10%", mock_page_rect)
+    assert rects[0][1] == 360
+    assert rects[1][3] == 440
+
+
+def test_parse_chop_spec_with_negative_overlap_raises(mock_page_rect):
+    with pytest.raises(ValueError, match="must be non-negative"):
+        cp.parse_chop_spec("cols2+-10", mock_page_rect)
 
 
 # ---------------------------
@@ -275,3 +459,54 @@ def test_chop_parser_comma_spec_excessive_size():
         cp.parse_chop_spec(spec_str, page_rect)
 
     assert "Sum of fixed sizes in chop spec exceeds page dimensions" in str(exc.value)
+
+
+def test_parse_chop_spec_full_page_overlap_at_100_percent(mock_page_rect):
+    """+100% overlap on a 2-piece split should yield two full-page-sized pieces."""
+    rects = cp.parse_chop_spec("rows2+100%", mock_page_rect)
+    h0 = rects[0][3] - rects[0][1]
+    h1 = rects[1][3] - rects[1][1]
+    assert h0 == pytest.approx(800)
+    assert h1 == pytest.approx(800)
+
+
+def test_build_rects_middle_piece_grows_both_sides(mock_page_rect):
+    final_sizes = [200, 200, 200]
+    delete_flags = [False, False, False]
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 600, 800, overlap=40)
+    # middle piece grows by 20 on each side
+    assert rects[1][0] == 180  # 200 - 20
+    assert rects[1][2] == 420  # 400 + 20
+
+
+def test_build_rects_kept_piece_flanked_by_deletions(mock_page_rect):
+    final_sizes = [100, 100, 100]
+    delete_flags = [True, False, True]
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 300, 800, overlap=20)
+    assert len(rects) == 1
+    assert rects[0][0] == 100  # no growth, left neighbor deleted
+    assert rects[0][2] == 200  # no growth, right neighbor deleted
+
+
+def test_parse_chop_spec_single_piece_overlap_is_noop(mock_page_rect):
+    rects = cp.parse_chop_spec("cols1+50pt", mock_page_rect)
+    assert len(rects) == 1
+    assert rects[0][0] == 0
+    assert rects[0][2] == 600
+
+
+def test_parse_chop_spec_trailing_empty_overlap(mock_page_rect):
+    rects = cp.parse_chop_spec("cols3+", mock_page_rect)
+    assert len(rects) == 3
+    assert rects[0][2] == pytest.approx(200)  # no overlap applied
+
+
+def test_build_rects_overlap_four_pieces_correct_seams(mock_page_rect):
+    final_sizes = [100, 100, 100, 100]
+    delete_flags = [False] * 4
+    rects = cp._build_rects(final_sizes, delete_flags, "cols", 400, 800, overlap=20)
+    # 3 internal seams, each piece except ends grows both sides by 10
+    assert rects[0][2] == 110
+    assert rects[1][0] == 90 and rects[1][2] == 210
+    assert rects[2][0] == 190 and rects[2][2] == 310
+    assert rects[3][0] == 290

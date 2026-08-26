@@ -117,6 +117,29 @@ Size Units (for use in `<list>` format):
       to be discarded from the output. This is useful for trimming
       margins.
 
+Overlap:
+
+    An optional `+<overlap>` suffix may be appended after the
+    `<sizes_or_pieces>` portion (outside any parentheses) to make
+    adjacent pieces overlap rather than butt exactly at the cut line.
+    `<overlap>` accepts the same size units as above (`pt`, `%`, or a
+    named unit).
+
+    Example: `cols3+10pt` (3 equal columns, each overlapping its
+    neighbor(s) by a total of 10pt at each internal seam).
+
+    Overlap is split evenly across a seam: each of the two pieces on
+    either side grows by half the overlap amount into the other. Only
+    seams between two *kept* pieces are expanded; the outer edges of
+    the page and seams adjacent to a discarded (`d`) piece are never
+    grown.
+
+    Note: `<overlap>` is the width of the shared (duplicated) region
+    itself, not the growth applied to each individual piece. For
+    example, `rows2+100%` produces two full-page-height pieces, since
+    each side grows by half of the 100% overlap (50%) on top of its
+    base 50% size.
+
 """
 
 _CHOP_EXAMPLES = [
@@ -143,6 +166,10 @@ _CHOP_EXAMPLES = [
     {
         "cmd": "in.pdf chop cols(1:2) output out.pdf",
         "desc": "Split pages into two columns in the ratio 1:2",
+    },
+    {
+        "cmd": "in.pdf chop cols3+10pt output out.pdf",
+        "desc": "Chop into 3 columns, overlapping each seam by 10pt",
     },
 ]
 
