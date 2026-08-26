@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Can now give `chop` an overlap
 
+- `redact`: attempt to verify redaction success when `verify=true` is passed
+
+### Changed
+
+- `redact` now redacts entire matches by default. Capturing groups `(...)` no longer narrow
+  the target unless `redact*`-named groups are explicitly used `(?P<redact_foo>...)`.
+
 ## [0.27.0] - 2026-08-26
 
 ### Added

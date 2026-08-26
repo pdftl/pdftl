@@ -29,6 +29,13 @@ painting a box over each merged region afterwards (`box=true`, the
 default) -- either burned directly into page content, or onto a named
 Optional Content Group layer so it can be toggled/stripped later
 (see modify_layers). See _draw_redaction_boxes.
+
+The other genuinely new piece is `verify` (opt-in, default false):
+after deleting content for a spec, re-extract text from the page(s)
+just modified and re-run search_regex against it. If the pattern can
+still match, the underlying text wasn't actually removed (a real
+redaction failure -- box drawn over content that's still extractable)
+and RedactionVerificationError is raised. See _verify_redaction.
 """
 
 from __future__ import annotations
@@ -39,7 +46,7 @@ from typing import Any
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -78,29 +85,6 @@ A redact specification (`<spec>`) has the same shape as `highlight`'s:
 - `ignore_case=<b>`: Case-insensitive search (default: false).
 - `pad=<F>`: Padding in points added around every matched line's bbox
   before merging/deletion (default: 1.0).
-
-### Partial-match redaction with capturing groups
-By default, the whole regex match is redacted. Adding capturing groups
-to the pattern narrows this down to just the captured text:
-
-- If the pattern has named groups whose names start with `redact`
-  (e.g. `(?P<redact_ssn>...)`), ONLY the text captured by those groups
-  is redacted -- any other matched text (including other named groups)
-  is left untouched. This takes priority over plain numbered groups.
-- Otherwise, if the pattern has ordinary numbered capturing groups
-  `(...)`, all of them are redacted (their combined spans), and any
-  matched text outside the groups is left alone.
-- If the pattern has no capturing groups at all, the whole match is
-  redacted (today's unconditional default).
-- A group that doesn't participate in a given match (e.g. one side of
-  an alternation `(a)|(b)`) is simply skipped for that match; if no
-  group ends up participating, the whole match is redacted as a
-  fallback.
-- Use non-capturing groups `(?:...)` for grouping/alternation that
-  should NOT narrow what gets redacted.
-
-Example: `/the (wombat)/` redacts only "wombat", leaving "the" visible.
-
 - `merge=<line|area|none>`: How nearby match boxes on the same page are
   combined before deletion (default: `line`).
     - `line`: only merges boxes that plausibly sit on the same printed
@@ -121,14 +105,47 @@ Example: `/the (wombat)/` redacts only "wombat", leaving "the" visible.
   (layer) with this name instead of being burned directly into page
   content -- toggleable/strippable afterwards via `modify_layers`.
 
+### Verification
+- `verify=<b>` (default: false): After deletion, re-extracts text from
+  every page this spec touched and re-runs the same search against it.
+  If the pattern still matches anywhere on those pages, the redaction
+  is considered to have failed -- the underlying text was not actually
+  removed from the content stream -- and `redact` raises
+  `OperationError` instead of completing silently. This
+  only confirms the pattern is no longer extractable as text; it does
+  not inspect non-visible layers, revision history, or embedded files.
+  Off by default because it re-serializes and re-scans the PDF, which
+  roughly doubles this operation's cost.
+
+### Partial-match redaction with capturing groups
+By default, the whole regex match is redacted. Whether that default
+applies is decided once per PATTERN (not per match): does the pattern
+contain at least one NAMED capturing group whose name starts with
+`redact`?
+
+- **No** `redact*`-named group anywhere in the pattern: the whole
+  match is always redacted, for every match, regardless of any
+  groups `(...)` the pattern happens to use.
+- **Yes**, the pattern has one or more `redact*`-named groups: only
+  the text captured by those specific groups is redacted, for every
+  match. Any other matched text, including other (non-`redact`)
+  named groups and plain numbered groups, is left untouched. If none
+  of the pattern's `redact*` groups participate in a given match, then
+  nothing is redacted for that match. If combined with `verify=true`,
+  this may result in a verification failure.
+
+Example: For text "the wombat is a wombat" (using XXX for redacted content):
+- `/the (wombat)/` redacts the whole match ("the wombat") -> "XXXXXXXXXX is a wombat".
+- `/the (?P<redact_animal>wombat)/` redacts only "wombat" following "the " ->
+  "the XXXXXX is a wombat".
+
+
 ### Examples of specifications:
 - `/\d{3}-\d{2}-\d{4}/` -- redact every SSN-shaped string, everywhere.
 - `1-3/CONFIDENTIAL/(box=false)` -- delete the text but draw no box.
 - `/Jane Doe/(color=1 0 0, opacity=0.8, layer=Redactions)`
-- `/the (wombat)/` -- redact only "wombat", leaving the surrounding word "the" untouched.
-- `/(?P<redact_ssn>\d{3}-\d{2}-\d{4})|(?P<keep>N\/A)/` -- redact the SSN
-  group when present; the "N/A" alternative's `keep` group is never
-  targeted since its name doesn't start with `redact`.
+- `/the (?P<redact_animal>wombat)/` -- redact only "wombat", leaving "the" untouched.
+- `/(?P<keep>000-00-0000)|(?P<redact_ssn>\d{3}-\d{2}-\d{4})/` -- redact any SSN except 000-00-0000.
 """
 
 _REDACT_EXAMPLES = [
@@ -154,6 +171,7 @@ _ALLOWED_OPTION_KEYS = [
     "color",
     "opacity",
     "layer",
+    "verify",
 ]
 
 
@@ -255,6 +273,7 @@ class RedactOptions:
         "color",
         "opacity",
         "layer",
+        "verify",
     )
 
     def __init__(self, kv: dict) -> None:
@@ -283,6 +302,7 @@ class RedactOptions:
         self.color = _parse_color(kv.get("color", "0 0 0"))
         self.opacity = _parse_opacity(kv)
         self.layer = kv.get("layer")
+        self.verify = _parse_bool(kv, "verify", False)
 
 
 def _parse_options(options_part: str) -> RedactOptions:
@@ -329,34 +349,32 @@ def _pad_rect(rect: list[float], pad: float) -> list[float]:
 
 def _match_target_spans(match: Any) -> list[tuple[int, int]]:
     """Determines the (start, end) text-offset span(s) to redact for a
-    single regex match, implementing group-based partial-match
-    targeting (see redact's long_desc):
+    single regex match (see redact's long_desc). The rule is a
+    PATTERN-level decision, not a per-match one:
 
-      1. Named groups whose name starts with 'redact' -- if any exist,
-         ONLY these spans are targeted (lets a pattern match broader
-         context while redacting just the sensitive part(s)).
-      2. Else, plain numbered capturing groups, if the pattern has any.
-      3. Else, the whole match (today's default, unconditional behavior).
+      - If the PATTERN (match.re.groupindex, fixed for every match of
+        this compiled regex) contains at least one group named with a
+        'redact' prefix: ONLY spans of `redact*` groups that
+        PARTICIPATED in this specific match are targeted. If none
+        participated, this returns an EMPTY list -- deliberately NOT a
+        whole-match fallback. Using `redact*` naming is an explicit
+        opt-in to fine-grained targeting; a non-participating
+        `redact*` group (e.g. the non-taken side of an alternation)
+        means this match wasn't the kind meant to be targeted at all,
+        not "redact everything instead."
+      - Otherwise (no `redact*`-named group anywhere in the pattern --
+        covers no groups at all, plain numbered groups, and any other
+        named groups not prefixed `redact`): the whole match is always
+        targeted. Plain numbered/other-named groups are NOT a
+        narrowing signal by themselves.
 
-    Non-capturing groups `(?:...)` never appear in match.re.groupindex
-    or count toward match.re.groups, so they fall out of this naturally
-    without special-casing -- a pattern using only non-capturing groups
-    for alternation/structure lands in case 3, same as no groups at all.
-
-    A group that didn't participate in this particular match (e.g. one
-    side of a `|` alternation) has match.group(name-or-idx) is None and
-    is skipped, since match.span() for such a group is (-1, -1).
+    match.re.groupindex is a property of the compiled pattern, so
+    checking it for a 'redact' prefix is the same for every match
+    produced by this regex -- it is not itself a per-match test.
     """
-    named_targets = [
-        name
-        for name in match.re.groupindex
-        if name.startswith("redact") and match.group(name) is not None
-    ]
-    if named_targets:
-        return [match.span(name) for name in named_targets]
-
-    if match.re.groups > 0:
-        return [match.span(i) for i in range(1, match.re.groups + 1) if match.group(i) is not None]
+    redact_group_names = [name for name in match.re.groupindex if name.startswith("redact")]
+    if redact_group_names:
+        return [match.span(name) for name in redact_group_names if match.group(name) is not None]
 
     return [match.span()]
 
@@ -487,6 +505,45 @@ def _register_layer_property(page: Any, ocg: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Verification
+# ---------------------------------------------------------------------------
+
+
+def _verify_redaction(pdf: Any, target_pages: list[int], search_regex: Any) -> None:
+    """Re-extracts text from `target_pages` on `pdf`'s CURRENT (post-deletion)
+    state and re-runs `search_regex` against it. Raises OperationError if
+    the pattern still matches anywhere.
+
+    Deliberately does not track which specific spans were originally
+    targeted (see module docstring) -- it relies on the pattern itself
+    requiring the deleted text to exist. If a match survives, the
+    underlying glyphs/content were not actually removed, regardless of
+    whether a box was painted over them.
+
+    The error message never includes the matched text itself, only the
+    page number and match length -- printing the sensitive text in a
+    "verification failed" error would defeat the point of this check.
+    """
+    tp = _build_text_provider(pdf)
+    try:
+        failures = []
+        for page_1_indexed in target_pages:
+            page_num = page_1_indexed - 1
+            text = tp.get_text(page_num)
+            for match in search_regex.finditer(text):
+                failures.append((page_1_indexed, match.end() - match.start()))
+    finally:
+        tp.close()
+
+    if failures:
+        details = "; ".join(f"page {p} ({n} chars)" for p, n in failures)
+        raise OperationError(
+            f"redact: verification failed -- pattern still matches after "
+            f"deletion on: {details}. Underlying content was not fully removed."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Main operation
 # ---------------------------------------------------------------------------
 
@@ -607,6 +664,9 @@ def _apply_redact_spec(pdf: Any, spec: str) -> None:
             _process_redact_page(pdf, tp, page_1_indexed, search_regex, options, ocg, stats)
     finally:
         tp.close()
+
+    if options.verify:
+        _verify_redaction(pdf, target_pages, search_regex)
 
     logger.info(
         "redact: spec '%s' -- %d streams processed, %d images, %d paths, %d glyphs deleted",

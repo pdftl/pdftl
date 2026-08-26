@@ -7,7 +7,7 @@ import pikepdf
 import pytest
 from pikepdf import Dictionary, Name
 
-from pdftl.exceptions import InvalidArgumentError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.operations.redact import (
     RedactOptions,
     _color_operator,
@@ -24,6 +24,7 @@ from pdftl.operations.redact import (
     _parse_redact_spec,
     _match_target_spans,
     _register_layer_property,
+    _verify_redaction,
     redact,
 )
 
@@ -557,34 +558,38 @@ class TestMatchTargetSpansNoGroups:
         assert _match_target_spans(match) == [match.span()]
 
 
+class TestMatchTargetSpansOtherNamedGroups:
+    """A named group whose name doesn't start with 'redact' is NOT a
+    narrowing signal. Since no redact*-prefixed group exists anywhere
+    in the pattern, this behaves like tier 3 (whole match) -- same as
+    if the group were unnamed or absent entirely."""
+
+    def test_non_redact_named_group_present_still_redacts_whole_match(self):
+        match = re.search(r"Patient: (?P<name>\w+ \w+), DOB", "Patient: John Smith, DOB")
+        assert _match_target_spans(match) == [match.span()]
+
+
 class TestMatchTargetSpansNumberedGroups:
-    def test_single_numbered_group_returns_group_span_not_whole_match(self):
+    """Plain numbered groups are NOT a narrowing signal (see redact's
+    long_desc) -- they're ignored entirely, and the whole match is
+    always redacted regardless of what numbered groups exist or
+    whether they participated."""
+
+    def test_single_numbered_group_redacts_whole_match(self):
         match = re.search(r"the (wombat)", "the wombat sleeps")
-        spans = _match_target_spans(match)
-        assert spans == [match.span(1)]
-        # sanity: group span is strictly narrower than / after the whole match start
-        assert spans[0][0] > match.start(0)
+        assert _match_target_spans(match) == [match.span()]
 
-    def test_multiple_numbered_groups_return_all_spans_in_order(self):
+    def test_multiple_numbered_groups_redact_whole_match(self):
         match = re.search(r"(\w+)@(\w+)\.com", "contact user@example.com now")
-        spans = _match_target_spans(match)
-        assert spans == [match.span(1), match.span(2)]
+        assert _match_target_spans(match) == [match.span()]
 
-    def test_non_participating_numbered_group_in_alternation_is_skipped(self):
-        match = re.search(r"(foo)|the (wombat)", "the wombat sleeps")
-        spans = _match_target_spans(match)
-        assert spans == [match.span(2)]
-
-    def test_numbered_group_present_but_none_participate_yields_no_spans(self):
-        # contrived: optional group that never matches text. Unlike the
-        # named-group tier, the numbered-group tier has NO whole-match
-        # fallback -- if every numbered group fails to participate, the
-        # match contributes zero target spans, and _collect_raw_match_rects
-        # simply skips it (nothing gets redacted for this match at all,
-        # not even the whole match).
+    def test_optional_numbered_group_not_participating_still_redacts_whole_match(self):
+        """The exact bug this used to have: (A|B)?C-shaped patterns
+        must never silently redact nothing just because a plain
+        numbered group didn't fire."""
         match = re.search(r"wombat(x)?", "the wombat sleeps")
         assert match.group(1) is None  # group 1 did not participate
-        assert _match_target_spans(match) == []
+        assert _match_target_spans(match) == [match.span()]
 
 
 class TestMatchTargetSpansNamedRedactGroups:
@@ -601,13 +606,11 @@ class TestMatchTargetSpansNamedRedactGroups:
         )
         assert _match_target_spans(match) == [match.span("redact_animal")]
 
-    def test_named_groups_not_prefixed_redact_are_ignored(self):
-        # only plain-named group present, no 'redact' prefix -- falls
-        # through to numbered-group handling, and named groups DO count
-        # as numbered groups in the re module, so it's still targeted
-        # via the numbered-group tier, not the named-group tier.
+    def test_named_groups_not_prefixed_redact_redact_whole_match(self):
+        # only plain-named group present, no 'redact' prefix, and no
+        # redact*-named group anywhere in the pattern -- whole match.
         match = re.search(r"the (?P<animal>wombat)", "the wombat sleeps")
-        assert _match_target_spans(match) == [match.span("animal")]
+        assert _match_target_spans(match) == [match.span()]
 
     def test_multiple_redact_prefixed_groups_all_targeted(self):
         match = re.search(
@@ -624,6 +627,26 @@ class TestMatchTargetSpansNamedRedactGroups:
         )
         assert _match_target_spans(match) == [match.span("redact_b")]
 
+    def test_all_redact_groups_non_participating_redacts_nothing(self):
+        """If a pattern HAS redact*-named groups but none of them
+        participate in this particular match, NOTHING is redacted for
+        this match -- deliberately no whole-match fallback, since
+        redact* naming is an explicit opt-in to fine-grained targeting."""
+        match = re.search(r"(?P<redact_a>foo)|(?P<redact_b>bar)|baz", "baz")
+        assert match.group("redact_a") is None
+        assert match.group("redact_b") is None
+        assert _match_target_spans(match) == []
+
+    def test_keep_style_named_group_firing_alone_redacts_nothing(self):
+        """An explicit 'keep' branch of an alternation must not be
+        swept into any fallback -- the pattern-level 'has a redact*
+        group' check still applies even though THIS match's
+        participating group isn't the redact* one."""
+        match = re.search(r"(?P<redact_ssn>\d{3}-\d{2}-\d{4})|(?P<keep>N/A)", "value: N/A")
+        assert match.group("keep") == "N/A"
+        assert match.group("redact_ssn") is None
+        assert _match_target_spans(match) == []
+
 
 # ---------------------------------------------------------------------------
 # redact end-to-end -- capturing-group-narrowed redaction
@@ -631,7 +654,7 @@ class TestMatchTargetSpansNamedRedactGroups:
 
 
 class TestRedactCapturingGroupsEndToEnd:
-    def test_numbered_group_redacts_only_group_leaving_anchor_text(self):
+    def test_numbered_group_no_longer_narrows_redacts_whole_match(self):
         pdf = pikepdf.new()
         page = pdf.add_blank_page(page_size=(WIDTH, HEIGHT))
         page.Resources = Dictionary(
@@ -645,7 +668,7 @@ class TestRedactCapturingGroupsEndToEnd:
 
         remaining = "".join(_tj_strings(pdf, 0))
         assert "wombat" not in remaining
-        assert "the" in remaining
+        assert "the" not in remaining  # whole match ("the wombat") is gone now
         assert "sleeps" in remaining
 
     def test_named_redact_group_takes_priority_over_numbered_group(self):
@@ -684,12 +707,10 @@ class TestRedactCapturingGroupsEndToEnd:
         assert "the wombat" not in remaining
         assert "sleeps" in remaining
 
-    def test_non_participating_optional_group_skips_redaction_entirely(self):
-        """Documents current behavior: if a pattern's only capturing
-        group doesn't participate in a match, that match is NOT
-        redacted at all (not even as a whole-match fallback) -- see
-        TestMatchTargetSpansNumberedGroups.
-        test_numbered_group_present_but_none_participate_yields_no_spans."""
+    def test_non_participating_optional_group_still_redacts_whole_match(self):
+        """Regression test for the (A|B)?C silent-no-op bug: a plain
+        numbered group that doesn't participate must still redact the
+        whole match, not silently do nothing."""
         pdf = pikepdf.new()
         page = pdf.add_blank_page(page_size=(WIDTH, HEIGHT))
         page.Resources = Dictionary(
@@ -702,7 +723,7 @@ class TestRedactCapturingGroupsEndToEnd:
         redact(pdf, [r"/wombat(x)?/"])
 
         remaining = "".join(_tj_strings(pdf, 0))
-        assert "wombat" in remaining  # NOT redacted -- group never participated
+        assert "wombat" not in remaining  # now correctly redacted as whole match
 
 
 # ---------------------------------------------------------------------------
@@ -723,18 +744,17 @@ class TestMatchTargetSpans:
         m = re.match(r"(?:foo|bar)baz", "foobaz")
         assert _match_target_spans(m) == [m.span()]
 
-    def test_plain_numbered_group_targets_only_that_group(self):
+    def test_plain_numbered_group_no_longer_narrows_targets_whole_match(self):
         import re
 
         m = re.match(r"Patient: (\w+ \w+)", "Patient: John Smith")
-        assert _match_target_spans(m) == [m.span(1)]
-        assert m.string[slice(*_match_target_spans(m)[0])] == "John Smith"
+        assert _match_target_spans(m) == [m.span()]
 
-    def test_multiple_plain_numbered_groups_all_targeted(self):
+    def test_multiple_plain_numbered_groups_still_target_whole_match(self):
         import re
 
         m = re.match(r"(\w+)-(\w+)", "foo-bar")
-        assert set(_match_target_spans(m)) == {m.span(1), m.span(2)}
+        assert _match_target_spans(m) == [m.span()]
 
     def test_named_redact_group_wins_over_plain_groups(self):
         import re
@@ -764,13 +784,13 @@ class TestMatchTargetSpans:
 
 
 class TestRedactGroupTargets:
-    def test_plain_group_redacts_only_captured_text(self):
+    def test_plain_group_no_longer_narrows_redacts_whole_match(self):
         pdf = _make_text_pdf(["Patient: John Smith, DOB 1990-01-01"])
         redact(pdf, [r"/Patient: (\w+ \w+), DOB/"])
         strings = "".join(_tj_strings(pdf))
         assert "John Smith" not in strings
-        assert "Patient:" in strings
-        assert "DOB" in strings
+        assert "Patient:" not in strings  # whole match now gone
+        assert "DOB" not in strings
         assert "1990-01-01" in strings
 
     def test_named_redact_group_redacts_only_that_group(self):
@@ -816,11 +836,36 @@ class TestRedactGroupTargets:
         )
         strings = "".join(_tj_strings(pdf))
         # Only the named `redact` group's text should be gone --
-        # the plain numbered group (SSN) is treated as context here.
+        # the plain numbered group (SSN) is treated as context here,
+        # since a redact* group is present so tier-1 rules apply.
         assert "John Smith" not in strings
         assert "123-45-6789" in strings
         assert "Name:" in strings
         assert "SSN:" in strings
+
+
+class TestRedactNonParticipatingRedactGroupSkipsMatch:
+    def test_keep_style_alternation_leaves_non_target_branch_untouched(self):
+        """End-to-end version of the 'keep' example from redact's
+        long_desc: when only the non-redact* branch of an alternation
+        fires, that match must be left completely alone."""
+        pdf = _make_text_pdf(["Status: N/A on file"])
+        redact(pdf, [r"/(?P<redact_ssn>\d{3}-\d{2}-\d{4})|(?P<keep>N\/A)/"])
+        strings = "".join(_tj_strings(pdf))
+        assert "N/A" in strings
+        assert "Status:" in strings
+        assert "on file" in strings
+
+
+class TestRedactNonRedactNamedGroupEndToEnd:
+    def test_plain_named_group_without_redact_prefix_redacts_whole_match(self):
+        pdf = _make_text_pdf(["Patient: John Smith, DOB 1990-01-01"])
+        redact(pdf, [r"/Patient: (?P<name>\w+ \w+), DOB/"])
+        strings = "".join(_tj_strings(pdf))
+        assert "John Smith" not in strings
+        assert "Patient:" not in strings  # whole match gone, "name" isn't redact*
+        assert "DOB" not in strings
+        assert "1990-01-01" in strings
 
 
 # ---------------------------------------------------------------------------
@@ -836,7 +881,7 @@ class TestCollectRawMatchRectsZeroWidthSpan:
         a degenerate range."""
         tp = MagicMock()
         tp.get_text.return_value = "ab"
-        search_regex = re.compile(r"a(x*)b")
+        search_regex = re.compile(r"a(?P<redact_x>x*)b")
         groups = _collect_raw_match_rects(tp, 0, search_regex)
         assert groups == []
         tp.get_bboxes_for_lines.assert_not_called()
@@ -897,3 +942,75 @@ class TestRedactNoTargetPages:
         assert result.success is True
         strings = "".join(_tj_strings(pdf))
         assert "123-45-6789" in strings  # untouched
+
+
+# ---------------------------------------------------------------------------
+# verify= option -- post-deletion re-scan
+# ---------------------------------------------------------------------------
+
+
+class TestRedactVerifyOption:
+    def test_verify_true_passes_when_redaction_actually_succeeded(self):
+        """The normal, successful case: verify=true must not raise when
+        the matched text really was deleted."""
+        pdf = _make_text_pdf(["Hello World SSN 123-45-6789 end"])
+        result = redact(pdf, [r"/\d{3}-\d{2}-\d{4}/(verify=true)"])
+        assert result.success is True
+        strings = "".join(_tj_strings(pdf))
+        assert "123-45-6789" not in strings
+
+    def test_verify_false_default_does_not_raise_or_rescan(self):
+        """Default behavior is unchanged: no verification pass at all."""
+        pdf = _make_text_pdf(["Hello World SSN 123-45-6789 end"])
+        result = redact(pdf, [r"/\d{3}-\d{2}-\d{4}/"])
+        assert result.success is True
+
+    def test_verify_true_raises_when_deletion_did_not_remove_the_match(self):
+        """Direct reproduction of a genuine verification failure,
+        without relying on redact's own targeting logic (which now
+        always deletes SOMETHING for any matching pattern -- see
+        _match_target_spans): patch excise's page processor to a no-op
+        so the search finds a match but nothing was actually deleted."""
+        from unittest.mock import patch
+
+        pdf = _make_text_pdf(["Hello World SSN 123-45-6789 end"])
+        with patch("pdftl.operations.excise._process_page", lambda *a, **kw: None):
+            with pytest.raises(OperationError, match="verification failed"):
+                redact(pdf, [r"/\d{3}-\d{2}-\d{4}/(verify=true)"])
+
+    def test_verify_failure_message_excludes_matched_text(self):
+        """The error message must report page number/length only, never
+        the actual matched (sensitive) text."""
+        from unittest.mock import patch
+
+        pdf = _make_text_pdf(["Hello World SSN 123-45-6789 end"])
+        with patch("pdftl.operations.excise._process_page", lambda *a, **kw: None):
+            with pytest.raises(OperationError) as exc_info:
+                redact(pdf, [r"/\d{3}-\d{2}-\d{4}/(verify=true)"])
+        assert "123-45-6789" not in str(exc_info.value)
+        assert "page 1" in str(exc_info.value)
+
+    def test_verify_redaction_direct_no_failures_is_a_noop(self):
+        """Unit-level: calling _verify_redaction directly against a page
+        with no remaining matches must not raise."""
+        pdf = _make_text_pdf(["Nothing sensitive here"])
+        search_regex = re.compile(r"\d{3}-\d{2}-\d{4}")
+        _verify_redaction(pdf, [1], search_regex)  # should not raise
+
+    def test_verify_redaction_direct_multiple_page_failures_all_listed(self):
+        """Unit-level: failures across more than one page must all be
+        collected and reported, not just the first."""
+        pdf = pikepdf.new()
+        for text in ["digits 111-11-1111 here", "digits 222-22-2222 here"]:
+            page = pdf.add_blank_page(page_size=(WIDTH, HEIGHT))
+            page.Resources = Dictionary(
+                Font=Dictionary(
+                    F1=Dictionary(Type=Name.Font, Subtype=Name.Type1, BaseFont=Name.Helvetica)
+                )
+            )
+            page.Contents = pdf.make_stream(
+                f"BT\n/F1 18 Tf\n50 700 Td\n({text}) Tj\nET\n".encode("latin-1")
+            )
+        search_regex = re.compile(r"\d{3}-\d{2}-\d{4}")
+        with pytest.raises(OperationError, match="page 1.*page 2|page 2.*page 1"):
+            _verify_redaction(pdf, [1, 2], search_regex)
