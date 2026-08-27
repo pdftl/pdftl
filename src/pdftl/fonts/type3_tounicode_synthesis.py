@@ -38,6 +38,7 @@ from typing import Any
 
 from pdftl.fonts.cmap_utils import compile_to_unicode_cmap, parse_to_unicode_cmap
 from pdftl.fonts.font_encoding_tables import _get_maps
+from pdftl.utils.pdf_resources import get_resources
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +263,7 @@ def _iter_unique_font_objects(pdf_pike: Any) -> list[Any]:
     fonts: list[Any] = []
     for page in pdf_pike.pages:
         _collect_fonts_from_resources(
-            page.get("/Resources"), seen_objgens, seen_xobject_objgens, fonts, depth=0
+            get_resources(page), seen_objgens, seen_xobject_objgens, fonts, depth=0
         )
     return fonts
 

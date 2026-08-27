@@ -188,3 +188,23 @@ def test_chop_with_overlap_end_to_end(two_page_pdf):
 
         assert w0 + w1 == pytest.approx(page_width + 20)
         assert w0 == pytest.approx(w1)
+
+
+def test_chop_inherited_bounding_box():
+    """Test that inherited bounding boxes (e.g., CropBox on parent node) are overridden."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 300))
+
+    # Mock get_inheritable to simulate an inherited /CropBox from a parent node
+    def mock_get_inheritable(page, box):
+        if box == "/CropBox":
+            return pikepdf.Array([0, 0, 200, 300])
+        return None
+
+    with patch("pdftl.operations.chop.get_inheritable", side_effect=mock_get_inheritable):
+        result = chop_pages(pdf, ["cols2"])
+
+    # Line 286 sets page[box] = page.mediabox for inherited boxes
+    for page in result.pdf.pages:
+        assert "/CropBox" in page
+        assert page.CropBox == page.MediaBox

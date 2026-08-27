@@ -20,6 +20,7 @@ from pdftl.operations.helpers.crop_fit import FitCropContext
 from pdftl.operations.parsers.rebox_parser import parse_rebox_content, specs_to_page_rules
 from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dimensions import get_visible_page_dimensions
+from pdftl.utils.pikepdf_helpers import get_inheritable
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +267,7 @@ def _calculate_new_box(page, spec_str, page_idx, fit_ctx, all_rules, operation):
     # MARGIN UN-ROTATION
     # -------------------------------------------------------------
     try:
-        rotation = int(page.Rotate) % 360
+        rotation = int(page.rotation) % 360
     except (AttributeError, TypeError, ValueError):
         rotation = 0
 
@@ -300,8 +301,12 @@ def _apply_or_preview(page, new_box, preview, operation):
         _overlay_preview_rectangle(page, new_box)
     elif operation == "crop":
         page.mediabox = new_box
+        # NOTE: `box_key in page` only checks the page's OWN dict. A page
+        # whose CropBox/TrimBox/BleedBox is inherited from a shared /Pages
+        # ancestor keeps that stale, now-mismatched box after MediaBox above
+        # is overwritten, since `in` never sees inherited keys.
         for box_key in ("/CropBox", "/TrimBox", "/BleedBox"):
-            if box_key in page:
+            if get_inheritable(page, box_key) is not None:
                 page[box_key] = new_box
     elif operation == "clip":
         re_args = _overlay_rect_args(new_box)
@@ -326,8 +331,7 @@ def _overlay_preview_rectangle(page, new_box):
         overlay_page = overlay_pdf.pages[0]
 
         overlay_page.mediabox = pikepdf.Array(list(page.mediabox))
-        if hasattr(page, "Rotate"):
-            overlay_page.Rotate = int(page.Rotate)
+        overlay_page.Rotate = int(page.rotation)
 
         re_args = _overlay_rect_args(new_box)
         stream = f"q 1 0 0 RG {re_args} re s"

@@ -23,6 +23,37 @@ from pdftl.info.output_info import (
     write_info,
 )
 
+from pdftl.info.output_info import _get_docinfo
+from pdftl.info.info_types import PdfInfo as _PdfInfoForDocinfoTests
+
+
+def _make_mock_page(boxes: dict | None = None, rotation: int = 0):
+    """Build a MagicMock page compatible with get_inheritable's real
+    pikepdf.Object walk semantics.
+
+    get_inheritable checks `key in node`, reads `node[key]`, and -- on a
+    miss -- continues the walk via `node.get("/Parent", None)`. A bare
+    `page.get.return_value = <something truthy>` (as several fixtures used
+    to set, back when rotation was read via page.get()) gets returned for
+    THAT /Parent lookup too, turning `node` into a non-dict value and
+    crashing the next iteration's `key in node`. Box keys must also be
+    slash-prefixed ("/MediaBox") to match what _get_page_info actually
+    queries.
+    """
+    boxes = boxes or {}
+    page = MagicMock()
+    page.rotation = rotation
+    page.__contains__.side_effect = lambda k: k in boxes
+    page.__getitem__.side_effect = lambda k: boxes[k]
+    # Any other .get() call -- notably get_inheritable's own /Parent
+    # continuation -- must return the caller's default (None) so the walk
+    # terminates cleanly after one hop instead of looping on a stray value.
+    page.get.side_effect = lambda key, default=None: default
+    for name, value in boxes.items():
+        setattr(page, name.lstrip("/"), value)
+    return page
+
+
 # --- Fixtures ---
 
 
@@ -81,24 +112,14 @@ def mock_pdf():
     # -----------------------------------------------------------------------------
 
     # Page Media (Page 1)
-    p1 = pdf.pages[0]
-    p1.get.return_value = 0  # Rotation
-    p1.mediabox = [0, 0, 600, 800]
-    p1.cropbox = [0, 0, 600, 800]
-    p1_boxes = {"MediaBox": p1.mediabox, "CropBox": p1.cropbox}
-    p1.__getitem__.side_effect = p1_boxes.__getitem__
-    for k, v in p1_boxes.items():
-        setattr(p1, k, v)
+    p1 = _make_mock_page({"/MediaBox": [0, 0, 600, 800], "/CropBox": [0, 0, 600, 800]}, rotation=0)
+    pdf.pages[0] = p1
 
     # Page Media (Page 2)
-    p2 = pdf.pages[1]
-    p2.get.return_value = 90  # Rotation
-    p2.mediabox = [0, 0, 500, 500]
-    p2.cropbox = [10, 10, 490, 490]
-    p2_boxes = {"MediaBox": p2.mediabox, "CropBox": p2.cropbox}
-    p2.__getitem__.side_effect = p2_boxes.__getitem__
-    for k, v in p2_boxes.items():
-        setattr(p2, k, v)
+    p2 = _make_mock_page(
+        {"/MediaBox": [0, 0, 500, 500], "/CropBox": [10, 10, 490, 490]}, rotation=90
+    )
+    pdf.pages[1] = p2
 
     # IDs
     pdf.trailer = MagicMock()
@@ -199,7 +220,7 @@ class TestInfoExtraction:
     def test_get_info_page_media(self, mock_pdf):
         """Test extraction of page media data."""
         page_mock = MagicMock()
-        page_mock.get.return_value = 0
+        page_mock.rotation = 0
         mock_pdf.pages = [page_mock, page_mock]
 
         info = get_info(mock_pdf, "input.pdf")
@@ -458,36 +479,18 @@ def test_advanced_page_box_logic():
     # Helper to create a mock page with specific box returns
     # Helper to create a mock page with specific box returns
     def make_page(media, crop=None, trim=None, bleed=None, art=None):
-        p = MagicMock()
-
-        # 1. Setup Dictionary Access (page.get("/MediaBox"))
-        def get_side_effect(key, default=None):
-            vals = {
-                "/Rotate": 0,
-                "/MediaBox": media,
-                "/CropBox": crop,
-                "/TrimBox": trim,
-                "/BleedBox": bleed,
-                "/ArtBox": art,
-            }
-            return vals.get(key, default)
-
-        p.get.side_effect = get_side_effect
-
-        # 2. Setup Attribute Access (getattr(page, "MediaBox"))
-        # We must explicitly set these so getattr returns the list, not a new Mock
+        boxes = {}
         if media is not None:
-            p.MediaBox = media
+            boxes["/MediaBox"] = media
         if crop is not None:
-            p.CropBox = crop
+            boxes["/CropBox"] = crop
         if trim is not None:
-            p.TrimBox = trim
+            boxes["/TrimBox"] = trim
         if bleed is not None:
-            p.BleedBox = bleed
+            boxes["/BleedBox"] = bleed
         if art is not None:
-            p.ArtBox = art
-
-        return p
+            boxes["/ArtBox"] = art
+        return _make_mock_page(boxes, rotation=0)
 
     # Define standard boxes for reuse
     box_100 = [0, 0, 100, 100]
@@ -601,12 +604,12 @@ def mock_constants():
 
 def test_get_info_basic_docinfo(mock_pdf, mock_constants):
     """Test extracting basic document info."""
-    mock_pdf.pages = [MagicMock(), MagicMock()]  # 2 pages
+    mock_pdf.pages = [_make_mock_page(), _make_mock_page()]  # 2 pages
     mock_pdf.docinfo = {"/Title": "Test PDF", "/Author": "PyTest", "/CreationDate": "D:20230101"}
 
     # Mock page rotation
     for p in mock_pdf.pages:
-        p.get.return_value = 0
+        pass  # rotation already defaults to 0 via _make_mock_page
 
     info = get_info(mock_pdf, "test.pdf", extra_info=True)
 
@@ -635,11 +638,10 @@ def test_get_info_skips_non_string_metadata(mock_pdf, mock_constants, caplog):
 
 def test_get_info_page_media(mock_pdf, mock_constants):
     """Test extraction of MediaBox and CropBox."""
-    page = MagicMock()
-    # Setup page attributes based on the mock_constants fixture map
-    page.MediaBox = [0, 0, 595.28, 841.89]  # A4
-    page.CropBox = [10, 10, 585.28, 831.89]  # Slightly cropped
-    page.get.return_value = 90  # Rotation
+    page = _make_mock_page(
+        {"/MediaBox": [0, 0, 595.28, 841.89], "/CropBox": [10, 10, 585.28, 831.89]},
+        rotation=90,
+    )
 
     mock_pdf.pages = [page]
 
@@ -763,9 +765,8 @@ def test_get_info_redundant_boxes(mock_pdf, mock_constants):
     # - MediaBox is defined.
     # - CropBox is NOT defined (defaults to MediaBox).
     # - TrimBox IS defined but is identical to MediaBox.
-    page.MediaBox = rect_data
-    del page.CropBox  # Ensure hasattr(page, 'CropBox') is False or returns None
-    page.TrimBox = rect_data
+    page = _make_mock_page({"/MediaBox": rect_data, "/TrimBox": rect_data}, rotation=0)
+    # CropBox intentionally omitted from boxes -> "not present" for get_inheritable
 
     mock_pdf.pages = [page]
 
@@ -794,3 +795,40 @@ def test_info_bookmark_resolution_none(mocker):
 
     # Verify it defaulted to 0 and hit the warning line (276-279)
     assert results[0].page_number == 0
+
+
+# ==================================================================
+# === _get_docinfo branch coverage
+# ==================================================================
+
+
+def test_get_docinfo_skips_when_already_populated():
+    """Covers the guard's False branch: if info.doc_info is already set
+    (not None), _get_docinfo must leave it untouched and never touch
+    pdf_docinfo at all."""
+    existing = [DocInfoEntry(key="Existing", value="Untouched")]
+    info = _PdfInfoForDocinfoTests(pages=1, doc_info=existing)
+
+    pdf_docinfo = MagicMock()
+    pdf_docinfo.keys.side_effect = AssertionError(
+        "doc_info was already populated; _get_docinfo should not have read pdf_docinfo"
+    )
+
+    _get_docinfo(info, pdf_docinfo)
+
+    assert info.doc_info == existing
+
+
+def test_get_docinfo_skips_entry_that_cleans_to_empty_string():
+    """Covers the cleaned_value falsy branch: a value that is a non-empty
+    pikepdf.String but cleans down to "" (e.g. it's nothing but a null
+    byte) must be skipped rather than appended as an empty DocInfoEntry."""
+    info = _PdfInfoForDocinfoTests(pages=1)
+
+    pdf_docinfo = {"/Empty": String("\x00"), "/Kept": String("Real Value")}
+
+    _get_docinfo(info, pdf_docinfo)
+
+    entry_map = {e.key: e.value for e in info.doc_info}
+    assert "Empty" not in entry_map
+    assert entry_map["Kept"] == "Real Value"

@@ -200,7 +200,7 @@ def _apply_montage_logic(
 
         target_page = output_pages[slot.page_index]
         try:
-            src_page.Rotate = int(getattr(src_page, "Rotate", 0)) % 360
+            src_page.Rotate = int(src_page.rotation) % 360
         except (ValueError, TypeError) as exc:
             raise OperationError("Invalid /Rotate") from exc
         target_page.add_overlay(

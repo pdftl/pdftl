@@ -10,6 +10,8 @@ import re
 from contextlib import suppress
 from typing import Any
 
+from pdftl.utils.pdf_resources import get_resources
+
 # Matches standard PDF subset prefixes like "AAAAAA+FontName"
 SUBSET_PREFIX_RE = re.compile(r"^[A-Z]{6}\+")
 
@@ -381,8 +383,9 @@ class _DocumentFontExtractor:
     def crawl_page(self, page: Any) -> None:
         """Entry point for a single page, processing its Resources and Annotations."""
         with suppress(AttributeError, TypeError):
-            if "/Resources" in page:
-                self.crawl_resources(page.Resources)
+            resources = get_resources(page)
+            if resources is not None:
+                self.crawl_resources(resources)
 
             if "/Annots" in page:
                 self._crawl_annots(page.Annots)

@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pdftl.utils.pdf_resources import get_resources
+
 if TYPE_CHECKING:
     from pikepdf import Pdf
 
@@ -97,8 +99,9 @@ class GreyscaleReplaceContentStream:
         page.Contents = self.pdf.make_stream(new_content)
 
         # 2. Recursively search for sub-forms and patterns nested inside page resource forks
-        if "/Resources" in page:
-            self._process_resources(page.Resources)
+        resources = get_resources(page)
+        if resources is not None:
+            self._process_resources(resources)
 
     def _process_resources(self, resources):
         """Recursively updates child structural layouts (Form XObjects and Tiling Patterns)."""

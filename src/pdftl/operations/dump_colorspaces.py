@@ -20,6 +20,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 # Import from the newly extracted utilities
 from pdftl.utils.colorspaces import effective_family
+from pdftl.utils.pdf_resources import get_resources
 from pdftl.utils.stream_walker import walk_page
 
 if TYPE_CHECKING:
@@ -97,7 +98,7 @@ def _extract_page_info(page, page_num: int, pikepdf, *, full: bool) -> dict:
     }
 
     try:
-        resources = page.get("/Resources")
+        resources = get_resources(page)
         walk_page(
             page,
             resources,

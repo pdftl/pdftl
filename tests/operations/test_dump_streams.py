@@ -612,3 +612,98 @@ def test_api_serialize_stream_blocks_ignores_meta_argument():
 
     assert meta["kind"] == "text"
     assert "content" in meta["text"]
+
+
+# ---------------------------------------------------------------------------
+# 10. Inherited /Resources (page-tree inheritance, not own-dict)
+# ---------------------------------------------------------------------------
+
+
+def test_dump_streams_recurses_into_inherited_page_resources():
+    """Fails on current code: a page whose /Resources is only inherited
+    from a /Pages ancestor is treated as having no resources at all, so
+    dump_streams (recurse=true, the default) never descends into its
+    Form XObjects, and resources=true never dumps its resource block."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+    parent = page.obj["/Parent"]
+
+    form = pdf.make_stream(b"1 0 0 RG")
+    form.Type = pikepdf.Name("/XObject")
+    form.Subtype = pikepdf.Name("/Form")
+    form.BBox = pikepdf.Array([0, 0, 100, 100])
+
+    page.Contents = pdf.make_stream(b"/Fm1 Do")
+    parent[pikepdf.Name.Resources] = pikepdf.Dictionary(
+        {"/XObject": pikepdf.Dictionary({"/Fm1": form})}
+    )
+    if pikepdf.Name.Resources in page.obj:
+        del page.obj[pikepdf.Name.Resources]
+
+    result = dump_streams(pdf, ["resources=true"])
+    headers = [entry[0] for entry in result.data]
+
+    assert "Page 1 / Resources" in headers
+    assert any("XObject /Fm1" in h for h in headers)
+
+
+def test_scan_xobject_resources_same_xobject_twice_same_page():
+    """Covers the 'already recorded for this page_num' branch: the same
+    Form XObject reachable via two different resource keys on one page
+    must not be appended to objgen_to_pages[...] twice for that page."""
+    pdf = pikepdf.new()
+    form = pdf.make_stream(b"")
+    form.Type = pikepdf.Name("/XObject")
+    form.Subtype = pikepdf.Name("/Form")
+    form.BBox = pikepdf.Array([0, 0, 100, 100])
+
+    resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": form})})
+
+    from pdftl.operations.dump_streams import _scan_xobject_resources
+
+    objgen_to_pages: dict = {}
+    seen: set = set()
+    _scan_xobject_resources(resources, 1, seen, objgen_to_pages)
+    # Second pass over the same resources/page_num: xobj.objgen is already
+    # in `seen`, so this hits the early `continue` -- not the branch we're
+    # after. To hit "already in objgen_to_pages[objgen]", call again with a
+    # fresh `seen` but the same objgen_to_pages/page_num.
+    _scan_xobject_resources(resources, 1, set(), objgen_to_pages)
+
+    assert objgen_to_pages[form.objgen] == [1]
+
+
+def test_build_xobject_page_map_page_with_no_resources_anywhere():
+    """Covers the loop-continues-without-scanning branch: a page with no
+    /Resources in its own dict and none inherited must be skipped
+    without error, contributing nothing to the map."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+    if pikepdf.Name.Resources in page.obj:
+        del page.obj[pikepdf.Name.Resources]
+    if pikepdf.Name.Resources in pdf.Root.Pages:
+        del pdf.Root.Pages[pikepdf.Name.Resources]
+
+    from pdftl.operations.dump_streams import _build_xobject_page_map
+
+    result = _build_xobject_page_map(pdf, [1])
+    assert result == {}
+
+
+def test_dump_streams_recurse_false_skips_xobject_recursion(base_pdf):
+    """Covers the recurse=False fall-through: entries returned without
+    ever calling _recurse_and_collect, even though the page has Form
+    XObjects in its resources."""
+    xobj = base_pdf.make_stream(b"")
+    xobj.Type = pikepdf.Name("/XObject")
+    xobj.Subtype = pikepdf.Name("/Form")
+    xobj.BBox = pikepdf.Array([0, 0, 100, 100])
+    base_pdf.pages[0].Contents = base_pdf.make_stream(b"/Fm1 Do")
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/XObject": pikepdf.Dictionary({"/Fm1": xobj})}
+    )
+
+    res = dump_streams(base_pdf, ["recurse=false"])
+    headers = [h for h, _, _ in res.data]
+
+    assert headers == ["Page 1 / Contents"]

@@ -290,3 +290,26 @@ def test_coverage_line_237_nested_xobject_resources_recursion():
 
     # Validate that recursion correctly traversed into the child's resources
     assert b"CleanNested" in child_xobj.read_bytes()
+
+
+def test_replace_recurses_into_inherited_page_resources():
+    """Fails on current code: a page whose /Resources is only inherited
+    from a /Pages ancestor (not its own dict) is treated as having no
+    resources at all, so replace's default recurse=true silently skips
+    that page's Form XObjects entirely."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    parent = page.obj["/Parent"]
+
+    xobj = pdf.make_stream(b"BT (Target) Tj ET")
+    xobj.Type = pikepdf.Name("/XObject")
+    xobj.Subtype = pikepdf.Name("/Form")
+    xobj.BBox = [0, 0, 100, 100]
+
+    parent["/Resources"] = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": xobj})})
+    if "/Resources" in page.obj:
+        del page.obj["/Resources"]
+    page.Contents = pdf.make_stream(b"/Fm1 Do")
+
+    replace_in_content_streams(pdf, ["/Target/Clean/"])
+    assert b"Clean" in xobj.read_bytes()

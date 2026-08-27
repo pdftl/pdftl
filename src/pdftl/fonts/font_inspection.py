@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from contextlib import suppress
 
+from pdftl.utils.pdf_resources import get_resources
+
 if TYPE_CHECKING:
     import pikepdf
 
@@ -93,7 +95,7 @@ def _process_single_font(page_idx: int, font_obj: Any, font_registry: dict[str, 
 
 def _process_page_fonts(page_idx: int, page: Any, font_registry: dict[str, FontInfo]) -> None:
     """Iterates over the Font mappings in a specific page's Resources dictionary."""
-    resources = page.get("/Resources")
+    resources = get_resources(page)
     if not resources or "/Font" not in resources:
         return
 

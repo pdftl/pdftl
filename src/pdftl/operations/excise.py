@@ -55,6 +55,7 @@ from pdftl.operations.helpers.excise_stream import (
 from pdftl.operations.helpers.excise_stream import (
     process_stream as _process_stream,
 )
+from pdftl.utils.pdf_resources import get_resources
 
 logger = logging.getLogger(__name__)
 
@@ -471,7 +472,7 @@ def _unshare_page_resources(page: Any, pdf: Any) -> None:
     """
     import pikepdf
 
-    existing = page.get("/Resources")
+    existing = get_resources(page)
     page.Resources = pikepdf.Dictionary({}) if existing is None else _copy_resource_dict(existing)
 
 

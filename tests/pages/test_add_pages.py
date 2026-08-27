@@ -355,7 +355,8 @@ def test_stash_page_source_data_rotation_swap():
     mock_pdf.filename = "test.pdf"
 
     mbox_val = [0, 0, 100, 200]
-    mock_source_page.MediaBox = mbox_val
+    mock_source_page.MediaBox = None
+    mock_source_page.mediabox = mbox_val
 
     def get_side_effect(key, default=None):
         if str(key) == "/Rotate":

@@ -1,8 +1,8 @@
-from contextlib import suppress
 from typing import TYPE_CHECKING
 import logging
 
 from pdftl.utils.colorspaces import image_colorspace
+from pdftl.utils.pdf_resources import get_resources
 
 if TYPE_CHECKING:
     pass
@@ -24,8 +24,9 @@ def extract_pdf_images(pdf, target_pages: list[int]) -> list:
         images_on_page: list = []
         identity_ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
 
-        with suppress(AttributeError):
-            _parse_stream(page, page.Resources, identity_ctm, images_on_page)
+        page_resources = get_resources(page)
+        if page_resources is not None:
+            _parse_stream(page, page_resources, identity_ctm, images_on_page)
 
         if images_on_page:
             for img_meta in images_on_page:

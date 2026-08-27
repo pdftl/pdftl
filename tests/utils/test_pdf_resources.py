@@ -1,5 +1,6 @@
 """Tests for pdftl.utils.pdf_resources"""
 
+import io
 import logging
 from unittest.mock import MagicMock
 
@@ -12,6 +13,8 @@ from pdftl.utils.pdf_resources import (
     get_all_fonts_recursive,
     walk_content_streams,
     StreamContext,
+    ensure_page_resources,
+    _yield_immediate_fonts,
 )
 
 
@@ -963,3 +966,57 @@ class TestWalkContentStreams:
 
         results = list(walk_content_streams(doc))
         assert len([r for r in results if r[1].kind == "annotation"]) == 1
+
+
+def test_ensure_page_resources_creates_empty_dict():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    if "/Resources" in page:
+        del page["/Resources"]
+
+    res = ensure_page_resources(page)
+    assert "/Resources" in page.obj
+    assert isinstance(res, pikepdf.Dictionary)
+
+
+def test_ensure_page_resources_forks_inherited_dict():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    del page["/Resources"]
+    pdf.Root.Pages["/Resources"] = pikepdf.Dictionary(
+        {"/Font": pikepdf.Dictionary({"/F1": pikepdf.Dictionary()})}
+    )
+
+    # Save and re-open to instantiate parent tree references
+    buf = io.BytesIO()
+    pdf.save(buf)
+    buf.seek(0)
+
+    pdf_reopened = pikepdf.open(buf, inherit_page_attributes=False)
+    page_reopened = pdf_reopened.pages[0]
+
+    assert "/Resources" not in page_reopened.obj
+    res = ensure_page_resources(page_reopened)
+
+    assert "/Resources" in page_reopened.obj
+    assert "/Font" in res
+
+
+def test_ensure_page_resources_already_present():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.obj["/Resources"] = pikepdf.Dictionary({"/Font": pikepdf.Dictionary()})
+
+    res = ensure_page_resources(page)
+    assert res == page.obj["/Resources"]
+
+
+def test_yield_immediate_fonts_skips_non_pikepdf_objects():
+    class MockResources(dict):
+        @property
+        def Font(self):
+            return {"/F1": "not_a_pikepdf_object"}
+
+    mock_res = MockResources({"/Font": True})
+    fonts = list(_yield_immediate_fonts(mock_res, page_num=1))
+    assert fonts == []

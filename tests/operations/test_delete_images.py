@@ -552,3 +552,33 @@ class TestDeleteImages:
         pdf.objects = []
         result = delete_images(pdf, [])
         assert result.pdf is pdf
+
+
+def test_delete_images_from_page_with_inherited_resources():
+    """Fails on current code: page-based image deletion misses inherited /Resources."""
+    import pikepdf
+    from pikepdf import Name
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+    parent = page.obj["/Parent"]
+
+    # Create an image XObject stream
+    image_stream = pdf.make_stream(b"\xff" * 100)
+    image_stream.Type = Name.XObject
+    image_stream.Subtype = Name.Image
+    image_stream.Width = 10
+    image_stream.Height = 10
+
+    # Attach /Resources to the parent /Pages node instead of the page dictionary
+    parent[Name.Resources] = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im1=image_stream))
+    if Name.Resources in page.obj:
+        del page.obj[Name.Resources]
+
+    # Delete images on page 1 explicitly
+    result = delete_images(pdf, ["1"])
+    assert result.success
+
+    # 'if Name.Resources in page' evaluated to False, skipping _process_resources entirely
+    assert image_stream.Width == 1
+    assert image_stream.Height == 1

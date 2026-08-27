@@ -9,7 +9,60 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     import pikepdf
 
+from pdftl.utils.pikepdf_helpers import get_inheritable
+
+
 logger = logging.getLogger(__name__)
+
+
+# See pikepdf_helpers for usage note
+# basically: use this for write access to a Page's resources
+# (and only in that case)
+#
+# IMPORTANT Note on Sub-Dictionaries (/Font, /XObject, /ExtGState, etc.):
+# ensure_page_resources creates a private top-level /Resources dict, but its
+# sub-dictionaries still reference shared parent objects.
+# If mutating a sub-dictionary in place (e.g. adding a key to res.Font), copy
+# that sub-dictionary first to avoid polluting sibling pages:
+#   res["/Font"] = pikepdf.Dictionary(res.Font)
+def ensure_page_resources(page) -> "pikepdf.Dictionary":
+    """Ensures page has a local /Resources dict, copying inherited resources if necessary."""
+    import pikepdf
+
+    page_obj = getattr(page, "obj", page)
+    if "/Resources" not in page_obj:
+        inherited = get_inheritable(page, "/Resources")
+        if inherited is not None:
+            # Fork/copy inherited dictionary
+            # so we don't mutate parent or shadow it with an empty dict
+            page_obj["/Resources"] = pikepdf.Dictionary(inherited)
+        else:
+            page_obj["/Resources"] = pikepdf.Dictionary()
+    return page_obj["/Resources"]
+
+
+def get_resources(container: Any) -> Any | None:
+    """Gets /Resources dict, accounting for /Pages inheritance if container is a Page."""
+    page_obj = getattr(container, "obj", container)
+    if hasattr(container, "as_page") or (
+        hasattr(page_obj, "get") and page_obj.get("/Type") == "/Page"
+    ):
+        return get_inheritable(container, "/Resources")
+
+    if hasattr(container, "get"):
+        return container.get("/Resources")
+
+    return None
+
+
+def unshare_resources_key(resources: "pikepdf.Dictionary", key: str):
+    import pikepdf
+
+    if key not in resources:
+        resources[key] = pikepdf.Dictionary({})
+    else:
+        resources[key] = pikepdf.Dictionary(resources[key])
+    return resources[key]
 
 
 def find_resource_recursive(
@@ -32,10 +85,10 @@ def _search_container(
     container: Any, resource_type: str, target_name: str, visited: set[int]
 ) -> Any | None:
     """Recursively searches a container (Page or XObject). resource_type is e.g., '/Font'"""
-    if "/Resources" not in container:
+    resources = get_resources(container)
+    if resources is None:
         return None
 
-    resources = container.Resources
     return (
         _check_immediate_resources(resource_type, resources, target_name)
         or _next_xobject_match(resource_type, resources, target_name, visited)
@@ -183,10 +236,10 @@ def _yield_annotation_fonts(
 def _walk_container(
     container: Any, page_num: int, visited: set[int]
 ) -> Generator[tuple[str, Any, int], None, None]:
-    if not hasattr(container, "get") or "/Resources" not in container:
+    resources = get_resources(container)
+    if resources is None:
         return
 
-    resources = container.Resources
     yield from _yield_immediate_fonts(resources, page_num)
     yield from _yield_xobject_fonts(resources, page_num, visited)
     yield from _yield_pattern_fonts(resources, page_num, visited)
@@ -271,15 +324,14 @@ def walk_content_streams(
             continue
 
         visited: set[tuple] = set()
+        page_res = get_resources(page)
 
         if "/Contents" in page:
-            ctx = StreamContext(
-                page_num=page_num, depth=0, kind="page", resources=page.get("/Resources")
-            )
+            ctx = StreamContext(page_num=page_num, depth=0, kind="page", resources=page_res)
             yield page.Contents, ctx
 
-        if "/Resources" in page:
-            yield from _walk_resources_streams(page.Resources, page_num, 1, visited)
+        if page_res is not None:
+            yield from _walk_resources_streams(page_res, page_num, 1, visited)
 
         yield from _walk_annotation_streams(page, page_num, visited)
 
@@ -303,17 +355,18 @@ def _walk_xobject_forms(resources, page_num, depth, visited):
         visited.add(xobj.objgen)
         if xobj.get("/Subtype") != "/Form":
             continue
+        xobj_res = get_resources(xobj)
         ctx = StreamContext(
             page_num=page_num,
             depth=depth,
             kind="form",
-            resources=xobj.get("/Resources"),
+            resources=xobj_res,
             owner_resources=resources,
             owner_key=str(name),
         )
         yield xobj, ctx
-        if "/Resources" in xobj:
-            yield from _walk_resources_streams(xobj.Resources, page_num, depth + 1, visited)
+        if xobj_res is not None:
+            yield from _walk_resources_streams(xobj_res, page_num, depth + 1, visited)
 
 
 def _walk_tiling_patterns(resources, page_num, depth, visited):
@@ -327,15 +380,14 @@ def _walk_tiling_patterns(resources, page_num, depth, visited):
         visited.add(pat.objgen)
         try:
             if int(pat.get("/PatternType", 0)) != 1:
-                continue  # shading patterns (type 2) have no content stream
+                continue
         except (TypeError, ValueError):
             continue
-        ctx = StreamContext(
-            page_num=page_num, depth=depth, kind="pattern", resources=pat.get("/Resources")
-        )
+        pat_res = get_resources(pat)
+        ctx = StreamContext(page_num=page_num, depth=depth, kind="pattern", resources=pat_res)
         yield pat, ctx
-        if "/Resources" in pat:
-            yield from _walk_resources_streams(pat.Resources, page_num, depth + 1, visited)
+        if pat_res is not None:
+            yield from _walk_resources_streams(pat_res, page_num, depth + 1, visited)
 
 
 def _walk_extgstate_smasks(resources, page_num, depth, visited):
@@ -358,12 +410,11 @@ def _walk_one_extgstate_smask(gs, page_num, depth, visited):
         if group is None:
             return
         visited.add(group.objgen)
-        ctx = StreamContext(
-            page_num=page_num, depth=depth, kind="smask", resources=group.get("/Resources")
-        )
+        group_res = get_resources(group)
+        ctx = StreamContext(page_num=page_num, depth=depth, kind="smask", resources=group_res)
         yield group, ctx
-        if "/Resources" in group:
-            yield from _walk_resources_streams(group.Resources, page_num, depth + 1, visited)
+        if group_res is not None:
+            yield from _walk_resources_streams(group_res, page_num, depth + 1, visited)
 
 
 def _resolve_smask_group(gs, visited):
@@ -403,9 +454,8 @@ def _walk_ap_entry_streams(ap_entry, page_num, visited):
         if stream_obj.objgen in visited:
             continue
         visited.add(stream_obj.objgen)
-        ctx = StreamContext(
-            page_num=page_num, depth=1, kind="annotation", resources=stream_obj.get("/Resources")
-        )
+        stream_res = get_resources(stream_obj)
+        ctx = StreamContext(page_num=page_num, depth=1, kind="annotation", resources=stream_res)
         yield stream_obj, ctx
-        if "/Resources" in stream_obj:
-            yield from _walk_resources_streams(stream_obj.Resources, page_num, 2, visited)
+        if stream_res is not None:
+            yield from _walk_resources_streams(stream_res, page_num, 2, visited)

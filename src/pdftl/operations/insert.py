@@ -21,6 +21,7 @@ from pdftl.operations.parsers.paper_parser import parse_paper_spec
 from pdftl.utils.blank_page import make_blank_page
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_labels import remap_page_labels
+from pdftl.utils.pikepdf_helpers import get_inheritable
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ def _resolve_geometry(
 
     # Identify context for relative units (%, etc)
     target_page = pdf.pages[target_idx]
-    target_media = target_page.MediaBox
+    target_media = target_page.mediabox
     ref_w = float(target_media[2]) - float(target_media[0])
     ref_h = float(target_media[3]) - float(target_media[1])
 
@@ -205,7 +206,7 @@ def _resolve_geometry(
         source_page = target_page
 
     return (
-        getattr(source_page, "MediaBox"),
-        getattr(source_page, "CropBox", None),
-        getattr(source_page, "TrimBox", None),
+        source_page.mediabox,
+        get_inheritable(source_page, "/CropBox"),
+        get_inheritable(source_page, "/TrimBox"),
     )

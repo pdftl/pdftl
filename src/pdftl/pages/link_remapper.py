@@ -184,7 +184,7 @@ class LinkRemapper:
         # --- SLOW PATH (Rotation needed) ---
         # It is safe to allocate lists here because rotation is rare.
 
-        page_box = target_page.get(self.pikepdf.Name.CropBox, target_page.MediaBox)
+        page_box = target_page.cropbox
 
         # Manual iteration to extract coords (index 2 onwards) without slicing
         # new_dest is [Page, /XYZ, x, y, zoom]

@@ -116,3 +116,31 @@ def test_dump_colorspaces(mock_extract):
     assert res.success is True
     assert res.data == {"summary": {}}
     assert res.meta[c.META_OUTPUT_FILE] == "out.json"
+
+
+def test_dump_colorspaces_sees_inherited_page_resources():
+    """Fails on current code: a page whose /Resources is only inherited
+    from a /Pages ancestor (not its own dict) reports zero color families,
+    since page.get('/Resources') misses the inherited dict entirely."""
+    import pikepdf
+    from pikepdf import Name, Dictionary
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+    parent = page.obj["/Parent"]
+
+    image = pdf.make_stream(b"\xff" * 12)
+    image.Type = Name.XObject
+    image.Subtype = Name.Image
+    image.Width = 2
+    image.Height = 2
+    image.BitsPerComponent = 8
+    image.ColorSpace = Name.DeviceRGB
+
+    page.Contents = pdf.make_stream(b"q 100 0 0 100 0 0 cm /Im1 Do Q")
+    parent[Name.Resources] = Dictionary(XObject=Dictionary(Im1=image))
+    if Name.Resources in page.obj:
+        del page.obj[Name.Resources]
+
+    result = dump_colorspaces(pdf, [])
+    assert "rgb" in result.data["summary"]["families"]

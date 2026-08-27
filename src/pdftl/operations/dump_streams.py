@@ -20,6 +20,7 @@ from pdftl.operations.helpers.xobject_helpers import read_xobject_stream
 from pdftl.operations.helpers.pretty_printers import pretty_format_pdf_obj
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.normalize import get_normalized_page_content_stream
+from pdftl.utils.pdf_resources import get_resources
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 
@@ -88,8 +89,9 @@ def _build_xobject_page_map(pdf: pikepdf.Pdf, target_page_nums: list[int]) -> di
     objgen_to_pages: dict[tuple, list[int]] = {}
     for page_num in target_page_nums:
         page = pdf.pages[page_num - 1]
-        if "/Resources" in page:
-            _scan_xobject_resources(page.Resources, page_num, set(), objgen_to_pages)
+        page_resources = get_resources(page)
+        if page_resources is not None:
+            _scan_xobject_resources(page_resources, page_num, set(), objgen_to_pages)
     return objgen_to_pages
 
 
@@ -425,9 +427,9 @@ def dump_streams(pdf: pikepdf.Pdf, specs, output_file=None) -> OpResult:
 # ---------------------------------------------------------------------------
 
 
-def _process_page_resources(page, page_num: int) -> tuple[str, bytes]:
+def _process_page_resources(page, page_num: int, resources) -> tuple[str, bytes]:
     """Return the (header, content) entry for a page's resource block."""
-    res_content = "\n".join(pretty_format_pdf_obj(page.Resources)).encode("latin-1")
+    res_content = "\n".join(pretty_format_pdf_obj(resources)).encode("latin-1")
     return f"Page {page_num} / Resources", res_content
 
 
@@ -444,6 +446,7 @@ def _process_page(
     """Collect all stream entries for a single page."""
     entries: list[tuple[str, bytes, list[str]]] = []
 
+    page_resources = get_resources(page)
     content, warnings = _collect_page_stream(page, normalize)
 
     if content is None:
@@ -451,9 +454,7 @@ def _process_page(
         logger.warning("Page %d: no content found (missing /Contents)", page_num)
         warnings.append("No content stream found (missing /Contents)")
     elif annotate and normalize:
-        content = annotate_stream(
-            content, page.get("/Resources"), MIN_COMMENT_COL, MAX_COMMENT_COL
-        )
+        content = annotate_stream(content, page_resources, MIN_COMMENT_COL, MAX_COMMENT_COL)
     elif annotate and not normalize:
         logger.warning(
             "Page %d: annotation is only reliable on normalized streams; "
@@ -463,13 +464,13 @@ def _process_page(
 
     entries.append((f"Page {page_num} / Contents", content, warnings))
 
-    if dump_resources and "/Resources" in page:
-        header, res_content = _process_page_resources(page, page_num)
+    if dump_resources and page_resources is not None:
+        header, res_content = _process_page_resources(page, page_num, page_resources)
         entries.append((header, res_content, []))
 
-    if recurse and "/Resources" in page:
+    if recurse and page_resources is not None:
         _recurse_and_collect(
-            page.Resources,
+            page_resources,
             page_num,
             f"Page {page_num}",
             seen_objgens,

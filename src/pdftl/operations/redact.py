@@ -51,6 +51,7 @@ from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_escaped
+from pdftl.utils.pdf_resources import ensure_page_resources, unshare_resources_key
 
 from pdftl.operations.grep import _compile_regex, _parse_bool
 from pdftl.operations.helpers.excise_types import ExciseRect, ExciseStats
@@ -444,19 +445,16 @@ def _ensure_ext_gstate(page: Any, opacity: float) -> str | None:
         return None
     import pikepdf
 
-    if "/Resources" not in page:
-        page.Resources = pikepdf.Dictionary({})
-    resources = page.Resources
-    if "/ExtGState" not in resources:
-        resources.ExtGState = pikepdf.Dictionary({})
+    resources = ensure_page_resources(page)
+    ext_gstate = unshare_resources_key(resources, "/ExtGState")
 
     name = "RedactGS"
     suffix = 0
-    while f"/{name}" in resources.ExtGState:
+    while f"/{name}" in ext_gstate:
         suffix += 1
         name = f"RedactGS{suffix}"
 
-    resources.ExtGState[f"/{name}"] = pikepdf.Dictionary(
+    ext_gstate[f"/{name}"] = pikepdf.Dictionary(
         {"/Type": pikepdf.Name("/ExtGState"), "/ca": opacity, "/CA": opacity}
     )
     return name
@@ -486,21 +484,17 @@ def _draw_page_boxes(
 def _register_layer_property(page: Any, ocg: Any) -> str:
     """Registers `ocg` under page.Resources /Properties (creating the
     dict if needed) and returns the resource key to reference it by."""
-    import pikepdf
 
-    if "/Resources" not in page:
-        page.Resources = pikepdf.Dictionary({})
-    resources = page.Resources
-    if "/Properties" not in resources:
-        resources.Properties = pikepdf.Dictionary({})
+    resources = ensure_page_resources(page)
+    properties = unshare_resources_key(resources, "/Properties")
 
     key = "RedactLayer"
     suffix = 0
-    while f"/{key}" in resources.Properties:
+    while f"/{key}" in properties:
         suffix += 1
         key = f"RedactLayer{suffix}"
 
-    resources.Properties[f"/{key}"] = ocg
+    properties[f"/{key}"] = ocg
     return key
 
 

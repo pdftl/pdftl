@@ -6,14 +6,16 @@
 
 import pikepdf
 
-from pdftl.fonts.cmap_utils import compile_to_unicode_cmap
 from pdftl.fonts.type3_tounicode_synthesis import (
+    patch_missing_to_unicode,
     _iter_unique_font_objects,
+)
+from pdftl.fonts.type3_tounicode_synthesis import (
     _resolve_via_encoding_and_agl,
     _resolve_via_to_unicode,
     build_synthetic_to_unicode_map,
-    patch_missing_to_unicode,
     resolve_simple_font_char_to_unicode,
+    compile_to_unicode_cmap,
 )
 
 # ---------------------------------------------------------------------------

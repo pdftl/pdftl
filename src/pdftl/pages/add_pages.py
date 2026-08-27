@@ -97,8 +97,8 @@ def _compute_source_page_meta(src, page_idx, src_page) -> tuple:
     src_filename = getattr(src, "filename", "")
     src_basename = os.path.basename(src_filename) if src_filename else ""
     src_abspath = os.path.abspath(src_filename) if src_filename else ""
-    orig_rotation = int(src_page.get("/Rotate", 0))
-    mediabox = src_page.MediaBox
+    orig_rotation = int(src_page.rotation)
+    mediabox = src_page.mediabox
     width = float(mediabox[2] - mediabox[0])
     height = float(mediabox[3] - mediabox[1])
     if orig_rotation % 180 != 0:

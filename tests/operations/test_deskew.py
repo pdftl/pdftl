@@ -497,6 +497,8 @@ def test_calculate_deskew_matrix_visual_dims_none():
         mock_get.side_effect = [(0, 0, 100, 100), None]
 
         class DummyPage:
+            rotation = 0
+
             def get(self, *args, **kwargs):
                 return 0
 

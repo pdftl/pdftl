@@ -7,12 +7,15 @@
 """Tests for pdftl.fonts.font_extraction_utils using real pikepdf objects."""
 
 import pikepdf
+from pikepdf import Dictionary, Name, Array
 
 from pdftl.fonts.font_extraction_utils import (
     extract_document_fonts,
     extract_resource_fonts,
     find_font_descriptor,
     get_encoding_name,
+    _unwrap_physical_font,
+    _DocumentFontExtractor,
     get_font_properties,
     parse_font_flags,
     process_single_font,
@@ -810,49 +813,108 @@ class TestFontExtractionCoverage:
     def test_extract_doc_fonts_seen_font_ids_via_pages(self):
         """Deduping Font object_id previously crawled via ExtGState on another page."""
 
-        class MockFont(dict):
-            @property
-            def objgen(self):
-                return (999, 0)
+        import pikepdf
+        from pikepdf import Dictionary, Name
 
-        shared_font = MockFont({"/Subtype": "/Type1", "/BaseFont": "/Arial"})
+        pdf = pikepdf.new()
+        shared_font = pdf.make_indirect(Dictionary(Subtype=Name.Type1, BaseFont=Name("/Arial")))
 
-        class ExtGStateRes(dict):
-            @property
-            def ExtGState(self):
-                class MockGS(dict):
-                    @property
-                    def objgen(self):
-                        return (888, 0)
+        page1 = pdf.add_blank_page(page_size=(200, 200))
+        page1.Resources = Dictionary(
+            ExtGState=Dictionary(GS1=Dictionary(Font=pikepdf.Array([shared_font, 12.0])))
+        )
 
-                    @property
-                    def Font(self):
-                        return [shared_font, 12.0]
-
-                return {"/GS1": MockGS({"/Font": True})}
-
-        class Page1(dict):
-            @property
-            def Resources(self):
-                return ExtGStateRes({"/ExtGState": True})
-
-        class FontRes(dict):
-            @property
-            def Font(self):
-                return {"/F1": shared_font}
-
-        class Page2(dict):
-            @property
-            def Resources(self):
-                return FontRes({"/Font": True})
-
-        class MockDoc:
-            pages = [Page1({"/Resources": True}), Page2({"/Resources": True})]
+        page2 = pdf.add_blank_page(page_size=(200, 200))
+        page2.Resources = Dictionary(Font=Dictionary(F1=shared_font))
 
         # Page 1 ExtGState logs object 999 into seen_font_ids
-        # Page 2 /Font logs object 999 into seen_dict_ids, natively triggering the dedup skip
-        result = extract_document_fonts(MockDoc())
+        # Page 2 /Font logs the same objgen into seen_dict_ids, natively
+        # triggering the dedup skip.
+        result = extract_document_fonts(pdf)
         assert len(result) == 1
+
+
+def test_unwrap_physical_font_empty_descendants():
+    """Type0 font with an empty /DescendantFonts array falls through to the
+    parent object itself (len(descendants) > 0 branch not taken)."""
+    parent = Dictionary(
+        Subtype=Name.Type0,
+        DescendantFonts=Array([]),
+    )
+    assert _unwrap_physical_font(parent) is parent
+
+
+def test_process_and_store_font_skips_when_process_single_font_returns_none():
+    """_process_and_store_font must no-op (not append/track) when
+    process_single_font returns None (e.g. an unrecognized object type)."""
+    extractor = _DocumentFontExtractor()
+    extractor._process_and_store_font("F1", "not a font-like object")
+    assert extractor.all_fonts == []
+    assert extractor.seen_font_ids == set()
+
+
+def test_process_and_store_font_plain_dict_no_objgen():
+    """A font object with no `objgen` attribute at all (e.g. a plain dict,
+    as opposed to a non-indirect pikepdf.Dictionary, which still reports
+    objgen == (0, 0)) resolves obj_id to None, so the seen_font_ids dedup
+    path is skipped entirely and the font is still recorded."""
+    extractor = _DocumentFontExtractor()
+    direct_font = {"/Subtype": Name.Type1, "/BaseFont": Name("/Helvetica")}
+    extractor._process_and_store_font("F1", direct_font)
+    assert len(extractor.all_fonts) == 1
+    assert extractor.all_fonts[0]["obj_id"] is None
+    assert extractor.seen_font_ids == set()
+
+
+def test_process_single_font_non_dict_physical_obj_returns_none():
+    """A Type0 font whose sole /DescendantFonts entry is not itself a
+    dict-like object (malformed PDF) makes _unwrap_physical_font return
+    that non-dict value; process_single_font must bail out with None
+    rather than crash trying to treat it as a font dictionary."""
+    parent = Dictionary(
+        Subtype=Name.Type0,
+        DescendantFonts=Array([42]),
+    )
+    assert process_single_font("F1", parent) is None
+
+
+def test_crawl_ap_state_skips_non_dict_like_state():
+    """_crawl_ap_state must no-op when handed something with no .get
+    method at all (e.g. a malformed /AP entry that's a bare string or
+    number instead of a stream or state dictionary)."""
+    extractor = _DocumentFontExtractor()
+    extractor._crawl_ap_state("not a dict-like appearance state")
+    assert extractor.all_fonts == []
+
+
+def test_crawl_resources_none_is_noop():
+    extractor = _DocumentFontExtractor()
+    extractor.crawl_resources(None)
+    assert extractor.all_fonts == []
+
+
+def test_crawl_fonts_recurses_into_font_with_own_resources():
+    """A Type3 font's glyph procedures can reference their own /Resources
+    dict (e.g. nested fonts/images used by its CharProcs); crawl_fonts
+    must recurse into a font object's own /Resources if present."""
+    import pikepdf
+
+    pdf = pikepdf.new()
+    nested_font = pdf.make_indirect(Dictionary(Subtype=Name.Type1, BaseFont=Name("/Courier")))
+    type3_font = pdf.make_indirect(
+        Dictionary(
+            Subtype=Name.Type3,
+            Resources=Dictionary(Font=Dictionary(FN1=nested_font)),
+        )
+    )
+    resources = Dictionary(Font=Dictionary(F1=type3_font))
+
+    extractor = _DocumentFontExtractor()
+    extractor.crawl_resources(resources)
+
+    found_names = {f["resource_name"] for f in extractor.all_fonts}
+    assert "F1" in found_names
+    assert "FN1" in found_names
 
     def test_crawl_fonts_with_list_font_obj(self):
         """Font_obj lacks .get(), causing _process_and_store_font to return early."""

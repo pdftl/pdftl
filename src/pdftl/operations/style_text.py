@@ -21,6 +21,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.core_types import OpResult
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.keyval_parser import parse_keyval_list
+from pdftl.utils.pdf_resources import get_resources
 
 logger = logging.getLogger(__name__)
 
@@ -283,8 +284,9 @@ class TextStrokeReplaceContentStream:
         stream.write(new_content)
         self._processed.add(stream.objgen)
 
-        if "/Resources" in page:
-            self._process_resources(page.Resources)
+        resources = get_resources(page)
+        if resources is not None:
+            self._process_resources(resources)
 
     def _process_resources(self, resources):
         if "/XObject" not in resources:
@@ -300,8 +302,9 @@ class TextStrokeReplaceContentStream:
                 xobj.write(new_content)
                 self._processed.add(xobj.objgen)
 
-                if "/Resources" in xobj:
-                    self._process_resources(xobj.Resources)
+                xobj_resources = get_resources(xobj)
+                if xobj_resources is not None:
+                    self._process_resources(xobj_resources)
 
     def _color_instruction(self, operands, fill_or_stroke="fill"):
         if len(operands) == 1:

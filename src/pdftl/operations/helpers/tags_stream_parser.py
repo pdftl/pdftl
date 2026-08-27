@@ -12,6 +12,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from pdftl.utils.pdf_resources import get_resources
+
 if TYPE_CHECKING:
     import pikepdf
 
@@ -140,7 +142,7 @@ def _build_mcid_stream_map(
 
             annotated_bytes = annotate_stream(
                 stream_bytes,
-                page.get("/Resources"),
+                get_resources(page),
                 40,
                 80,
             )

@@ -173,7 +173,7 @@ def test_montage_invalid_rotate():
     from pdftl.operations.montage import _apply_montage_logic
 
     mock_src = MagicMock()
-    mock_src.Rotate = "invalid"
+    mock_src.rotation = "invalid"
 
     mock_target = MagicMock()
     # Start with an empty list

@@ -20,6 +20,8 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from pdftl.utils.pdf_resources import get_resources
+
 if TYPE_CHECKING:
     import pikepdf
 
@@ -317,7 +319,7 @@ def _scan_page_annotations(
     if annots is None:
         return
     logger.debug("[SCANNER] Found %d annotations on page", len(annots))
-    page_resources = page.get("/Resources")
+    page_resources = get_resources(page)
     for annot in annots:
         for stream_obj in _iter_annotation_appearance_streams(annot):
             scanner = _PageFontCodeScanner(codes_by_font_id, resolved)
@@ -332,7 +334,7 @@ def _scan_page_annotations(
 
 
 def _scan_page(page: Any, codes_by_font_id: dict[Any, set[int]], resolved: dict[Any, Any]) -> None:
-    resources = page.get("/Resources")
+    resources = get_resources(page)
     scanner = _PageFontCodeScanner(codes_by_font_id, resolved)
     _scan_stream(page, resources, scanner)
     _scan_page_annotations(page, codes_by_font_id, resolved)

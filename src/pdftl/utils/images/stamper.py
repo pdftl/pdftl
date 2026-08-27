@@ -90,7 +90,7 @@ def _get_page_geometry(
     """Safely extracts native CropBox coordinates and normalized rotation value."""
     box = page.cropbox
     cx1, cy1, cx2, cy2 = float(box[0]), float(box[1]), float(box[2]), float(box[3])
-    rotation = int(page.get("/Rotate", 0)) % 360
+    rotation = int(page.rotation) % 360
     return (cx1, cy1, cx2, cy2), rotation
 
 

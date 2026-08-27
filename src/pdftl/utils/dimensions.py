@@ -110,6 +110,6 @@ def get_visible_page_dimensions_or_raise(page, box, apply_rotate):
         rect = page.cropbox
     x0, y0, x1, y1 = float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])
     w, h = x1 - x0, y1 - y0
-    if apply_rotate and getattr(page, "Rotate", None) and (page.Rotate % 360) in (90, 270):
+    if apply_rotate and (page.rotation % 360) in (90, 270):
         return x0, y0, h, w
     return x0, y0, w, h

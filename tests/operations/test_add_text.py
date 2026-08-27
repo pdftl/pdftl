@@ -75,23 +75,23 @@ class TestAddTextLogic(unittest.TestCase):
         rect = [10, 20, 30, 40]
 
         # Line 381: Test 0 rotation
-        mock_page.get.return_value = 0
+        mock_page.rotation = 0
         self.assertEqual(_rotate_rect(rect, mock_page), [10, 20, 30, 40])
 
         # Line 392: Test 90 CW
-        mock_page.get.return_value = 90
+        mock_page.rotation = 90
         self.assertEqual(_rotate_rect(rect, mock_page), [460.0, 10.0, 480.0, 30.0])
 
         # Line 395: Test 180
-        mock_page.get.return_value = 180
+        mock_page.rotation = 180
         self.assertEqual(_rotate_rect(rect, mock_page), [470.0, 760.0, 490.0, 780.0])
 
         # Line 400: Test 270 CW
-        mock_page.get.return_value = 270
+        mock_page.rotation = 270
         self.assertEqual(_rotate_rect(rect, mock_page), [20.0, 770.0, 40.0, 790.0])
 
         # Line 402: Test non-standard rotation fallback (e.g., 45 degrees)
-        mock_page.get.return_value = 45
+        mock_page.rotation = 45
         self.assertEqual(_rotate_rect(rect, mock_page), [10, 20, 30, 40])
 
     def test_copy_annotations(self):

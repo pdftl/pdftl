@@ -21,6 +21,7 @@ from pdftl.operations.helpers.image_processor import (
 )
 from pdftl.operations.parsers.modify_images_parser import parse_modify_images_args
 from pdftl.utils.dependencies import ensure_dependencies
+from pdftl.utils.pdf_resources import get_resources
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
 
@@ -262,8 +263,9 @@ def _discover_target_images(pdf: Any, target_pages: list[int], total_pages: int)
             continue
         page = pdf.pages[p_num - 1]
 
-        if "/Resources" in page and "/XObject" in page["/Resources"]:
-            for name, xobj in page["/Resources"]["/XObject"].items():
+        resources = get_resources(page)
+        if resources is not None and "/XObject" in resources:
+            for name, xobj in resources["/XObject"].items():
                 if xobj.get("/Subtype") == "/Image":
                     images_to_process.append({"xobj": xobj, "name": str(name), "page_num": p_num})
     return images_to_process

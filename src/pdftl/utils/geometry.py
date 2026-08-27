@@ -204,7 +204,7 @@ def wrap_visual_matrix(page, visual_matrix: "Matrix") -> "Matrix | None":
     """
     from pdftl.utils.dimensions import get_visible_page_dimensions
 
-    rotation = int(page.get("/Rotate", 0)) % 360
+    rotation = int(page.rotation) % 360
 
     unrot_dims = get_visible_page_dimensions(page, apply_rotate=False)
     if unrot_dims is None:

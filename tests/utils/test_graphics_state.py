@@ -4,7 +4,58 @@
 
 import pytest
 
-from pdftl.utils.graphics_state import GraphicsState, GraphicsStateStack, ctm_scale
+from pdftl.utils.graphics_state import (
+    GraphicsState,
+    GraphicsStateStack,
+    ctm_scale,
+    multiply_matrices,
+)
+
+
+# ---------------------------------------------------------------------------
+# multiply_matrices
+# ---------------------------------------------------------------------------
+
+
+class TestMultiplyMatrices:
+    def test_identity_times_identity(self):
+        I = [1, 0, 0, 1, 0, 0]
+        assert multiply_matrices(I, I) == (1, 0, 0, 1, 0, 0)
+
+    def test_identity_times_arbitrary(self):
+        I = (1, 0, 0, 1, 0, 0)
+        m = (2, 3, 4, 5, 6, 7)
+        assert multiply_matrices(I, m) == m
+
+    def test_translation_composition(self):
+        t1 = [1, 0, 0, 1, 10, 20]
+        t2 = [1, 0, 0, 1, 5, 15]
+        result = multiply_matrices(t1, t2)
+        assert result == (1, 0, 0, 1, 15, 35)
+
+    def test_scale_composition(self):
+        s1 = [2, 0, 0, 3, 0, 0]
+        s2 = [4, 0, 0, 5, 0, 0]
+        result = multiply_matrices(s1, s2)
+        assert result == (8, 0, 0, 15, 0, 0)
+
+    def test_non_commutative(self):
+        m1 = (1, 2, 3, 4, 5, 6)
+        m2 = (7, 8, 9, 10, 11, 12)
+        assert multiply_matrices(m1, m2) != multiply_matrices(m2, m1)
+
+    def test_known_result(self):
+        m1 = (1, 2, 3, 4, 5, 6)
+        m2 = (7, 8, 9, 10, 11, 12)
+        result = multiply_matrices(m1, m2)
+        assert result == (
+            1 * 7 + 2 * 9,
+            1 * 8 + 2 * 10,
+            3 * 7 + 4 * 9,
+            3 * 8 + 4 * 10,
+            5 * 7 + 6 * 9 + 11,
+            5 * 8 + 6 * 10 + 12,
+        )
 
 
 # ---------------------------------------------------------------------------

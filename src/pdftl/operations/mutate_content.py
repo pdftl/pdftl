@@ -11,6 +11,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import MissingArgumentError
+from pdftl.utils.pdf_resources import get_resources
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -134,8 +135,9 @@ class ContentMutationEngine:
         mutated = self.mutate_func(instructions, context)
         page.Contents = self.pdf.make_stream(pikepdf.unparse_content_stream(mutated))
 
-        if "/Resources" in page:
-            self._process_resources(page.Resources)
+        resources = get_resources(page)
+        if resources is not None:
+            self._process_resources(resources)
 
     def _process_resources(self, resources):
         if "/XObject" not in resources:

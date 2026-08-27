@@ -323,7 +323,7 @@ def _generate_page_overlay(i, page, rules_for_page, static_context, drawer):
     physical_height = float(page_box.height)
 
     # Extract rotation safely (avoids the bound method bug)
-    rotation = int(page.get("/Rotate", 0)) % 360
+    rotation = int(page.rotation) % 360
 
     # Calculate visual dimensions
     if rotation in (90, 270):
@@ -359,7 +359,7 @@ def _rotate_rect(rect, page):
     Maps a rect from Visual Space (what the user sees)
     to Physical Space (the PDF dictionary).
     """
-    rotation = int(page.get("/Rotate", 0)) % 360
+    rotation = int(page.rotation) % 360
     if rotation == 0:
         return rect
 

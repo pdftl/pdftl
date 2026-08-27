@@ -32,6 +32,7 @@ from pdftl.info.read_info import (
     resolve_page_number,
 )
 from pdftl.utils.destinations import get_named_destinations
+from pdftl.utils.pikepdf_helpers import get_inheritable
 from pdftl.utils.string_utils import (
     pdf_num_to_string,
     pdf_rect_to_string,
@@ -80,7 +81,7 @@ def _get_docinfo(info, pdf_docinfo):
 def _get_page_info(info, i, page):
     import pikepdf
 
-    rotation = int(page.get("/Rotate", 0))
+    rotation = int(page.rotation)
 
     if info.page_media is None:
         info.page_media = []
@@ -90,7 +91,11 @@ def _get_page_info(info, i, page):
     }
     saved_boxes = {"media": None, "crop": None}
     for box, key in c.INFO_TO_PAGE_BOXES_MAP.items():
-        box_obj = getattr(page, key, None)
+        # `key` is the bare box name (e.g. "CropBox"); getattr(page, key, None)
+        # only ever sees the page's OWN dict, so a box inherited from a shared
+        # /Parent (very common for /MediaBox especially) is invisible here and
+        # silently dropped from dump_data's output. get_inheritable walks /Parent.
+        box_obj = get_inheritable(page, "/" + key)
         if not isinstance(box_obj, (pikepdf.Array, list)):
             continue
         _update_box_info_dict(page_media_dict, box, box_obj, saved_boxes)

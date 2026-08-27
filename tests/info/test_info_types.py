@@ -214,9 +214,20 @@ def test_get_info_mocked():
     mock_pdf.docinfo = {"/Title": "MockTitle"}
 
     # Mock Page Media
-    mock_pdf.pages[0].get.return_value = 0
+    def _page0_get(key, default=None):
+        if key == "/Parent":
+            return None
+        return 0
+
+    mock_pdf.pages[0].get.side_effect = _page0_get
     mock_pdf.pages[0].mediabox = [0, 0, 100, 100]
-    mock_pdf.pages[1].get.return_value = 90
+
+    def _page1_get(key, default=None):
+        if key == "/Parent":
+            return None
+        return 90
+
+    mock_pdf.pages[1].get.side_effect = _page1_get
     mock_pdf.pages[1].mediabox = [0, 0, 100, 100]
 
     # Mock PageLabels

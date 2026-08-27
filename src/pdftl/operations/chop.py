@@ -28,6 +28,7 @@ from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import OperationError
 from pdftl.operations.parsers.chop_parser import parse_chop_spec, parse_chop_specs_to_rules
+from pdftl.utils.pikepdf_helpers import get_inheritable
 
 _CHOP_LONG_DESC = """
 
@@ -235,7 +236,7 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
     raw_x0, raw_y0, raw_x1, raw_y1 = [float(x) for x in source_page.mediabox]
     raw_w = raw_x1 - raw_x0
     raw_h = raw_y1 - raw_y0
-    rotation = int(source_page.get("/Rotate", 0)) % 360
+    rotation = int(source_page.rotation) % 360
 
     # 2. Determine visual dimensions (what the user sees on screen)
     if rotation in (90, 270):
@@ -274,9 +275,15 @@ def _apply_chop_to_page(pdf: "Pdf", source_page, chop_spec_to_use):
         new_page.mediabox = pikepdf.Array([px0 + raw_x0, py0 + raw_y0, px1 + raw_x0, py1 + raw_y0])
 
         # 5. Clean up other bounding boxes so they don't hide the new MediaBox
+        # NOTE: "box in new_page" only checks the page's OWN dict; a box
+        # inherited from a shared /Parent won't be caught by that check but
+        # will still silently override/clip the freshly computed MediaBox.
+        # Use get_inheritable to also catch (and override) inherited boxes.
         for box in ("/CropBox", "/TrimBox", "/BleedBox", "/ArtBox"):
             if box in new_page:
                 del new_page[box]  # type: ignore
+            elif get_inheritable(new_page, box) is not None:
+                new_page[box] = new_page.mediabox
 
         # Note: We DO NOT delete new_page.Rotate and DO NOT inject a content transform!
         # The physical MediaBox and the native rotation flag handle everything gracefully.

@@ -23,6 +23,7 @@ from pdftl.utils.barcode_utils import generate_barcode
 from pdftl.utils.dimensions import dim_str_to_pts, get_visible_page_dimensions
 from pdftl.utils.text_templates import build_static_context, build_page_context
 from pdftl.operations.parsers.barcode_parser import parse_barcode_specs_to_rules
+from pdftl.utils.pdf_resources import unshare_resources_key, ensure_page_resources
 
 
 logger = logging.getLogger(__name__)
@@ -111,18 +112,16 @@ def _stamp_image_on_page(
 
     rect = pikepdf.Rectangle(phys_x, phys_y, phys_x + phys_w, phys_y + phys_h)
 
-    old_xobjs = (
-        set(page.Resources.XObject.keys())
-        if "/Resources" in page and "/XObject" in page.Resources
-        else set()
-    )
+    page_resources = ensure_page_resources(page)
+    xobjects = unshare_resources_key(page_resources, "/XObject")
+    old_xobjs = set(xobjects.keys())
 
     page.add_overlay(img_page, rect)
 
-    if ocg and "/Resources" in page and "/XObject" in page.Resources:
-        new_keys = set(page.Resources.XObject.keys()) - old_xobjs
+    if ocg:
+        new_keys = set(xobjects.keys()) - old_xobjs
         for key in new_keys:
-            page.Resources.XObject[key].OC = ocg
+            xobjects[key].OC = ocg
 
 
 def _get_preset_x(pos: str, page_width: float) -> float:
@@ -287,7 +286,7 @@ def barcode_pdf(input_pdf: "pikepdf.Pdf", operation_args: list[str]) -> OpResult
         # Pull raw bounding coordinates without native rotation applied, we will apply it
         dims = get_visible_page_dimensions(page, box="cropbox", apply_rotate=False)
         raw_dims = dims if dims is not None else (0.0, 0.0, *c.PAPERSIZES["letter"])
-        rotation = int(page.get("/Rotate", 0)) % 360
+        rotation = int(page.rotation) % 360
 
         page_context = build_page_context(static_context, page, page_idx + 1)
 

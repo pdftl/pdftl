@@ -591,7 +591,6 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from pypdf import PdfWriter
 from pyhanko.sign import fields
 from pyhanko.sign.signers import SimpleSigner
 
@@ -681,11 +680,10 @@ def cert_chain_and_signed_pdf(tmp_path: Path):
     signer_cert_path.write_bytes(signer_cert.public_bytes(serialization.Encoding.PEM))
 
     # 3. Create Blank PDF and Sign It
-    blank_pdf = tmp_path / "blank.pdf"
-    writer = PdfWriter()
-    writer.add_blank_page(width=100, height=100)
-    with open(blank_pdf, "wb") as f:
-        writer.write(f)
+    blank_pdf_path = tmp_path / "blank.pdf"
+    blank_pdf = pikepdf.new()
+    blank_pdf.add_blank_page(page_size=(100, 100))
+    blank_pdf.save(blank_pdf_path)
 
     signed_pdf = tmp_path / "signed.pdf"
     signer = SimpleSigner.load(
@@ -693,7 +691,7 @@ def cert_chain_and_signed_pdf(tmp_path: Path):
         cert_file=str(signer_cert_path),
     )
 
-    with open(blank_pdf, "rb") as inf:
+    with open(blank_pdf_path, "rb") as inf:
         w = IncrementalPdfFileWriter(inf)
         fields.append_signature_field(
             w, sig_field_spec=fields.SigFieldSpec(sig_field_name="Signature1")
@@ -728,3 +726,25 @@ def test_dump_signatures_trust_roots_validation(cert_chain_and_signed_pdf):
     assert trusted_data["is_trusted"] is True
     assert "Test Root CA" in str(trusted_data["chain_of_trust"])
     assert "Test Signer" in str(trusted_data["chain_of_trust"])
+
+
+def test_safe_validate_pdf_signature_active_event_loop():
+    """Covers lines 400-401 by invoking validation inside an active asyncio event loop."""
+    import asyncio
+    from unittest.mock import MagicMock, patch
+    from pdftl.operations.dump_signatures import _safe_validate_pdf_signature
+
+    mock_status = MagicMock()
+    mock_sig = MagicMock()
+    mock_vc = MagicMock()
+
+    async def _async_runner():
+        with patch(
+            "pyhanko.sign.validation.validate_pdf_signature", return_value=mock_status
+        ) as mock_val:
+            res = _safe_validate_pdf_signature(mock_sig, mock_vc)
+            mock_val.assert_called_once_with(mock_sig, signer_validation_context=mock_vc)
+            return res
+
+    result = asyncio.run(_async_runner())
+    assert result == mock_status

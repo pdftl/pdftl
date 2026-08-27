@@ -55,6 +55,7 @@ def test_barcode_pdf_handles_page_rotations(mock_create_layer, mock_stamp, mock_
     }.get(str(key), default)
     mock_page_0.mediabox = us_letter
     mock_page_0.cropbox = us_letter
+    mock_page_0.rotation = 0
 
     mock_page_90 = MagicMock(spec=pikepdf.Page)
     mock_page_90.get.side_effect = lambda key, default=None: {
@@ -64,6 +65,7 @@ def test_barcode_pdf_handles_page_rotations(mock_create_layer, mock_stamp, mock_
     }.get(str(key), default)
     mock_page_90.mediabox = us_letter
     mock_page_90.cropbox = us_letter
+    mock_page_90.rotation = 90
 
     mock_pdf = MagicMock(spec=pikepdf.Pdf)
     mock_pdf.pages = [mock_page_0, mock_page_90]
@@ -105,14 +107,16 @@ def test_stamp_image_on_page_real_objects():
     pdf.add_blank_page(page_size=(612, 792))
     page = pdf.pages[0]
 
+    # Pre-populate _image_cache to cover line 109 branch skip
+    pdf._image_cache = []
+
     # Create a dummy image
     img = Image.new("RGB", (50, 50), color="black")
 
     # Run the stamper (no OCG layer to test standard path)
     _stamp_image_on_page(pdf, page, img, phys_x=10.0, phys_y=10.0, phys_w=50.0, phys_h=50.0)
 
-    # Verify the image cache list was created and populated
-    assert hasattr(pdf, "_image_cache")
+    # Verify the image cache list was populated
     assert len(pdf._image_cache) == 1
 
     # Verify resources were added to the page
@@ -278,3 +282,64 @@ def test_stamp_image_with_ocg_layer():
     assert len(xobjects) > 0
     # Check that at least one XObject has the Optional Content (OC) key applied
     assert any("/OC" in xobj for xobj in xobjects.values())
+
+
+def test_stamp_barcode_page_with_no_resources_anywhere():
+    """Tests a page with no /Resources in its own dict and none inherited."""
+    from pikepdf import Name
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+
+    if Name.Resources in page.obj:
+        del page.obj[Name.Resources]
+    if Name.Resources in pdf.Root.Pages:
+        del pdf.Root.Pages[Name.Resources]
+
+    result = barcode_pdf(pdf, ["1!data!"])
+    assert result.success
+
+
+from unittest.mock import patch
+
+
+# --- 1. Argument Parsing (Lines 68, 75-76) ---
+
+
+# --- 2. The Core Stamping Function (Lines 94-122) ---
+
+
+# --- 3. Positioning and Anchors (Lines 128, 131-133, 140-144, 156-158) ---
+
+
+# --- 4. Empty Text, No Rules, & Exceptions (Lines 196, 205-206, 248-249, 281) ---
+
+
+# --- 5. Rotations 90, 180, and 270 (Lines 229-232, 234-237, 239-242) ---
+
+
+@patch("pdftl.operations.barcode._stamp_image_on_page")
+@patch("pdftl.operations.barcode.generate_barcode")
+def test_barcode_all_rotations_execution(mock_gen, mock_stamp):
+    """Hits lines 229-232, 234-237, and 239-242 by testing real page rotation values."""
+    mock_gen.return_value = Image.new("RGB", (10, 10))
+    us_letter = [0.0, 0.0, 612.0, 792.0]
+
+    def create_mock_page(rotate_angle):
+        mock_page = MagicMock(spec=pikepdf.Page)
+        mock_page.get.side_effect = lambda k, d=None: {"/Rotate": rotate_angle}.get(str(k), d)
+        mock_page.cropbox = us_letter
+        mock_page.mediabox = us_letter
+        mock_page.rotation = rotate_angle
+        return mock_page
+
+    pages = [create_mock_page(angle) for angle in (90, 180, 270)]
+    mock_pdf = MagicMock(spec=pikepdf.Pdf)
+    mock_pdf.pages = pages
+
+    barcode_pdf(mock_pdf, ["1-end!data!"])
+
+    assert mock_stamp.call_count == 3
+
+
+# --- 6. Image Modes and OCG Layers (Lines 97, 120-122) ---

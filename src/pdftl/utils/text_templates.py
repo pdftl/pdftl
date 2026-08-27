@@ -481,7 +481,7 @@ def build_page_context(
     if source_meta:
         ctx.update({k.lstrip("/"): v for k, v in source_meta.items()})
     else:
-        rotation = int(page.get("/Rotate", 0)) % 360
+        rotation = int(page.rotation) % 360
         box = page.trimbox
         phys_w = float(box[2] - box[0])
         phys_h = float(box[3] - box[1])

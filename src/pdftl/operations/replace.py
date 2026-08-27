@@ -20,6 +20,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.normalize import get_normalized_page_content_stream, normalize_page_content_stream
+from pdftl.utils.pdf_resources import get_resources
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_escaped
 
@@ -165,8 +166,9 @@ class RegexReplaceContentStream:
         """Apply the replacement"""
         page = self.pdf.pages[page_num - 1]
         self._apply_to_stream(page, is_page=True)
-        if self.recurse and "/Resources" in page:
-            self._recurse_resources(page.Resources)
+        resources = get_resources(page)
+        if self.recurse and resources is not None:
+            self._recurse_resources(resources)
 
     def _extract_bytes(self, container, is_page: bool) -> bytes | None:
         """Safely extract raw content stream bytes, handling layouts and normalization

@@ -14,6 +14,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.pikepdf_helpers import get_inheritable
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +191,8 @@ def _process_resources(resources, params, modified_objects) -> None:
     for _, obj in list(resources.XObject.items()):
         subtype = obj.get(Name.Subtype)
 
+        # Form XObjects inherit from the enclosing stream scope, not via /Parent keys
+        # so get_inheritable is not required here
         if subtype == Name.Form and Name.Resources in obj:
             _process_resources(obj.Resources, params, modified_objects)
         elif subtype == Name.Image:
@@ -262,8 +265,9 @@ def _delete_images_from_pages(selector, pdf, params, modified_objects, pikepdf):
     target_pages = page_numbers_matching_page_spec(selector, len(pdf.pages))
     for p_num in target_pages:
         page = pdf.pages[p_num - 1]
-        if pikepdf.Name.Resources in page:
-            _process_resources(page.Resources, params, modified_objects)
+        resources = get_inheritable(page, "/Resources")
+        if resources is not None:
+            _process_resources(resources, params, modified_objects)
 
 
 def _get_params(params_str):

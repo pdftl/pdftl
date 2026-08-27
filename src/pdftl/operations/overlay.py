@@ -15,6 +15,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import OperationError, MissingArgumentError
 from pdftl.utils.io_helpers import smart_pikepdf_open
 from pdftl.utils.ocg import create_layer
+from pdftl.utils.pdf_resources import unshare_resources_key, ensure_page_resources
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 if TYPE_CHECKING:
@@ -233,24 +234,22 @@ def _process_page(i, base_page, overlay_pdf, pikepdf, scale_to_fit, on_top, mult
     overlay_page = overlay_pdf.pages[overlay_idx]
 
     rect = (
-        pikepdf.Rectangle(*map(float, base_page.trimbox or base_page.MediaBox))
+        pikepdf.Rectangle(*map(float, base_page.trimbox or base_page.mediabox))
         if scale_to_fit
         else None
     )
 
     # Diff-and-Patch Logic
-    old_xobjs = (
-        set(base_page.Resources.XObject.keys())
-        if "/Resources" in base_page and "/XObject" in base_page.Resources
-        else set()
-    )
+    page_resources = ensure_page_resources(base_page)
+    xobjects = unshare_resources_key(page_resources, "/XObject")
+    old_xobjs = set(xobjects.keys())
 
     if on_top:
         base_page.add_overlay(overlay_page, rect=rect)
     else:
         base_page.add_underlay(overlay_page, rect=rect)
 
-    if ocg and "/Resources" in base_page and "/XObject" in base_page.Resources:
-        new_keys = set(base_page.Resources.XObject.keys()) - old_xobjs
+    if ocg:
+        new_keys = set(xobjects.keys()) - old_xobjs
         for key in new_keys:
-            base_page.Resources.XObject[key].OC = ocg
+            xobjects[key].OC = ocg

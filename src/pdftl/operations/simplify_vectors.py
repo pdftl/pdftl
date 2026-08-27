@@ -33,6 +33,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.path_geometry import simplify_path
 from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig
+from pdftl.utils.pdf_resources import get_resources
 from pdftl.utils.path_segmentation import segment, serialize
 
 logger = logging.getLogger(__name__)
@@ -314,8 +315,9 @@ class _StreamProcessor:
         self._process_stream(stream)
         self._processed.add(stream.objgen)
 
-        if "/Resources" in page:
-            self._recurse_resources(page.Resources)
+        resources = get_resources(page)
+        if resources is not None:
+            self._recurse_resources(resources)
 
     # -- stream processing --
 

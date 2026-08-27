@@ -218,7 +218,7 @@ def test_build_page_context_fallback():
     if hasattr(mock_page, c.PDFTL_SOURCE_INFO_KEY):
         delattr(mock_page, c.PDFTL_SOURCE_INFO_KEY)
 
-    mock_page.get.return_value = 90  # 90 degrees rotation
+    mock_page.rotation = 90  # 90 degrees rotation
     mock_page.trimbox = [0, 0, 500, 800]  # Width: 500, Height: 800
 
     page_ctx = build_page_context(static_ctx, mock_page, page_num=3)
