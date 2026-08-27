@@ -75,6 +75,7 @@ HARDCODED_KEYWORDS = {
     "import_streams",
     "inject",
     "insert",
+    "link_urls",
     "modify_annots",
     "modify_images",
     "modify_layers",

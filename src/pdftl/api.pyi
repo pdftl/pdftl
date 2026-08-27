@@ -274,6 +274,7 @@ def dump_layers(
 def dump_signatures(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     password: Optional[str] = ...,
+    operation_args: Optional[List[str]] = ...,
     output: Optional[str] = ...,
     run_cli_hook: bool = False,
     full_result: bool = False,
@@ -402,6 +403,13 @@ def inject(
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
 def insert(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def link_urls(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
     run_cli_hook: bool = False,
