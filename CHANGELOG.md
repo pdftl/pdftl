@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `redact`: attempt to verify redaction success when `verify=true` is passed
 
+- Custom CA certificate support added to `dump_signatures` via new `trust_roots` option,
+  for deterministic trust chain verification.
+
 ### Changed
 
 - `redact` now redacts entire matches by default. Capturing groups `(...)` no longer narrow

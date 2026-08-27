@@ -8,12 +8,14 @@
 
 import io
 import logging
+
 import re
+from pathlib import Path
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.exceptions import OperationError
+from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.io_helpers import smart_open
 
@@ -35,7 +37,7 @@ engines.
 * `SignatureIntegrity`: VALID or INVALID.
   Requires both that the document bytes are untouched since signing (digest match), and that
   the cryptographic signature verifies against the embedded certificate's public key.
-* `SignerTrusted`: True or False (whether the certificate is trusted).
+* `SignerTrusted`: True or False (whether the certificate is trusted against provided trust roots).
 * `TrustProblem`: Detailed reason if the signer is untrusted.
 * `SignatureCoverage`: ENTIRE_FILE, REVISION_ONLY, or PARTIAL.
 * `SignatureModificationLevel`: NONE, FORM_FILLING, or SUSPICIOUS.
@@ -151,9 +153,7 @@ def _print_signature_stanza(sig_data, out):
 
     # Mathematical Integrity: both the byte-range digest must match (intact)
     # AND the PKCS#1 signature must cryptographically verify against the
-    # embedded certificate's public key (valid). "intact" alone only proves
-    # the document wasn't altered after signing -- it does NOT prove the
-    # signature was produced by the claimed key/cert pair.
+    # embedded certificate's public key (valid).
     integrity = (
         "VALID" if sig_data.get("is_intact") and sig_data.get("is_signature_valid") else "INVALID"
     )
@@ -208,6 +208,32 @@ def dump_signatures_cli_hook(result: OpResult, stage, _pipeline):
                 print("---", file=out)
 
 
+def _parse_operation_args(operation_args) -> list[str]:
+    """Parse trust_roots from CLI positional operation_args."""
+    if not operation_args:
+        return []
+
+    trust_roots = []
+    i = 0
+    while i < len(operation_args):
+        arg = operation_args[i]
+        if arg == "trust_roots":
+            i += 1
+            found = False
+            while i < len(operation_args):
+                trust_roots.append(operation_args[i])
+                found = True
+                i += 1
+            if not found:
+                raise InvalidArgumentError(
+                    "`trust_roots` option requires at least one certificate file path"
+                )
+        else:
+            raise InvalidArgumentError(f"Unrecognized argument '{arg}' for dump_signatures")
+        i += 1
+    return trust_roots
+
+
 @register_operation(
     "dump_signatures",
     tags=["info", "security", "signatures"],
@@ -215,14 +241,26 @@ def dump_signatures_cli_hook(result: OpResult, stage, _pipeline):
     type="single input operation",
     desc="List and validate digital signatures",
     long_desc=_DUMP_SIGNATURES_LONG_DESC,
-    usage="<input> dump_signatures [output <output>]",
-    # Pass filename and password to bypass pikepdf object modifications
-    args=([c.INPUT_FILENAME, c.INPUT_PDF, c.INPUT_PASSWORD], {"output_file": c.OUTPUT}),
+    usage="<input> dump_signatures [output <output>] [trust_roots <file...>]",
+    args=(
+        [c.INPUT_FILENAME, c.INPUT_PDF, c.INPUT_PASSWORD, c.OPERATION_ARGS],
+        {"output_file": c.OUTPUT},
+    ),
 )
-def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None) -> OpResult:
+def dump_signatures(
+    pdf_filename,
+    pdf,
+    pdf_password,
+    operation_args=None,
+    output_file=None,
+    trust_roots=None,
+) -> OpResult:
     """
     Validate PDF signatures and returns a list of validation results.
     """
+    if trust_roots is None and operation_args:
+        trust_roots = _parse_operation_args(operation_args)
+
     _patch_pyhanko()
     ph_logger = logging.getLogger("pyhanko")
     cv_logger = logging.getLogger("pyhanko_certvalidator")
@@ -231,7 +269,9 @@ def dump_signatures(pdf_filename, pdf, pdf_password, output_file=None) -> OpResu
     cv_logger.setLevel(logging.CRITICAL)
 
     try:
-        signatures_data = _validate_signatures_worker(pdf_filename, pdf, pdf_password)
+        signatures_data = _validate_signatures_worker(
+            pdf_filename, pdf, pdf_password, trust_roots=trust_roots
+        )
         return OpResult(success=True, data=signatures_data, meta={c.META_OUTPUT_FILE: output_file})
     finally:
         ph_logger.setLevel(prev_ph)
@@ -301,7 +341,52 @@ def _extract_signature_info(sig, status) -> dict:
     }
 
 
-def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
+def _load_cert_from_path(cert_path):
+    from pyhanko.keys import load_certs_from_pemder
+
+    try:
+        certs = list(load_certs_from_pemder([cert_path]))
+        if not certs:
+            raise InvalidArgumentError(
+                f"No valid certificates found in trust root file '{cert_path}'"
+            )
+        return certs
+    except InvalidArgumentError:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
+        raise InvalidArgumentError(
+            f"Failed to load trust root certificate '{cert_path}': {e}"
+        ) from e
+
+
+def _load_vc_trust_roots(trust_roots):
+    if not trust_roots:
+        return []
+
+    if isinstance(trust_roots, (str, Path)):
+        trust_roots = [trust_roots]
+
+    vc_trust_roots = []
+    for item in trust_roots:
+        if isinstance(item, (str, Path)):
+            vc_trust_roots.extend(_load_cert_from_path(item))
+        else:
+            vc_trust_roots.append(item)
+
+    return vc_trust_roots
+
+
+def _get_pdf_source_bytes(pdf_filename, pdf):
+    if pdf_filename != "_":
+        with open(pdf_filename, "rb") as f:
+            return f.read()
+
+    buf = io.BytesIO()
+    pdf.save(buf)
+    return buf.getvalue()
+
+
+def _validate_signatures_worker(pdf_filename, pdf, pdf_password, trust_roots=None):
     ensure_dependencies(
         feature_name="validate_signatures",
         dependencies={"pyhanko": "pyhanko"},
@@ -310,15 +395,12 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
     from pyhanko.pdf_utils.reader import PdfFileReader
     from pyhanko.sign.validation import validate_pdf_signature
     from pyhanko.sign.validation.errors import SignatureValidationError
+    from pyhanko_certvalidator import ValidationContext
 
-    if pdf_filename != "_":
-        with open(pdf_filename, "rb") as f:
-            source_bytes = f.read()
-    else:
-        buf = io.BytesIO()
-        pdf.save(buf)
-        source_bytes = buf.getvalue()
+    vc_trust_roots = _load_vc_trust_roots(trust_roots)
+    vc = ValidationContext(trust_roots=vc_trust_roots, allow_fetching=False)
 
+    source_bytes = _get_pdf_source_bytes(pdf_filename, pdf)
     reader = PdfFileReader(io.BytesIO(source_bytes))
 
     if reader.encrypted:
@@ -329,7 +411,7 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password):
 
     for sig in reader.embedded_signatures:
         try:
-            status = validate_pdf_signature(sig)
+            status = validate_pdf_signature(sig, signer_validation_context=vc)
         except (SignatureValidationError, ValueError) as e:
             raise OperationError(f"[dump_signatures] {e}") from e
 
