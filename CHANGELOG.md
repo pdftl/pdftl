@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom CA certificate support added to `dump_signatures` via new `trust_roots` option,
   for deterministic trust chain verification.
 
+- Friendly error handling when input and output filenames agree
+
 ### Changed
 
 - `redact` now redacts entire matches by default. Capturing groups `(...)` no longer narrow

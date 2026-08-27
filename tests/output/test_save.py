@@ -1083,3 +1083,60 @@ def test_save_content_os_error_raises_pdftl_output_error():
             match="While saving content, got Mocked disk full or permission error",
         ):
             save_content("dummy_content", "dummy_path.pdf", None)
+
+
+def test_save_pdf_cannot_overwrite_input_error(mock_pdf, mock_input_context):
+    """Test catching pikepdf overwrite ValueError and raising PdftlOutputError."""
+    from pdftl.exceptions import PdftlOutputError
+
+    mock_pdf.save.side_effect = ValueError(
+        "Cannot overwrite input file. Open the file with pikepdf.open(...)"
+    )
+    with pytest.raises(
+        PdftlOutputError, match="Cannot overwrite input file '/tmp/c0.pdf' directly"
+    ):
+        save_pdf(mock_pdf, "/tmp/c0.pdf", mock_input_context)
+
+
+# ---------------------------------------------------------
+# Fix for missing /AcroForm and /XFA branches
+# ---------------------------------------------------------
+
+
+def test_drop_xfa_no_acroform():
+    """Evaluates drop_xfa when the PDF has no /AcroForm."""
+    pdf_mock = MagicMock()
+    pdf_mock.Root = {}
+
+    # Should complete without error
+    _action_drop_flags(pdf_mock, {"drop_xfa": True})
+
+
+def test_drop_xfa_no_xfa_in_acroform():
+    """Evaluates drop_xfa when the PDF has /AcroForm but no /XFA."""
+    pdf_mock = MagicMock()
+    pdf_mock.Root = {"/AcroForm": {}}
+
+    # Should complete without error
+    _action_drop_flags(pdf_mock, {"drop_xfa": True})
+
+
+# ---------------------------------------------------------
+# Fix for generic ValueError re-raise
+# ---------------------------------------------------------
+
+
+def test_save_pdf_raises_other_valueerror():
+    """Evaluates the fallback raise when a different ValueError occurs."""
+    pdf_mock = MagicMock()
+    pdf_mock.save.side_effect = ValueError("An unrelated value error occurred")
+
+    input_context_mock = MagicMock()
+
+    with pytest.raises(ValueError, match="An unrelated value error occurred"):
+        save_pdf(
+            pdf=pdf_mock,
+            output_filename="output.pdf",
+            input_context=input_context_mock,
+            options={},
+        )

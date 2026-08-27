@@ -472,18 +472,23 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     logger.debug("Save options for pikepdf: %s", save_opts)
 
     is_signing = any(k.startswith("sign_") for k in options)
-    if is_signing:
-        if output_filename == "-":
-            raise NotImplementedError("Signing and saving to stdout is not yet implemented")
-        sign_cfg = parse_sign_options(options, input_context)
-        save_and_sign(pdf, sign_cfg, save_opts, output_filename)
-    else:
-        if output_filename == "-":
-            save_to_stdout(pdf, save_opts)
-
+    try:
+        if is_signing:
+            if output_filename == "-":
+                raise NotImplementedError("Signing and saving to stdout is not yet implemented")
+            sign_cfg = parse_sign_options(options, input_context)
+            save_and_sign(pdf, sign_cfg, save_opts, output_filename)
         else:
-            pdf.save(output_filename, **save_opts)
-            # pikepdf_save_with_transient_status(pdf, output_filename, save_opts)
+            if output_filename == "-":
+                save_to_stdout(pdf, save_opts)
+            else:
+                pdf.save(output_filename, **save_opts)
+    except ValueError as exc:
+        if "Cannot overwrite input file" in str(exc):
+            raise PdftlOutputError(
+                f"Cannot overwrite input file '{output_filename}' directly."
+            ) from exc
+        raise
 
 
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
