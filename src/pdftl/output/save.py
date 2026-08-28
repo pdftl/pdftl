@@ -23,6 +23,56 @@ from pdftl.output.sign import parse_sign_options, save_and_sign
 
 logger = logging.getLogger(__name__)
 
+
+def _iter_form_fields(fields):
+    """Recursively walks an /AcroForm /Fields array (or a /Kids array
+    within it), yielding every field dictionary encountered -- a signed
+    /Sig field can sit at any depth via /Kids, same as any other field
+    hierarchy."""
+    for field in fields:
+        yield field
+        kids = field.get("/Kids") if hasattr(field, "get") else None
+        if kids is not None:
+            yield from _iter_form_fields(kids)
+
+
+def has_live_signatures(pdf) -> bool:
+    """Whether `pdf` has at least one AcroForm field that is an actually-
+    SIGNED /Sig field (/FT == /Sig with a real /V signature dictionary,
+    not merely an unsigned placeholder field).
+
+    save_pdf always performs a full rewrite via pikepdf's normal save
+    path -- there is no incremental, append-only save mode that would
+    leave an existing signature's covered byte range untouched. A full
+    rewrite invalidates any existing signature regardless of what else
+    changed, even a save that never touches the signature field itself.
+    This function can't prevent that; it only lets the caller warn
+    before it happens, rather than let it happen silently.
+    """
+    import pikepdf
+
+    try:
+        acro_form = pdf.Root.get("/AcroForm") if hasattr(pdf.Root, "get") else None
+    except (pikepdf.PdfError, AttributeError):
+        return False
+    if acro_form is None or "/Fields" not in acro_form:
+        return False
+
+    for field in _iter_form_fields(acro_form["/Fields"]):
+        try:
+            if str(field.get("/FT", "")) != "/Sig":
+                continue
+            value = field.get("/V")
+        except (pikepdf.PdfError, AttributeError):
+            continue
+        # A dictionary /V is a real signature object (/Type /Sig with
+        # /Contents, /ByteRange, etc.) -- an unsigned field either has
+        # no /V at all, or (rarely) a non-dict placeholder.
+        if value is not None and hasattr(value, "get"):
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Register options for PDF output
 # ---------------------------------------------------------------------------
@@ -427,6 +477,54 @@ def _action_drop_flags(pdf, options):
                 del acro_form["/XFA"]
 
 
+def _apply_need_appearances(pdf, options):
+    """Sets the /NeedAppearances flag on /AcroForm if requested, logging
+    a warning (rather than raising) if the AcroForm can't be accessed."""
+    if not options.get("need_appearances"):
+        return
+    import pikepdf
+
+    try:
+        pdf.Root.AcroForm[pikepdf.Name.NeedAppearances] = True
+    except AttributeError as e:
+        logger.warning("Problem setting need_appearances: %s %s", e.__class__.__name__, e)
+
+
+def _warn_if_live_signatures_will_be_invalidated(pdf, is_signing):
+    """Logs a warning if `pdf` has live signatures that this save will
+    invalidate (see has_live_signatures' docstring for why). Never
+    blocks the save -- only informs the caller."""
+    if is_signing or not has_live_signatures(pdf):
+        return
+    logger.warning(
+        "This document has one or more digital signatures. Saving "
+        "will invalidate them, since pdftl always performs a full "
+        "rewrite rather than an incremental append-only save."
+    )
+
+
+def _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing):
+    """Performs the actual write: signing, stdout, or a normal file save.
+    Wraps pikepdf's 'cannot overwrite input file' ValueError in a
+    friendlier PdftlOutputError; re-raises any other ValueError as-is."""
+    try:
+        if is_signing:
+            if output_filename == "-":
+                raise NotImplementedError("Signing and saving to stdout is not yet implemented")
+            sign_cfg = parse_sign_options(options, input_context)
+            save_and_sign(pdf, sign_cfg, save_opts, output_filename)
+        elif output_filename == "-":
+            save_to_stdout(pdf, save_opts)
+        else:
+            pdf.save(output_filename, **save_opts)
+    except ValueError as exc:
+        if "Cannot overwrite input file" in str(exc):
+            raise PdftlOutputError(
+                f"Cannot overwrite input file '{output_filename}' directly."
+            ) from exc
+        raise
+
+
 def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None):
     """
     Saves a PDF with various options like encryption, compression, and attachments.
@@ -451,13 +549,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         # pdf.flatten_annotations()
         pdf = flatten_pdf(pdf)
 
-    if options.get("need_appearances"):
-        import pikepdf
-
-        try:
-            pdf.Root.AcroForm[pikepdf.Name.NeedAppearances] = True
-        except AttributeError as e:
-            logger.warning("Problem setting need_appearances: %s %s", e.__class__.__name__, e)
+    _apply_need_appearances(pdf, options)
 
     # https://pikepdf.readthedocs.io/en/latest/api/main.html#pikepdf.Pdf.remove_unreferenced_resources
     # this is slow on big files, and the docs say something about auto
@@ -472,23 +564,8 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     logger.debug("Save options for pikepdf: %s", save_opts)
 
     is_signing = any(k.startswith("sign_") for k in options)
-    try:
-        if is_signing:
-            if output_filename == "-":
-                raise NotImplementedError("Signing and saving to stdout is not yet implemented")
-            sign_cfg = parse_sign_options(options, input_context)
-            save_and_sign(pdf, sign_cfg, save_opts, output_filename)
-        else:
-            if output_filename == "-":
-                save_to_stdout(pdf, save_opts)
-            else:
-                pdf.save(output_filename, **save_opts)
-    except ValueError as exc:
-        if "Cannot overwrite input file" in str(exc):
-            raise PdftlOutputError(
-                f"Cannot overwrite input file '{output_filename}' directly."
-            ) from exc
-        raise
+    _warn_if_live_signatures_will_be_invalidated(pdf, is_signing)
+    _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing)
 
 
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):

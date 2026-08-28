@@ -9,6 +9,7 @@ from pdftl.core.constants import PDFTL_SOURCE_INFO_KEY
 from pdftl.exceptions import InvalidArgumentError, MissingArgumentError
 from pdftl.output import save as save_module
 from pdftl.output.save import (
+    _iter_form_fields,
     _action_drop_flags,
     _allow_option,
     _build_encryption_object,
@@ -21,6 +22,7 @@ from pdftl.output.save import (
     _get_passwords_from_options,
     _keep_id_options,
     _linearize_option,
+    has_live_signatures,
     _need_appearances_option,
     _output_option,
     _owner_pw_option,
@@ -1140,3 +1142,139 @@ def test_save_pdf_raises_other_valueerror():
             input_context=input_context_mock,
             options={},
         )
+
+
+# ---------------------------------------------------------------------------
+# _iter_form_fields / has_live_signatures
+# ---------------------------------------------------------------------------
+
+
+def test_iter_form_fields_flat():
+    """A flat list of fields with no /Kids yields each field once."""
+    fields = [{"name": "a"}, {"name": "b"}]
+    result = list(_iter_form_fields(fields))
+    assert result == fields
+
+
+def test_iter_form_fields_recurses_into_kids():
+    """A field with /Kids yields itself, then recurses into the kids
+    (covering the nested-hierarchy 'yield from' branch)."""
+    grandchild = {"name": "grandchild"}
+    child = {"name": "child", "/Kids": [grandchild]}
+    root = {"name": "root", "/Kids": [child]}
+
+    result = list(_iter_form_fields([root]))
+    assert result == [root, child, grandchild]
+
+
+def test_iter_form_fields_field_without_get_method():
+    """A field with no .get method at all (e.g. a plain int/str) must
+    still be yielded, just without recursion attempted on it."""
+    result = list(_iter_form_fields(["not_a_dict"]))
+    assert result == ["not_a_dict"]
+
+
+def test_has_live_signatures_no_acroform():
+    """No /AcroForm on the Root -> False, no crash."""
+    pdf = MagicMock()
+    pdf.Root = {}
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_acroform_get_raises():
+    """pdf.Root.get raising PdfError/AttributeError is caught -> False."""
+    pdf = MagicMock()
+    pdf.Root.get.side_effect = AttributeError("boom")
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_acroform_none():
+    """/AcroForm present but resolves to None -> False."""
+    pdf = MagicMock()
+    pdf.Root.get.return_value = None
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_no_fields_key():
+    """/AcroForm present but has no /Fields -> False."""
+    pdf = MagicMock()
+    pdf.Root.get.return_value = {}
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_field_get_raises_continues():
+    """A field whose .get('/FT', ...) call raises PdfError/AttributeError
+    (but whose /Kids lookup succeeds normally) is skipped via `continue`,
+    not fatal to the overall scan."""
+    import pikepdf
+
+    class BrokenField:
+        def get(self, *a, **kw):
+            if a and a[0] == "/Kids":
+                return None
+            raise pikepdf.PdfError("broken field")
+
+    pdf = MagicMock()
+    pdf.Root.get.return_value = {"/Fields": [BrokenField()]}
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_non_sig_field_skipped():
+    """A field whose /FT is not /Sig is skipped (continue)."""
+    pdf = MagicMock()
+    field = {"/FT": "/Tx"}
+    pdf.Root.get.return_value = {"/Fields": [field]}
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_sig_field_no_value():
+    """A /Sig field with no /V (unsigned placeholder) -> False."""
+    pdf = MagicMock()
+    field = {"/FT": "/Sig"}
+    pdf.Root.get.return_value = {"/Fields": [field]}
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_sig_field_non_dict_value():
+    """A /Sig field whose /V is present but not dict-like (no .get)
+    is treated as an unsigned placeholder, not a real signature."""
+    pdf = MagicMock()
+    field = {"/FT": "/Sig", "/V": "not_a_dict"}
+    pdf.Root.get.return_value = {"/Fields": [field]}
+    assert has_live_signatures(pdf) is False
+
+
+def test_has_live_signatures_true_for_real_signature():
+    """A /Sig field with a dict-like /V (a real signature dict) -> True."""
+    pdf = MagicMock()
+    field = {"/FT": "/Sig", "/V": {"/Type": "/Sig", "/Contents": b"..."}}
+    pdf.Root.get.return_value = {"/Fields": [field]}
+    assert has_live_signatures(pdf) is True
+
+
+def test_has_live_signatures_nested_via_kids():
+    """A signed /Sig field nested under /Kids is still found."""
+    pdf = MagicMock()
+    signed_kid = {"/FT": "/Sig", "/V": {"/Type": "/Sig"}}
+    parent = {"name": "group", "/Kids": [signed_kid]}
+    pdf.Root.get.return_value = {"/Fields": [parent]}
+    assert has_live_signatures(pdf) is True
+
+
+# ---------------------------------------------------------------------------
+# save_pdf: live-signature warning branch
+# ---------------------------------------------------------------------------
+
+
+def test_save_pdf_warns_on_live_signatures_when_not_signing(mock_pdf, mock_input_context, caplog):
+    """When not signing and the document has live signatures, save_pdf
+    logs a warning (rather than blocking the save) before proceeding."""
+    with (
+        patch("pdftl.output.save.has_live_signatures", return_value=True),
+        patch("pdftl.output.save._build_save_options", return_value={}),
+        caplog.at_level(logging.WARNING),
+    ):
+        save_pdf(mock_pdf, "out.pdf", mock_input_context, options={})
+
+    assert any("will invalidate them" in record.message for record in caplog.records)
+    mock_pdf.save.assert_called_once()

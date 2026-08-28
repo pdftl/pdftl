@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `redact` now redacts entire matches by default. Capturing groups `(...)` no longer narrow
   the target unless `redact*`-named groups are explicitly used `(?P<redact_foo>...)`.
 
+- A warning is issued when saving will invalidate a signature
+
 ### Fixed
 
 - `excise` and `redact` now remove annotations whose rectangle cannot be determined
