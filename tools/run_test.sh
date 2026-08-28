@@ -11,7 +11,7 @@ fi
 
 TEST_PATHS=()
 COV_ARGS=()
-EXTRA_ARGS=(-rf)
+EXTRA_ARGS=(-rfEs)
 
 cd "${PROJECT_BASE:-$(cat "${HOME}/.config/run_test/base.txt")}"
 
