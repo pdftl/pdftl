@@ -9,13 +9,39 @@ import pikepdf
 from pdftl.utils.pdf_resources import (
     _next_xobject_match,
     _iter_appearance_streams,
+    unshare_resources_key,
     find_resource_recursive,
     get_all_fonts_recursive,
     walk_content_streams,
+    walk_content_streams_deduped,
     StreamContext,
     ensure_page_resources,
     _yield_immediate_fonts,
 )
+
+
+class TestUnshareResourcesKey:
+    """Tests for unshare_resources_key's create-vs-copy branches."""
+
+    def test_creates_empty_dict_when_key_absent(self):
+        """Test the key-not-present branch creates a fresh empty Dictionary."""
+        resources = pikepdf.Dictionary({})
+        result = unshare_resources_key(resources, "/XObject")
+
+        assert "/XObject" in resources
+        assert isinstance(result, pikepdf.Dictionary)
+        assert len(result.keys()) == 0
+
+    def test_copies_existing_dict_when_key_present(self):
+        """Test the key-present branch forks a private copy rather than
+        aliasing the original shared dictionary."""
+        shared = pikepdf.Dictionary({"/F1": pikepdf.Dictionary({"/Type": "/Font"})})
+        resources = pikepdf.Dictionary({"/Font": shared})
+
+        result = unshare_resources_key(resources, "/Font")
+
+        assert "/F1" in result
+        assert result is not shared
 
 
 class TestPdfResources:
@@ -966,6 +992,114 @@ class TestWalkContentStreams:
 
         results = list(walk_content_streams(doc))
         assert len([r for r in results if r[1].kind == "annotation"]) == 1
+
+
+class TestWalkContentStreamsDeduped:
+    """Tests for the walk_content_streams_deduped cross-call dedup wrapper."""
+
+    def _make_form(self, doc, content=b"", resources=None):
+        form = doc.make_stream(content)
+        form.Subtype = pikepdf.Name("/Form")
+        if resources is not None:
+            form.Resources = resources
+        return form
+
+    def test_fresh_seen_set_matches_undeduped_walk(self):
+        """Test that with an empty `seen` set, results match a plain
+        walk_content_streams call one-for-one (no cross-call state yet)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page content")
+
+        form = self._make_form(doc, b"form content")
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/F1": form})}
+        )
+
+        plain = list(walk_content_streams(doc))
+        deduped = list(walk_content_streams_deduped(doc, None, set()))
+
+        assert [ctx.kind for _, ctx in deduped] == [ctx.kind for _, ctx in plain]
+
+    def test_seen_set_populated_after_call(self):
+        """Test every yielded stream's objgen ends up in `seen`."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page content")
+
+        form = self._make_form(doc, b"form content")
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/F1": form})}
+        )
+
+        seen = set()
+        results = list(walk_content_streams_deduped(doc, None, seen))
+
+        assert seen == {stream.objgen for stream, _ in results}
+
+    def test_preseeded_objgen_is_skipped(self):
+        """Test a stream whose objgen is already in `seen` before the call
+        is never yielded, simulating a shared Form already processed on a
+        prior page."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page content")
+
+        form = self._make_form(doc, b"form content")
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/F1": form})}
+        )
+
+        seen = {form.objgen}
+        results = list(walk_content_streams_deduped(doc, None, seen))
+
+        assert [ctx.kind for _, ctx in results] == ["page"]
+
+    def test_shared_form_across_two_pages_yielded_once(self):
+        """Test the primary use case: a Form XObject shared by two pages is
+        only yielded on the first page when the same `seen` set is reused
+        across two separate calls (one per page)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page1 content")
+        doc.pages[1].Contents = doc.make_stream(b"page2 content")
+
+        shared_form = self._make_form(doc, b"shared form content")
+        shared_resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/F1": shared_form})}
+        )
+        doc.pages[0].Resources = shared_resources
+        doc.pages[1].Resources = shared_resources
+
+        seen = set()
+        page1_results = list(walk_content_streams_deduped(doc, [1], seen))
+        page2_results = list(walk_content_streams_deduped(doc, [2], seen))
+
+        assert len([r for r in page1_results if r[1].kind == "form"]) == 1
+        assert len([r for r in page2_results if r[1].kind == "form"]) == 0
+        assert [ctx.kind for _, ctx in page2_results] == ["page"]
+
+    def test_independent_seen_sets_do_not_interfere(self):
+        """Test two separate `seen` sets passed to two separate calls don't
+        leak state into each other (sanity check that dedup state lives in
+        the caller-supplied set, not anywhere global)."""
+        doc = pikepdf.Pdf.new()
+        doc.add_blank_page()
+        doc.pages[0].Contents = doc.make_stream(b"page content")
+
+        form = self._make_form(doc, b"form content")
+        doc.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/F1": form})}
+        )
+
+        seen_a = set()
+        seen_b = set()
+        results_a = list(walk_content_streams_deduped(doc, [1], seen_a))
+        results_b = list(walk_content_streams_deduped(doc, [1], seen_b))
+
+        assert len([r for r in results_a if r[1].kind == "form"]) == 1
+        assert len([r for r in results_b if r[1].kind == "form"]) == 1
 
 
 def test_ensure_page_resources_creates_empty_dict():

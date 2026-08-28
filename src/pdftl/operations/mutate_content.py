@@ -11,7 +11,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import MissingArgumentError
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.pdf_resources import walk_content_streams_deduped
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -135,34 +135,27 @@ class ContentMutationEngine:
         mutated = self.mutate_func(instructions, context)
         page.Contents = self.pdf.make_stream(pikepdf.unparse_content_stream(mutated))
 
-        resources = get_resources(page)
-        if resources is not None:
-            self._process_resources(resources)
+        for stream_obj, ctx in walk_content_streams_deduped(
+            self.pdf, [page_num], self._processed_xobjs
+        ):
+            if ctx.kind == "page":
+                continue  # page content already handled above
+            self._mutate_resource_stream(stream_obj, ctx)
 
-    def _process_resources(self, resources):
-        if "/XObject" not in resources:
-            return
+    def _mutate_resource_stream(self, stream_obj, ctx):
+        import pikepdf
 
-        for name, xobj in resources.XObject.items():
-            if xobj.objgen in self._processed_xobjs:
-                continue
-            self._processed_xobjs.add(xobj.objgen)
+        context = {
+            "pdf": self.pdf,
+            "object": stream_obj,
+            "page_num": None,
+            "is_xobject": ctx.kind == "form",
+            "args": self.user_args,
+            "kind": ctx.kind,
+        }
+        if ctx.owner_key is not None:
+            context["xobject_name"] = ctx.owner_key
 
-            if xobj.get("/Subtype") == "/Form":
-                import pikepdf
-
-                context = {
-                    "pdf": self.pdf,
-                    "object": xobj,
-                    "page_num": None,
-                    "is_xobject": True,
-                    "args": self.user_args,
-                    "xobject_name": str(name),
-                }
-
-                instructions = pikepdf.parse_content_stream(xobj)
-                mutated = self.mutate_func(instructions, context)
-                xobj.write(pikepdf.unparse_content_stream(mutated))
-
-                if "/Resources" in xobj:
-                    self._process_resources(xobj.Resources)
+        instructions = pikepdf.parse_content_stream(stream_obj)
+        mutated = self.mutate_func(instructions, context)
+        stream_obj.write(pikepdf.unparse_content_stream(mutated))

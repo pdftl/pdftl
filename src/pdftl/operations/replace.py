@@ -20,7 +20,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.normalize import get_normalized_page_content_stream, normalize_page_content_stream
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.pdf_resources import walk_content_streams_deduped
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.string_utils import split_escaped
 
@@ -54,8 +54,9 @@ Before and after the replacement is applied, the page
 content stream is normalized (see the `normalize` operation), which
 results in it appearing with one operator per line.
 
-By default, the replacement also recurses into Form XObjects referenced
-by the page. Pass ``recurse=false`` to restrict replacement to the
+By default, the replacement also recurses into Form XObjects, tiling
+Patterns, ExtGState soft-mask groups, and annotation appearance streams
+referenced by the page. Pass ``recurse=false`` to restrict replacement to the
 top-level page content stream only.
 
 *See also* the `dump_streams` operation, which lets you examine normalized content
@@ -166,9 +167,14 @@ class RegexReplaceContentStream:
         """Apply the replacement"""
         page = self.pdf.pages[page_num - 1]
         self._apply_to_stream(page, is_page=True)
-        resources = get_resources(page)
-        if self.recurse and resources is not None:
-            self._recurse_resources(resources)
+        if not self.recurse:
+            return
+        for stream_obj, ctx in walk_content_streams_deduped(
+            self.pdf, [page_num], self._processed_objgens
+        ):
+            if ctx.kind == "page":
+                continue  # page content already handled above
+            self._apply_to_stream(stream_obj, is_page=False)
 
     def _extract_bytes(self, container, is_page: bool) -> bytes | None:
         """Safely extract raw content stream bytes, handling layouts and normalization
@@ -232,18 +238,3 @@ class RegexReplaceContentStream:
             new_content_stream = content_stream
 
         self._write_bytes(container, is_page, new_content_stream)
-
-    def _recurse_resources(self, resources):
-        """Walk Form XObjects in a resource dict and apply the replacement to each."""
-        if "/XObject" not in resources:
-            return
-        for name, xobj in resources.XObject.items():
-            if xobj.objgen in self._processed_objgens:
-                continue
-            if xobj.get("/Subtype") != "/Form":
-                continue
-            logger.debug("Recursing into Form XObject %s (%s)", name, xobj.objgen)
-            self._processed_objgens.add(xobj.objgen)
-            self._apply_to_stream(xobj, is_page=False)
-            if "/Resources" in xobj:
-                self._recurse_resources(xobj.Resources)

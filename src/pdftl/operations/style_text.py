@@ -21,7 +21,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.core_types import OpResult
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.keyval_parser import parse_keyval_list
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.pdf_resources import walk_content_streams_deduped
 
 logger = logging.getLogger(__name__)
 
@@ -276,35 +276,19 @@ class TextStrokeReplaceContentStream:
         pikepdf_page.contents_coalesce()
 
         stream = page["/Contents"]
-        if stream.objgen in self._processed:
-            return
+        if stream.objgen not in self._processed:
+            self._process_stream(stream)
 
-        instructions = self.pikepdf.parse_content_stream(stream)
+        for stream_obj, ctx in walk_content_streams_deduped(self.pdf, [page_num], self._processed):
+            if ctx.kind == "page":
+                continue  # page content already handled above (coalesced specially)
+            self._process_stream(stream_obj)
+
+    def _process_stream(self, stream_obj):
+        instructions = self.pikepdf.parse_content_stream(stream_obj)
         new_content = self._process_instructions(instructions)
-        stream.write(new_content)
-        self._processed.add(stream.objgen)
-
-        resources = get_resources(page)
-        if resources is not None:
-            self._process_resources(resources)
-
-    def _process_resources(self, resources):
-        if "/XObject" not in resources:
-            return
-
-        for _, xobj in resources.XObject.items():
-            if xobj.objgen in self._processed:
-                continue
-
-            if xobj.get("/Subtype") == "/Form":
-                instructions = self.pikepdf.parse_content_stream(xobj)
-                new_content = self._process_instructions(instructions)
-                xobj.write(new_content)
-                self._processed.add(xobj.objgen)
-
-                xobj_resources = get_resources(xobj)
-                if xobj_resources is not None:
-                    self._process_resources(xobj_resources)
+        stream_obj.write(new_content)
+        self._processed.add(stream_obj.objgen)
 
     def _color_instruction(self, operands, fill_or_stroke="fill"):
         if len(operands) == 1:

@@ -313,3 +313,25 @@ def test_replace_recurses_into_inherited_page_resources():
 
     replace_in_content_streams(pdf, ["/Target/Clean/"])
     assert b"Clean" in xobj.read_bytes()
+
+
+def test_replace_recurse_false_skips_form_xobjects():
+    """Covers the recurse=false early-return branch: the page's own content
+    stream is still replaced, but Form XObjects referenced by it are left
+    untouched."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+
+    xobj = pdf.make_stream(b"BT (Target) Tj ET")
+    xobj.Type = pikepdf.Name("/XObject")
+    xobj.Subtype = pikepdf.Name("/Form")
+    xobj.BBox = [0, 0, 100, 100]
+
+    pdf.pages[0].Resources = {"/XObject": {"/Fm1": xobj}}
+    pdf.pages[0].Contents = pdf.make_stream(b"BT (Target) Tj ET /Fm1 Do")
+
+    replace_in_content_streams(pdf, ["recurse=false", "/Target/Clean/"])
+
+    assert b"Clean" in pdf.pages[0].Contents.read_bytes()
+    assert b"Clean" not in xobj.read_bytes()
+    assert b"Target" in xobj.read_bytes()

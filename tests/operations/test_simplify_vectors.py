@@ -334,154 +334,32 @@ class TestStreamProcessorApplyToPage:
             proc.apply_to_page(1)
         assert proc._stats.streams_processed == 0
 
+    def test_apply_to_page_skips_page_kind_in_walk(self):
+        """Line 322: walk_content_streams_deduped items with kind=='page' are skipped."""
+        pdf = pikepdf.new()
+        page = pdf.add_blank_page()
+        page.Contents = pdf.make_stream(b"10 10 m S\n")
 
-class TestRecurseXobjectsAndPatterns:
-    """
-    Lines 385-417: _recurse_xobjects and _recurse_patterns.
-    Use lightweight fakes to exercise the guard clauses.
-    """
+        from unittest.mock import MagicMock, patch
 
-    def _build_processor(self):
-        from pdftl.operations.simplify_vectors import _StreamProcessor
+        fake_ctx_page = MagicMock(kind="page")
+        fake_ctx_other = MagicMock(kind="xobject")
+        fake_stream = pdf.make_stream(b"0 0 m 5 5 l S\n")
 
-        class _FakePdf:
-            pages = []
+        walk_yields = [
+            (page.Contents, fake_ctx_page),
+            (fake_stream, fake_ctx_other),
+        ]
 
-        return _StreamProcessor(_FakePdf(), _build_config({}), SimplifyStats())
+        proc = self._build_processor(pdf)
+        with patch(
+            "pdftl.operations.simplify_vectors.walk_content_streams_deduped",
+            return_value=walk_yields,
+        ):
+            proc.apply_to_page(1)
 
-    def test_recurse_xobjects_no_xobject_key(self):
-        """Resources without /XObject should be a no-op."""
-        proc = self._build_processor()
-
-        class _FakeResources:
-            def __contains__(self, key):
-                return False
-
-        proc._recurse_xobjects(_FakeResources())  # should not raise
-
-    def test_recurse_patterns_no_pattern_key(self):
-        """Resources without /Pattern should be a no-op."""
-        proc = self._build_processor()
-
-        class _FakeResources:
-            def __contains__(self, key):
-                return False
-
-        proc._recurse_patterns(_FakeResources())  # should not raise
-
-    def test_recurse_xobjects_skips_non_form(self):
-        """XObjects that are not /Form should be skipped."""
-        proc = self._build_processor()
-
-        class _FakeXobj:
-            objgen = (1, 0)
-
-            def get(self, key, default=None):
-                return "/Image"  # not /Form
-
-        class _FakeXObjects:
-            def items(self):
-                return [("Im0", _FakeXobj())]
-
-        class _FakeResources:
-            XObject = _FakeXObjects()
-
-            def __contains__(self, key):
-                return key == "/XObject"
-
-        proc._recurse_xobjects(_FakeResources())
-        assert proc._stats.streams_processed == 0
-
-    def test_recurse_xobjects_skips_already_processed(self):
-        """Already-processed objgens must not be re-entered."""
-        proc = self._build_processor()
-        objgen = (99, 0)
-        proc._processed.add(objgen)
-
-        class _FakeXobj:
-            pass
-
-        _FakeXobj.objgen = objgen
-
-        class _FakeXObjects:
-            def items(self):
-                return [("Fm0", _FakeXobj())]
-
-        class _FakeResources:
-            XObject = _FakeXObjects()
-
-            def __contains__(self, key):
-                return key == "/XObject"
-
-        proc._recurse_xobjects(_FakeResources())
-        assert proc._stats.streams_processed == 0
-
-    def test_recurse_patterns_skips_non_tiling(self):
-        """PatternType != 1 should be skipped."""
-        proc = self._build_processor()
-
-        class _FakePat:
-            objgen = (2, 0)
-
-            def get(self, key, default=None):
-                return 2  # ShadingPattern, not TilingPattern
-
-        class _FakePatterns:
-            def items(self):
-                return [("P0", _FakePat())]
-
-        class _FakeResources:
-            Pattern = _FakePatterns()
-
-            def __contains__(self, key):
-                return key == "/Pattern"
-
-        proc._recurse_patterns(_FakeResources())
-        assert proc._stats.streams_processed == 0
-
-    def test_recurse_patterns_skips_already_processed(self):
-        proc = self._build_processor()
-        objgen = (77, 0)
-        proc._processed.add(objgen)
-
-        class _FakePat:
-            pass
-
-        _FakePat.objgen = objgen
-
-        class _FakePatterns:
-            def items(self):
-                return [("P1", _FakePat())]
-
-        class _FakeResources:
-            Pattern = _FakePatterns()
-
-            def __contains__(self, key):
-                return key == "/Pattern"
-
-        proc._recurse_patterns(_FakeResources())
-
-    def test_recurse_patterns_invalid_pattern_type_skipped(self):
-        """TypeError/ValueError from int(pat.get(...)) should be caught."""
-        proc = self._build_processor()
-
-        class _FakePat:
-            objgen = (3, 0)
-
-            def get(self, key, default=None):
-                return "not_an_int"
-
-        class _FakePatterns:
-            def items(self):
-                return [("P2", _FakePat())]
-
-        class _FakeResources:
-            Pattern = _FakePatterns()
-
-            def __contains__(self, key):
-                return key == "/Pattern"
-
-        proc._recurse_patterns(_FakeResources())  # should not raise
+        # 1 for page stream (lines 315-316), 1 for fake_stream (line 323), none for fake_ctx_page (line 322)
+        assert proc._stats.streams_processed == 2
 
 
 # ---------------------------------------------------------------------------

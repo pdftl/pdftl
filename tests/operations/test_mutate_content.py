@@ -1,8 +1,9 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pikepdf
 import pytest
 
+from pdftl.operations.mutate_content import ContentMutationEngine
 from pdftl.operations.mutate_content import mutate_content
 from pdftl.exceptions import MissingArgumentError
 
@@ -223,3 +224,64 @@ def test_mutate_content_load_errors(tmp_path):
     # We specify a function name that isn't in the script ('missing_func')
     with pytest.raises(AttributeError, match="Function 'missing_func' not found"):
         mutate_content(pdf, [f"{script}::missing_func"])
+
+
+def test_content_mutation_engine_duplicate_xobject_skipped():
+    """Dedup across repeated walk entries is now walk_content_streams_deduped's
+    job (covered in tests/utils/test_pdf_resources.py); this test just
+    confirms apply() hands it the engine's own long-lived seen set so
+    dedup actually spans calls across pages."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 200))
+
+    mock_stream = MagicMock()
+    mock_stream.objgen = (10, 0)
+    mock_ctx = MagicMock()
+    mock_ctx.kind = "form"
+
+    engine = ContentMutationEngine(
+        pdf=pdf,
+        mutate_func=lambda instrs, ctx: instrs,
+    )
+
+    with patch(
+        "pdftl.operations.mutate_content.walk_content_streams_deduped",
+        return_value=[(mock_stream, mock_ctx)],
+    ) as mock_walk:
+        with patch.object(engine, "_mutate_resource_stream") as mock_mutate:
+            engine.apply(page_num=1)
+            assert mock_mutate.call_count == 1
+            mock_walk.assert_called_once_with(pdf, [1], engine._processed_xobjs)
+
+
+def test_content_mutation_engine_resource_stream_without_owner_key():
+    """Covers Branch 157->160: Handles resource streams where ctx.owner_key is None."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 200))
+
+    mock_stream = MagicMock()
+    mock_stream.objgen = (12, 0)
+
+    # Context with owner_key set to None to bypass line 158
+    mock_ctx = MagicMock()
+    mock_ctx.kind = "type3_char"
+    mock_ctx.owner_key = None
+
+    captured_context = {}
+
+    def dummy_mutate(instructions, ctx):
+        captured_context.update(ctx)
+        return instructions
+
+    engine = ContentMutationEngine(pdf=pdf, mutate_func=dummy_mutate)
+
+    with patch(
+        "pdftl.operations.mutate_content.walk_content_streams_deduped",
+        return_value=[(mock_stream, mock_ctx)],
+    ):
+        with patch("pikepdf.parse_content_stream", return_value=[]):
+            with patch("pikepdf.unparse_content_stream", return_value=b""):
+                engine.apply(page_num=1)
+
+    # Verify xobject_name was not populated in context
+    assert "xobject_name" not in captured_context

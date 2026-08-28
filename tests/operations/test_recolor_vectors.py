@@ -64,38 +64,6 @@ def test_greyscale_replace_content_stream_apply():
     assert "rg" not in modified_content
 
 
-def test_greyscale_process_resources_xobject_recursion():
-    """Covers lines 84-90: XObject Form recursive extraction and processed-cache skipping."""
-    pdf = pikepdf.new()
-    page = pdf.add_blank_page()
-
-    # 1. Build a nested form layout stream (Stroke color)
-    nested_form = pdf.make_stream(b"0 1 0 RG")
-    nested_form.Subtype = pikepdf.Name("/Form")
-
-    # 2. Build a parent form layout stream (Fill color) containing the nested form
-    parent_form = pdf.make_stream(b"0 0 1 rg")
-    parent_form.Subtype = pikepdf.Name("/Form")
-    parent_form.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm2=nested_form))
-
-    # 3. Mount to page
-    page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=parent_form))
-
-    replacer = GreyscaleReplaceContentStream(pdf)
-    replacer._process_resources(page.Resources)
-
-    # Verify the parent was converted to fill 'g'
-    assert b"g" in parent_form.read_bytes()
-
-    # Verify the recursion caught the nested object and converted to stroke 'G'
-    assert b"G" in nested_form.read_bytes()
-
-    # 4. Trigger processed skip logic (Lines 82-83)
-    parent_bytes_before = parent_form.read_bytes()
-    replacer._process_resources(page.Resources)
-    assert parent_form.read_bytes() == parent_bytes_before
-
-
 def test_process_instructions_edge_cases(caplog):
     """Covers lines 94-109: warning branches on bad operations."""
     replacer = GreyscaleReplaceContentStream(None)
@@ -147,56 +115,6 @@ def test_to_gray_exception_handling(caplog):
     assert "Exception running raster math logic transformation" in caplog.text
 
 
-def test_greyscale_process_xobjects_exception_handling(caplog):
-    """Covers the exception block when Form XObject stream parsing fails."""
-    pdf = pikepdf.new()
-    replacer = GreyscaleReplaceContentStream(pdf)
-
-    # Create a malformed XObject (a dictionary instead of a stream)
-    broken_xobj = pikepdf.Dictionary(Type=pikepdf.Name("/XObject"), Subtype=pikepdf.Name("/Form"))
-    # pikepdf.parse_content_stream will raise a TypeError/ValueError on non-streams
-    resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm1=broken_xobj))
-
-    replacer._process_xobjects(resources)
-    assert "Failed to process Form XObject" in caplog.text
-
-
-def test_greyscale_process_patterns_exception_handling(caplog):
-    """Covers the exception block when Tiling Pattern stream parsing fails."""
-    pdf = pikepdf.new()
-    replacer = GreyscaleReplaceContentStream(pdf)
-
-    # Create a malformed Pattern (a dictionary instead of a stream)
-    broken_pat = pikepdf.Dictionary(Type=pikepdf.Name("/Pattern"), PatternType=1)
-    resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(Pat1=broken_pat))
-
-    replacer._process_patterns(resources)
-    assert "Failed to process Pattern" in caplog.text
-
-
-def test_greyscale_process_patterns_success():
-    """Covers the happy-path for Tiling Pattern extraction and recursion."""
-    pdf = pikepdf.new()
-    replacer = GreyscaleReplaceContentStream(pdf)
-
-    # Create a valid Pattern Stream
-    pat_stream = pdf.make_stream(b"1 0 0 rg")
-    pat_stream.update(
-        {
-            pikepdf.Name("/Type"): pikepdf.Name("/Pattern"),
-            pikepdf.Name("/PatternType"): 1,
-            # Include an empty Resources dict to hit the `if "/Resources" in pat:` branch
-            pikepdf.Name("/Resources"): pikepdf.Dictionary(),
-        }
-    )
-    resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(Pat1=pat_stream))
-
-    replacer._process_patterns(resources)
-
-    # Assert the 'rg' inside the pattern was converted to 'g'
-    assert b"g" in pat_stream.read_bytes()
-
-
 def test_to_gray_uppercase_operators():
     """Covers uppercase 'RG' and 'K' stroke operators in NTSC luminance mapping."""
     replacer = GreyscaleReplaceContentStream(None)
@@ -213,29 +131,107 @@ def test_to_gray_uppercase_operators():
     assert len(val) == 1
 
 
-def test_greyscale_process_patterns_cache_hit_line_142():
-    """Explicitly triggers line 142 by processing the exact same pattern object twice."""
+def test_recolor_vectors_non_empty_specs():
+    """Covers the path when non-empty page specifications are provided."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(100, 100))
+    res = recolor_vectors_in_content_streams(pdf, ["1"])
+    assert res.success is True
+
+
+def test_greyscale_post_init_custom_processed_set():
+    """Covers __post_init__ when an existing _processed_objgens set is explicitly provided."""
+    custom_set = {(1, 0)}
+    replacer = GreyscaleReplaceContentStream(pdf=None, _processed_objgens=custom_set)
+    assert replacer._processed_objgens is custom_set
+
+
+def test_greyscale_apply_with_page_stream_in_walk():
+    """Covers skipping resource stream handling when the context kind is 'page' during walking."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Contents = pdf.make_stream(b"1.0 0.0 0.0 rg")
+
+    # Mock walk_content_streams_deduped to yield a stream with ctx.kind == "page"
+    mock_ctx = MagicMock()
+    mock_ctx.kind = "page"
+    mock_stream = page.Contents
+
+    with patch(
+        "pdftl.operations.recolor_vectors.walk_content_streams_deduped",
+        return_value=[(mock_stream, mock_ctx)],
+    ):
+        replacer = GreyscaleReplaceContentStream(pdf)
+        replacer.apply(1)
+
+    assert b"g" in page.Contents.read_bytes()
+
+
+def test_process_resource_stream_success_and_exception(caplog):
+    """Covers direct calls to _process_resource_stream for both success and exception paths."""
     pdf = pikepdf.new()
     replacer = GreyscaleReplaceContentStream(pdf)
 
-    # 1. Create a valid mock pattern stream
-    pat_stream = pdf.make_stream(b"1 0 0 rg")
-    pat_stream.update(
-        {
-            pikepdf.Name("/Type"): pikepdf.Name("/Pattern"),
-            pikepdf.Name("/PatternType"): 1,
-        }
-    )
-    resources = pikepdf.Dictionary(Pattern=pikepdf.Dictionary(Pat1=pat_stream))
+    # 1. Happy path: valid resource stream (e.g., Form, SMask, or Annotation appearance stream)
+    stream_obj = pdf.make_stream(b"0 0 1 rg")
+    replacer._process_resource_stream(stream_obj)
+    assert b"g" in stream_obj.read_bytes()
 
-    # 2. First pass: Processes normally, adding pat_stream.objgen to the cache
-    replacer._process_patterns(resources)
-    assert pat_stream.objgen in replacer._processed_objgens
+    # 2. Exception path: passing an invalid object causes parse_content_stream to fail
+    broken_obj = pikepdf.Dictionary(Type=pikepdf.Name("/XObject"))
+    replacer._process_resource_stream(broken_obj)
+    assert "Failed to process resource stream" in caplog.text
 
-    # 3. Second pass: Hits line 142 ('continue') because the objgen is already cached
-    # We alter the stream contents locally to prove that the second pass completely skips processing it
-    pat_stream.write(b"0 1 0 rg")
-    replacer._process_patterns(resources)
 
-    # If line 142 successfully skipped it, the new 'rg' operator remains intact and wasn't morphed to 'g'
-    assert b"rg" in pat_stream.read_bytes()
+def test_greyscale_apply_skips_page_kind_in_walk():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Contents = pdf.make_stream(b"1.0 0.0 0.0 rg")
+
+    mock_ctx = MagicMock()
+    mock_ctx.kind = "page"
+    mock_stream = page.Contents
+
+    with patch(
+        "pdftl.operations.recolor_vectors.walk_content_streams_deduped",
+        return_value=[(mock_stream, mock_ctx)],
+    ):
+        replacer = GreyscaleReplaceContentStream(pdf)
+        replacer.apply(1)
+
+    assert b"g" in page.Contents.read_bytes()
+
+
+def test_greyscale_apply_page_stream_continue_integration():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    # Ensure page.Contents is a stream object registered in the PDF
+    page.Contents = pdf.make_stream(b"1.0 0.0 0.0 rg")
+
+    replacer = GreyscaleReplaceContentStream(pdf)
+    # Clear processed set prior to apply if it was pre-filled
+    replacer._processed_objgens.clear()
+    replacer.apply(1)
+
+    assert b"g" in page.Contents.read_bytes()
+
+
+def test_greyscale_apply_processes_nested_resource_stream():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Contents = pdf.make_stream(b"1 0 0 rg /X1 Do")
+
+    # Create a Form XObject (resource stream with ctx.kind != "page")
+    form_stream = pdf.make_stream(b"0 1 0 rg")
+    form_stream.Type = pikepdf.Name("/XObject")
+    form_stream.Subtype = pikepdf.Name("/Form")
+    form_stream.BBox = [0, 0, 100, 100]
+
+    page.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(X1=form_stream))
+
+    replacer = GreyscaleReplaceContentStream(pdf)
+    replacer.apply(1)
+
+    # Verifies both main content stream and nested resource stream were processed
+    assert b"g" in page.Contents.read_bytes()
+    assert b"g" in form_stream.read_bytes()

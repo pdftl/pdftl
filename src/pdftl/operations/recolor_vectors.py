@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.pdf_resources import walk_content_streams_deduped
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -98,62 +98,26 @@ class GreyscaleReplaceContentStream:
         new_content = self._process_instructions(instructions)
         page.Contents = self.pdf.make_stream(new_content)
 
-        # 2. Recursively search for sub-forms and patterns nested inside page resource forks
-        resources = get_resources(page)
-        if resources is not None:
-            self._process_resources(resources)
+        # 2. Recursively search for sub-forms, patterns, SMask groups, and
+        # annotation appearance streams nested inside the page.
+        for stream_obj, ctx in walk_content_streams_deduped(
+            self.pdf, [page_num], self._processed_objgens
+        ):
+            if ctx.kind == "page":
+                continue  # page content already handled above
+            self._process_resource_stream(stream_obj)
 
-    def _process_resources(self, resources):
-        """Recursively updates child structural layouts (Form XObjects and Tiling Patterns)."""
-        self._process_xobjects(resources)
-        self._process_patterns(resources)
-
-    def _process_xobjects(self, resources):
+    def _process_resource_stream(self, stream_obj):
+        """Recolor a single non-page content stream (Form/Pattern/SMask/annotation)."""
         import pikepdf
         from pikepdf import PdfError
 
-        if "/XObject" not in resources:
-            return
-
-        for _, xobj in resources.XObject.items():
-            if xobj.objgen in self._processed_objgens:
-                continue
-            self._processed_objgens.add(xobj.objgen)
-
-            if xobj.get("/Subtype") == "/Form":
-                try:
-                    instructions = pikepdf.parse_content_stream(xobj)
-                    new_content = self._process_instructions(instructions)
-                    xobj.write(new_content)
-
-                    if "/Resources" in xobj:
-                        self._process_resources(xobj.Resources)
-                except (PdfError, ValueError, TypeError) as e:
-                    logger.warning("Failed to process Form XObject %s: %s", xobj.objgen, e)
-
-    def _process_patterns(self, resources):
-        import pikepdf
-        from pikepdf import PdfError
-        from contextlib import suppress
-
-        if "/Pattern" not in resources:
-            return
-
-        with suppress(AttributeError, KeyError, TypeError):
-            for _, pat in resources.Pattern.items():
-                if pat.objgen in self._processed_objgens:
-                    continue
-                self._processed_objgens.add(pat.objgen)
-
-                # Only Type 1 (tiling) patterns have a content stream with color ops
-                if int(pat.get("/PatternType", 0)) == 1:
-                    try:
-                        instructions = pikepdf.parse_content_stream(pat)
-                        pat.write(self._process_instructions(instructions))
-                        if "/Resources" in pat:
-                            self._process_resources(pat.Resources)
-                    except (PdfError, ValueError, TypeError) as e:
-                        logger.warning("Failed to process Pattern %s: %s", pat.objgen, e)
+        try:
+            instructions = pikepdf.parse_content_stream(stream_obj)
+            new_content = self._process_instructions(instructions)
+            stream_obj.write(new_content)
+        except (PdfError, ValueError, TypeError) as e:
+            logger.warning("Failed to process resource stream %s: %s", stream_obj.objgen, e)
 
     def _process_instructions(self, instructions):
         """Iterates content tokens, swapping out RGB/CMYK selectors for Recolor_Vectors."""

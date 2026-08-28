@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `excise` and `redact` now remove annotations whose rectangle cannot be determined
 
+- `replace`, `style_text`, `mutate_content`, `simplify_vectors`, and
+  `recolor_vectors` now also recurse into tiling Patterns, ExtGState
+  soft-mask groups, and annotation appearance streams (previously only
+  Form XObjects, or Forms+Patterns for the vector operations). Content
+  painted through these mechanisms was silently skipped before; it is
+  now processed like any other reachable content stream.
+
 ## [0.27.0] - 2026-08-26
 
 ### Added

@@ -557,20 +557,25 @@ def test_apply_single_stream_and_processed_filtering_real_objects():
 
         stream_objgen = contents.objgen
 
-        with patch.object(replacer, "_process_resources") as mock_res:
+        with patch(
+            "pdftl.operations.style_text.walk_content_streams_deduped", return_value=iter([])
+        ) as mock_walk:
             replacer.apply(1)
             assert stream_objgen in replacer._processed
-            mock_res.assert_called_once()
+            mock_walk.assert_called_once_with(mock_pdf_wrapper, [1], replacer._processed)
 
         with (
-            patch.object(replacer, "_process_resources") as mock_res,
+            patch(
+                "pdftl.operations.style_text.walk_content_streams_deduped", return_value=iter([])
+            ) as mock_walk,
             patch("pikepdf.parse_content_stream") as mock_parse,
         ):
             replacer.apply(1)
             mock_parse.assert_not_called()
-            # Second call is skipped entirely once stream is in _processed —
-            # _process_resources is not called either.
-            mock_res.assert_not_called()
+            # Second call still walks resources looking for unprocessed
+            # streams, but the page stream itself is skipped (already in
+            # _processed) so parse_content_stream is never invoked.
+            mock_walk.assert_called_once_with(mock_pdf_wrapper, [1], replacer._processed)
 
 
 def test_apply_page_with_multiple_streams_real_objects():
@@ -613,46 +618,6 @@ def test_apply_page_with_multiple_streams_real_objects():
         with patch("pikepdf.parse_content_stream") as mock_parse:
             replacer.apply(1)
             mock_parse.assert_not_called()
-
-
-def test_process_resources_already_processed_xobject_real_objects():
-    """Verify resource loops skip XObjects if their objgen is already tracked."""
-    with pikepdf.new() as pdf:
-        xobj_stream = pikepdf.Stream(pdf, b"(Form Content) Tj")
-        xobj_stream["/Subtype"] = pikepdf.Name("/Form")
-
-        resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/X1": xobj_stream})})
-
-        replacer = TextStrokeReplaceContentStream(pdf=MagicMock())
-        replacer._processed.add(xobj_stream.objgen)
-
-        with patch("pikepdf.parse_content_stream") as mock_parse:
-            replacer._process_resources(resources)
-            mock_parse.assert_not_called()
-
-
-def test_process_resources_recurs_into_form_xobjects_real_objects(base_replacer):
-    """Verify recursive lookups step into nested Form XObjects."""
-    with pikepdf.new() as pdf:
-        nested_form = pikepdf.Stream(pdf, b"(Nested content) Tj")
-        nested_form["/Subtype"] = pikepdf.Name("/Form")
-        nested_form["/Resources"] = pikepdf.Dictionary()
-
-        resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Form1": nested_form})})
-
-        with (
-            patch.object(base_replacer, "_process_instructions") as mock_proc,
-            patch.object(
-                base_replacer, "_process_resources", wraps=base_replacer._process_resources
-            ) as spy_res,
-        ):
-            mock_proc.return_value = b"Mocked Bytes Injection"
-
-            base_replacer._process_resources(resources)
-
-            mock_proc.assert_called_once()
-            assert nested_form.objgen in base_replacer._processed
-            assert spy_res.call_count == 2
 
 
 def test_process_op_named_colorspace_marks_fill_unknown(base_replacer):
@@ -1221,9 +1186,45 @@ def test_apply_page_with_no_resources_key():
             stroke_width=1.0,
         )
 
-        with patch.object(replacer, "_process_resources") as mock_res:
+        with patch(
+            "pdftl.operations.style_text.walk_content_streams_deduped", return_value=iter([])
+        ) as mock_walk:
             replacer.apply(1)
-            mock_res.assert_not_called()
+            # walk_content_streams_deduped handles the missing-/Resources case
+            # internally (get_resources returns None); apply() just calls
+            # it unconditionally now rather than gating on resources.
+            mock_walk.assert_called_once_with(pdf, [1], replacer._processed)
+
+
+def test_apply_skips_already_processed_resource_stream():
+    """Covers the loop's skip branch: a Form XObject already recorded in
+    _processed (e.g. from styling a prior page that shares it) must not be
+    re-parsed/re-written when walk_content_streams yields it again for a
+    second page."""
+    with pikepdf.new() as pdf:
+        page = pdf.add_blank_page(page_size=(100, 100))
+        page.Contents = pdf.make_stream(b"/F1 12 Tf (Text) Tj")
+
+        form_xobj = pdf.make_stream(b"/F1 12 Tf (Form Text) Tj")
+        form_xobj.Subtype = pikepdf.Name("/Form")
+        page.Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/Form1": form_xobj})}
+        )
+
+        replacer = TextStrokeReplaceContentStream(
+            pdf=pdf,
+            has_stroke_intent=True,
+            stroke_color=[1, 0, 0],
+            stroke_width=1.0,
+        )
+        # Simulate the Form having already been processed via another page.
+        replacer._processed.add(form_xobj.objgen)
+
+        with patch.object(replacer, "_process_stream") as mock_process:
+            replacer.apply(1)
+            # Only the page's own content stream should be processed;
+            # the pre-processed Form must be skipped.
+            mock_process.assert_called_once_with(page.Contents)
 
 
 def test_build_replacer_stroke_none_sets_removal_flag():

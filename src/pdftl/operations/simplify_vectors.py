@@ -33,7 +33,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.path_geometry import simplify_path
 from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.pdf_resources import walk_content_streams_deduped
 from pdftl.utils.path_segmentation import segment, serialize
 
 logger = logging.getLogger(__name__)
@@ -315,9 +315,12 @@ class _StreamProcessor:
         self._process_stream(stream)
         self._processed.add(stream.objgen)
 
-        resources = get_resources(page)
-        if resources is not None:
-            self._recurse_resources(resources)
+        for stream_obj, ctx in walk_content_streams_deduped(
+            self._pdf, [page_num], self._processed
+        ):
+            if ctx.kind == "page":
+                continue  # page content already handled above (coalesced specially)
+            self._process_stream(stream_obj)
 
     # -- stream processing --
 
@@ -356,43 +359,6 @@ class _StreamProcessor:
             stream_obj.write(self._pk.unparse_content_stream(new_instructions))
         except self._pikepdf.PdfError as exc:
             logger.warning("Failed to write simplified stream: %s", exc)
-
-    # -- resource recursion --
-
-    def _recurse_resources(self, resources: Any) -> None:
-        self._recurse_xobjects(resources)
-        self._recurse_patterns(resources)
-
-    def _recurse_xobjects(self, resources: Any) -> None:
-        if "/XObject" not in resources:
-            return
-        for name, xobj in resources.XObject.items():
-            if xobj.objgen in self._processed:
-                continue
-            if xobj.get("/Subtype") != "/Form":
-                continue
-            logger.debug("Recursing into Form XObject %s (%s)", name, xobj.objgen)
-            self._processed.add(xobj.objgen)
-            self._process_stream(xobj)
-            if "/Resources" in xobj:
-                self._recurse_resources(xobj.Resources)
-
-    def _recurse_patterns(self, resources: Any) -> None:
-        if "/Pattern" not in resources:
-            return
-        for name, pat in resources.Pattern.items():
-            if pat.objgen in self._processed:
-                continue
-            try:
-                if int(pat.get("/PatternType", 0)) != 1:
-                    continue
-            except (TypeError, ValueError):
-                continue
-            logger.debug("Recursing into Tiling Pattern %s (%s)", name, pat.objgen)
-            self._processed.add(pat.objgen)
-            self._process_stream(pat)
-            if "/Resources" in pat:
-                self._recurse_resources(pat.Resources)
 
     # -- stats helpers --
 

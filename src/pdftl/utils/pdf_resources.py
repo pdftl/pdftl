@@ -459,3 +459,29 @@ def _walk_ap_entry_streams(ap_entry, page_num, visited):
         yield stream_obj, ctx
         if stream_res is not None:
             yield from _walk_resources_streams(stream_res, page_num, 2, visited)
+
+
+def walk_content_streams_deduped(
+    pdf: "pikepdf.Pdf",
+    page_indices: list[int] | None,
+    seen: set[tuple[int, int]],
+) -> Generator[tuple[Any, StreamContext], None, None]:
+    """
+    Thin filter over walk_content_streams for callers that need dedup across
+    repeated calls (e.g. once per page), rather than the per-call dedup
+    walk_content_streams already does on its own.
+
+    `seen` is owned and persisted by the caller (e.g. a `_processed` set
+    living on a per-document replacer instance across apply() calls). Any
+    stream whose objgen is already in `seen` is skipped and never yielded;
+    every other stream's objgen is added to `seen` before it's yielded.
+
+    Not suitable for excise_stream.py's Form handling, which needs
+    private-copy-on-mutation semantics for shared Forms rather than dedup.
+    """
+    for stream_obj, ctx in walk_content_streams(pdf, page_indices):
+        objgen = stream_obj.objgen
+        if objgen in seen:
+            continue
+        seen.add(objgen)
+        yield stream_obj, ctx
