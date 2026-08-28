@@ -294,6 +294,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`update_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/update_bookmarks.html)           | Replace PDF bookmarks from a YAML or JSON file                  |
 | [`update_info`](https://pdftl.readthedocs.io/en/latest/operations/update_info.html)                     | Update PDF metadata from dump_data instructions                 |
 | [`update_info_utf8`](https://pdftl.readthedocs.io/en/latest/operations/update_info_utf8.html)           | Update PDF metadata from dump_data_utf8 instructions            |
+| [`usage`](https://pdftl.readthedocs.io/en/latest/operations/usage.html)                                 | Per-category byte breakdown of a PDF                            |
 | [`zoom`](https://pdftl.readthedocs.io/en/latest/operations/zoom.html)                                   | Rescale entire pages                                            |
 
 | Option                                                                                                             | Description                                               |

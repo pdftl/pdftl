@@ -108,6 +108,7 @@ HARDCODED_KEYWORDS = {
     "update_bookmarks",
     "update_info",
     "update_info_utf8",
+    "usage",
     "zoom",
     "allow",
     "compress",

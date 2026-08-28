@@ -64,6 +64,15 @@ Portions of the font replacement logic (specifically `src/pdftl/fonts/font_{embe
 * **License:** Mozilla Public License 2.0
 * **Source:** <https://github.com/qooxzuub/swapfont>
 
+### Spectra PDF
+
+Portions of the `space_usage` module are adapted from [**Spectra PDF**](https://github.com/jasonulbright/Spectra-PDF).
+
+* **Original author:** Jason Ulbright
+* **License:** MIT License
+* **Source:** <https://github.com/jasonulbright/Spectra-PDF>
+
+
 ### pikepdf/qpdf
 
 This project relies heavily on **pikepdf** (© 2022-2024 James R. Barlow, MPL 2.0) and **qpdf** (MPL 2.0). While not directly "adapted" code, they are core dependencies that make this tool possible.

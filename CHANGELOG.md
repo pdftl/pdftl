@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `usage` operation
+
 - `link_urls` operation
 
 - Can now give `chop` an overlap
