@@ -35,6 +35,7 @@ _ALLOWED_BOOKMARK_KEYS = {
     "italic",
     "children",
     "action",
+    "action_lossy",
 }
 
 
@@ -60,6 +61,10 @@ def _to_python_types(obj):
         return obj
     elif obj is None:
         return None
+    elif isinstance(obj, pikepdf.Stream):
+        # No text representation attempted here — see _extract_action for
+        # the one case (a /JS action's script) where this actually matters.
+        return {"__stream__": True}
     return str(obj)
 
 
@@ -129,9 +134,21 @@ def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> di
 
 
 def _extract_action(action_obj, node):
+    import pikepdf
+
     action_type = str(action_obj.get("/S", ""))
     if action_type == "/URI":
         node["uri"] = str(action_obj.get("/URI"))
+    elif action_type == "/JS":
+        js = action_obj.get("/JS")
+        if isinstance(js, pikepdf.Stream):
+            try:
+                node["action"] = {"S": {"__name__": "/JS"}, "JS": js.read_bytes().decode("utf-8")}
+            except (UnicodeDecodeError, pikepdf.PdfError):
+                node["action"] = _to_python_types(action_obj)
+                node["action_lossy"] = True
+        else:
+            node["action"] = _to_python_types(action_obj)
     elif action_type != "/GoTo":
         # For non-GoTo/URI actions, perfectly preserve the ISO action dict
         node["action"] = _to_python_types(action_obj)
@@ -261,6 +278,22 @@ def _build_basic_item(node: dict, pdf) -> "pikepdf.OutlineItem":
     import pikepdf
 
     title = node.get("title", "Untitled")
+
+    if node.get("action_lossy") and "action" in node:
+        # The original action (e.g. an undecodable /JS stream) could not
+        # be faithfully captured on extraction — only a marker was kept.
+        # Rebuilding it would write that marker into the PDF as if it
+        # were real data. Drop it and warn instead of silently
+        # fabricating an action. Remove "action" from a local copy so the
+        # branch chain below falls through to dest/uri/page/no-target
+        # exactly as if no action had ever been present.
+        logger.warning(
+            "Bookmark '%s' had a lossy action on extraction (e.g. an "
+            "undecodable /JS stream); dropping it rather than writing "
+            "back a placeholder.",
+            title,
+        )
+        node = {k: v for k, v in node.items() if k not in ("action", "action_lossy")}
 
     if "action" in node:
         # Handles Launch, GoToR, Named, JavaScript, etc. natively
