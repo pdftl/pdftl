@@ -1,8 +1,10 @@
+# src/pdftl/utils/images/finders.py
 from typing import TYPE_CHECKING
 import logging
 
 from pdftl.utils.colorspaces import image_colorspace
 from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.graphics_state import GraphicsStateStack, multiply_matrices
 
 if TYPE_CHECKING:
     pass
@@ -39,22 +41,20 @@ def extract_pdf_images(pdf, target_pages: list[int]) -> list:
 def _parse_stream(content_stream, resources, initial_ctm, image_list) -> None:
     import pikepdf
 
-    ctm_stack = []
-    current_ctm = list(initial_ctm)
+    gs_stack = GraphicsStateStack()
+    gs_stack.current.ctm = tuple(float(x) for x in initial_ctm)
     try:
         for inst in pikepdf.parse_content_stream(content_stream):
             op = str(inst.operator)
             if op == "q":
-                ctm_stack.append(list(current_ctm))
+                gs_stack.push()
             elif op == "Q":
-                if ctm_stack:
-                    current_ctm = ctm_stack.pop()
+                gs_stack.pop()
             elif op == "cm":
-                operand_matrix = [float(x) for x in inst.operands]
-                current_ctm = _multiply_matrices(operand_matrix, current_ctm)
+                gs_stack.current.apply_cm(inst.operands)
             elif op == "Do":
                 obj_name_node = inst.operands[0]
-                _handle_do_operator(obj_name_node, resources, current_ctm, image_list)
+                _handle_do_operator(obj_name_node, resources, gs_stack.current.ctm, image_list)
     except (pikepdf.PdfError, KeyError, TypeError, ValueError, AttributeError) as err:
         logger.warning("Error parsing content stream: %s", err)
 
@@ -78,11 +78,11 @@ def _handle_do_operator(obj_name_node, resources, current_ctm, image_list) -> No
 
 
 def _process_form_xobject(xobj, parent_resources, current_ctm, image_list) -> None:
-    form_matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    form_matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
     if "/Matrix" in xobj:
-        form_matrix = [float(x) for x in xobj.Matrix]
+        form_matrix = tuple(float(x) for x in xobj.Matrix)
 
-    form_ctm = _multiply_matrices(form_matrix, current_ctm)
+    form_ctm = multiply_matrices(form_matrix, tuple(current_ctm))
     form_resources = xobj.get("/Resources", parent_resources)
 
     _parse_stream(xobj, form_resources, form_ctm, image_list)
@@ -119,19 +119,6 @@ def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> N
             "xobj": xobj,  # Preserved so downstream operations can modify the exact stream
         }
     )
-
-
-def _multiply_matrices(m1, m2) -> list[float]:
-    a1, b1, c1, d1, e1, f1 = m1
-    a2, b2, c2, d2, e2, f2 = m2
-    return [
-        a1 * a2 + b1 * c2,
-        a1 * b2 + b1 * d2,
-        c1 * a2 + d1 * c2,
-        c1 * b2 + d1 * d2,
-        e1 * a2 + f1 * c2 + e2,
-        e1 * b2 + f1 * d2 + f2,
-    ]
 
 
 def _calculate_bbox(ctm) -> list[float]:
