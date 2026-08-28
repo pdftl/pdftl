@@ -411,17 +411,48 @@ def _filter_annots(page: Any, excise_rect: ExciseRect, stats: ExciseStats) -> No
 
     kept: list[Any] = []
     for annot in page.Annots:
-        if not isinstance(annot, pikepdf.Object) or "/Rect" not in annot:
+        if not isinstance(annot, pikepdf.Object):
+            # Not a dictionary-shaped entry, so there is no renderable,
+            # interactive object here -- nothing that could be a
+            # link/highlight/widget sitting over redacted content. The
+            # fail-closed policy below exists to protect against a real
+            # annotation whose geometry we can't verify; it has nothing
+            # to apply to here, so this is kept unconditionally.
             kept.append(annot)
+            continue
+
+        if "/Rect" not in annot:
+            # /Rect is required on every annotation dictionary (ISO
+            # 32000-2 12.5.2). Its absence means overlap can't be
+            # tested, and excise is the engine redaction is built on --
+            # keeping an annotation whose geometry is unknown risks
+            # leaving it sitting over content that was meant to be
+            # removed. Remove rather than risk that.
+            stats.annots_total += 1
+            logger.warning("excise: annotation has no /Rect (spec requires one); removing it.")
+            stats.annots_deleted += 1
             continue
 
         stats.annots_total += 1
         try:
             r = [float(x) for x in annot.Rect]
-        except (TypeError, ValueError):
-            kept.append(annot)
+            x0, y0, x1, y1 = r
+        except (TypeError, ValueError, IndexError) as exc:
+            # An unparseable /Rect means overlap can't be tested, so
+            # this annotation's inside/outside status relative to
+            # excise_rect is unknowable regardless of excise_rect.delete's
+            # direction. Removed rather than kept, matching the missing-
+            # /Rect case above -- excise is the engine redaction is built
+            # on, and keeping unverifiable geometry risks leaving it
+            # sitting over content meant to be removed.
+            logger.warning(
+                "excise: annotation has an unparseable /Rect (%r): %s; removing it.",
+                annot.get("/Rect"),
+                exc,
+            )
+            stats.annots_deleted += 1
             continue
-        bbox = [min(r[0], r[2]), min(r[1], r[3]), max(r[0], r[2]), max(r[1], r[3])]
+        bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
 
         if _overlap_means_delete(bbox, excise_rect):
             stats.annots_deleted += 1

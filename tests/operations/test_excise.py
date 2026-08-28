@@ -1166,7 +1166,13 @@ class TestGlyphShouldDeleteDirect:
 
 
 class TestFilterAnnotsMalformedRect:
-    def test_non_numeric_rect_entry_kept(self):
+    def test_non_numeric_rect_entry_removed_fail_closed(self):
+        """Regression test: previously this annotation was silently KEPT
+        (fail-open) because the ValueError from float("bad") was caught
+        and swallowed. In a redaction context that means an annotation
+        sitting over redacted content could survive just because its
+        /Rect happened to be unparseable. Must now be removed instead.
+        """
         pdf = pikepdf.new()
         pdf.add_blank_page(page_size=(300, 300))
         page = pdf.pages[0]
@@ -1175,7 +1181,61 @@ class TestFilterAnnotsMalformedRect:
         )
         page.Annots = pikepdf.Array([bad_annot])
         excise_content(pdf, ["1(abs,0,0,300,300)"])
-        assert len(pdf.pages[0].Annots) == 1  # malformed /Rect -- kept, not crashed
+        assert len(pdf.pages[0].Annots) == 0  # malformed /Rect -- removed (fail-closed)
+
+    def test_too_short_rect_array_removed_not_crashed(self):
+        """A /Rect with fewer than 4 elements previously wasn't caught by
+        (TypeError, ValueError) at all -- indexed access (r[2], r[3])
+        would raise IndexError uncaught, crashing excise entirely rather
+        than either keeping or removing the annotation. Must be caught
+        and removed (fail-closed), same as any other unparseable /Rect.
+        """
+        pdf = pikepdf.new()
+        pdf.add_blank_page(page_size=(300, 300))
+        page = pdf.pages[0]
+        short_annot = pikepdf.Dictionary(
+            {"/Type": pikepdf.Name("/Annot"), "/Rect": pikepdf.Array([0, 0])}
+        )
+        page.Annots = pikepdf.Array([short_annot])
+        excise_content(pdf, ["1(abs,0,0,300,300)"])  # must not raise IndexError
+        assert len(pdf.pages[0].Annots) == 0
+
+    def test_fail_closed_applies_regardless_of_delete_direction(self):
+        """The fail-closed removal isn't conditional on excise_rect.delete
+        -- even in delete=outside mode (keep only what's inside the box),
+        an unparseable /Rect must still be removed, since 'inside' vs
+        'outside' can't be determined for geometry that can't be parsed
+        either way.
+        """
+        pdf = pikepdf.new()
+        pdf.add_blank_page(page_size=(300, 300))
+        page = pdf.pages[0]
+        bad_annot = pikepdf.Dictionary(
+            {"/Type": pikepdf.Name("/Annot"), "/Rect": pikepdf.Array(["bad", 0, 100, 100])}
+        )
+        page.Annots = pikepdf.Array([bad_annot])
+        excise_content(pdf, ["1(abs,0,0,300,300,delete=outside)"])
+        assert len(pdf.pages[0].Annots) == 0
+
+    def test_non_object_annots_entry_kept_untouched(self):
+        """An /Annots array entry that isn't a dictionary-shaped
+        pikepdf.Object at all (e.g. a stray primitive) is kept
+        unconditionally -- there's no renderable annotation there for
+        the fail-closed /Rect policy above to apply to. Exercised via
+        _filter_annots directly with a MagicMock page, since a real
+        pikepdf.Array may auto-wrap plain Python values into Objects on
+        insert, making this state hard to reach through normal PDF
+        construction.
+        """
+        from unittest.mock import MagicMock
+        from pdftl.operations.excise import _filter_annots, ExciseRect, ExciseStats
+
+        page = MagicMock()
+        page.__contains__ = lambda self, key: key == "/Annots"
+        page.Annots = ["not a pikepdf object"]
+        stats = ExciseStats()
+        _filter_annots(page, ExciseRect(rect=[0, 0, 300, 300], delete="inside"), stats)
+        assert page.Annots == ["not a pikepdf object"]
 
 
 # ---------------------------------------------------------------------------
@@ -1214,13 +1274,17 @@ class TestExciseContentAnnotationDeletion:
         excise_content(pdf, ["1(abs,0,0,200,200,delete=outside)"])
         assert len(pdf.pages[0].Annots) == 1
 
-    def test_annot_with_no_rect_kept(self):
+    def test_annot_with_no_rect_removed(self):
+        """/Rect is required on every annotation dictionary (ISO 32000-2
+        12.5.2). Without it, overlap with the target region can't be
+        tested, so this annotation is removed rather than kept.
+        """
         pdf = pikepdf.new()
         pdf.add_blank_page(page_size=(300, 300))
         page = pdf.pages[0]
         page.Annots = pikepdf.Array([pikepdf.Dictionary({"/Type": pikepdf.Name("/Annot")})])
         excise_content(pdf, ["1(abs,0,0,300,300)"])
-        assert len(pdf.pages[0].Annots) == 1
+        assert len(pdf.pages[0].Annots) == 0
 
     def test_no_annots_key_is_noop(self):
         pdf = pikepdf.new()
