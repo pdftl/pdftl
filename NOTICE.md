@@ -66,7 +66,7 @@ Portions of the font replacement logic (specifically `src/pdftl/fonts/font_{embe
 
 ### Spectra PDF
 
-Portions of the `space_usage` module are adapted from [**Spectra PDF**](https://github.com/jasonulbright/Spectra-PDF).
+Portions of the code underlying the `usage` and the `add_marks` operations are adapted from [**Spectra PDF**](https://github.com/jasonulbright/Spectra-PDF).
 
 * **Original author:** Jason Ulbright
 * **License:** MIT License

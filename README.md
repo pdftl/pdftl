@@ -207,6 +207,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 |---------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
 | [`add_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/add_bookmarks.html)                 | Add top-level bookmarks                                         |
 | [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html)                       | Stamp user-specified images onto PDF pages                      |
+| [`add_marks`](https://pdftl.readthedocs.io/en/latest/operations/add_marks.html)                         | Add crop marks, registration targets and a colour bar           |
 | [`add_text`](https://pdftl.readthedocs.io/en/latest/operations/add_text.html)                           | Add user-specified text strings to PDF pages                    |
 | [`attach_files`](https://pdftl.readthedocs.io/en/latest/operations/attach_files.html)                   | Attach files to the output PDF                                  |
 | [`background`](https://pdftl.readthedocs.io/en/latest/operations/background.html)                       | Use a 1-page PDF as the background for each page                |

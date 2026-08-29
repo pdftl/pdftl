@@ -253,3 +253,35 @@ class TestParseKeyvalString:
     def test_allowed_keys_enforced(self):
         with pytest.raises(InvalidArgumentError, match="unknown parameter"):
             parse_keyval_string("bad=1", allowed_keys=["good"])
+
+
+from pdftl.utils.keyval_parser import constrained_bool, constrained_choice
+
+
+class TestConstrainedBool:
+    @pytest.mark.parametrize("raw", ["true", "True", "1", "yes", "YES"])
+    def test_truthy_values(self, raw):
+        assert constrained_bool()(raw) is True
+
+    @pytest.mark.parametrize("raw", ["false", "False", "0", "no", "NO"])
+    def test_falsy_values(self, raw):
+        assert constrained_bool()(raw) is False
+
+    def test_invalid_value_raises(self):
+        with pytest.raises(ValueError, match="must be true or false"):
+            constrained_bool()("maybe")
+
+
+class TestConstrainedChoice:
+    def test_accepts_listed_choice(self):
+        validator = constrained_choice("western", "japanese", "false")
+        assert validator("japanese") == "japanese"
+
+    def test_case_insensitive(self):
+        validator = constrained_choice("western", "japanese")
+        assert validator("WESTERN") == "western"
+
+    def test_rejects_unlisted_choice(self):
+        validator = constrained_choice("western", "japanese")
+        with pytest.raises(ValueError, match="must be one of western, japanese"):
+            validator("chinese")

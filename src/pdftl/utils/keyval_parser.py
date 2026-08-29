@@ -32,6 +32,34 @@ def constrained_int(
     return validator
 
 
+def constrained_bool() -> Callable[[str], bool]:
+    """Generates a validator that coerces 'true'/'false' (and 1/0, yes/no)
+    strings to bool, case-insensitively."""
+
+    def validator(val: str) -> bool:
+        v = val.strip().lower()
+        if v in ("true", "1", "yes"):
+            return True
+        if v in ("false", "0", "no"):
+            return False
+        raise ValueError("must be true or false")
+
+    return validator
+
+
+def constrained_choice(*choices: str) -> Callable[[str], str]:
+    """Generates a validator that accepts only one of `choices`
+    (case-insensitive), returning the lowercased match."""
+
+    def validator(val: str) -> str:
+        v = val.strip().lower()
+        if v not in choices:
+            raise ValueError(f"must be one of {', '.join(choices)}")
+        return v
+
+    return validator
+
+
 def parse_keyval_token(
     token: str,
     *,
