@@ -11,14 +11,13 @@ single shared copy, shrinking the file without touching visual output.
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import HelpExample, OpResult
 from pdftl.core.registry import register_operation
-from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.helpers.dedupe_images_core import deduplicate_image_xobjects
+from pdftl.utils.arg_helpers import parse_size_to_bytes
 from pdftl.utils.keyval_parser import parse_keyval_list
 
 if TYPE_CHECKING:
@@ -66,42 +65,6 @@ _DEDUPLICATE_IMAGES_EXAMPLES = [
     ),
 ]
 
-_SIZE_SUFFIXES = {
-    "": 1,
-    "B": 1,
-    "KB": 1024,
-    "MB": 1024**2,
-    "GB": 1024**3,
-}
-
-_SIZE_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]*)\s*$")
-
-
-def _parse_byte_size(raw: str) -> int:
-    """Parses a plain byte count or a `<number><KB|MB|GB>` size string.
-
-    NOTE: this is a small local parser, not a shared codebase utility --
-    I couldn't confirm whether pdftl already has a canonical
-    string-to-bytes size parser elsewhere (the `usage` operation's
-    `_human_bytes` only goes the other direction: bytes to display
-    string). If one already exists, prefer it over this and delete this
-    function instead of maintaining two.
-    """
-    match = _SIZE_RE.match(raw)
-    if not match:
-        raise InvalidArgumentError(
-            f"'deduplicate_images': invalid min_bytes value '{raw}'. "
-            "Expected a byte count or a size like '64KB'."
-        )
-    number_str, suffix = match.groups()
-    suffix = suffix.upper()
-    if suffix not in _SIZE_SUFFIXES:
-        raise InvalidArgumentError(
-            f"'deduplicate_images': invalid size suffix '{suffix}' in min_bytes='{raw}'. "
-            f"Expected one of: {', '.join(s for s in _SIZE_SUFFIXES if s)}."
-        )
-    return int(float(number_str) * _SIZE_SUFFIXES[suffix])
-
 
 def _parse_deduplicate_images_args(args: list[str]) -> int:
     """Parses `deduplicate_images` keyword arguments, returning min_bytes."""
@@ -113,7 +76,7 @@ def _parse_deduplicate_images_args(args: list[str]) -> int:
     min_bytes_raw = parsed.get("min_bytes")
     if min_bytes_raw is None:
         return 0
-    return _parse_byte_size(min_bytes_raw)
+    return parse_size_to_bytes(min_bytes_raw, context="deduplicate_images: min_bytes")
 
 
 @register_operation(

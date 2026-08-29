@@ -692,5 +692,5 @@ def test_make_chunk_pdf_directly_preserves_labels(book_with_chapters):
 
 
 def test_invalid_argument_error_raised_on_misparse(two_page_pdf):
-    with pytest.raises(InvalidArgumentError, match="Invalid size format"):
+    with pytest.raises(InvalidArgumentError, match="[Ii]nvalid size"):
         burst_pdf([two_page_pdf], ["sizenot_a_number"])

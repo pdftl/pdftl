@@ -2,15 +2,6 @@
 """Operation-level test for `deduplicate_images`: exercises the registered
 operation function itself (argument parsing + wiring to
 deduplicate_image_xobjects), not just the core helper directly.
-
-NOTE: this container has no access to the real pdftl.core.* / keyval_parser
-framework, so this runs against small local stand-ins created for this
-session only (see src/pdftl/core/*.py, src/pdftl/utils/keyval_parser.py --
-each file-headed as a stand-in). The `deduplicate_images` operation module
-itself is real and unmodified for that reason; only its framework
-dependencies are stubbed. Rerun this (or the real repo's existing
-operation-test pattern, if one exists for other operations) against the
-genuine framework once this lands in the real repo.
 """
 
 from __future__ import annotations
@@ -20,10 +11,7 @@ import pikepdf
 from pikepdf import Dictionary, Name
 
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.operations.deduplicate_images import (
-    deduplicate_images,
-    _parse_byte_size,
-)
+from pdftl.operations.deduplicate_images import deduplicate_images
 
 
 @pytest.fixture
@@ -47,39 +35,6 @@ def _make_image(pdf, data: bytes, **extra):
             **extra,
         )
     )
-
-
-# --- _parse_byte_size -----------------------------------------------------
-
-
-def test_parse_byte_size_plain_number():
-    assert _parse_byte_size("1024") == 1024
-
-
-def test_parse_byte_size_kb_suffix():
-    assert _parse_byte_size("64KB") == 64 * 1024
-
-
-def test_parse_byte_size_mb_suffix_case_insensitive():
-    assert _parse_byte_size("2mb") == 2 * 1024**2
-
-
-def test_parse_byte_size_gb_suffix():
-    assert _parse_byte_size("1GB") == 1024**3
-
-
-def test_parse_byte_size_fractional():
-    assert _parse_byte_size("1.5KB") == int(1.5 * 1024)
-
-
-def test_parse_byte_size_rejects_garbage():
-    with pytest.raises(InvalidArgumentError):
-        _parse_byte_size("not-a-size")
-
-
-def test_parse_byte_size_rejects_unknown_suffix():
-    with pytest.raises(InvalidArgumentError):
-        _parse_byte_size("5TB")  # not in the supported suffix set
 
 
 # --- deduplicate_images operation, end to end through this wrapper --------
@@ -140,9 +95,9 @@ def test_operation_no_args_defaults_to_no_minimum(pdf):
 
 
 def test_operation_unknown_option_raises():
-    with pytest.raises(InvalidArgumentError):
-        from pdftl.operations.deduplicate_images import _parse_deduplicate_images_args
+    from pdftl.operations.deduplicate_images import _parse_deduplicate_images_args
 
+    with pytest.raises(InvalidArgumentError):
         _parse_deduplicate_images_args(["bogus=1"])
 
 

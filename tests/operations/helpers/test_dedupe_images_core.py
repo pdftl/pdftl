@@ -15,8 +15,8 @@ from pikepdf import Dictionary, Name
 from pdftl.operations.helpers.dedupe_images_core import (
     deduplicate_image_xobjects,
     _find_image_candidates,
-    _stream_length,
 )
+from pdftl.utils.stream_dedup import stream_length as _stream_length
 
 
 @pytest.fixture

@@ -12,6 +12,7 @@ from pdftl.utils.arg_helpers import (
     expand_shorthand_args,
     parse_size_to_bytes,
 )
+from pdftl.exceptions import InvalidArgumentError
 
 # --- Fixtures & Mocks ---
 
@@ -480,21 +481,34 @@ def test_expand_shorthand_args_invalid_types():
     assert "Using EACH" not in error_msg
 
 
-def testparse_size_to_bytes():
-    # Test Megabytes
+def test_parse_size_to_bytes_megabytes():
     assert parse_size_to_bytes("5M") == 5 * 1024 * 1024
     assert parse_size_to_bytes("2.5MB") == int(2.5 * 1024 * 1024)
 
-    # Test Kilobytes
+
+def test_parse_size_to_bytes_kilobytes():
     assert parse_size_to_bytes("500K") == 500 * 1024
     assert parse_size_to_bytes("100.5KB") == int(100.5 * 1024)
 
-    # Test Raw Bytes
+
+def test_parse_size_to_bytes_gigabytes():
+    assert parse_size_to_bytes("1GB") == 1024**3
+    assert parse_size_to_bytes("1G") == 1024**3
+
+
+def test_parse_size_to_bytes_raw_bytes():
     assert parse_size_to_bytes("1048576") == 1048576
 
-    # Test Error Handling
-    with pytest.raises(ValueError, match="Invalid size format"):
-        parse_size_to_bytes("5GB")  # Unsupported unit
 
-    with pytest.raises(ValueError, match="Invalid size format"):
+def test_parse_size_to_bytes_case_insensitive():
+    assert parse_size_to_bytes("2mb") == 2 * 1024**2
+
+
+def test_parse_size_to_bytes_rejects_unknown_suffix():
+    with pytest.raises(InvalidArgumentError, match="[iI]nvalid size"):
+        parse_size_to_bytes("5TB")
+
+
+def test_parse_size_to_bytes_rejects_garbage():
+    with pytest.raises(InvalidArgumentError, match="[Ii]nvalid size"):
         parse_size_to_bytes("not_a_number")

@@ -174,10 +174,7 @@ def burst_pdf(opened_pdfs, operation_args=None, output_pattern="pg_%04d.pdf") ->
         if spec.lower().startswith("size"):
             if size_limit_bytes is not None:
                 raise InvalidArgumentError("More than one `size` spec passed to `burst`")
-            try:
-                size_limit_bytes = parse_size_to_bytes(spec[4:])
-            except ValueError as exc:
-                raise InvalidArgumentError(exc)
+            size_limit_bytes = parse_size_to_bytes(spec[4:])
         else:
             standard_specs.append(spec)
 

@@ -7,10 +7,14 @@
 """Utilities to help operations gather arguments in different formats"""
 
 import logging
+import re
+
+
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
+from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.page_specs import is_valid_page_spec
 
 logger = logging.getLogger(__name__)
@@ -162,18 +166,39 @@ def expand_shorthand_args(args: list[str], is_selector_func=is_valid_page_spec) 
         return [f"({opts_str})"]
 
 
-def parse_size_to_bytes(size_str: str) -> int:
-    """Converts a size string like '5M', '500K', or '1048576' to bytes."""
-    size_str = size_str.strip().upper()
-    try:
-        if size_str.endswith("MB") or size_str.endswith("M"):
-            val = float(size_str.replace("MB", "").replace("M", ""))
-            return int(val * 1024 * 1024)
-        if size_str.endswith("KB") or size_str.endswith("K"):
-            val = float(size_str.replace("KB", "").replace("K", ""))
-            return int(val * 1024)
-        return int(size_str)
-    except ValueError as exc:
-        raise ValueError(
-            f"Invalid size format: '{size_str}'. Use format like 5M or 500K."
-        ) from exc
+_SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]*)\s*$")
+
+_SIZE_SUFFIXES = {
+    "": 1,
+    "B": 1,
+    "K": 1024,
+    "KB": 1024,
+    "M": 1024**2,
+    "MB": 1024**2,
+    "G": 1024**3,
+    "GB": 1024**3,
+}
+
+
+def parse_size_to_bytes(size_str: str, *, context: str = "value") -> int:
+    """Parses a plain byte count or a `<number><suffix>` size string
+    (suffix one of B/K/KB/M/MB/G/GB, case-insensitive) into an integer
+    byte count. `context` names the option/argument for the error
+    message, e.g. "min_bytes" or "'deduplicate_images'".
+
+    This is pdftl's single canonical string-to-bytes size parser --
+    if you need one, use this rather than writing a local variant.
+    """
+    match = _SIZE_RE.match(size_str)
+    if not match:
+        raise InvalidArgumentError(
+            f"{context}: invalid size '{size_str}'. Expected a byte count or a size like '64KB'."
+        )
+    number_str, suffix = match.groups()
+    suffix = suffix.upper()
+    if suffix not in _SIZE_SUFFIXES:
+        raise InvalidArgumentError(
+            f"{context}: invalid size suffix '{suffix}' in '{size_str}'. "
+            f"Expected one of: {', '.join(s for s in _SIZE_SUFFIXES if s)}."
+        )
+    return int(float(number_str) * _SIZE_SUFFIXES[suffix])

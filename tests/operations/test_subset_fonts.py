@@ -1735,3 +1735,141 @@ def test_subset_fonts_loop_continues_past_a_none_stat_group_to_the_next():
     resolved_type0 = pdf.pages[0].Resources.Font.F2
     resolved_base = str(resolved_type0["/BaseFont"]).lstrip("/")
     assert resolved_base.endswith("+TestCIDFont")
+
+
+def test_shared_fontfile2_used_as_both_simple_and_cid_font():
+    """
+    Regression/coverage test for a scenario not otherwise exercised:
+    ONE physical FontFile2 stream shared by two /Font dicts of different
+    kinds -- a plain Simple /TrueType font (resolved via cmap) and a
+    Type0/CIDFontType2 font (resolved via /CIDToGIDMap, needing
+    retain_gids=True to keep its GID positions stable). This is exactly
+    the shape dedupe_fonts could newly create by merging two previously-
+    distinct FontFile2 streams that happen to be byte-identical, so
+    subset_fonts' grouping must handle it correctly:
+      - the union of glyphs both usages need must be retained
+      - retain_gids=True (forced by the CIDFontType2 sibling) must not
+        break the Simple font's own cmap-resolved code -> glyph mapping
+      - the CIDFontType2 sibling's CID 3 -> GID 3 Identity mapping must
+        survive intact (this is the ORIGINAL GID position, protected by
+        retain_gids)
+    """
+    pdf = pikepdf.new()
+
+    # One shared TTF: glyph "A" deliberately at GID 3 (matching the
+    # existing test_cidtype2_retains_gid_alignment fixture shape), plus
+    # a cmap entry for 0x42 ("B") at GID 4, used ONLY by the simple font.
+    fb = FontBuilder(1024, isTTF=True)
+    glyph_order = [".notdef", "unused1", "unused2", "A", "B"]
+    fb.setupGlyphOrder(glyph_order)
+    fb.setupCharacterMap({0x41: "A", 0x42: "B"})
+    glyphs = {g: Glyph() for g in glyph_order}
+    fb.setupGlyf(glyphs)
+    fb.setupHead()
+    metrics = {g: (500, 0) for g in glyph_order}
+    fb.setupHorizontalMetrics(metrics)
+    fb.setupHorizontalHeader()
+    fb.setupOS2()
+    fb.setupPost()
+    fb.setupNameTable({"familyName": "SharedFont", "styleName": "Regular"})
+    buf = BytesIO()
+    fb.save(buf)
+    ttf_bytes = buf.getvalue()
+
+    shared_stream = pdf.make_stream(ttf_bytes)
+
+    # Descriptor #1: used by the Simple font.
+    simple_descriptor = pikepdf.Dictionary(
+        Type=pikepdf.Name.FontDescriptor,
+        FontName=pikepdf.Name("/SharedFont"),
+        FontFile2=shared_stream,
+    )
+    simple_font = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.TrueType,
+        BaseFont=pikepdf.Name("/SharedFont"),
+        FirstChar=0x42,
+        LastChar=0x42,
+        Widths=pikepdf.Array([500]),
+        FontDescriptor=simple_descriptor,
+        # No /Encoding at all -- resolved purely via the font's own cmap.
+    )
+
+    # Descriptor #2: used by the CIDFontType2 descendant, pointing at
+    # the SAME physical stream object.
+    cid_descriptor = pikepdf.Dictionary(
+        Type=pikepdf.Name.FontDescriptor,
+        FontName=pikepdf.Name("/SharedFont"),
+        FontFile2=shared_stream,
+    )
+    cid_font_dict = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.CIDFontType2,
+        BaseFont=pikepdf.Name("/SharedFont"),
+        CIDSystemInfo=pikepdf.Dictionary(Registry="Adobe", Ordering="Identity", Supplement=0),
+        CIDToGIDMap=pikepdf.Name.Identity,
+        FontDescriptor=cid_descriptor,
+    )
+    type0_font = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.Type0,
+        BaseFont=pikepdf.Name("/SharedFont"),
+        Encoding=pikepdf.Name("/Identity-H"),
+        DescendantFonts=pikepdf.Array([cid_font_dict]),
+    )
+
+    page = pdf.add_blank_page(page_size=(612, 792))
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=simple_font, F2=type0_font))
+    # F1 paints code 0x42 ("B") as a Simple font; F2 paints CID 3 ("A")
+    # via Identity CIDToGIDMap.
+    page.Contents = pdf.make_stream(b"/F1 12 Tf <42> Tj /F2 12 Tf <0003> Tj")
+
+    result = subset_fonts(pdf, [])
+    assert result.success
+
+    # Both /Font dicts must have been resynced -- confirms the group was
+    # correctly identified as ONE shared-stream group, not treated as
+    # two independent (and therefore non-conflicting, uninteresting)
+    # subsets.
+    resolved_simple = pdf.pages[0].Resources.Font.F1
+    resolved_type0 = pdf.pages[0].Resources.Font.F2
+    resolved_cid = resolved_type0.DescendantFonts[0]
+
+    # They must still point at the identical physical stream object --
+    # subsetting rewrites the shared stream's bytes in place, it must
+    # never split it into two separate objects.
+    assert (
+        resolved_simple.FontDescriptor.FontFile2.objgen
+        == resolved_cid.FontDescriptor.FontFile2.objgen
+    )
+
+    new_bytes = bytes(resolved_simple.FontDescriptor.FontFile2.read_bytes())
+    tt = TTFont(BytesIO(new_bytes))
+    new_glyph_order = tt.getGlyphOrder()
+
+    # CIDFontType2 sibling forces retain_gids=True for the WHOLE shared
+    # font, so GID 3 ("A") must still be exactly "A" post-subset --
+    # confirms retain_gids protected the CID mapping correctly even
+    # with a Simple-font sibling also contributing to the same subset.
+    assert len(new_glyph_order) > 3, "GID padding lost -- retain_gids did not hold"
+    assert new_glyph_order[3] == "A", (
+        f"CID 3 must still map to glyph 'A' at GID 3, got {new_glyph_order[3]!r}"
+    )
+
+    # The Simple font's own code 0x42 ("B") must ALSO have survived the
+    # union -- confirms the Simple-font entry's cmap-resolved GID was
+    # correctly unioned in alongside the CID entry's protected GIDs,
+    # not silently dropped because retain_gids took a code path that
+    # only "knows about" GID-indexed retention.
+    assert "B" in new_glyph_order, (
+        "Simple font's own used glyph 'B' was dropped from the shared "
+        "subset -- retain_gids/CID-driven grouping may have discarded "
+        "glyphs the Simple-font sibling still needs"
+    )
+
+    # And both dicts must carry the SAME subset tag (one shared program
+    # -> one shared tag, per ISO 32000-2 9.6.4.3), confirming
+    # _apply_subset_tag also treated this correctly as one group.
+    simple_base = str(resolved_simple["/BaseFont"]).lstrip("/")
+    type0_base = str(resolved_type0["/BaseFont"]).lstrip("/")
+    assert simple_base.split("+")[0] == type0_base.split("+")[0]
