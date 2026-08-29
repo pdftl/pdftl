@@ -182,21 +182,26 @@ def _yield_extgstate_fonts(
 def _iter_appearance_streams(ap_entry: Any) -> Generator[Any, None, None]:
     """Yields the actual stream object(s) referenced by an /AP /N, /D, or /R
     entry, which per spec can either be a stream directly, or a sub-dictionary
-    keyed by appearance state (e.g. /N << /Off ... /On ... >>)."""
+    keyed by appearance state (e.g. /N << /Off ... /On ... >>).
+
+    Yields (state_name, stream_obj) pairs. state_name is None when ap_entry
+    is a direct stream (no appearance-state sub-dictionary); otherwise it's
+    the state key (e.g. "/On") the stream was found under.
+    """
     import pikepdf
 
     if not isinstance(ap_entry, pikepdf.Object):
         return
 
     if ap_entry.get("/Subtype") == "/Form":
-        yield ap_entry
+        yield None, ap_entry
         return
 
     # Otherwise assume it's a dict of appearance states
     with suppress(TypeError, KeyError, AttributeError, pikepdf.PdfError):
-        for _, state_obj in ap_entry.items():
+        for state_key, state_obj in ap_entry.items():
             if isinstance(state_obj, pikepdf.Object):
-                yield state_obj
+                yield str(state_key), state_obj
 
 
 def _yield_annot_fonts(
@@ -208,7 +213,7 @@ def _yield_annot_fonts(
     for ap_key in ("/N", "/D", "/R"):
         if ap_key not in ap:
             continue
-        for stream_obj in _iter_appearance_streams(ap[ap_key]):
+        for _state_name, stream_obj in _iter_appearance_streams(ap[ap_key]):
             if stream_obj.objgen in visited:
                 continue
             visited.add(stream_obj.objgen)
@@ -285,17 +290,34 @@ class StreamContext:
     depth: int
     kind: str  # "page" | "form" | "pattern" | "smask" | "annotation"
     resources: Any | None  # this stream's own /Resources dict, if any
-    # Populated ONLY for kind=="form": the resources dict that holds the
-    # /XObject entry referencing this stream, and the key name under
-    # /XObject (e.g. "/Fm0"). Lets callers rewrite that single entry to
-    # point at a private copy when the same Form is shared across pages
-    # with different trim_rects -- see trim._process_page's unsharing.
+    # owner_resources/owner_key together identify the single dict entry
+    # that references this stream, so callers can rewrite it to point at
+    # a private copy (e.g. trim._process_page's unsharing) or build a
+    # breadcrumb path (e.g. dump_streams). Populated per kind as follows:
+    #   "form":    owner_resources = the /Resources dict holding /XObject;
+    #              owner_key = the /XObject entry name (e.g. "/Fm0")
+    #   "pattern": owner_resources = the /Resources dict holding /Pattern;
+    #              owner_key = the /Pattern entry name (e.g. "/P1")
+    #   "smask":   owner_key = the /ExtGState entry name that references
+    #              this group via /SMask /G (e.g. "/GS1"); owner_resources
+    #              not populated, since the group itself has no direct
+    #              /Resources-keyed entry
+    #   "page", "annotation": not populated -- annotations use
+    #              annot_index/ap_key/ap_state below instead, since they
+    #              have no name under a resources dict
     owner_resources: Any | None = None
     owner_key: str | None = None
+    # Populated ONLY for kind=="annotation": position of the annotation
+    # in the page's /Annots array, which /AP key it came from ("/N",
+    # "/D", or "/R"), and -- if /AP's entry was a state sub-dictionary
+    # rather than a direct stream -- the state key (e.g. "/On"), else None.
+    annot_index: int | None = None
+    ap_key: str | None = None
+    ap_state: str | None = None
 
 
 def walk_content_streams(
-    pdf: "pikepdf.Pdf", page_indices: list[int] | None = None
+    pdf: "pikepdf.Pdf", page_indices: list[int] | None = None, yield_duplicates: bool = False
 ) -> Generator[tuple[Any, StreamContext], None, None]:
     """
     Canonical recursive walker over every content stream that can paint
@@ -312,6 +334,14 @@ def walk_content_streams(
     Caveat: if page.Contents is an array (multiple streams), it is yielded
     as-is (kind="page"). Callers that need a single coalesced stream should
     call `pikepdf.Page(page).contents_coalesce()` before walking that page.
+
+    `yield_duplicates`: when False (default), each unique stream is yielded
+    once per page regardless of how many resource names point at it -- the
+    behavior all five existing callers rely on. When True, every named
+    reference to a stream is yielded (needed by dump_streams to produce an
+    entry, or an alias stub, for each occurrence), but a stream is only
+    *descended into* the first time it's encountered -- cycle prevention
+    stays unconditional either way.
     """
 
     target_pages = page_indices if page_indices else range(1, len(pdf.pages) + 1)
@@ -331,30 +361,35 @@ def walk_content_streams(
             yield page.Contents, ctx
 
         if page_res is not None:
-            yield from _walk_resources_streams(page_res, page_num, 1, visited)
+            yield from _walk_resources_streams(page_res, page_num, 1, visited, yield_duplicates)
 
-        yield from _walk_annotation_streams(page, page_num, visited)
+        yield from _walk_annotation_streams(page, page_num, visited, yield_duplicates)
 
 
 def _walk_resources_streams(
-    resources: Any, page_num: int, depth: int, visited: set[tuple]
+    resources: Any, page_num: int, depth: int, visited: set[tuple], yield_duplicates: bool = False
 ) -> Generator[tuple[Any, StreamContext], None, None]:
-    yield from _walk_xobject_forms(resources, page_num, depth, visited)
-    yield from _walk_tiling_patterns(resources, page_num, depth, visited)
-    yield from _walk_extgstate_smasks(resources, page_num, depth, visited)
+    yield from _walk_xobject_forms(resources, page_num, depth, visited, yield_duplicates)
+    yield from _walk_tiling_patterns(resources, page_num, depth, visited, yield_duplicates)
+    yield from _walk_extgstate_smasks(resources, page_num, depth, visited, yield_duplicates)
 
 
-def _walk_xobject_forms(resources, page_num, depth, visited):
+def _walk_xobject_forms(resources, page_num, depth, visited, yield_duplicates=False):
     import pikepdf
 
     if "/XObject" not in resources:
         return
     for name, xobj in resources.XObject.items():
-        if not isinstance(xobj, pikepdf.Object) or xobj.objgen in visited:
+        if not isinstance(xobj, pikepdf.Object):
             continue
-        visited.add(xobj.objgen)
         if xobj.get("/Subtype") != "/Form":
+            visited.add(xobj.objgen)
             continue
+
+        already_visited = xobj.objgen in visited
+        if already_visited and not yield_duplicates:
+            continue
+
         xobj_res = get_resources(xobj)
         ctx = StreamContext(
             page_num=page_num,
@@ -365,100 +400,156 @@ def _walk_xobject_forms(resources, page_num, depth, visited):
             owner_key=str(name),
         )
         yield xobj, ctx
-        if xobj_res is not None:
-            yield from _walk_resources_streams(xobj_res, page_num, depth + 1, visited)
+
+        if not already_visited:
+            visited.add(xobj.objgen)
+            if xobj_res is not None:
+                yield from _walk_resources_streams(
+                    xobj_res, page_num, depth + 1, visited, yield_duplicates
+                )
 
 
-def _walk_tiling_patterns(resources, page_num, depth, visited):
+def _walk_tiling_patterns(resources, page_num, depth, visited, yield_duplicates=False):
     import pikepdf
 
     if "/Pattern" not in resources:
         return
-    for _, pat in resources.Pattern.items():
-        if not isinstance(pat, pikepdf.Object) or pat.objgen in visited:
+    for name, pat in resources.Pattern.items():
+        if not isinstance(pat, pikepdf.Object):
             continue
-        visited.add(pat.objgen)
         try:
             if int(pat.get("/PatternType", 0)) != 1:
+                visited.add(pat.objgen)
                 continue
         except (TypeError, ValueError):
             continue
+
+        already_visited = pat.objgen in visited
+        if already_visited and not yield_duplicates:
+            continue
+
         pat_res = get_resources(pat)
-        ctx = StreamContext(page_num=page_num, depth=depth, kind="pattern", resources=pat_res)
+        ctx = StreamContext(
+            page_num=page_num,
+            depth=depth,
+            kind="pattern",
+            resources=pat_res,
+            owner_resources=resources,
+            owner_key=str(name),
+        )
         yield pat, ctx
-        if pat_res is not None:
-            yield from _walk_resources_streams(pat_res, page_num, depth + 1, visited)
+
+        if not already_visited:
+            visited.add(pat.objgen)
+            if pat_res is not None:
+                yield from _walk_resources_streams(
+                    pat_res, page_num, depth + 1, visited, yield_duplicates
+                )
 
 
-def _walk_extgstate_smasks(resources, page_num, depth, visited):
+def _walk_extgstate_smasks(resources, page_num, depth, visited, yield_duplicates=False):
     import pikepdf
 
     if "/ExtGState" not in resources:
         return
-    for _, gs in resources.ExtGState.items():
-        if not isinstance(gs, pikepdf.Object) or gs.objgen in visited:
+    for gs_key, gs in resources.ExtGState.items():
+        if not isinstance(gs, pikepdf.Object):
             continue
-        visited.add(gs.objgen)
-        yield from _walk_one_extgstate_smask(gs, page_num, depth, visited)
+        yield from _walk_one_extgstate_smask(
+            gs, page_num, depth, visited, str(gs_key), yield_duplicates
+        )
 
 
-def _walk_one_extgstate_smask(gs, page_num, depth, visited):
+def _walk_one_extgstate_smask(gs, page_num, depth, visited, gs_key, yield_duplicates=False):
     import pikepdf
 
     with suppress(TypeError, KeyError, AttributeError, pikepdf.PdfError):
-        group = _resolve_smask_group(gs, visited)
+        group = _get_smask_group(gs)
         if group is None:
             return
-        visited.add(group.objgen)
+
+        already_visited = group.objgen in visited
+        if already_visited and not yield_duplicates:
+            return
+
         group_res = get_resources(group)
-        ctx = StreamContext(page_num=page_num, depth=depth, kind="smask", resources=group_res)
+        ctx = StreamContext(
+            page_num=page_num, depth=depth, kind="smask", resources=group_res, owner_key=gs_key
+        )
         yield group, ctx
-        if group_res is not None:
-            yield from _walk_resources_streams(group_res, page_num, depth + 1, visited)
+
+        if not already_visited:
+            visited.add(group.objgen)
+            if group_res is not None:
+                yield from _walk_resources_streams(
+                    group_res, page_num, depth + 1, visited, yield_duplicates
+                )
 
 
-def _resolve_smask_group(gs, visited):
+def _get_smask_group(gs):
+    """Resolve gs's /SMask /G group, or None if absent/None/malformed.
+
+    Renamed from _resolve_smask_group -- no longer takes `visited`, since
+    dedup is now handled entirely by the caller via `already_visited`."""
     import pikepdf
 
     smask = gs.get("/SMask")
     if not isinstance(smask, pikepdf.Object) or smask == pikepdf.Name("/None"):
         return None
     group = smask.get("/G")
-    if not isinstance(group, pikepdf.Object) or group.objgen in visited:
+    if not isinstance(group, pikepdf.Object):
         return None
     return group
 
 
-def _walk_annotation_streams(page, page_num, visited):
+def _walk_annotation_streams(page, page_num, visited, yield_duplicates=False):
     import pikepdf
 
     if "/Annots" not in page:
         return
     with suppress(TypeError, KeyError, AttributeError, ValueError, pikepdf.PdfError):
-        for annot in page.Annots:
+        for annot_index, annot in enumerate(page.Annots):
             if not isinstance(annot, pikepdf.Object) or "/AP" not in annot:
                 continue
-            yield from _walk_one_annot(annot, page_num, visited)
+            yield from _walk_one_annot(annot, page_num, visited, annot_index, yield_duplicates)
 
 
-def _walk_one_annot(annot, page_num, visited):
+def _walk_one_annot(annot, page_num, visited, annot_index, yield_duplicates=False):
     ap = annot.AP
     for ap_key in ("/N", "/D", "/R"):
         if ap_key not in ap:
             continue
-        yield from _walk_ap_entry_streams(ap[ap_key], page_num, visited)
+        yield from _walk_ap_entry_streams(
+            ap[ap_key], page_num, visited, annot_index, ap_key, yield_duplicates
+        )
 
 
-def _walk_ap_entry_streams(ap_entry, page_num, visited):
-    for stream_obj in _iter_appearance_streams(ap_entry):
-        if stream_obj.objgen in visited:
+def _walk_ap_entry_streams(
+    ap_entry, page_num, visited, annot_index, ap_key, yield_duplicates=False
+):
+    for ap_state, stream_obj in _iter_appearance_streams(ap_entry):
+        already_visited = stream_obj.objgen in visited
+        if already_visited and not yield_duplicates:
             continue
-        visited.add(stream_obj.objgen)
+
         stream_res = get_resources(stream_obj)
-        ctx = StreamContext(page_num=page_num, depth=1, kind="annotation", resources=stream_res)
+        ctx = StreamContext(
+            page_num=page_num,
+            depth=1,
+            kind="annotation",
+            resources=stream_res,
+            annot_index=annot_index,
+            ap_key=ap_key,
+            ap_state=ap_state,
+        )
         yield stream_obj, ctx
-        if stream_res is not None:
-            yield from _walk_resources_streams(stream_res, page_num, 2, visited)
+
+        if not already_visited:
+            visited.add(stream_obj.objgen)
+            if stream_res is not None:
+                yield from _walk_resources_streams(
+                    stream_res, page_num, 2, visited, yield_duplicates
+                )
 
 
 def walk_content_streams_deduped(

@@ -28,11 +28,106 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class StreamTarget:
-    """Represents a structural target in the PDF to apply a stream to."""
+    """Represents a structural target in the PDF to apply a stream to.
+
+    `target_type` is the root kind the path resolves to first: "Contents",
+    "XObject", "Pattern", "SMask", or "Annotation". `xobject_path` is always
+    the *nested* Form XObject chain applied after resolving the root (empty
+    for a path that terminates at the root itself) -- for target_type
+    "XObject" the root IS the first path element, so xobject_path there is
+    the full chain including it, matching the pre-existing behavior.
+    """
 
     page_num: int
-    target_type: str  # "Contents" or "XObject"
+    target_type: str  # "Contents" | "XObject" | "Pattern" | "SMask" | "Annotation"
     xobject_path: list[str] = field(default_factory=list)
+    pattern_name: str | None = None
+    extgstate_name: str | None = None
+    annot_index: int | None = None  # 0-based, converted from the 1-based breadcrumb
+    ap_key: str | None = None
+    ap_state: str | None = None
+
+
+def _parse_xobject_chain(parts: list[str]) -> list[str] | None:
+    """Parse a sequence of 'XObject <name>' segments into a name list, or
+    None if any segment doesn't match. Shared by the top-level XObject
+    target and by the nested-XObject suffix of Pattern/SMask/Annotation
+    targets.
+
+    Each part is checked with `startswith("XObject ")` before being
+    split, which guarantees a space is present -- so split(" ", 1) always
+    yields exactly 2 elements here; no length check is reachable to test.
+    """
+    xobject_path = []
+    for part in parts:
+        if not part.startswith("XObject "):
+            return None
+        xobject_path.append(part.split(" ", 1)[1])
+    return xobject_path
+
+
+def _parse_pattern_target(page_num: int, parts: list[str]) -> StreamTarget | None:
+    """Parse 'Pattern <name>' [ / 'XObject <name>' ]...
+
+    parts[0] is guaranteed by the caller's `startswith("Pattern ")` guard
+    to contain a space, so split(" ", 1) always yields 2 elements here --
+    no length check needed (and none is reachable to test).
+    """
+    pattern_name = parts[0].split(" ", 1)[1]
+    nested = _parse_xobject_chain(parts[1:]) if len(parts) > 1 else []
+    if nested is None:
+        return None
+    return StreamTarget(page_num, "Pattern", xobject_path=nested, pattern_name=pattern_name)
+
+
+def _parse_smask_target(page_num: int, parts: list[str]) -> StreamTarget | None:
+    """Parse 'ExtGState <name> / SMask' [ / 'XObject <name>' ]...
+
+    parts[1] is guaranteed by the caller's `startswith("ExtGState ")`
+    guard to contain a space -- same reasoning as _parse_pattern_target.
+    """
+    extgstate_name = parts[1].split(" ", 1)[1]
+    nested = _parse_xobject_chain(parts[3:]) if len(parts) > 3 else []
+    if nested is None:
+        return None
+    return StreamTarget(page_num, "SMask", xobject_path=nested, extgstate_name=extgstate_name)
+
+
+def _parse_annotation_target(page_num: int, parts: list[str]) -> StreamTarget | None:
+    """Parse 'Annot <1-based-index> / AP <key>' [ / 'State <state>' ]
+    [ / 'XObject <name>' ]...
+
+    parts[1] and parts[2] are guaranteed by the caller's `startswith`
+    guards to contain a space, so split(" ", 1) always yields 2 elements
+    for those -- only the numeric index conversion can actually fail.
+    """
+    try:
+        annot_index = int(parts[1].split(" ", 1)[1]) - 1
+    except ValueError:
+        return None
+    if annot_index < 0:
+        return None
+
+    ap_key = parts[2].split(" ", 1)[1]
+
+    remaining = parts[3:]
+    ap_state = None
+    if remaining and remaining[0].startswith("State "):
+        ap_state = remaining[0].split(" ", 1)[1]
+        remaining = remaining[1:]
+
+    nested = _parse_xobject_chain(remaining) if remaining else []
+    if nested is None:
+        return None
+
+    return StreamTarget(
+        page_num,
+        "Annotation",
+        xobject_path=nested,
+        annot_index=annot_index,
+        ap_key=ap_key,
+        ap_state=ap_state,
+    )
 
 
 def _parse_target_path(header: str) -> StreamTarget | None:
@@ -53,13 +148,19 @@ def _parse_target_path(header: str) -> StreamTarget | None:
         return StreamTarget(page_num, "Contents")
 
     if len(parts) >= 2 and parts[1].startswith("XObject "):
-        xobject_path = []
-        for part in parts[1:]:
-            if not part.startswith("XObject "):
-                return None
-            name_parts = part.split(" ", 1)
-            xobject_path.append(name_parts[1])
+        xobject_path = _parse_xobject_chain(parts[1:])
+        if xobject_path is None:
+            return None
         return StreamTarget(page_num, "XObject", xobject_path=xobject_path)
+
+    if len(parts) >= 2 and parts[1].startswith("Pattern "):
+        return _parse_pattern_target(page_num, parts[1:])
+
+    if len(parts) >= 3 and parts[1].startswith("ExtGState ") and parts[2] == "SMask":
+        return _parse_smask_target(page_num, parts)
+
+    if len(parts) >= 3 and parts[1].startswith("Annot ") and parts[2].startswith("AP "):
+        return _parse_annotation_target(page_num, parts)
 
     return None
 
@@ -185,44 +286,143 @@ def _apply_contents_target(
             )
 
 
+def _descend_xobject_path(start_obj: Any, xobject_path: list[str]) -> Any:
+    """Walk a chain of nested Form XObject names starting from `start_obj`
+    (a page, Pattern, SMask group, or annotation appearance stream, any of
+    which may carry its own /Resources/XObject dict), returning the final
+    stream object. Raises AttributeError/KeyError if any hop is missing,
+    same as the original inline loop this was extracted from."""
+    current_obj = start_obj
+    for xobj_name in xobject_path:
+        resources = current_obj.Resources
+        xobjects = resources.XObject
+        current_obj = xobjects[xobj_name]
+    return current_obj
+
+
+def _write_normalized(obj: Any, content: bytes, normalize: bool, warn_context: str) -> None:
+    """Write `content` to `obj`, then optionally re-write it normalized,
+    falling back to the raw bytes already written if normalization fails."""
+    import pikepdf
+
+    obj.write(content)
+    if normalize:
+        try:
+            obj.write(normalize_xobject_stream(obj))
+        except (pikepdf.PdfError, ValueError, TypeError) as e:
+            # Explanatory comment: Normalization failed on syntax. We keep raw bytes.
+            logger.warning("Could not normalize imported %s: %s", warn_context, e)
+
+
 def _apply_xobject_target(
     page: Any, page_num: int, xobject_path: list[str], content: bytes, normalize: bool
 ) -> None:
     """Helper method executing /XObject stream extraction and structural replacement."""
-    import pikepdf
-
     if not xobject_path:
         return
     try:
         # ISO 32000-2 7.8.3 Resource Dictionaries
-        current_obj = page
-        for xobj_name in xobject_path:
-            resources = current_obj.Resources
-            xobjects = resources.XObject
-            current_obj = xobjects[xobj_name]
+        current_obj = _descend_xobject_path(page, xobject_path)
 
         # We overwrite the stream content of the existing XObject.
         # This ensures that any other pages referencing this exact object
         # (Shared Form XObjects) inherit the change simultaneously.
-        current_obj.write(content)
-
-        if normalize:
-            try:
-                current_obj.write(normalize_xobject_stream(current_obj))
-            except (pikepdf.PdfError, ValueError, TypeError) as e:
-                # Explanatory comment: Normalization failed on syntax. We keep raw bytes.
-                logger.warning(
-                    "Could not normalize imported XObject %s on page %d: %s",
-                    " / ".join(xobject_path),
-                    page_num,
-                    e,
-                )
+        _write_normalized(
+            current_obj,
+            content,
+            normalize,
+            f"XObject {' / '.join(xobject_path)} on page {page_num}",
+        )
     except (AttributeError, KeyError) as e:
         # Explanatory comment: The target page is missing the /Resources or /XObject
         # dictionary in the tree path, meaning the target cannot exist here.
         logger.warning(
             "Could not find XObject path %s on page %d (missing Resources dict): %s",
             " / ".join(xobject_path),
+            page_num,
+            e,
+        )
+
+
+def _apply_pattern_target(
+    page: Any, page_num: int, target: "StreamTarget", content: bytes, normalize: bool
+) -> None:
+    """Helper method executing /Pattern stream extraction and structural
+    replacement, with an optional nested XObject descent."""
+    try:
+        pat = page.Resources.Pattern[target.pattern_name]
+        final_obj = _descend_xobject_path(pat, target.xobject_path)
+        _write_normalized(
+            final_obj,
+            content,
+            normalize,
+            f"Pattern {target.pattern_name} on page {page_num}",
+        )
+    except (AttributeError, KeyError) as e:
+        logger.warning(
+            "Could not find Pattern %s on page %d (missing Resources/Pattern dict): %s",
+            target.pattern_name,
+            page_num,
+            e,
+        )
+
+
+def _apply_smask_target(
+    page: Any, page_num: int, target: "StreamTarget", content: bytes, normalize: bool
+) -> None:
+    """Helper method executing an ExtGState /SMask /G group stream
+    extraction and structural replacement, with an optional nested
+    XObject descent."""
+    try:
+        gs = page.Resources.ExtGState[target.extgstate_name]
+        group = gs.SMask.G
+        final_obj = _descend_xobject_path(group, target.xobject_path)
+        _write_normalized(
+            final_obj,
+            content,
+            normalize,
+            f"SMask group for ExtGState {target.extgstate_name} on page {page_num}",
+        )
+    except (AttributeError, KeyError) as e:
+        logger.warning(
+            "Could not find SMask group for ExtGState %s on page %d "
+            "(missing Resources/ExtGState/SMask/G): %s",
+            target.extgstate_name,
+            page_num,
+            e,
+        )
+
+
+def _apply_annotation_target(
+    page: Any, page_num: int, target: "StreamTarget", content: bytes, normalize: bool
+) -> None:
+    """Helper method executing an annotation /AP appearance stream
+    extraction and structural replacement, with an optional nested
+    XObject descent.
+
+    Note: annotation targeting is index-based (`Annot <n>` counts position
+    in the page's /Annots array at dump time). If annotations are added,
+    removed, or reordered between dump and import, the index may silently
+    resolve to the wrong annotation. Prefer re-dumping immediately before
+    re-importing when annotation content is being edited.
+    """
+    try:
+        annot = page.Annots[target.annot_index]
+        ap_entry = annot.AP[target.ap_key]
+        stream_obj = ap_entry[target.ap_state] if target.ap_state is not None else ap_entry
+        final_obj = _descend_xobject_path(stream_obj, target.xobject_path)
+        _write_normalized(
+            final_obj,
+            content,
+            normalize,
+            f"annotation appearance stream (Annot {target.annot_index + 1}, "
+            f"AP {target.ap_key}) on page {page_num}",
+        )
+    except (AttributeError, KeyError, IndexError) as e:
+        logger.warning(
+            "Could not find annotation appearance stream (Annot %d, AP %s) on page %d: %s",
+            target.annot_index + 1,
+            target.ap_key,
             page_num,
             e,
         )
@@ -249,6 +449,12 @@ def _apply_stream_target(
         _apply_contents_target(pdf, page, target.page_num, content, normalize)
     elif target.target_type == "XObject":
         _apply_xobject_target(page, target.page_num, target.xobject_path, content, normalize)
+    elif target.target_type == "Pattern":
+        _apply_pattern_target(page, target.page_num, target, content, normalize)
+    elif target.target_type == "SMask":
+        _apply_smask_target(page, target.page_num, target, content, normalize)
+    elif target.target_type == "Annotation":
+        _apply_annotation_target(page, target.page_num, target, content, normalize)
 
 
 _IMPORT_STREAMS_LONG_DESC = """
@@ -268,6 +474,26 @@ ignoring any internal Object IDs (`(4:0)`).
 * `=== Page 2 / XObject /Fm1` overwrites the stream of the XObject mapped as
   `/Fm1` within Page 2's resources.
 * `=== Page 1 / XObject /Fm1 / XObject /Fm0` overwrites the nested XObject `/Fm0`.
+* `=== Page 1 / Pattern /P1` overwrites the stream of the tiling Pattern
+  mapped as `/P1` within Page 1's resources.
+* `=== Page 1 / ExtGState /GS1 / SMask` overwrites the soft-mask group
+  stream referenced by `/GS1`'s `/SMask /G` entry.
+* `=== Page 1 / Annot 2 / AP /N` overwrites the direct-stream `/N`
+  appearance stream of the 2nd annotation (1-based) in Page 1's /Annots.
+* `=== Page 1 / Annot 2 / AP /N / State /On` overwrites the `/On` state
+  stream when `/N` is itself a sub-dictionary keyed by appearance state.
+
+Any of the above can be followed by one or more `/ XObject <name>` segments
+to target a Form XObject nested inside that Pattern's, SMask group's, or
+annotation appearance stream's own resources -- e.g.
+`Page 1 / Pattern /P1 / XObject /Fm1`.
+
+**Annotation targeting is index-based and order-sensitive.** The `Annot <n>`
+index reflects the annotation's position in `/Annots` at dump time. Adding,
+removing, or reordering annotations between `dump_streams` and
+`import_streams` will cause the index to silently target the wrong
+annotation. Re-dump immediately before re-importing when editing
+annotation appearance streams to avoid this.
 
 Because it relies on semantic paths, you can easily use text tools to
 migrate streams across entirely different PDF documents by simply swapping

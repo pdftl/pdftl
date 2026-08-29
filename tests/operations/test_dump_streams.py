@@ -1,7 +1,7 @@
 # tests/operations/test_dump_streams.py
 
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pikepdf
 import pytest
 
@@ -218,88 +218,66 @@ def test_collect_page_stream_normalization_disabled(base_pdf):
 
 
 # ---------------------------------------------------------------------------
-# 4. Form XObject Normalization Exception Fallback
+# 4. Walked-stream Normalization Exception Fallback
 # ---------------------------------------------------------------------------
 
 
-def test_recurse_and_collect_normalization_exception_fallback(base_pdf):
-    """Triggers the try-except fallback block in _recurse_and_collect when normalization fails."""
+def test_collect_walked_streams_normalization_exception_fallback(base_pdf):
+    """Triggers the try-except fallback in read_xobject_stream (via
+    _collect_walked_streams) when normalization fails: raw bytes are kept."""
+    if "/Contents" in base_pdf.pages[0]:
+        del base_pdf.pages[0].Contents
+
     xobj = base_pdf.make_stream(b"BT (Stream) Tj ET")
     xobj.Type = pikepdf.Name("/XObject")
     xobj.Subtype = pikepdf.Name("/Form")
     xobj.BBox = [0, 0, 100, 100]
 
-    resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": xobj})})
-
-    collected = []
-    seen = {}
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/XObject": pikepdf.Dictionary({"/Fm1": xobj})}
+    )
 
     # Force unparse_content_stream to throw a PdfError during collection
     with patch(
         "pikepdf.unparse_content_stream", side_effect=pikepdf.PdfError("Mock syntax error")
     ):
-        from pdftl.operations.dump_streams import _recurse_and_collect
-
-        _recurse_and_collect(
-            resources=resources,
-            page_num=1,
-            current_path="Page 1",
-            seen_objgens=seen,
-            collected=collected,
-            annotate=False,
-            xobject_page_map={},
-            dump_resources=False,
-            normalize=True,
-        )
+        res = dump_streams(base_pdf, ["1"])
 
     # It must gracefully catch the exception, print warning, and fall back to the raw content stream
-    assert len(collected) == 1
-    assert collected[0][1] == b"BT (Stream) Tj ET"
+    fm1_entry = [entry for entry in res.data if "XObject /Fm1" in entry[0]][0]
+    assert fm1_entry[1] == b"BT (Stream) Tj ET"
 
 
-def test_recurse_and_collect_none_content():
-    """Covers line 315 by validating gracefully warning outputs when the returned stream content is None."""
-    mock_xobj = MagicMock()
-    mock_xobj.objgen = (10, 0)
-    mock_xobj.get.return_value = "/Form"
-    mock_xobj.read_bytes.return_value = None
-    mock_xobj.__contains__.return_value = False  # Avoid infinite recursion on recursive check
+def test_collect_walked_streams_none_content_warns():
+    """A Form XObject whose read_xobject_stream returns None (e.g. a
+    malformed/uninitialized stream) produces a 'No stream content!'
+    warning rather than erroring."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
 
-    # Mock the resources structure completely at Python level to avoid C++ casting issues
-    mock_resources = MagicMock()
-    mock_resources.__contains__.return_value = True
+    with patch("pdftl.operations.dump_streams.read_xobject_stream", return_value=None):
+        xobj = pdf.make_stream(b"")
+        xobj.Type = pikepdf.Name("/XObject")
+        xobj.Subtype = pikepdf.Name("/Form")
+        xobj.BBox = [0, 0, 100, 100]
+        pdf.pages[0].Resources = pikepdf.Dictionary(
+            {"/XObject": pikepdf.Dictionary({"/FmNone": xobj})}
+        )
 
-    mock_xobject_dict = MagicMock()
-    mock_xobject_dict.items.return_value = [("/FmNone", mock_xobj)]
-    mock_resources.XObject = mock_xobject_dict
+        res = dump_streams(pdf, ["1"])
 
-    collected = []
-    seen = {}
-
-    from pdftl.operations.dump_streams import _recurse_and_collect
-
-    _recurse_and_collect(
-        resources=mock_resources,
-        page_num=1,
-        current_path="Page 1",
-        seen_objgens=seen,
-        collected=collected,
-        annotate=False,
-        xobject_page_map={},
-        dump_resources=False,
-        normalize=False,
-    )
-    assert len(collected) == 1
-    assert "No stream content!" in collected[0][2]
+    fmnone_entry = [entry for entry in res.data if "FmNone" in entry[0]][0]
+    assert "No stream content!" in fmnone_entry[2]
+    assert fmnone_entry[1] == b""
 
 
 # ---------------------------------------------------------------------------
-# 5. Shared XObjects Warning Triggers
+# 5. Shared Resource Warning Triggers
 # ---------------------------------------------------------------------------
 
 
-def test_shared_xobjects_warning_output(base_pdf):
-    """Ensures XObjects shared across multiple pages properly list those pages in warnings."""
+def test_shared_resource_warning_output(base_pdf):
+    """Ensures resources shared across multiple pages properly list those pages in warnings."""
     xobj = base_pdf.make_stream(b"")
     xobj.Type = pikepdf.Name("/XObject")
     xobj.Subtype = pikepdf.Name("/Form")
@@ -318,15 +296,16 @@ def test_shared_xobjects_warning_output(base_pdf):
 
     # Locate collected data for Fm1 under Page 1
     warnings = [w for header, _, w in res.data if "Page 1 / XObject /Fm1" == header][0]
-    assert any("Shared XObject: also appears on page(s): 2, 3" in warn for warn in warnings)
+    assert any("Shared resource: also appears on page(s): 2, 3" in warn for warn in warnings)
 
     # Ensure page 2 yielded an alias
     page2_content = [c for h, c, w in res.data if "Page 2 / XObject /Fm1" == h][0]
     assert b"% ALIAS OF: Page 1 / XObject /Fm1" in page2_content
 
 
-def test_build_xobject_page_map_complex(base_pdf):
-    """Covers lines 245, 247, and 253 inside the shared XObject page mapping logic."""
+def test_build_stream_page_map_complex(base_pdf):
+    """Covers the multi-kind sharing map: a nested Form chain plus a
+    non-Form Image sibling (which the walker never yields at all)."""
     img_xobj = base_pdf.make_stream(b"")
     img_xobj.Type = pikepdf.Name("/XObject")
     img_xobj.Subtype = pikepdf.Name("/Image")
@@ -356,21 +335,62 @@ def test_build_xobject_page_map_complex(base_pdf):
         }
     )
 
-    from pdftl.operations.dump_streams import _build_xobject_page_map
+    from pdftl.operations.dump_streams import _build_stream_page_map
 
-    page_map = _build_xobject_page_map(base_pdf, [1])
+    page_map = _build_stream_page_map(base_pdf, [1])
     assert grandchild.objgen in page_map
     assert child.objgen in page_map
     assert img_xobj.objgen not in page_map
 
 
+def test_build_stream_page_map_covers_pattern_smask_annotation(base_pdf):
+    """The sharing map now also tracks Patterns, SMask groups, and
+    annotation appearance streams, not just Forms."""
+    pat = base_pdf.make_stream(b"pattern content")
+    pat.PatternType = 1
+
+    smask_group = base_pdf.make_stream(b"mask content")
+    smask_group.Subtype = pikepdf.Name("/Form")
+    smask_group.BBox = [0, 0, 100, 100]
+    smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": smask_group})
+    gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+    ap_form = base_pdf.make_stream(b"annot content")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    ap_form.BBox = [0, 0, 100, 100]
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {
+            "/Pattern": pikepdf.Dictionary({"/P1": pat}),
+            "/ExtGState": pikepdf.Dictionary({"/GS1": gs}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    from pdftl.operations.dump_streams import _build_stream_page_map
+
+    page_map = _build_stream_page_map(base_pdf, [1])
+    assert pat.objgen in page_map
+    assert smask_group.objgen in page_map
+    assert ap_form.objgen in page_map
+
+
 # ---------------------------------------------------------------------------
-# 6. Comprehensive Recursion Coverage
+# 6. Comprehensive Walked-Stream Collection Coverage
 # ---------------------------------------------------------------------------
 
 
-def test_recurse_and_collect_comprehensive(base_pdf):
-    """Covers lines 285, 287, 302, 312, 315, 322-324, and 327 in recursive collection."""
+def test_dump_streams_comprehensive_nesting_and_alias(base_pdf):
+    """A Form nested two levels deep, plus a sibling reference to the
+    inner Form under a second name -- exercising nesting, alias-stub
+    dedup, dump_resources, and normalize=False in one pass."""
     img_xobj = base_pdf.make_stream(b"")
     img_xobj.Type = pikepdf.Name("/XObject")
     img_xobj.Subtype = pikepdf.Name("/Image")
@@ -388,7 +408,7 @@ def test_recurse_and_collect_comprehensive(base_pdf):
         {"/XObject": pikepdf.Dictionary({"/FmEmpty": empty_xobj})}
     )
 
-    resources = pikepdf.Dictionary(
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
         {
             "/XObject": pikepdf.Dictionary(
                 {
@@ -400,31 +420,17 @@ def test_recurse_and_collect_comprehensive(base_pdf):
         }
     )
 
-    collected = []
-    seen = {}
+    res = dump_streams(base_pdf, ["annotate", "resources=true", "normalize=false", "1"])
+    # entries: [Page 1 Contents, Page 1 Resources,
+    #           FmNested, FmNested/Resources, FmNested/XObject FmEmpty,
+    #           FmEmpty (alias, since seen via FmNested first or vice versa
+    #           depending on dict iteration order)]
+    collected = res.data
 
-    from pdftl.operations.dump_streams import _recurse_and_collect
-
-    _recurse_and_collect(
-        resources=resources,
-        page_num=1,
-        current_path="Page 1",
-        seen_objgens=seen,
-        collected=collected,
-        annotate=True,
-        xobject_page_map={},
-        dump_resources=True,
-        normalize=False,  # covers line 302
-    )
-
-    # Validate collected payloads (should extract Nested XObject, Nested resources, and Empty XObject, and an ALIAS)
-    # 1. /FmNested (content)
-    # 2. /FmNested / Resources
-    # 3. /FmNested / XObject /FmEmpty (content)
-    # 4. /FmEmpty (alias to the nested one, or vice versa depending on iteration order)
-    assert len(collected) == 4
     empty_warnings = [w for h, c, w in collected if "FmEmpty" in h and b"ALIAS" not in c][0]
     assert "Empty stream content!" in empty_warnings
+    alias_entries = [c for _, c, _ in collected if b"% ALIAS OF:" in c]
+    assert len(alias_entries) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -647,33 +653,7 @@ def test_dump_streams_recurses_into_inherited_page_resources():
     assert any("XObject /Fm1" in h for h in headers)
 
 
-def test_scan_xobject_resources_same_xobject_twice_same_page():
-    """Covers the 'already recorded for this page_num' branch: the same
-    Form XObject reachable via two different resource keys on one page
-    must not be appended to objgen_to_pages[...] twice for that page."""
-    pdf = pikepdf.new()
-    form = pdf.make_stream(b"")
-    form.Type = pikepdf.Name("/XObject")
-    form.Subtype = pikepdf.Name("/Form")
-    form.BBox = pikepdf.Array([0, 0, 100, 100])
-
-    resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": form})})
-
-    from pdftl.operations.dump_streams import _scan_xobject_resources
-
-    objgen_to_pages: dict = {}
-    seen: set = set()
-    _scan_xobject_resources(resources, 1, seen, objgen_to_pages)
-    # Second pass over the same resources/page_num: xobj.objgen is already
-    # in `seen`, so this hits the early `continue` -- not the branch we're
-    # after. To hit "already in objgen_to_pages[objgen]", call again with a
-    # fresh `seen` but the same objgen_to_pages/page_num.
-    _scan_xobject_resources(resources, 1, set(), objgen_to_pages)
-
-    assert objgen_to_pages[form.objgen] == [1]
-
-
-def test_build_xobject_page_map_page_with_no_resources_anywhere():
+def test_build_stream_page_map_page_with_no_resources_anywhere():
     """Covers the loop-continues-without-scanning branch: a page with no
     /Resources in its own dict and none inherited must be skipped
     without error, contributing nothing to the map."""
@@ -684,15 +664,15 @@ def test_build_xobject_page_map_page_with_no_resources_anywhere():
     if pikepdf.Name.Resources in pdf.Root.Pages:
         del pdf.Root.Pages[pikepdf.Name.Resources]
 
-    from pdftl.operations.dump_streams import _build_xobject_page_map
+    from pdftl.operations.dump_streams import _build_stream_page_map
 
-    result = _build_xobject_page_map(pdf, [1])
+    result = _build_stream_page_map(pdf, [1])
     assert result == {}
 
 
 def test_dump_streams_recurse_false_skips_xobject_recursion(base_pdf):
     """Covers the recurse=False fall-through: entries returned without
-    ever calling _recurse_and_collect, even though the page has Form
+    ever walking resource streams, even though the page has Form
     XObjects in its resources."""
     xobj = base_pdf.make_stream(b"")
     xobj.Type = pikepdf.Name("/XObject")
@@ -707,3 +687,134 @@ def test_dump_streams_recurse_false_skips_xobject_recursion(base_pdf):
     headers = [h for h, _, _ in res.data]
 
     assert headers == ["Page 1 / Contents"]
+
+
+# ---------------------------------------------------------------------------
+# 11. New breadcrumb segments: Pattern, SMask, Annotation
+# ---------------------------------------------------------------------------
+
+
+def test_dump_streams_pattern_breadcrumb(base_pdf):
+    """A tiling Pattern gets a 'Pattern <name>' breadcrumb segment."""
+    pat = base_pdf.make_stream(b"1 0 0 rg")
+    pat.PatternType = 1
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    res = dump_streams(base_pdf, ["1"])
+    headers = [h for h, _, _ in res.data]
+    assert "Page 1 / Pattern /P1" in headers
+
+
+def test_dump_streams_smask_breadcrumb(base_pdf):
+    """An ExtGState /SMask /G group gets an 'ExtGState <name> / SMask'
+    breadcrumb segment."""
+    group = base_pdf.make_stream(b"mask content")
+    group.Subtype = pikepdf.Name("/Form")
+    group.BBox = [0, 0, 100, 100]
+    smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+    gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+    )
+
+    res = dump_streams(base_pdf, ["1"])
+    headers = [h for h, _, _ in res.data]
+    assert "Page 1 / ExtGState /GS1 / SMask" in headers
+
+
+def test_dump_streams_annotation_direct_stream_breadcrumb(base_pdf):
+    """An annotation's direct-stream /AP /N entry gets an
+    'Annot <1-based-index> / AP /N' breadcrumb, with no /State suffix."""
+    ap_form = base_pdf.make_stream(b"annot content")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    ap_form.BBox = [0, 0, 100, 100]
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    res = dump_streams(base_pdf, ["1"])
+    headers = [h for h, _, _ in res.data]
+    assert "Page 1 / Annot 1 / AP /N" in headers
+
+
+def test_dump_streams_annotation_state_dict_breadcrumb(base_pdf):
+    """An annotation's /AP /N as a state sub-dictionary gets a
+    '/ State <state>' suffix appended to the breadcrumb."""
+    on_form = base_pdf.make_stream(b"on content")
+    on_form.Subtype = pikepdf.Name("/Form")
+    on_form.BBox = [0, 0, 100, 100]
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/Widget"),
+            "/AP": pikepdf.Dictionary({"/N": pikepdf.Dictionary({"/On": on_form})}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    res = dump_streams(base_pdf, ["1"])
+    headers = [h for h, _, _ in res.data]
+    assert "Page 1 / Annot 1 / AP /N / State /On" in headers
+
+
+def test_dump_streams_annotation_index_is_second_position(base_pdf):
+    """The second annotation in /Annots gets 'Annot 2', confirming the
+    1-based conversion from the walker's 0-based annot_index."""
+    no_ap_annot = pikepdf.Dictionary(
+        {"/Type": pikepdf.Name("/Annot"), "/Subtype": pikepdf.Name("/FreeText")}
+    )
+    ap_form = base_pdf.make_stream(b"second content")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    ap_form.BBox = [0, 0, 100, 100]
+    second_annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([no_ap_annot, second_annot])
+
+    res = dump_streams(base_pdf, ["1"])
+    headers = [h for h, _, _ in res.data]
+    assert "Page 1 / Annot 2 / AP /N" in headers
+
+
+def test_dump_streams_nested_form_inside_pattern_breadcrumb(base_pdf):
+    """A Form nested inside a Pattern's own /Resources produces a
+    3-segment breadcrumb, confirming the depth-stack correctly threads
+    through a non-Form parent kind."""
+    nested_form = base_pdf.make_stream(b"nested in pattern")
+    nested_form.Subtype = pikepdf.Name("/Form")
+    nested_form.BBox = [0, 0, 100, 100]
+
+    pat = base_pdf.make_stream(b"pattern content")
+    pat.PatternType = 1
+    pat.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": nested_form})})
+
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    res = dump_streams(base_pdf, ["1"])
+    headers = [h for h, _, _ in res.data]
+    assert "Page 1 / Pattern /P1 / XObject /Fm1" in headers
+
+
+def test_breadcrumb_segment_page_kind_returns_empty():
+    """Direct unit test of the kind=='page' fallback branch in
+    _breadcrumb_segment (line 125), which the normal walk never exercises
+    since _collect_walked_streams explicitly skips page-kind entries
+    before calling this helper."""
+    from pdftl.operations.dump_streams import _breadcrumb_segment
+    from pdftl.utils.pdf_resources import StreamContext
+
+    ctx = StreamContext(page_num=1, depth=0, kind="page", resources=None)
+    assert _breadcrumb_segment(ctx) == ""

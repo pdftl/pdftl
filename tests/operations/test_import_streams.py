@@ -450,3 +450,673 @@ def test_parse_stream_file_resources_does_not_leak_into_prior_buffer():
 
     assert targets[1][0].page_num == 2
     assert targets[1][1] == b"BT (Page Two) Tj ET"
+
+
+# ---------------------------------------------------------------------------
+# _parse_target_path: Pattern / SMask / Annotation grammar
+# ---------------------------------------------------------------------------
+
+
+def test_parse_target_path_pattern():
+    """Test 'Pattern <name>' resolves to a Pattern target."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / Pattern /P1")
+    assert target.page_num == 1
+    assert target.target_type == "Pattern"
+    assert target.pattern_name == "/P1"
+    assert target.xobject_path == []
+
+
+def test_parse_target_path_pattern_nested_xobject():
+    """Test 'Pattern <name> / XObject <name>' resolves nested path."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / Pattern /P1 / XObject /Fm1")
+    assert target.target_type == "Pattern"
+    assert target.pattern_name == "/P1"
+    assert target.xobject_path == ["/Fm1"]
+
+
+def test_parse_target_path_pattern_malformed_nested():
+    """Test a malformed nested segment after Pattern returns None."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    assert _parse_target_path("Page 1 / Pattern /P1 / NotXObject /Fm1") is None
+
+
+def test_parse_target_path_smask():
+    """Test 'ExtGState <name> / SMask' resolves to an SMask target."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / ExtGState /GS1 / SMask")
+    assert target.target_type == "SMask"
+    assert target.extgstate_name == "/GS1"
+    assert target.xobject_path == []
+
+
+def test_parse_target_path_smask_nested_xobject():
+    """Test SMask target with a further nested XObject chain."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / ExtGState /GS1 / SMask / XObject /Fm1")
+    assert target.target_type == "SMask"
+    assert target.extgstate_name == "/GS1"
+    assert target.xobject_path == ["/Fm1"]
+
+
+def test_parse_target_path_smask_malformed_nested():
+    """Test a malformed nested segment after SMask returns None."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    assert _parse_target_path("Page 1 / ExtGState /GS1 / SMask / Bogus /Fm1") is None
+
+
+def test_parse_target_path_annotation_direct_stream():
+    """Test 'Annot <n> / AP <key>' resolves to an Annotation target with
+    0-based annot_index and no ap_state."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / Annot 2 / AP /N")
+    assert target.target_type == "Annotation"
+    assert target.annot_index == 1
+    assert target.ap_key == "/N"
+    assert target.ap_state is None
+    assert target.xobject_path == []
+
+
+def test_parse_target_path_annotation_state():
+    """Test 'Annot <n> / AP <key> / State <state>' resolves ap_state."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / Annot 1 / AP /N / State /On")
+    assert target.target_type == "Annotation"
+    assert target.annot_index == 0
+    assert target.ap_key == "/N"
+    assert target.ap_state == "/On"
+
+
+def test_parse_target_path_annotation_nested_xobject_after_state():
+    """Test an Annotation target with State followed by a nested XObject
+    chain."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / Annot 1 / AP /N / State /On / XObject /Fm1")
+    assert target.target_type == "Annotation"
+    assert target.ap_state == "/On"
+    assert target.xobject_path == ["/Fm1"]
+
+
+def test_parse_target_path_annotation_nested_xobject_no_state():
+    """Test an Annotation target with a nested XObject chain directly
+    after AP, no State segment."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    target = _parse_target_path("Page 1 / Annot 1 / AP /N / XObject /Fm1")
+    assert target.target_type == "Annotation"
+    assert target.ap_state is None
+    assert target.xobject_path == ["/Fm1"]
+
+
+def test_parse_target_path_annotation_invalid_index():
+    """Test a non-numeric or zero/negative Annot index returns None."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    assert _parse_target_path("Page 1 / Annot X / AP /N") is None
+    assert _parse_target_path("Page 1 / Annot 0 / AP /N") is None
+
+
+def test_parse_target_path_annotation_malformed_ap():
+    """Test a malformed AP segment (no space) returns None."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    assert _parse_target_path("Page 1 / Annot 1 / APNoSpace") is None
+
+
+def test_parse_target_path_annotation_malformed_state():
+    """Test a malformed State segment (no space) returns None."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    assert _parse_target_path("Page 1 / Annot 1 / AP /N / StateNoSpace") is None
+
+
+def test_parse_target_path_annotation_malformed_nested_after_state():
+    """Test a malformed nested segment after State returns None."""
+    from pdftl.operations.import_streams import _parse_target_path
+
+    assert _parse_target_path("Page 1 / Annot 1 / AP /N / State /On / Bogus /Fm1") is None
+
+
+# ---------------------------------------------------------------------------
+# Application: Pattern / SMask / Annotation targets
+# ---------------------------------------------------------------------------
+
+
+def test_apply_stream_target_pattern(base_pdf):
+    """Successfully applying bytes to a referenced tiling Pattern."""
+    pat = base_pdf.make_stream(b"old pattern")
+    pat.PatternType = 1
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Pattern", pattern_name="/P1")
+    _apply_stream_target(base_pdf, target, b"new pattern content", normalize=False)
+
+    assert pat.read_bytes() == b"new pattern content"
+
+
+def test_apply_stream_target_pattern_nested_xobject(base_pdf):
+    """Successfully applying bytes to a Form nested inside a Pattern's own
+    /Resources."""
+    nested = base_pdf.make_stream(b"old nested")
+    pat = base_pdf.make_stream(b"old pattern")
+    pat.PatternType = 1
+    pat.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": nested})})
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Pattern", pattern_name="/P1", xobject_path=["/Fm1"])
+    _apply_stream_target(base_pdf, target, b"new nested", normalize=False)
+
+    assert nested.read_bytes() == b"new nested"
+    assert pat.read_bytes() == b"old pattern"
+
+
+def test_apply_stream_target_pattern_not_found(base_pdf, caplog):
+    """Safely skips a Pattern target that doesn't exist."""
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Pattern", pattern_name="/P1")
+    _apply_stream_target(base_pdf, target, b"data", normalize=False)
+    assert "Could not find Pattern /P1" in caplog.text
+
+
+def test_apply_stream_target_smask(base_pdf):
+    """Successfully applying bytes to an ExtGState /SMask /G group."""
+    group = base_pdf.make_stream(b"old mask")
+    group.Subtype = pikepdf.Name("/Form")
+    smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+    gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+    )
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "SMask", extgstate_name="/GS1")
+    _apply_stream_target(base_pdf, target, b"new mask", normalize=False)
+
+    assert group.read_bytes() == b"new mask"
+
+
+def test_apply_stream_target_smask_not_found(base_pdf, caplog):
+    """Safely skips an SMask target that doesn't exist."""
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "SMask", extgstate_name="/GS1")
+    _apply_stream_target(base_pdf, target, b"data", normalize=False)
+    assert "Could not find SMask group for ExtGState /GS1" in caplog.text
+
+
+def test_apply_stream_target_annotation_direct_stream(base_pdf):
+    """Successfully applying bytes to a direct-stream annotation
+    appearance stream."""
+    ap_form = base_pdf.make_stream(b"old annot")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Annotation", annot_index=0, ap_key="/N")
+    _apply_stream_target(base_pdf, target, b"new annot", normalize=False)
+
+    assert ap_form.read_bytes() == b"new annot"
+
+
+def test_apply_stream_target_annotation_state_dict(base_pdf):
+    """Successfully applying bytes to a state-keyed annotation appearance
+    stream."""
+    on_form = base_pdf.make_stream(b"old on")
+    on_form.Subtype = pikepdf.Name("/Form")
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/Widget"),
+            "/AP": pikepdf.Dictionary({"/N": pikepdf.Dictionary({"/On": on_form})}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Annotation", annot_index=0, ap_key="/N", ap_state="/On")
+    _apply_stream_target(base_pdf, target, b"new on", normalize=False)
+
+    assert on_form.read_bytes() == b"new on"
+
+
+def test_apply_stream_target_annotation_nested_xobject(base_pdf):
+    """Successfully applying bytes to a Form nested inside an annotation
+    appearance stream's own /Resources."""
+    nested = base_pdf.make_stream(b"old nested")
+    ap_form = base_pdf.make_stream(b"old annot")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    ap_form.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": nested})})
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Annotation", annot_index=0, ap_key="/N", xobject_path=["/Fm1"])
+    _apply_stream_target(base_pdf, target, b"new nested", normalize=False)
+
+    assert nested.read_bytes() == b"new nested"
+    assert ap_form.read_bytes() == b"old annot"
+
+
+def test_apply_stream_target_annotation_index_out_of_range(base_pdf, caplog):
+    """Safely skips an Annotation target whose index is out of range for
+    the page's /Annots array."""
+    from pdftl.operations.import_streams import StreamTarget
+
+    base_pdf.pages[0].Annots = pikepdf.Array([])
+    target = StreamTarget(1, "Annotation", annot_index=0, ap_key="/N")
+    _apply_stream_target(base_pdf, target, b"data", normalize=False)
+    assert "Could not find annotation appearance stream" in caplog.text
+
+
+def test_apply_stream_target_annotation_no_annots(base_pdf, caplog):
+    """Safely skips an Annotation target when the page has no /Annots at
+    all."""
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Annotation", annot_index=0, ap_key="/N")
+    _apply_stream_target(base_pdf, target, b"data", normalize=False)
+    assert "Could not find annotation appearance stream" in caplog.text
+
+
+def test_apply_stream_target_annotation_missing_ap_key(base_pdf, caplog):
+    """Safely skips an Annotation target requesting an /AP key the
+    annotation doesn't have."""
+    ap_form = base_pdf.make_stream(b"old annot")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Annotation", annot_index=0, ap_key="/D")
+    _apply_stream_target(base_pdf, target, b"data", normalize=False)
+    assert "Could not find annotation appearance stream" in caplog.text
+
+
+def test_apply_stream_target_pattern_normalize_error(base_pdf, caplog):
+    """Testing graceful fallback to raw bytes when Pattern normalization
+    raises."""
+    pat = base_pdf.make_stream(b"old pattern")
+    pat.PatternType = 1
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Pattern", pattern_name="/P1")
+    content = b"new pattern"
+    with patch(
+        "pikepdf.parse_content_stream",
+        side_effect=pikepdf.PdfError("simulated parse error"),
+    ):
+        _apply_stream_target(base_pdf, target, content, normalize=True)
+
+    assert pat.read_bytes() == content
+    assert "Could not normalize imported Pattern /P1" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# End-to-end round-trip: dump_streams -> import_streams for new kinds
+# ---------------------------------------------------------------------------
+
+
+def test_roundtrip_pattern(base_pdf, tmp_path):
+    """End-to-end: a tiling Pattern's content survives a
+    dump_streams -> import_streams round trip via the new breadcrumb."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    pat = base_pdf.make_stream(b"1 0 0 rg")
+    pat.PatternType = 1
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+
+    assert "=== Page 1 / Pattern /P1" in dump_file.read_text("latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+    assert pat.read_bytes() == b"1 0 0 rg"
+
+
+def test_roundtrip_smask(base_pdf, tmp_path):
+    """End-to-end: an SMask group's content survives a round trip."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    group = base_pdf.make_stream(b"0 g")
+    group.Subtype = pikepdf.Name("/Form")
+    smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": group})
+    gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/ExtGState": pikepdf.Dictionary({"/GS1": gs})}
+    )
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+
+    assert "=== Page 1 / ExtGState /GS1 / SMask" in dump_file.read_text("latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+    assert group.read_bytes() == b"0 g"
+
+
+def test_roundtrip_annotation(base_pdf, tmp_path):
+    """End-to-end: an annotation appearance stream's content survives a
+    round trip."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    ap_form = base_pdf.make_stream(b"1 1 1 rg")
+    ap_form.Subtype = pikepdf.Name("/Form")
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/FreeText"),
+            "/AP": pikepdf.Dictionary({"/N": ap_form}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+
+    assert "=== Page 1 / Annot 1 / AP /N" in dump_file.read_text("latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+    assert ap_form.read_bytes() == b"1 1 1 rg"
+
+
+def test_import_streams_empty_targets_no_op(base_pdf, tmp_path):
+    """Covers the zero-iteration branch of the apply loop in
+    import_streams(): a stream file with no recognizable headers parses
+    to zero targets, and the operation completes as a no-op."""
+    stream_path = tmp_path / "empty.txt"
+    stream_path.write_bytes(b"just some text with no headers at all\n")
+
+    result = import_streams(base_pdf, [str(stream_path), "normalize=false"])
+
+    assert result.success is True
+
+
+def test_apply_stream_target_unrecognized_type_falls_through(base_pdf):
+    """Covers the branch where target_type matches none of the five known
+    kinds: _apply_stream_target simply falls through and returns without
+    error or mutation."""
+    from pdftl.operations.import_streams import StreamTarget
+
+    target = StreamTarget(1, "Bogus")
+    # Must not raise; must not touch the page.
+    _apply_stream_target(base_pdf, target, b"data", normalize=False)
+
+
+def test_roundtrip_combined_all_kinds_one_page(base_pdf, tmp_path):
+    """End-to-end: a single page combining Contents, a Form, a Pattern, an
+    SMask group, and an annotation appearance stream (state-keyed) all
+    round-trip through dump_streams -> import_streams together, with each
+    edited to a distinguishable value, confirming no cross-contamination
+    between breadcrumb kinds when parsing/applying in one file."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    base_pdf.pages[0].Contents = base_pdf.make_stream(b"BT (page) Tj ET")
+
+    form = base_pdf.make_stream(b"BT (form) Tj ET")
+    form.Subtype = pikepdf.Name("/Form")
+
+    pat = base_pdf.make_stream(b"1 0 0 rg")
+    pat.PatternType = 1
+
+    smask_group = base_pdf.make_stream(b"0 g")
+    smask_group.Subtype = pikepdf.Name("/Form")
+    smask = pikepdf.Dictionary({"/Type": pikepdf.Name("/Mask"), "/G": smask_group})
+    gs = pikepdf.Dictionary({"/Type": pikepdf.Name("/ExtGState"), "/SMask": smask})
+
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {
+            "/XObject": pikepdf.Dictionary({"/Fm1": form}),
+            "/Pattern": pikepdf.Dictionary({"/P1": pat}),
+            "/ExtGState": pikepdf.Dictionary({"/GS1": gs}),
+        }
+    )
+
+    on_form = base_pdf.make_stream(b"1 1 1 rg")
+    on_form.Subtype = pikepdf.Name("/Form")
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/Widget"),
+            "/AP": pikepdf.Dictionary({"/N": pikepdf.Dictionary({"/On": on_form})}),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+    dumped_text = dump_file.read_text("latin-1")
+
+    # Sanity: all five breadcrumb kinds are present in the dump.
+    assert "=== Page 1 / Contents" in dumped_text
+    assert "=== Page 1 / XObject /Fm1" in dumped_text
+    assert "=== Page 1 / Pattern /P1" in dumped_text
+    assert "=== Page 1 / ExtGState /GS1 / SMask" in dumped_text
+    assert "=== Page 1 / Annot 1 / AP /N / State /On" in dumped_text
+
+    # Edit each block to a distinguishable value via targeted substitution,
+    # simulating the sed-style workflow.
+    edited = (
+        dumped_text.replace("BT (page) Tj ET", "BT (PAGE-EDITED) Tj ET")
+        .replace("BT (form) Tj ET", "BT (FORM-EDITED) Tj ET")
+        .replace("1 0 0 rg", "0 0 1 rg")
+        .replace("0 g", "1 g")
+        .replace("1 1 1 rg", "0.5 0.5 0.5 rg")
+    )
+    dump_file.write_text(edited, "latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+
+    assert base_pdf.pages[0].Contents.read_bytes() == b"BT (PAGE-EDITED) Tj ET"
+    assert form.read_bytes() == b"BT (FORM-EDITED) Tj ET"
+    assert pat.read_bytes() == b"0 0 1 rg"
+    assert smask_group.read_bytes() == b"1 g"
+    assert on_form.read_bytes() == b"0.5 0.5 0.5 rg"
+
+
+def test_roundtrip_annotation_state_dict(base_pdf, tmp_path):
+    """End-to-end: an annotation's state-keyed /AP /N /On stream survives
+    a dump -> edit -> import round trip via the '/ State /On' breadcrumb
+    suffix (as opposed to test_roundtrip_annotation, which covers the
+    direct-stream case with no state suffix)."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    on_form = base_pdf.make_stream(b"1 1 1 rg")
+    on_form.Subtype = pikepdf.Name("/Form")
+    off_form = base_pdf.make_stream(b"0 0 0 rg")
+    off_form.Subtype = pikepdf.Name("/Form")
+    annot = pikepdf.Dictionary(
+        {
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/Widget"),
+            "/AP": pikepdf.Dictionary(
+                {"/N": pikepdf.Dictionary({"/On": on_form, "/Off": off_form})}
+            ),
+        }
+    )
+    base_pdf.pages[0].Annots = pikepdf.Array([annot])
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+    dumped_text = dump_file.read_text("latin-1")
+
+    assert "=== Page 1 / Annot 1 / AP /N / State /On" in dumped_text
+    assert "=== Page 1 / Annot 1 / AP /N / State /Off" in dumped_text
+
+    # Only edit the /On state, confirm /Off is untouched.
+    edited = dumped_text.replace("1 1 1 rg", "0.2 0.2 0.2 rg")
+    dump_file.write_text(edited, "latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+
+    assert on_form.read_bytes() == b"0.2 0.2 0.2 rg"
+    assert off_form.read_bytes() == b"0 0 0 rg"
+
+
+def test_roundtrip_shared_pattern_aliased_update_propagates(base_pdf, tmp_path):
+    """End-to-end: a Pattern referenced twice under two names on the same
+    page produces one canonical entry and one ALIAS stub on dump; editing
+    only the canonical block and re-importing updates the underlying
+    shared object, so both names see the new content (since they point at
+    the same pikepdf object)."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    shared_pat = base_pdf.make_stream(b"1 0 0 rg")
+    shared_pat.PatternType = 1
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": shared_pat, "/P2": shared_pat})}
+    )
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+    dumped_text = dump_file.read_text("latin-1")
+
+    assert "=== Page 1 / Pattern /P1" in dumped_text
+    assert "=== Page 1 / Pattern /P2" in dumped_text
+    assert "% ALIAS OF:" in dumped_text
+
+    edited = dumped_text.replace("1 0 0 rg", "0 1 0 rg")
+    dump_file.write_text(edited, "latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+
+    # Both names reference the same underlying object, so a single write
+    # via the canonical /P1 (or /P2, whichever dict iteration hit first)
+    # block updates it for both.
+    assert shared_pat.read_bytes() == b"0 1 0 rg"
+
+
+def test_roundtrip_pattern_nested_xobject_via_dump_file(base_pdf, tmp_path):
+    """End-to-end: a Form nested inside a Pattern's own /Resources
+    round-trips through the actual breadcrumb parser (not a
+    hand-constructed StreamTarget), confirming
+    'Pattern <name> / XObject <name>' parses and applies correctly."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    nested = base_pdf.make_stream(b"BT (nested) Tj ET")
+    nested.Subtype = pikepdf.Name("/Form")
+
+    pat = base_pdf.make_stream(b"1 0 0 rg")
+    pat.PatternType = 1
+    pat.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Fm1": nested})})
+
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    dump_res = dump_streams(base_pdf, ["normalize=false", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+    dumped_text = dump_file.read_text("latin-1")
+
+    assert "=== Page 1 / Pattern /P1 / XObject /Fm1" in dumped_text
+
+    edited = dumped_text.replace("BT (nested) Tj ET", "BT (NESTED-EDITED) Tj ET")
+    dump_file.write_text(edited, "latin-1")
+
+    import_streams(base_pdf, ["normalize=false", str(dump_file)])
+
+    assert nested.read_bytes() == b"BT (NESTED-EDITED) Tj ET"
+    # Pattern's own stream must be untouched by the nested edit.
+    assert pat.read_bytes() == b"1 0 0 rg"
+
+
+def test_roundtrip_new_kinds_with_annotate_normalize(base_pdf, tmp_path):
+    """End-to-end: with annotate=true and normalize=true (the realistic
+    default workflow), a Pattern's dump includes annotation comments,
+    which import_streams correctly discards during normalization,
+    leaving clean re-parsed content rather than comment text leaking
+    into the stream."""
+    from pdftl.operations.dump_streams import dump_streams, dump_streams_cli_hook
+    import pdftl.core.constants as c
+
+    pat = base_pdf.make_stream(b"1 0 0 rg\n0 0 100 100 re\nf")
+    pat.PatternType = 1
+    base_pdf.pages[0].Resources = pikepdf.Dictionary(
+        {"/Pattern": pikepdf.Dictionary({"/P1": pat})}
+    )
+
+    dump_res = dump_streams(base_pdf, ["annotate", "1"])
+    dump_file = tmp_path / "dump.txt"
+    dump_res.meta[c.META_OUTPUT_FILE] = str(dump_file)
+    dump_streams_cli_hook(dump_res, None, None)
+    dumped_text = dump_file.read_text("latin-1")
+
+    assert "=== Page 1 / Pattern /P1" in dumped_text
+    assert "%" in dumped_text  # annotation comments present
+
+    import_streams(base_pdf, ["normalize=true", str(dump_file)])
+
+    result = pat.read_bytes()
+    assert b"rg" in result and b"re" in result and b"f" in result
+    # Comments must not have been written into the live stream.
+    assert b"%" not in result

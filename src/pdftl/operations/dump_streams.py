@@ -20,7 +20,7 @@ from pdftl.operations.helpers.xobject_helpers import read_xobject_stream
 from pdftl.operations.helpers.pretty_printers import pretty_format_pdf_obj
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.normalize import get_normalized_page_content_stream
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.pdf_resources import get_resources, walk_content_streams, StreamContext
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.io_helpers import smart_open_maybe_dash
 
@@ -64,45 +64,31 @@ def _collect_page_stream(page, normalize: bool) -> tuple[bytes | None, list[str]
     return page.Contents.read_bytes(), warnings
 
 
-def _scan_xobject_resources(resources, page_num: int, seen: set, objgen_to_pages: dict) -> None:
-    """Recursively record Form XObject objgens reachable from *resources*."""
-    if "/XObject" not in resources:
-        return
-    for _, xobj in resources.XObject.items():
-        if xobj.objgen in seen:
-            continue
-        if xobj.get("/Subtype") != "/Form":
-            continue
-        seen.add(xobj.objgen)
-        objgen_to_pages.setdefault(xobj.objgen, [])
-        if page_num not in objgen_to_pages[xobj.objgen]:
-            objgen_to_pages[xobj.objgen].append(page_num)
-        if "/Resources" in xobj:
-            _scan_xobject_resources(xobj.Resources, page_num, seen, objgen_to_pages)
-
-
-def _build_xobject_page_map(pdf: pikepdf.Pdf, target_page_nums: list[int]) -> dict:
+def _build_stream_page_map(pdf: pikepdf.Pdf, target_page_nums: list[int]) -> dict:
     """
-    Build a map of XObject objgen -> list of page numbers (from target_page_nums)
+    Build a map of stream objgen -> list of page numbers (from target_page_nums)
     that reference it, recursively. Used to warn when an XObject is shared.
+
+    Covers all four walkable kinds (Form, Pattern, SMask group, annotation
+    appearance stream), not just Forms.
     """
     objgen_to_pages: dict[tuple, list[int]] = {}
     for page_num in target_page_nums:
-        page = pdf.pages[page_num - 1]
-        page_resources = get_resources(page)
-        if page_resources is not None:
-            _scan_xobject_resources(page_resources, page_num, set(), objgen_to_pages)
+        for stream_obj, ctx in walk_content_streams(pdf, [page_num], yield_duplicates=True):
+            if ctx.kind == "page":
+                continue
+            objgen_to_pages.setdefault(stream_obj.objgen, []).append(page_num)
     return objgen_to_pages
 
 
-def _xobject_shared_warnings(xobj, page_num: int, xobject_page_map: dict) -> list[str]:
-    """Return warnings if this XObject is shared across multiple pages."""
-    other_pages = [p for p in xobject_page_map.get(xobj.objgen, []) if p != page_num]
+def _stream_shared_warnings(stream_obj, page_num: int, stream_page_map: dict) -> list[str]:
+    """Return warnings if this stream is shared across multiple pages."""
+    other_pages = [p for p in stream_page_map.get(stream_obj.objgen, []) if p != page_num]
     if not other_pages:
         return []
     pages_str = ", ".join(str(p) for p in sorted(other_pages))
     return [
-        f"Shared XObject: also appears on page(s): {pages_str}",
+        f"Shared resource: also appears on page(s): {pages_str}",
         "Changes via `replace` will affect all referencing pages.",
     ]
 
@@ -116,67 +102,82 @@ def _xobject_content_warnings(content: bytes | None) -> list[str]:
     return []
 
 
-def _recurse_and_collect(
-    resources,
+def _breadcrumb_segment(ctx: StreamContext) -> str:
+    """Render the single path segment for one non-page StreamContext.
+
+    "smask" and "annotation" segments each embed their own internal
+    " / "-joined sub-parts (e.g. "ExtGState /GS1 / SMask"), since the
+    walker treats them as one traversal level despite having two or three
+    named components. See _IMPORT_STREAMS_LONG_DESC / this module's
+    long-desc for the full path grammar.
+    """
+    if ctx.kind == "form":
+        return f"XObject {ctx.owner_key}"
+    if ctx.kind == "pattern":
+        return f"Pattern {ctx.owner_key}"
+    if ctx.kind == "smask":
+        return f"ExtGState {ctx.owner_key} / SMask"
+    if ctx.kind == "annotation":
+        segment = f"Annot {ctx.annot_index + 1} / AP {ctx.ap_key}"
+        if ctx.ap_state is not None:
+            segment += f" / State {ctx.ap_state}"
+        return segment
+    return ""  # kind == "page": handled separately by the caller
+
+
+def _collect_walked_streams(
+    pdf: pikepdf.Pdf,
     page_num: int,
-    current_path: str,
-    seen_objgens: dict[tuple, str],
-    collected: list,
-    annotate: bool,
-    xobject_page_map: dict,
-    dump_resources: bool,
     normalize: bool,
-) -> None:
+    annotate: bool,
+    dump_resources: bool,
+    seen_objgens: dict[tuple, str],
+    stream_page_map: dict,
+) -> list[tuple[str, bytes, list[str]]]:
     """
-    Recursively collect Form XObject streams into *collected* using deep semantic paths.
-    Form XObjects are normalized if requested (normalize=True), mirroring `replace` behavior.
+    Collect all non-page streams (Forms, Patterns, SMask groups, annotation
+    appearance streams) reachable from one page, via the canonical walker.
+
+    Path segments are reconstructed from ctx.depth using a stack: the
+    walker yields in strict depth-first pre-order (parent before its own
+    children, at depth+1), so popping stack entries whose recorded depth
+    is >= the current entry's depth always leaves exactly the correct
+    ancestor chain in place.
     """
-    if "/XObject" not in resources:
-        return
+    entries: list[tuple[str, bytes, list[str]]] = []
+    path_stack: list[tuple[int, str]] = []  # (depth, segment)
 
-    for name, xobj in resources.XObject.items():
-        if xobj.get("/Subtype") != "/Form":
+    for stream_obj, ctx in walk_content_streams(pdf, [page_num], yield_duplicates=True):
+        if ctx.kind == "page":
+            continue  # handled separately by the page's own /Contents entry
+
+        while path_stack and path_stack[-1][0] >= ctx.depth:
+            path_stack.pop()
+        path_stack.append((ctx.depth, _breadcrumb_segment(ctx)))
+        full_path = f"Page {page_num} / " + " / ".join(seg for _, seg in path_stack)
+
+        objgen = stream_obj.objgen
+        if objgen in seen_objgens:
+            canonical_path = seen_objgens[objgen]
+            entries.append((full_path, f"% ALIAS OF: {canonical_path}\n".encode("latin-1"), []))
             continue
+        seen_objgens[objgen] = full_path
 
-        new_path = f"{current_path} / XObject {name}"
-
-        # DAG Deduplication: if we've seen this object before via another path, emit an ALIAS stub
-        if xobj.objgen in seen_objgens:
-            canonical_path = seen_objgens[xobj.objgen]
-            collected.append((new_path, f"% ALIAS OF: {canonical_path}\n".encode("latin-1"), []))
-            continue
-
-        seen_objgens[xobj.objgen] = new_path
-
-        content = read_xobject_stream(xobj, normalize)
-        warnings = _xobject_shared_warnings(
-            xobj, page_num, xobject_page_map
+        content = read_xobject_stream(stream_obj, normalize)
+        warnings = _stream_shared_warnings(
+            stream_obj, page_num, stream_page_map
         ) + _xobject_content_warnings(content)
 
         if annotate and content:
-            content = annotate_stream(
-                content, xobj.get("/Resources"), MIN_COMMENT_COL, MAX_COMMENT_COL
-            )
+            content = annotate_stream(content, ctx.resources, MIN_COMMENT_COL, MAX_COMMENT_COL)
 
-        collected.append((new_path, content or b"", warnings))
+        entries.append((full_path, content or b"", warnings))
 
-        if dump_resources and "/Resources" in xobj:
-            res_content = "\n".join(pretty_format_pdf_obj(xobj.Resources)).encode("latin-1")
-            res_header = f"{new_path} / Resources"
-            collected.append((res_header, res_content, []))
+        if dump_resources and ctx.resources is not None:
+            res_content = "\n".join(pretty_format_pdf_obj(ctx.resources)).encode("latin-1")
+            entries.append((f"{full_path} / Resources", res_content, []))
 
-        if "/Resources" in xobj:
-            _recurse_and_collect(
-                xobj.Resources,
-                page_num,
-                new_path,
-                seen_objgens,
-                collected,
-                annotate,
-                xobject_page_map,
-                dump_resources,
-                normalize,
-            )
+    return entries
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +255,8 @@ match against.
   in the PDF, instead of the normalized form. Annotation is suppressed when
   normalization is disabled.
 * `recurse=false` — restrict output to top-level page content streams only,
-  skipping Form XObjects. Mirrors the same flag on `replace`.
+  skipping Form XObjects, tiling Patterns, ExtGState soft-mask groups, and
+  annotation appearance streams. Mirrors the same flag on `replace`.
 * `resources=true` — pretty-print the associated structural dictionary mapping
   for each Page and Form XObject. Very helpful to inspect Font and Form maps.
 * `annotate` — append a PDF-style `%` comment to each operator line
@@ -281,6 +283,26 @@ For nested Form XObjects:
     === Page <N> / XObject <name1> [ / XObject <name2> ]...
     ============================================
 
+Tiling Patterns, ExtGState soft-mask groups, and annotation appearance
+streams use their own path segments, and can nest further Form XObjects
+beneath them the same way a page can:
+
+    Page <N> / Pattern <name>
+    Page <N> / ExtGState <name> / SMask
+    Page <N> / Annot <index> / AP <key>
+    Page <N> / Annot <index> / AP <key> / State <state>
+
+`<index>` is 1-based, matching `Page <N>`. `<key>` is one of `/N`, `/D`,
+`/R`. `/ State <state>` only appears when the annotation's appearance
+entry is itself a sub-dictionary keyed by appearance state (e.g. `/On`,
+`/Off`) rather than a direct stream.
+
+Path segments are joined with " / " (space-slash-space); resource names
+themselves start with their own literal slash (e.g. `/Fm1`), so a full
+segment reads e.g. `XObject /Fm1` — the leading slash belongs to the
+name, not the delimiter. Avoid introducing a literal " / " sequence when
+editing a resource name with text tools.
+
 When an XObject is shared across multiple pages, a warning appears in
 the header identifying the other pages that reference it. Subsequent references
 to the same underlying PDF object will output a lightweight `% ALIAS OF:` stub
@@ -301,7 +323,7 @@ this automatically.
 |-----------------------------------|---------------------|---------------------|
 | Normalizes page streams           | yes                 | yes (default)       |
 | Normalizes XObject streams        | yes                 | yes (default)       |
-| Recurses into Form XObjects       | yes (default)       | yes (default)       |
+| Recurses into Forms/Patterns/etc. | yes (default)       | yes (default)       |
 
 """
 
@@ -395,7 +417,7 @@ def dump_streams(pdf: pikepdf.Pdf, specs, output_file=None) -> OpResult:
         }
     )
 
-    xobject_page_map = _build_xobject_page_map(pdf, all_target_pages) if recurse else {}
+    stream_page_map = _build_stream_page_map(pdf, all_target_pages) if recurse else {}
     collected: list[tuple[str, bytes, list[str]]] = []
     seen_objgens: dict[tuple, str] = {}
 
@@ -404,13 +426,14 @@ def dump_streams(pdf: pikepdf.Pdf, specs, output_file=None) -> OpResult:
             page = pdf.pages[page_num - 1]
             collected.extend(
                 _process_page(
+                    pdf,
                     page,
                     page_num,
                     normalize,
                     annotate,
                     dump_resources,
                     seen_objgens,
-                    xobject_page_map,
+                    stream_page_map,
                     recurse,
                 )
             )
@@ -434,13 +457,14 @@ def _process_page_resources(page, page_num: int, resources) -> tuple[str, bytes]
 
 
 def _process_page(
+    pdf,
     page,
     page_num: int,
     normalize: bool,
     annotate: bool,
     dump_resources: bool,
     seen_objgens: dict[tuple, str],
-    xobject_page_map: dict,
+    stream_page_map: dict,
     recurse: bool,
 ) -> list[tuple[str, bytes, list[str]]]:
     """Collect all stream entries for a single page."""
@@ -468,17 +492,11 @@ def _process_page(
         header, res_content = _process_page_resources(page, page_num, page_resources)
         entries.append((header, res_content, []))
 
-    if recurse and page_resources is not None:
-        _recurse_and_collect(
-            page_resources,
-            page_num,
-            f"Page {page_num}",
-            seen_objgens,
-            entries,
-            annotate,
-            xobject_page_map,
-            dump_resources,
-            normalize,
+    if recurse:
+        entries.extend(
+            _collect_walked_streams(
+                pdf, page_num, normalize, annotate, dump_resources, seen_objgens, stream_page_map
+            )
         )
 
     return entries
