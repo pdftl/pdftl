@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   painted through these mechanisms was silently skipped before; it is
   now processed like any other reachable content stream.
 
+- Resolved an issue where signing PDFs inside an active async event loop
+  could fail.
+
 ## [0.27.0] - 2026-08-26
 
 ### Added

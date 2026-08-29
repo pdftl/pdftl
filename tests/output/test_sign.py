@@ -926,3 +926,23 @@ def test_sign_second_field_preserves_first_signature(tmp_path, test_pki):
             status = validate_pdf_signature(sig)
             assert status.intact, f"Signature on field {sig.field_name} failed integrity check"
             assert status.valid, f"Signature on field {sig.field_name} failed validation"
+
+
+def test_safe_sign_pdf_active_event_loop():
+    """Test invoking _safe_sign_pdf inside an active asyncio event loop."""
+    import asyncio
+    from unittest.mock import MagicMock
+    from pdftl.output.sign import _safe_sign_pdf
+
+    mock_signer = MagicMock()
+    mock_signer.sign_pdf.return_value = "signed_result"
+    mock_writer = MagicMock()
+    mock_output = MagicMock()
+
+    async def _async_runner():
+        return _safe_sign_pdf(mock_signer, mock_writer, mock_output)
+
+    result = asyncio.run(_async_runner())
+
+    assert result == "signed_result"
+    mock_signer.sign_pdf.assert_called_once_with(mock_writer, output=mock_output)
