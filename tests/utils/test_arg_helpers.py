@@ -10,6 +10,7 @@ from pdftl.utils.arg_helpers import (
     _load_spec_from_file,
     resolve_operation_spec,
     expand_shorthand_args,
+    parse_size_to_bytes,
 )
 
 # --- Fixtures & Mocks ---
@@ -477,3 +478,23 @@ def test_expand_shorthand_args_invalid_types():
     assert "Unexpected object of type 'int'" in error_msg
     assert "Maybe you forgot" not in error_msg
     assert "Using EACH" not in error_msg
+
+
+def testparse_size_to_bytes():
+    # Test Megabytes
+    assert parse_size_to_bytes("5M") == 5 * 1024 * 1024
+    assert parse_size_to_bytes("2.5MB") == int(2.5 * 1024 * 1024)
+
+    # Test Kilobytes
+    assert parse_size_to_bytes("500K") == 500 * 1024
+    assert parse_size_to_bytes("100.5KB") == int(100.5 * 1024)
+
+    # Test Raw Bytes
+    assert parse_size_to_bytes("1048576") == 1048576
+
+    # Test Error Handling
+    with pytest.raises(ValueError, match="Invalid size format"):
+        parse_size_to_bytes("5GB")  # Unsupported unit
+
+    with pytest.raises(ValueError, match="Invalid size format"):
+        parse_size_to_bytes("not_a_number")

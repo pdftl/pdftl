@@ -160,3 +160,20 @@ def expand_shorthand_args(args: list[str], is_selector_func=is_valid_page_spec) 
         return [f"{selector}({opts_str})"]
     else:
         return [f"({opts_str})"]
+
+
+def parse_size_to_bytes(size_str: str) -> int:
+    """Converts a size string like '5M', '500K', or '1048576' to bytes."""
+    size_str = size_str.strip().upper()
+    try:
+        if size_str.endswith("MB") or size_str.endswith("M"):
+            val = float(size_str.replace("MB", "").replace("M", ""))
+            return int(val * 1024 * 1024)
+        if size_str.endswith("KB") or size_str.endswith("K"):
+            val = float(size_str.replace("KB", "").replace("K", ""))
+            return int(val * 1024)
+        return int(size_str)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid size format: '{size_str}'. Use format like 5M or 500K."
+        ) from exc

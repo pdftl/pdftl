@@ -11,7 +11,6 @@ from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.operations.burst import (
     _generate_burst_chunks,
     _make_chunk_pdf,
-    _parse_size_to_bytes,
     burst_cli_hook,
     burst_pdf,
     get_chunk_size,
@@ -235,26 +234,6 @@ def test_get_effective_specs_invalid(mock_get_pages, mock_pdf, bad_spec, expecte
         get_effective_specs(mock_pdf, [bad_spec])
 
     mock_get_pages.assert_not_called()
-
-
-def test_parse_size_to_bytes():
-    # Test Megabytes
-    assert _parse_size_to_bytes("5M") == 5 * 1024 * 1024
-    assert _parse_size_to_bytes("2.5MB") == int(2.5 * 1024 * 1024)
-
-    # Test Kilobytes
-    assert _parse_size_to_bytes("500K") == 500 * 1024
-    assert _parse_size_to_bytes("100.5KB") == int(100.5 * 1024)
-
-    # Test Raw Bytes
-    assert _parse_size_to_bytes("1048576") == 1048576
-
-    # Test Error Handling (Lines 299-300)
-    with pytest.raises(InvalidArgumentError, match="Invalid size format"):
-        _parse_size_to_bytes("5GB")  # Unsupported unit
-
-    with pytest.raises(InvalidArgumentError, match="Invalid size format"):
-        _parse_size_to_bytes("not_a_number")
 
 
 def test_burst_multiple_sizes_raises_error():
@@ -710,3 +689,8 @@ def test_make_chunk_pdf_directly_preserves_labels(book_with_chapters):
     labels = get_all_page_label_dicts(chunk)
     assert [d["St"] for d in labels] == [2, 3, 4]
     assert all(d["S"] == pikepdf.Name("/D") for d in labels)
+
+
+def test_invalid_argument_error_raised_on_misparse(two_page_pdf):
+    with pytest.raises(InvalidArgumentError, match="Invalid size format"):
+        burst_pdf([two_page_pdf], ["sizenot_a_number"])

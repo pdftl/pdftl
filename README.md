@@ -219,6 +219,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html)                                   | Clip page content to a rectangle                                |
 | [`create`](https://pdftl.readthedocs.io/en/latest/operations/create.html)                               | Create a new PDF                                                |
 | [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages to a rectangle                                       |
+| [`deduplicate_images`](https://pdftl.readthedocs.io/en/latest/operations/deduplicate_images.html)       | Merge duplicate image XObjects into a single shared copy        |
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
 | [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html)               | Delete action info                                              |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |

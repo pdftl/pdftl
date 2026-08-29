@@ -33,6 +33,7 @@ HARDCODED_KEYWORDS = {
     "clip",
     "create",
     "crop",
+    "deduplicate_images",
     "delete",
     "delete_actions",
     "delete_annots",

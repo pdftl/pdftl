@@ -18,6 +18,7 @@ from pdftl.pages.add_pages import add_pages
 from pdftl.utils.outline_select import get_outlines_to_level_pages
 from pdftl.utils.page_labels import remap_page_labels
 from pdftl.utils.page_specs import page_numbers_matching_page_specs, expand_specs_to_pages
+from pdftl.utils.arg_helpers import parse_size_to_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,10 @@ def burst_pdf(opened_pdfs, operation_args=None, output_pattern="pg_%04d.pdf") ->
         if spec.lower().startswith("size"):
             if size_limit_bytes is not None:
                 raise InvalidArgumentError("More than one `size` spec passed to `burst`")
-            size_limit_bytes = _parse_size_to_bytes(spec[4:])
+            try:
+                size_limit_bytes = parse_size_to_bytes(spec[4:])
+            except ValueError as exc:
+                raise InvalidArgumentError(exc)
         else:
             standard_specs.append(spec)
 
@@ -320,23 +324,6 @@ def get_effective_specs(source_pdf, specs):
                 ]
             )
     return effective_specs
-
-
-def _parse_size_to_bytes(size_str: str) -> int:
-    """Converts a size string like '5M', '500K', or '1048576' to bytes."""
-    size_str = size_str.strip().upper()
-    try:
-        if size_str.endswith("MB") or size_str.endswith("M"):
-            val = float(size_str.replace("MB", "").replace("M", ""))
-            return int(val * 1024 * 1024)
-        if size_str.endswith("KB") or size_str.endswith("K"):
-            val = float(size_str.replace("KB", "").replace("K", ""))
-            return int(val * 1024)
-        return int(size_str)
-    except ValueError as exc:
-        raise InvalidArgumentError(
-            f"Invalid size format: '{size_str}'. Use format like 5M or 500K."
-        ) from exc
 
 
 def get_chunk_size(src_pdf, start_idx: int, end_idx: int) -> int:
