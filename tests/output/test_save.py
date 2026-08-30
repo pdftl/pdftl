@@ -1278,3 +1278,78 @@ def test_save_pdf_warns_on_live_signatures_when_not_signing(mock_pdf, mock_input
 
     assert any("will invalidate them" in record.message for record in caplog.records)
     mock_pdf.save.assert_called_once()
+
+
+def test_prune_resources_option_registration():
+    """Covers the 'pass' statement in _prune_resources_option."""
+    from pdftl.output.save import _prune_resources_option
+
+    _prune_resources_option()
+
+
+def test_apply_prune_resources_disabled_by_default(mock_pdf):
+    """No option set -> remove_unreferenced_resources is never called."""
+    from pdftl.output.save import _apply_prune_resources
+
+    _apply_prune_resources(mock_pdf, {}, is_signing=False)
+
+    mock_pdf.remove_unreferenced_resources.assert_not_called()
+
+
+def test_apply_prune_resources_calls_pikepdf(mock_pdf):
+    """Option set, not signing -> calls through to pikepdf."""
+    from pdftl.output.save import _apply_prune_resources
+
+    _apply_prune_resources(mock_pdf, {"prune_resources": True}, is_signing=False)
+
+    mock_pdf.remove_unreferenced_resources.assert_called_once()
+
+
+def test_apply_prune_resources_skipped_when_signing(mock_pdf, caplog):
+    """Option set, but signing -> skipped with a warning, not called."""
+    from pdftl.output.save import _apply_prune_resources
+
+    with caplog.at_level("WARNING"):
+        _apply_prune_resources(mock_pdf, {"prune_resources": True}, is_signing=True)
+
+    mock_pdf.remove_unreferenced_resources.assert_not_called()
+    assert "Ignoring 'prune_resources'" in caplog.text
+
+
+def test_save_pdf_prune_resources_integration(tmp_path):
+    """End-to-end: an unreferenced font resource is dropped from the page
+    after save_pdf runs with prune_resources=True."""
+    import pikepdf
+
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page()
+    page.Resources = pikepdf.Dictionary(
+        Font=pikepdf.Dictionary(F1=pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Font)))
+    )
+    page.Contents = pdf.make_stream(b"BT ET")  # empty content stream, /F1 unused
+
+    out_file = tmp_path / "pruned.pdf"
+    save_pdf(pdf, str(out_file), None, options={"prune_resources": True})
+
+    with pikepdf.open(out_file) as saved:
+        resources = saved.pages[0].get("/Resources", {})
+        fonts = resources.get("/Font", {})
+        assert "/F1" not in fonts
+
+
+def test_save_pdf_prune_resources_skipped_when_signing():
+    """save_pdf with both prune_resources and a sign_* option should warn
+    and not call remove_unreferenced_resources, then proceed to sign."""
+    from unittest.mock import MagicMock, patch
+
+    mock_pdf = MagicMock()
+    options = {"prune_resources": True, "sign_field": "Sig1", "output": "out.pdf"}
+
+    with (
+        patch("pdftl.output.save.parse_sign_options"),
+        patch("pdftl.output.save.save_and_sign"),
+        patch("pdftl.output.save._build_save_options", return_value={}),
+    ):
+        save_pdf(mock_pdf, "out.pdf", MagicMock(), options)
+
+    mock_pdf.remove_unreferenced_resources.assert_not_called()

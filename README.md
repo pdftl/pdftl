@@ -321,6 +321,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`need_appearances`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#need-appearances)             | Set a form rendering flag in the output PDF               |
 | [`output <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#output-file)                     | The output file path, or a template for burst             |
 | [`owner_pw <pw>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#owner-pw-pw)                     | Set owner password and encrypt output                     |
+| [`prune_resources`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#prune-resources)               | Remove resources that are not used by a content stream    |
 | [`replacement_font <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#replacement-font-file) | Replace the font used for all form fields with a TTF file |
 | [`sign_cert <file>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-cert-file)               | Path to certificate PEM                                   |
 | [`sign_field <name>`](https://pdftl.readthedocs.io/en/latest/misc/output_options.html#sign-field-name)             | Signature field name (default: Signature1)                |

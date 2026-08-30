@@ -220,6 +220,24 @@ def _drop_options():
     pass
 
 
+@register_option(
+    "prune_resources",
+    desc="Remove resources that are not used by a content stream",
+    long_desc=(
+        "Scans each page's and Form XObject's content stream and removes any "
+        "/Resources entry (font, image, ExtGState, etc.) that isn't actually "
+        "used. This is distinct from the various dedup operations, which only "
+        "merge resources that are still referenced somewhere -- an entry with "
+        "no references anywhere is invisible to those passes. Skipped when "
+        "signing, since it mutates /Resources after content is finalized."
+    ),
+    type="flag",
+    tags=["resources", "cleanup"],
+)
+def _prune_resources_option():
+    pass
+
+
 @register_option("keep_first_id", desc="Copy first input PDF's ID metadata to output", type="flag")
 @register_option("keep_final_id", desc="Copy final input PDF's ID metadata to output", type="flag")
 def _keep_id_options():
@@ -503,6 +521,29 @@ def _warn_if_live_signatures_will_be_invalidated(pdf, is_signing):
     )
 
 
+def _apply_prune_resources(pdf, options, is_signing):
+    """Removes unreferenced /Resources entries via pikepdf's
+    remove_unreferenced_resources(), if requested.
+
+    Note: despite qpdf's CLI having a --remove-unreferenced-resources=auto
+    mode, pikepdf's Python method has no such heuristic -- it's a plain
+    on/off call that always does the full content-stream scan.
+
+    Skipped (with a warning) when signing: this mutates /Resources dicts,
+    which would invalidate a signature applied afterward, same category of
+    concern as _warn_if_live_signatures_will_be_invalidated.
+    """
+    if not options.get("prune_resources"):
+        return
+    if is_signing:
+        logger.warning(
+            "Ignoring 'prune_resources': not supported when signing, since it "
+            "would mutate /Resources after the signature is applied."
+        )
+        return
+    pdf.remove_unreferenced_resources()
+
+
 def _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing):
     """Performs the actual write: signing, stdout, or a normal file save.
     Wraps pikepdf's 'cannot overwrite input file' ValueError in a
@@ -536,6 +577,8 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
     logger.debug("Preparing to save to '%s' with options %s", output_filename, options)
 
+    is_signing = any(k.startswith("sign_") for k in options)
+
     _remove_source_info(pdf)
 
     _action_drop_flags(pdf, options)
@@ -551,10 +594,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
     _apply_need_appearances(pdf, options)
 
-    # https://pikepdf.readthedocs.io/en/latest/api/main.html#pikepdf.Pdf.remove_unreferenced_resources
-    # this is slow on big files, and the docs say something about auto
-    # so it is staying commented out
-    # pdf.remove_unreferenced_resources()
+    _apply_prune_resources(pdf, options, is_signing)
 
     save_opts = _build_save_options(options, input_context)
 
@@ -563,7 +603,6 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
 
     logger.debug("Save options for pikepdf: %s", save_opts)
 
-    is_signing = any(k.startswith("sign_") for k in options)
     _warn_if_live_signatures_will_be_invalidated(pdf, is_signing)
     _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing)
 
