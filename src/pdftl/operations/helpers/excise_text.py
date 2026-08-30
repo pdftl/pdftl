@@ -104,11 +104,23 @@ def rewrite_text_show(
     stats: ExciseStats,
 ) -> list[Any]:
     """Handles one text-showing operator (Tj/TJ/'/"), testing each decoded
-    glyph's device-space position against excise_rect and rebuilding the
-    operator as a TJ array with advance-preserving numeric placeholders
-    for any deleted glyphs. Runs with no deletions are re-emitted as a
-    plain Tj, per the locked spec (see roadmap): "runs with no deletions
-    stay plain Tj".
+    glyph's device-space position against excise_rect and rebuilding
+    survivors into one or more show instructions.
+
+    A deleted glyph leaves no trace in the output -- no numeric
+    placeholder is emitted for it. Instead, whenever a deletion breaks a
+    run of survivors, the next surviving run is preceded by an absolute
+    `Tm` that restores the correct text position; a run with nothing
+    deleted before it needs no `Tm`.
+
+    Each surviving run's operator (Tj vs TJ) is chosen from that run's
+    own contents, not inherited from op_str: a run of exactly one
+    surviving string with no kerning numbers is emitted as Tj; a run
+    containing a numeric (kerning) element is emitted as TJ (a lone
+    string can't otherwise carry a kerning adjustment). This keeps
+    output consistent with documents that only ever use one of the two
+    operators. A show operator with NO deletions at all is re-emitted as
+    the original operator, unchanged.
 
     ' and " are first reduced to their spec-equivalent state ops (T*, and
     Tw/Tc for ") plus a plain string operand, so only one show-handling
@@ -116,6 +128,38 @@ def rewrite_text_show(
     ahead of the (possibly rewritten) show instruction, keeping the
     content stream semantically identical either way.
     """
+    prefix, show_operands = _quote_prefix(op_str, operands, gs)
+    if gs.font_name is None or not show_operands:
+        fallback_op = "TJ" if op_str == "TJ" else "Tj"
+        return prefix + [(show_operands, fallback_op)]
+
+    elements = list(show_operands[0]) if op_str == "TJ" else [show_operands[0]]
+    segments, any_deleted = filter_show_elements(elements, gs, font_cache, excise_rect, stats)
+
+    if not any_deleted:
+        fallback_op = "TJ" if op_str == "TJ" else "Tj"
+        return prefix + [(show_operands, fallback_op)]
+
+    segment_ops, emitted_any_tm = _emit_segments(segments)
+    out: list[Any] = list(prefix) + segment_ops
+
+    # A corrective Tm (see filter_show_elements' pending_tm) resets BOTH
+    # Tm and Tlm per spec -- but gs itself never replays our synthetic
+    # Tm output, so gs.text_line_matrix still holds the author's real,
+    # un-drifted line anchor. Any Td/TD/T* in the ORIGINAL stream after
+    # this show op is relative to Tlm, so unless we restore Tlm back to
+    # that untouched value, every later line in this text object drifts
+    # by the deleted glyph(s)' advance. Restoring is a no-op for a real
+    # renderer when nothing actually needed correcting.
+    if emitted_any_tm and gs.text_line_matrix is not None:
+        out.append((list(gs.text_line_matrix), "Tm"))
+    return out
+
+
+def _quote_prefix(op_str: str, operands: list[Any], gs: Any) -> tuple[list[Any], list[Any]]:
+    """Reduces '/" to their spec-equivalent state ops (Tw/Tc for ", then
+    T* for both) plus a plain string operand list, per rewrite_text_show's
+    docstring. Returns (prefix_instructions, show_operands)."""
     prefix: list[Any] = []
     show_operands = operands
 
@@ -134,20 +178,29 @@ def rewrite_text_show(
         gs.apply_text_op("T*", [])
         prefix.append(([], "T*"))
 
-    if gs.font_name is None or not show_operands:
-        fallback_op = "TJ" if op_str == "TJ" else "Tj"
-        return prefix + [(show_operands, fallback_op)]
+    return prefix, show_operands
 
-    elements = list(show_operands[0]) if op_str == "TJ" else [show_operands[0]]
-    rebuilt, any_deleted = filter_show_elements(elements, gs, font_cache, excise_rect, stats)
 
-    if not any_deleted:
-        fallback_op = "TJ" if op_str == "TJ" else "Tj"
-        return prefix + [(show_operands, fallback_op)]
-
+def _emit_segments(
+    segments: list[tuple[tuple[float, ...] | None, list[Any]]],
+) -> tuple[list[Any], bool]:
+    """Turns filter_show_elements' segments into (operands, op) show
+    instructions, prefixed with a Tm wherever a segment carries one.
+    Returns (instructions, emitted_any_tm) -- the latter tells the
+    caller whether a Tlm-restoring Tm is needed afterward."""
     import pikepdf
 
-    return prefix + [([pikepdf.Array(rebuilt)], "TJ")]
+    out: list[Any] = []
+    emitted_any_tm = False
+    for tm, seg_elements in segments:
+        if tm is not None:
+            out.append((list(tm), "Tm"))
+            emitted_any_tm = True
+        if len(seg_elements) == 1 and isinstance(seg_elements[0], pikepdf.String):
+            out.append(([seg_elements[0]], "Tj"))
+        else:
+            out.append(([pikepdf.Array(seg_elements)], "TJ"))
+    return out, emitted_any_tm
 
 
 def _as_adjustment(el: Any) -> float | None:
@@ -187,8 +240,79 @@ def _glyph_advance_and_test(
         return should_delete, w0
 
 
-def _process_show_string(
-    raw: bytes,
+def _pikepdf_string(data: bytes) -> Any:
+    import pikepdf
+
+    return pikepdf.String(data)
+
+
+class _SegmentBuilder:
+    """Accumulates filter_show_elements' running state -- the pending
+    segment, any not-yet-flushed kept bytes, and the deletion-boundary
+    Tm-capture bookkeeping -- so filter_show_elements itself can stay a
+    thin per-element dispatch loop. See filter_show_elements' docstring
+    for the segment/Tm semantics these methods implement; this class
+    adds no new behavior, it just gives each branch its own method.
+    """
+
+    def __init__(self, gs: Any, is_vertical: bool) -> None:
+        self.gs = gs
+        self.is_vertical = is_vertical
+        self.segments: list[tuple[tuple[float, ...] | None, list[Any]]] = []
+        self.pending: list[Any] = []
+        self.kept_bytes = bytearray()
+        # See filter_show_elements' original docstring comments for the
+        # exact invariants pending_tm/needs_tm maintain.
+        self.pending_tm: tuple[float, ...] | None = None
+        self.needs_tm = False
+        self.any_deleted = False
+
+    def advance(self, advance_1000: float) -> None:
+        if self.is_vertical:
+            self.gs.advance_vertical_by_1000(advance_1000)
+        else:
+            self.gs.advance_horizontal_by_1000(advance_1000)
+
+    def flush_bytes(self) -> None:
+        if self.kept_bytes:
+            self.pending.append(_pikepdf_string(bytes(self.kept_bytes)))
+            self.kept_bytes = bytearray()
+
+    def close_segment(self) -> None:
+        import pikepdf
+
+        self.flush_bytes()
+        if any(isinstance(e, pikepdf.String) for e in self.pending):
+            self.segments.append((self.pending_tm, self.pending))
+        # else: nothing survived into this run -- discard rather than
+        # emit a numeric-only artifact (see filter_show_elements' docs).
+        self.pending = []
+        self.pending_tm = None
+
+    def handle_adjustment(self, adj: float) -> None:
+        self.advance(-adj)
+        self.flush_bytes()
+        if not self.needs_tm:
+            self.pending.append(adj)
+
+    def handle_deleted_glyph(self, advance_1000: float) -> None:
+        self.any_deleted = True
+        self.close_segment()
+        self.advance(advance_1000)
+        self.needs_tm = True
+
+    def handle_kept_glyph(self, raw_slice: bytes, advance_1000: float) -> None:
+        if self.needs_tm:
+            self.pending_tm = (
+                tuple(self.gs.text_matrix) if self.gs.text_matrix is not None else None
+            )
+            self.needs_tm = False
+        self.kept_bytes.extend(raw_slice)
+        self.advance(advance_1000)
+
+
+def _process_string_element(
+    el: Any,
     gs: Any,
     font_cache: FontCache,
     font_name: str,
@@ -196,42 +320,24 @@ def _process_show_string(
     is_vertical: bool,
     excise_rect: ExciseRect,
     stats: ExciseStats,
-    rebuilt: list[Any],
-    kept_bytes: bytearray,
-) -> tuple[bytearray, bool]:
-    """Decodes and tests every glyph in one string element, mutating
-    `rebuilt`/advancing `gs` in place. Returns (new kept_bytes, any_deleted)."""
+    builder: _SegmentBuilder,
+) -> None:
+    """Decodes one TJ/Tj string element into glyphs and feeds each one,
+    kept or deleted, to `builder`."""
+    raw = el if isinstance(el, (bytes, bytearray)) else str(el).encode("latin-1", "replace")
     codes = gs.decode_text_codes(raw, is_composite)
     step = 2 if is_composite else 1
     stats.glyphs_total += len(codes)
-    any_deleted = False
 
     for i, code in enumerate(codes):
         should_delete, advance_1000 = _glyph_advance_and_test(
             code, gs, font_cache, font_name, is_composite, is_vertical, excise_rect
         )
         if should_delete:
-            any_deleted = True
             stats.glyphs_deleted += 1
-            if kept_bytes:
-                rebuilt.append(_pikepdf_string(bytes(kept_bytes)))
-                kept_bytes = bytearray()
-            rebuilt.append(-advance_1000)
+            builder.handle_deleted_glyph(advance_1000)
         else:
-            kept_bytes.extend(raw[i * step : i * step + step])
-
-        if is_vertical:
-            gs.advance_vertical_by_1000(advance_1000)
-        else:
-            gs.advance_horizontal_by_1000(advance_1000)
-
-    return kept_bytes, any_deleted
-
-
-def _pikepdf_string(data: bytes) -> Any:
-    import pikepdf
-
-    return pikepdf.String(data)
+            builder.handle_kept_glyph(raw[i * step : i * step + step], advance_1000)
 
 
 def filter_show_elements(
@@ -240,49 +346,49 @@ def filter_show_elements(
     font_cache: FontCache,
     excise_rect: ExciseRect,
     stats: ExciseStats,
-) -> tuple[list[Any], bool]:
+) -> tuple[list[tuple[tuple[float, ...] | None, list[Any]]], bool]:
     """Decodes every glyph across a Tj/TJ operand's elements, testing and
-    advancing one at a time, and returns (new_TJ_elements, any_deleted)."""
+    advancing one at a time, and splits survivors into SEGMENTS at each
+    deletion boundary: a segment is a maximal run of surviving strings
+    and genuine (non-synthetic) kerning numbers with no deletion between
+    them.
+
+    Returns (segments, any_deleted). Each segment is (tm_or_None,
+    elements): tm_or_None is an absolute (a,b,c,d,e,f) text matrix
+    snapshot for the caller to emit as a `Tm` immediately before this
+    segment, present only if a deletion occurred since the previous
+    segment closed (None for e.g. the first segment, if nothing preceded
+    it). `elements` is the segment's own ordered list of surviving
+    pikepdf.String / numeric elements -- the caller (rewrite_text_show)
+    picks Tj vs TJ per segment from this list's shape. No numeric
+    placeholder is ever emitted for a deleted glyph.
+
+    A pending run consisting ONLY of numeric (kerning) elements, with no
+    surviving string, is discarded rather than emitted as its own
+    segment -- such a run has nothing visible to position and would
+    otherwise surface as a bare numeric TJ array, exactly the leak this
+    rewrite exists to eliminate. Its positional effect is already fully
+    captured in the text matrix (advancing happens regardless of
+    whether the run is ultimately kept or discarded), so dropping it
+    changes nothing about where subsequent surviving content lands.
+    """
 
     font_name = gs.font_name
     is_composite = font_cache.is_composite(font_name)
     is_vertical = font_cache.is_vertical(font_name)
-
-    rebuilt: list[Any] = []
-    kept_bytes = bytearray()
-    any_deleted = False
-
-    def _flush_kept() -> None:
-        nonlocal kept_bytes
-        if kept_bytes:
-            rebuilt.append(_pikepdf_string(bytes(kept_bytes)))
-            kept_bytes = bytearray()
+    builder = _SegmentBuilder(gs, is_vertical)
 
     for el in elements:
         adj = _as_adjustment(el)
         if adj is not None:
-            gs.advance_horizontal_by_1000(-adj)
-            _flush_kept()
-            rebuilt.append(adj)
+            builder.handle_adjustment(adj)
             continue
-
-        raw = el if isinstance(el, (bytes, bytearray)) else str(el).encode("latin-1", "replace")
-        kept_bytes, deleted_here = _process_show_string(
-            raw,
-            gs,
-            font_cache,
-            font_name,
-            is_composite,
-            is_vertical,
-            excise_rect,
-            stats,
-            rebuilt,
-            kept_bytes,
+        _process_string_element(
+            el, gs, font_cache, font_name, is_composite, is_vertical, excise_rect, stats, builder
         )
-        any_deleted = any_deleted or deleted_here
 
-    _flush_kept()
-    return rebuilt, any_deleted
+    builder.close_segment()
+    return builder.segments, builder.any_deleted
 
 
 def glyph_should_delete(

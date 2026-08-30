@@ -16,6 +16,7 @@ from pdftl.utils.geometry import transform_rect_bbox
 from pdftl.utils.graphics_state import GraphicsStateStack, multiply_matrices
 from pdftl.utils.path_segmentation import segment
 from pdftl.utils.path_types import Path, SimplifyConfig
+from pdftl.utils.optimize_content import optimize_positioning_ops
 from pdftl.operations.helpers.excise_types import ExciseRect, ExciseStats
 from pdftl.operations.helpers.excise_geometry import (
     IDENTITY_CTM,
@@ -173,6 +174,13 @@ def process_stream(
     mixed = segment(instructions, TRIM_SEGMENT_CONFIG, track_instructions=True)
     font_cache = FontCache(resources)
     new_instructions = interpret_and_filter(pdf, mixed, resources, font_cache, excise_rect, stats)
+    # aggressive_tf=True is safe here: excise.py's _process_page calls
+    # pikepdf.Page(page).contents_coalesce() before this stream is ever
+    # reached, so stream_obj is always one complete, already-merged
+    # logical content stream -- never one element of a still-split
+    # /Contents array -- which is exactly the precondition
+    # optimize_positioning_ops' aggressive_tf docstring requires.
+    new_instructions = optimize_positioning_ops(new_instructions, aggressive_tf=True)
 
     try:
         stream_obj.write(pikepdf.unparse_content_stream(new_instructions))
@@ -317,6 +325,11 @@ def handle_form_do(
         initial_ctm=effective_ctm,
         depth=depth + 1,
     )
+    # aggressive_tf=True is safe here unconditionally: a Form XObject's
+    # content is always a single stream object per spec, never an array
+    # like a page's /Contents can be -- there is no multi-stream
+    # concatenation hazard to guard against for this call site at all.
+    filtered = optimize_positioning_ops(filtered, aggressive_tf=True)
 
     import zlib
 
