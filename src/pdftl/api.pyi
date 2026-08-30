@@ -109,6 +109,13 @@ def deduplicate_fonts(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def deduplicate_icc_profiles(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def deduplicate_images(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,

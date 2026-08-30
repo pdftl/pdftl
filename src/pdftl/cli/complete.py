@@ -34,6 +34,7 @@ HARDCODED_KEYWORDS = {
     "create",
     "crop",
     "deduplicate_fonts",
+    "deduplicate_icc_profiles",
     "deduplicate_images",
     "delete",
     "delete_actions",
