@@ -6,7 +6,6 @@
 
 """Dump and validate digital signatures from a PDF file using pyHanko"""
 
-import concurrent.futures
 import io
 import logging
 import re
@@ -18,6 +17,7 @@ from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError, OperationError
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.async_helpers import run_sync
 
 logger = logging.getLogger(__name__)
 
@@ -386,25 +386,6 @@ def _get_pdf_source_bytes(pdf_filename, pdf):
     return buf.getvalue()
 
 
-def _safe_validate_pdf_signature(sig, vc):
-    """Executes pyHanko's validate_pdf_signature safely in active event loop environments."""
-    from pyhanko.sign.validation import validate_pdf_signature
-    import asyncio
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(
-                validate_pdf_signature, sig, signer_validation_context=vc
-            ).result()
-
-    return validate_pdf_signature(sig, signer_validation_context=vc)
-
-
 def _validate_signatures_worker(pdf_filename, pdf, pdf_password, trust_roots=None):
     ensure_dependencies(
         feature_name="validate_signatures",
@@ -429,7 +410,9 @@ def _validate_signatures_worker(pdf_filename, pdf, pdf_password, trust_roots=Non
 
     for sig in reader.embedded_signatures:
         try:
-            status = _safe_validate_pdf_signature(sig, vc)
+            from pyhanko.sign.validation import validate_pdf_signature
+
+            status = run_sync(validate_pdf_signature, sig, signer_validation_context=vc)
         except (SignatureValidationError, ValueError) as e:
             raise OperationError(f"[dump_signatures] {e}") from e
 

@@ -13,6 +13,7 @@ ALWAYS_FORBIDDEN = [
     "numpy",
     "numba",
     "http.server",
+    "asyncio",
 ]
 
 

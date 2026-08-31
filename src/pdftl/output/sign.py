@@ -14,25 +14,9 @@ import contextlib
 from pdftl.core.registry import register_help_topic, register_option
 from pdftl.exceptions import PdftlOutputError, UserCommandLineError
 from pdftl.utils.dependencies import ensure_dependencies
+from pdftl.utils.async_helpers import run_sync
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_sign_pdf(pdf_signer, writer, output_file):
-    """Executes pyHanko's pdf_signer.sign_pdf safely when an active event loop exists."""
-    import asyncio
-    import concurrent.futures
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(pdf_signer.sign_pdf, writer, output=output_file).result()
-
-    return pdf_signer.sign_pdf(writer, output=output_file)
 
 
 def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
@@ -99,7 +83,7 @@ def save_and_sign(pdf, sign_cfg, save_opts, output_filename):
 
     try:
         with open(output_filename, "wb") as out_file:
-            _safe_sign_pdf(pdf_signer, w, out_file)
+            run_sync(pdf_signer.sign_pdf, w, output=out_file)
     except SigningError as exc:
         # Don't leave a truncated/partial file behind at the user's
         # requested output path if signing fails partway through.
