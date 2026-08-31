@@ -199,6 +199,10 @@ include = '\.pyi?$'
 
 [tool.coverage.run]
 source = ["pdftl"]
+omit = [
+    "*/.config/pdftl/operations/*",
+    "*/AppData/Roaming/pdftl/operations/*",
+]
 
 [tool.coverage.report]
 exclude_also = [

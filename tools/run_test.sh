@@ -104,9 +104,22 @@ if [ "$HAS_COV" = false ]; then
     COV_ARGS+=("--cov=pdftl")
 fi
 
-# 7. Print and execute the single massive command
+# 7. Print and execute the command
+
+# 7(a). Build the full command into a single array (Single Source of Truth)
+PYTEST_CMD=(
+    pytest
+    "${TEST_PATHS[@]}"
+    "${COV_ARGS[@]}"
+    --cov-branch
+    --cov-report=term-missing
+    "${EXTRA_ARGS[@]}"
+)
+
+# 7(b). Print what is actually being run with correct shell quoting
 echo "Constructing pytest run..."
-echo "Running: pytest ${TEST_PATHS[*]} ${COV_ARGS[*]} --cov-report=term-missing ${EXTRA_ARGS[*]}"
+printf 'Running: %s\n' "$(printf '%q ' "${PYTEST_CMD[@]}")"
 echo "----------------------------------------------------------------------"
 
-pytest "${TEST_PATHS[@]}" "${COV_ARGS[@]}" --cov-branch --cov-report=term-missing "${EXTRA_ARGS[@]}"
+# 7(c). Execute the array directly
+"${PYTEST_CMD[@]}"
