@@ -14,6 +14,7 @@ from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign.validation import validate_pdf_signature
 
 from pdftl.cli.main import main
+from pdftl.utils.async_helpers import run_sync
 
 
 @pytest.fixture
@@ -100,7 +101,7 @@ def test_sign_pipeline_integrity(tmp_path, test_pki):
             pytest.fail("No signatures found in the output PDF")
 
         sig = reader.embedded_signatures[0]
-        status = validate_pdf_signature(sig)
+        status = run_sync(validate_pdf_signature, sig)
 
         assert status.intact, "Signature digest mismatch - file likely corrupted"
         assert status.valid, "Signature failed cryptographic validation"
@@ -396,7 +397,7 @@ def test_sign_preserves_existing_ap(tmp_path, test_pki):
     with open(output_pdf, "rb") as f:
         reader = PdfFileReader(f)
         assert reader.embedded_signatures, "Expected a signature to be present"
-        status = validate_pdf_signature(reader.embedded_signatures[0])
+        status = run_sync(validate_pdf_signature, reader.embedded_signatures[0])
         assert status.intact
         assert status.valid
 
@@ -577,7 +578,7 @@ def test_sign_split_form_field(tmp_path, test_pki):
     with open(output_pdf, "rb") as f:
         reader = PdfFileReader(f)
         assert reader.embedded_signatures
-        status = validate_pdf_signature(reader.embedded_signatures[0])
+        status = run_sync(validate_pdf_signature, reader.embedded_signatures[0])
         assert status.intact
         assert status.valid
 
@@ -614,7 +615,7 @@ def test_sign_creates_field_when_no_acroform_present(tmp_path, test_pki):
     with open(output_pdf, "rb") as f:
         reader = PdfFileReader(f)
         assert reader.embedded_signatures
-        status = validate_pdf_signature(reader.embedded_signatures[0])
+        status = run_sync(validate_pdf_signature, reader.embedded_signatures[0])
         assert status.intact
         assert status.valid
 
@@ -659,7 +660,7 @@ def test_sign_targets_correct_field_among_multiple(tmp_path, test_pki):
     with open(output_pdf, "rb") as f:
         reader = PdfFileReader(f)
         assert len(reader.embedded_signatures) == 1
-        status = validate_pdf_signature(reader.embedded_signatures[0])
+        status = run_sync(validate_pdf_signature, reader.embedded_signatures[0])
         assert status.intact
         assert status.valid
 
@@ -804,7 +805,7 @@ def test_sign_encrypted_output_with_existing_ap(tmp_path, test_pki):
         reader = PdfFileReader(f)
         reader.decrypt("usersecret")
         assert reader.embedded_signatures, "Expected a signature to be present"
-        status = validate_pdf_signature(reader.embedded_signatures[0])
+        status = run_sync(validate_pdf_signature, reader.embedded_signatures[0])
         assert status.intact
         assert status.valid
 
@@ -868,7 +869,7 @@ def test_stamp_then_sign_pipeline(tmp_path, test_pki):
     with open(output_pdf, "rb") as f:
         reader = PdfFileReader(f)
         assert reader.embedded_signatures
-        status = validate_pdf_signature(reader.embedded_signatures[0])
+        status = run_sync(validate_pdf_signature, reader.embedded_signatures[0])
         assert status.intact
         assert status.valid
 
@@ -923,6 +924,6 @@ def test_sign_second_field_preserves_first_signature(tmp_path, test_pki):
         assert len(reader.embedded_signatures) == 2, "Expected both signatures to be present"
 
         for sig in reader.embedded_signatures:
-            status = validate_pdf_signature(sig)
+            status = run_sync(validate_pdf_signature, sig)
             assert status.intact, f"Signature on field {sig.field_name} failed integrity check"
             assert status.valid, f"Signature on field {sig.field_name} failed validation"
