@@ -635,3 +635,27 @@ class TestDumpImages:
         result = dump_images(pdf, specs=["1", "min_dpi=0"], output_file=None)
         assert len(result.data) == 1
         assert result.data[0]["page"] == 1
+
+
+def test_ppi_calculation_with_rotated_image():
+    """Test that ppi_x and ppi_y are derived from vector lengths rather than axis-aligned bbox."""
+    pdf = pikepdf.Pdf.new()
+    image = _make_image_stream(pdf)
+    image["/Width"] = 2532
+    image["/Height"] = 1788
+
+    # 90-degree rotated CTM:
+    # Image width maps to vertical vector (0, 843.84) -> length 843.84 pt
+    # Image height maps to horizontal vector (-595.44, 0) -> length 595.44 pt
+    ctm = [0, 843.84, -595.44, 0, 595.44, 0]
+
+    image_list = []
+    _extract_image_metadata(image, "/x47", ctm, None, image_list)
+
+    assert len(image_list) == 1
+    info = image_list[0]
+
+    # 2532 px / (843.84 / 72 in) ≈ 216 PPI
+    # 1788 px / (595.44 / 72 in) ≈ 216 PPI
+    assert info["ppi_x"] == pytest.approx(216, abs=1)
+    assert info["ppi_y"] == pytest.approx(216, abs=1)

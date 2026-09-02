@@ -1,5 +1,6 @@
 # src/pdftl/utils/images/finders.py
 from typing import TYPE_CHECKING
+import math
 import logging
 
 from pdftl.utils.colorspaces import image_colorspace
@@ -100,8 +101,9 @@ def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> N
 
     width_px = int(xobj.get("/Width", 0))
     height_px = int(xobj.get("/Height", 0))
-    bbox_width = bbox[2] - bbox[0]
-    bbox_height = bbox[3] - bbox[1]
+    a, b, c, d, _, _ = ctm
+    drawn_width_pts = math.hypot(a, b)
+    drawn_height_pts = math.hypot(c, d)
 
     image_list.append(
         {
@@ -110,8 +112,8 @@ def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> N
             "bbox": bbox,
             "width_px": width_px,
             "height_px": height_px,
-            "ppi_x": round(width_px / bbox_width * 72) if bbox_width > 0 else 0,
-            "ppi_y": round(height_px / bbox_height * 72) if bbox_height > 0 else 0,
+            "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
+            "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
             "colorspace": image_colorspace(xobj, resources, pikepdf),
             "bits": int(xobj.get("/BitsPerComponent", 8)),
             "stream_bytes": stream_bytes,
