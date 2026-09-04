@@ -89,6 +89,55 @@ def _process_form_xobject(xobj, parent_resources, current_ctm, image_list) -> No
     _parse_stream(xobj, form_resources, form_ctm, image_list)
 
 
+def _extract_mask_metadata(xobj, drawn_width_pts: float, drawn_height_pts: float) -> dict | None:
+    """Extracts metadata for an image's /Mask or /SMask stencil, if present.
+
+    The mask has no CTM of its own -- it is always drawn through the same
+    placement matrix as its parent image (PDF 32000-1, 8.9.6.2/8.9.6.3), so
+    we reuse the parent's drawn size in points to derive the mask's own
+    effective ppi, which can legitimately differ from the parent's (e.g. a
+    300ppi stencil riding on a 75ppi color layer).
+
+    Returns None if there is no mask, or if /Mask is a color-key masking
+    array rather than a stencil stream (PDF 8.9.6.4 -- an array of ranges,
+    not an image XObject, and has no meaningful width/height/format of its
+    own).
+    """
+    import pikepdf
+
+    smask = xobj.get("/SMask")
+    mask_key = (
+        "/SMask" if smask is not None else "/Mask" if xobj.get("/Mask") is not None else None
+    )
+    if mask_key is None:
+        return None
+
+    mask_xobj = smask if mask_key == "/SMask" else xobj.get("/Mask")
+    if not isinstance(mask_xobj, pikepdf.Stream):
+        # Color-key masking: an Array of component ranges, not a stencil image.
+        return None
+
+    try:
+        stream_bytes = _read_stream_bytes(mask_xobj)
+    except (pikepdf.PdfError, ValueError):
+        stream_bytes = 0
+
+    width_px = int(mask_xobj.get("/Width", 0))
+    height_px = int(mask_xobj.get("/Height", 0))
+
+    return {
+        "role": "smask" if mask_key == "/SMask" else "stencil",
+        "obj_id": mask_xobj.objgen[0],
+        "width_px": width_px,
+        "height_px": height_px,
+        "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
+        "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
+        "bits": int(mask_xobj.get("/BitsPerComponent", 1)),
+        "stream_bytes": stream_bytes,
+        "format": _get_format(mask_xobj),
+    }
+
+
 def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> None:
     import pikepdf
 
@@ -105,22 +154,26 @@ def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> N
     drawn_width_pts = math.hypot(a, b)
     drawn_height_pts = math.hypot(c, d)
 
-    image_list.append(
-        {
-            "name": obj_name_str,
-            "obj_id": xobj.objgen[0],
-            "bbox": bbox,
-            "width_px": width_px,
-            "height_px": height_px,
-            "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
-            "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
-            "colorspace": image_colorspace(xobj, resources, pikepdf),
-            "bits": int(xobj.get("/BitsPerComponent", 8)),
-            "stream_bytes": stream_bytes,
-            "format": _get_format(xobj),
-            "xobj": xobj,  # Preserved so downstream operations can modify the exact stream
-        }
-    )
+    entry = {
+        "name": obj_name_str,
+        "obj_id": xobj.objgen[0],
+        "bbox": bbox,
+        "width_px": width_px,
+        "height_px": height_px,
+        "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
+        "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
+        "colorspace": image_colorspace(xobj, resources, pikepdf),
+        "bits": int(xobj.get("/BitsPerComponent", 8)),
+        "stream_bytes": stream_bytes,
+        "format": _get_format(xobj),
+        "xobj": xobj,  # Preserved so downstream operations can modify the exact stream
+    }
+
+    mask_meta = _extract_mask_metadata(xobj, drawn_width_pts, drawn_height_pts)
+    if mask_meta is not None:
+        entry["mask"] = mask_meta
+
+    image_list.append(entry)
 
 
 def _calculate_bbox(ctm) -> list[float]:

@@ -295,3 +295,71 @@ def test_process_form_xobject_no_matrix_uses_identity(empty_pdf):
     image_list = []
     _process_form_xobject(form, pikepdf.Dictionary(), [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], image_list)
     assert len(image_list) == 1
+
+
+def test_extract_image_metadata_with_smask(empty_pdf):
+    """Covers the SMask stencil branch in _extract_mask_metadata: an image
+    with a real /SMask stream must produce a populated 'mask' entry."""
+    page = empty_pdf.add_blank_page()
+    img_xobj = create_real_image_stream(empty_pdf)
+
+    smask_xobj = create_real_image_stream(empty_pdf, mode="L", size=(10, 10), fmt="RAW")
+    img_xobj["/SMask"] = smask_xobj
+
+    page.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/DirectImg": img_xobj})})
+    page.Contents = empty_pdf.make_stream(b"q 2 0 0 2 5 5 cm /DirectImg Do Q")
+
+    result = extract_pdf_images(empty_pdf, [1])
+    assert len(result) == 1
+    mask = result[0]["mask"]
+    assert mask["role"] == "smask"
+    assert mask["width_px"] == 10
+    assert mask["height_px"] == 10
+    assert mask["bits"] == 8
+    assert mask["format"] == "unknown"
+
+
+def test_extract_image_metadata_with_mask_stencil(empty_pdf, monkeypatch):
+    """Covers the /Mask (not /SMask) stencil branch, and the mask's own
+    unreadable-stream-bytes fallback to 0."""
+    page = empty_pdf.add_blank_page()
+    img_xobj = create_real_image_stream(empty_pdf)
+
+    mask_xobj = empty_pdf.make_stream(b"CORRUPTED")
+    mask_xobj["/Type"] = pikepdf.Name("/XObject")
+    mask_xobj["/Subtype"] = pikepdf.Name("/Image")
+    mask_xobj["/Width"] = 5
+    mask_xobj["/Height"] = 5
+    mask_xobj["/BitsPerComponent"] = 1
+    img_xobj["/Mask"] = mask_xobj
+
+    from pdftl.utils.images import finders as finders_mod
+
+    def raise_on_mask(xobj):
+        if xobj.objgen == mask_xobj.objgen:
+            raise ValueError("Simulated mask read crash")
+        return len(xobj.read_raw_bytes())
+
+    monkeypatch.setattr(finders_mod, "_read_stream_bytes", raise_on_mask)
+
+    page.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/DirectImg": img_xobj})})
+    page.Contents = empty_pdf.make_stream(b"/DirectImg Do")
+
+    result = extract_pdf_images(empty_pdf, [1])
+    assert len(result) == 1
+    mask = result[0]["mask"]
+    assert mask["role"] == "stencil"
+    assert mask["width_px"] == 5
+    assert mask["height_px"] == 5
+    assert mask["stream_bytes"] == 0
+
+
+def test_extract_mask_metadata_color_key_array(empty_pdf):
+    """Covers the color-key masking branch: /Mask as an Array of ranges
+    rather than a stencil stream must yield no mask metadata."""
+    img_xobj = create_real_image_stream(empty_pdf)
+    img_xobj["/Mask"] = pikepdf.Array([0, 1, 0, 1, 0, 1])
+
+    image_list = []
+    _extract_image_metadata(img_xobj, "Im1", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], None, image_list)
+    assert "mask" not in image_list[0]
