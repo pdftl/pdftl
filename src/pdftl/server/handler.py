@@ -414,18 +414,24 @@ class PdftlServerRequestHandlerMixIn:
         except json.JSONDecodeError:
             return [a.strip() for a in args_raw.split(",") if a.strip()]
 
-    def _handle_execute(self, operation: str) -> None:
+    def _get_fields_and_files(self):
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
             self._send_error(400, "Content-Type must be 'multipart/form-data'")
-            return
+            return None, None, False
 
         content_length = int(self.headers.get("Content-Length", 0))
         if self._reject_if_oversized(content_length):
-            return
+            return None, None, False
         parsed_fields, uploaded_files = multipart.parse_multipart_payload(
             self.rfile, content_type, content_length
         )
+        return parsed_fields, uploaded_files, True
+
+    def _handle_execute(self, operation: str) -> None:
+        parsed_fields, uploaded_files, carry_on = self._get_fields_and_files()
+        if not carry_on:
+            return
 
         try:
             opened_pdfs, _aliases = self._initialize_pdfs(uploaded_files)
@@ -444,17 +450,9 @@ class PdftlServerRequestHandlerMixIn:
             multipart.cleanup_uploaded_files(uploaded_files)
 
     def _handle_pipeline_execute(self) -> None:
-        content_type = self.headers.get("Content-Type", "")
-        if "multipart/form-data" not in content_type:
-            self._send_error(400, "Content-Type must be 'multipart/form-data'")
+        parsed_fields, uploaded_files, carry_on = self._get_fields_and_files()
+        if not carry_on:
             return
-
-        content_length = int(self.headers.get("Content-Length", 0))
-        if self._reject_if_oversized(content_length):
-            return
-        parsed_fields, uploaded_files = multipart.parse_multipart_payload(
-            self.rfile, content_type, content_length
-        )
 
         try:
             opened_pdfs, _aliases = self._initialize_pdfs(uploaded_files)

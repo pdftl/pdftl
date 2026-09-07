@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Text Processing",
 ]
 dependencies = [
-    "pikepdf>=10.3.0",
+    "pikepdf>=10.9.0",
     "rich", "defusedxml"
 ]
 
