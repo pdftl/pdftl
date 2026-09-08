@@ -36,6 +36,10 @@ _ALLOWED_BOOKMARK_KEYS = {
     "children",
     "action",
     "action_lossy",
+    "launch",
+    "goto_remote",
+    "named_action",
+    "new_window",
 }
 
 
@@ -88,8 +92,82 @@ def _from_python_types(obj, pdf):
     return obj
 
 
+def _sanitize_dest_and_action_conflicts(pdf: "pikepdf.Pdf") -> None:
+    """Pre-sanitizes outline items carrying both /Dest and /A.
+
+    ISO 32000-2 Table 153 forbids setting both on the same outline item
+    -- but real-world PDFs do it anyway, and pikepdf's OutlineItem
+    constructor raises ValueError unconditionally when it sees both
+    (ignoring its own strict=False default), which aborts
+    pdf.open_outline()'s tree walk for the *entire* document over one
+    malformed item rather than just that item. So we fix the conflict up
+    in the raw dictionary, before pikepdf ever loads it.
+
+    We keep /Dest and drop /A: ISO 32000-2 12.6.4.2's NOTE says a /GoTo
+    action and an equivalent direct /Dest "have the same effect", but
+    that using the direct destination "is preferable" -- and a sibling
+    project (pdfcer's resolve_item_destination, which documents this
+    exact spec ambiguity as OL-A1) independently reached the same
+    /Dest-wins precedent for the identical mutual-exclusion rule.
+
+    Walked iteratively (not recursively) so a merely-deep-but-legal
+    outline (thousands of levels) can't turn this pre-pass itself into a
+    RecursionError, and guarded by objgen so a cyclic /Next or /First
+    chain terminates instead of looping forever.
+    """
+    outlines = pdf.Root.get("/Outlines")
+    if outlines is None:
+        return
+
+    visited: set[tuple[int, int]] = set()
+    stack = [outlines.get("/First")]
+    while stack:
+        item = stack.pop()
+        while item is not None:
+            if _already_visited_outline_item(item, visited):
+                break
+
+            _drop_conflicting_action(item)
+
+            child = item.get("/First")
+            if child is not None:
+                stack.append(child)
+
+            item = item.get("/Next")
+
+
+def _already_visited_outline_item(item, visited: set[tuple[int, int]]) -> bool:
+    """Cycle guard for the walk above: records item's objgen, returns
+    True if it's already been seen (a cyclic /Next or /First chain).
+    """
+    try:
+        key = item.objgen
+    except AttributeError:
+        return False
+    if key in visited:
+        return True
+    visited.add(key)
+    return False
+
+
+def _drop_conflicting_action(item) -> None:
+    """Drops /A from an outline item that illegally carries both /Dest
+    and /A, warning as it does. No-op if the conflict isn't present.
+    """
+    if "/Dest" not in item or "/A" not in item:
+        return
+    title = item.get("/Title")
+    logger.warning(
+        "Outline item %r has both /Dest and /A (spec-illegal "
+        "per ISO 32000-2 Table 153); keeping /Dest, dropping /A.",
+        str(title) if title is not None else "<untitled>",
+    )
+    del item["/A"]
+
+
 def extract_toc_tree(pdf: "pikepdf.Pdf") -> list[dict]:
     """Extracts the entire outline tree from a PDF into a list of dictionaries."""
+    _sanitize_dest_and_action_conflicts(pdf)
     page_map = get_page_map(pdf.pages)
     named_dests = get_named_destinations(pdf)
 
@@ -133,6 +211,133 @@ def _extract_item(item: "pikepdf.OutlineItem", pdf, page_map, named_dests) -> di
     return node
 
 
+def _extract_simple_filespec(fs) -> "str | None":
+    """Reduces a file specification (ISO 32000-2 7.11) to a display filename,
+    but only for the "safe to simplify" shapes: a bare string, or a
+    dictionary containing nothing but F/UF/Type where F and UF (if both
+    present) agree. /UF is preferred when present (it has a defined text
+    encoding; /F is a raw platform path "without interpretation" per
+    7.11.2.1). Anything richer -- embedded-file references, differing
+    F/UF, other keys -- returns None so the caller preserves the whole
+    action losslessly instead of guessing which name is "the" filename.
+    """
+    import pikepdf
+
+    if fs is None:
+        return None
+    if isinstance(fs, (pikepdf.String, str)):
+        return str(fs)
+    if isinstance(fs, pikepdf.Dictionary):
+        keys = {str(k).lstrip("/") for k in fs.keys()}
+        if not keys <= {"F", "UF", "Type"}:
+            return None
+        f_val = str(fs.get("/F")) if "/F" in fs else None
+        uf_val = str(fs.get("/UF")) if "/UF" in fs else None
+        if f_val is not None and uf_val is not None and f_val != uf_val:
+            return None
+        return uf_val or f_val
+    return None
+
+
+def _extract_launch_filename(action_obj) -> "str | None":
+    """Resolves a /Launch action's target filename (ISO 32000-2 12.6.4.6,
+    Table 207), but only for the two shapes safe to collapse to a plain
+    filename: a lone /F entry, or (when /F is entirely absent) a lone
+    /Win platform dictionary with nothing but a plain-string /F and an
+    /O of "open" (the default) or absent. /Mac and /Unix are never read
+    (undocumented structure, deprecated); a /Win with a /P parameter
+    string or an /O of "print" is left alone too, since collapsing either
+    would silently change what the action does. Anything outside these
+    shapes returns None so the caller falls back to full preservation.
+    """
+    import pikepdf
+
+    top_keys = {str(k).lstrip("/") for k in action_obj.keys()}
+
+    if "F" in top_keys and not (top_keys & {"Win", "Mac", "Unix"}):
+        return _extract_simple_filespec(action_obj.get("/F"))
+
+    if "Win" in top_keys and not (top_keys & {"F", "Mac", "Unix"}):
+        win = action_obj.get("/Win")
+        if not isinstance(win, pikepdf.Dictionary):
+            return None
+        win_keys = {str(k).lstrip("/") for k in win.keys()}
+        if not win_keys <= {"F", "O"}:
+            return None
+        op = win.get("/O")
+        if op is not None and str(op) != "open":
+            return None
+        f_val = win.get("/F")
+        return str(f_val) if isinstance(f_val, (pikepdf.String, str)) else None
+
+    return None
+
+
+def _extract_goto_remote(action_obj) -> "dict | None":
+    """Resolves a /GoToR action (ISO 32000-2 12.6.4.3, Table 203) to a
+    friendly dict, but only when its filename is unambiguous (see
+    _extract_simple_filespec) and any action keys this function doesn't
+    know about are absent.
+
+    Its /D can name either an explicit page *number* in the remote
+    document (the first array element is already an absolute integer,
+    unlike a same-document /GoTo destination -- no named-destination
+    lookup needed) -- giving {file, page, [view], [new_window]} -- or a
+    name/string in the *remote* file's own namespace, which can't be
+    resolved to a page without opening that file. That case isn't a
+    fallback: showing {file, dest, [new_window]} loses nothing (the
+    remote file's own page number was never available to us either
+    way), it's just the exact same "dest vs page" split the top-level
+    same-document bookmark schema already makes, applied one file over.
+    """
+    import pikepdf
+
+    top_keys = {str(k).lstrip("/") for k in action_obj.keys()}
+    if not top_keys <= {"S", "F", "D", "NewWindow"}:
+        return None
+
+    filename = _extract_simple_filespec(action_obj.get("/F"))
+    if filename is None:
+        return None
+
+    result: dict = {"file": filename}
+
+    dest = action_obj.get("/D")
+    if isinstance(dest, (pikepdf.Name, pikepdf.String, str)):
+        result["dest"] = str(dest).lstrip("/")
+    elif isinstance(dest, pikepdf.Array) and len(dest) > 0:
+        page_arg = dest[0]
+        if not isinstance(page_arg, (int, pikepdf.Integer)) or int(page_arg) < 0:
+            return None
+        result["page"] = int(page_arg) + 1
+        dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "Fit"
+        view_list = _view_list_from_args(dest_type, dest[2:])
+        if view_list != ["Fit"]:
+            result["view"] = view_list
+    else:
+        return None
+
+    if "/NewWindow" in action_obj:
+        result["new_window"] = bool(action_obj.get("/NewWindow"))
+    return result
+
+
+def _extract_named_action(action_obj) -> "str | None":
+    """Resolves a /Named action (ISO 32000-2 12.6.4.12, Table 216) to its
+    bare name (e.g. "NextPage"). Table 216 defines only /S and /N for
+    this action type -- no optional extras -- so this is always a
+    lossless simplification, not a "safe subset" like the Launch/GoToR
+    helpers above.
+    """
+    top_keys = {str(k).lstrip("/") for k in action_obj.keys()}
+    if not top_keys <= {"S", "N"}:
+        return None
+    name_val = action_obj.get("/N")
+    if name_val is None:
+        return None
+    return str(name_val).lstrip("/")
+
+
 def _extract_action(action_obj, node):
     import pikepdf
 
@@ -149,8 +354,17 @@ def _extract_action(action_obj, node):
                 node["action_lossy"] = True
         else:
             node["action"] = _to_python_types(action_obj)
+    elif action_type == "/Launch" and (filename := _extract_launch_filename(action_obj)):
+        node["launch"] = filename
+        if "/NewWindow" in action_obj:
+            node["new_window"] = bool(action_obj.get("/NewWindow"))
+    elif action_type == "/GoToR" and (goto_remote := _extract_goto_remote(action_obj)):
+        node["goto_remote"] = goto_remote
+    elif action_type == "/Named" and (named := _extract_named_action(action_obj)):
+        node["named_action"] = named
     elif action_type != "/GoTo":
-        # For non-GoTo/URI actions, perfectly preserve the ISO action dict
+        # For non-GoTo actions we couldn't simplify above, perfectly
+        # preserve the ISO action dict instead of guessing.
         node["action"] = _to_python_types(action_obj)
 
 
@@ -164,21 +378,16 @@ def _extract_destination(item, node, page_map, named_dests):
         node.update(_get_node_dest_data(dest, page_map, named_dests))
 
 
-def _get_node_dest_data(dest, page_map, named_dests):
-    resolved = resolve_dest_to_page_num(dest, page_map, named_dests)
-    if not resolved:
-        return {}
-
-    update = {"page": resolved.page_num}
-
-    # Reconstruct view list: ["XYZ", 0, 500, null]
-    view_list = [resolved.dest_type]
-
-    logger.debug("resolved=%s", resolved)
-    logger.debug("resolved.args=%s", resolved.args)
+def _view_list_from_args(dest_type: str, args) -> list:
+    """Builds a friendly view list (e.g. ["XYZ", 0, 500, null]) from a
+    destination type name plus its raw argument objects. Shared by
+    same-document destinations and /GoToR's remote destination array,
+    which both use the identical [type, ...numeric-or-null args] shape.
+    """
     import decimal
 
-    for arg in resolved.args:
+    view_list = [dest_type]
+    for arg in args:
         if isinstance(arg, (decimal.Decimal, float)):
             view_list.append(float(arg))
         elif arg is None or str(arg) == "null":
@@ -188,6 +397,21 @@ def _get_node_dest_data(dest, page_map, named_dests):
                 view_list.append(int(arg))
             except (ValueError, TypeError):
                 logger.warning("Ignoring unknown destination argument: %s", arg)
+    return view_list
+
+
+def _get_node_dest_data(dest, page_map, named_dests):
+    resolved = resolve_dest_to_page_num(dest, page_map, named_dests)
+    if not resolved:
+        return {}
+
+    update = {"page": resolved.page_num}
+
+    logger.debug("resolved=%s", resolved)
+    logger.debug("resolved.args=%s", resolved.args)
+
+    # Reconstruct view list: ["XYZ", 0, 500, null]
+    view_list = _view_list_from_args(resolved.dest_type, resolved.args)
 
     # Only append view if it's more complex than standard Fit
     if view_list != ["Fit"]:
@@ -206,6 +430,12 @@ def build_toc_tree(pdf: "pikepdf.Pdf", toc_items: list[dict]) -> None:
         if "/Outlines" in pdf.Root:
             del pdf.Root.Outlines
         return
+
+    # pdf.open_outline() below loads the *existing* tree (so it can be
+    # cleared) before we ever get to write the new one -- so a pre-existing
+    # /Dest+/A conflict left over from the document being replaced would
+    # crash the load just as it does in extract_toc_tree.
+    _sanitize_dest_and_action_conflicts(pdf)
 
     # Use the official context manager to mutate the tree
     with pdf.open_outline() as outline:
@@ -274,64 +504,126 @@ def _build_item(node: dict, pdf) -> "pikepdf.OutlineItem":
     return item
 
 
+def _build_goto_remote_item(title: str, goto_remote, pdf) -> "pikepdf.OutlineItem":
+    import pikepdf
+
+    has_target = isinstance(goto_remote, dict) and (
+        ("page" in goto_remote) ^ ("dest" in goto_remote)
+    )
+    if not isinstance(goto_remote, dict) or "file" not in goto_remote or not has_target:
+        raise OperationError(
+            f"Invalid keys found in bookmark '{title}': 'goto_remote' must be a "
+            "dict with 'file' and exactly one of 'page' or 'dest'."
+        )
+
+    if "dest" in goto_remote:
+        dest_value: object = pikepdf.String(goto_remote["dest"])
+    else:
+        remote_page = goto_remote["page"] - 1
+        if remote_page < 0:
+            raise ValueError(
+                f"Validation Error: Bookmark '{title}' has goto_remote.page "
+                f"{goto_remote['page']}, but page numbers must be >= 1."
+            )
+        view_args = goto_remote.get("view", ["Fit"])
+        dest_value = pikepdf.Array([remote_page, pikepdf.Name(f"/{view_args[0]}"), *view_args[1:]])
+
+    action = pikepdf.Dictionary(
+        S=pikepdf.Name("/GoToR"), F=pikepdf.String(goto_remote["file"]), D=dest_value
+    )
+    if "new_window" in goto_remote:
+        action.NewWindow = bool(goto_remote["new_window"])
+    return pikepdf.OutlineItem(title, action=action)
+
+
+def _drop_lossy_action(node: dict, title: str) -> dict:
+    """Strips a lossy 'action' (e.g. an undecodable /JS stream, which
+    extraction could only capture as a marker) before it's rebuilt as
+    though it were real data. Warns and falls through to whatever other
+    target the node carries (dest/uri/page/none), exactly as if no
+    action had ever been present. No-op if the node isn't lossy.
+    """
+    if not (node.get("action_lossy") and "action" in node):
+        return node
+    logger.warning(
+        "Bookmark '%s' had a lossy action on extraction (e.g. an "
+        "undecodable /JS stream); dropping it rather than writing "
+        "back a placeholder.",
+        title,
+    )
+    return {k: v for k, v in node.items() if k not in ("action", "action_lossy")}
+
+
+def _build_launch_item(title: str, node: dict) -> "pikepdf.OutlineItem":
+    import pikepdf
+
+    action = pikepdf.Dictionary(S=pikepdf.Name("/Launch"), F=pikepdf.String(node["launch"]))
+    if "new_window" in node:
+        action.NewWindow = bool(node["new_window"])
+    return pikepdf.OutlineItem(title, action=action)
+
+
+def _build_named_action_item(title: str, node: dict) -> "pikepdf.OutlineItem":
+    import pikepdf
+
+    action = pikepdf.Dictionary(
+        S=pikepdf.Name("/Named"), N=pikepdf.Name(f"/{node['named_action']}")
+    )
+    return pikepdf.OutlineItem(title, action=action)
+
+
+def _build_page_item(title: str, node: dict, pdf) -> "pikepdf.OutlineItem":
+    import pikepdf
+
+    page_num = node["page"]
+    if page_num < 1 or page_num > len(pdf.pages):
+        raise ValueError(
+            f"Validation Error: Bookmark '{title}' points to page {page_num}, "
+            f"but the document only has {len(pdf.pages)} pages."
+        )
+
+    page_index = page_num - 1  # pikepdf uses 0-based page indexing
+    item = pikepdf.OutlineItem(title, page_index)
+
+    view_args = node.get("view", ["Fit"])
+    if view_args != ["Fit"]:
+        # Overwrite the default Fit destination array for complex views
+        dest_type = pikepdf.Name(f"/{view_args[0]}")
+        item.destination = pikepdf.Array([pdf.pages[page_index].obj, dest_type, *view_args[1:]])
+
+    return item
+
+
 def _build_basic_item(node: dict, pdf) -> "pikepdf.OutlineItem":
     import pikepdf
 
     title = node.get("title", "Untitled")
-
-    if node.get("action_lossy") and "action" in node:
-        # The original action (e.g. an undecodable /JS stream) could not
-        # be faithfully captured on extraction — only a marker was kept.
-        # Rebuilding it would write that marker into the PDF as if it
-        # were real data. Drop it and warn instead of silently
-        # fabricating an action. Remove "action" from a local copy so the
-        # branch chain below falls through to dest/uri/page/no-target
-        # exactly as if no action had ever been present.
-        logger.warning(
-            "Bookmark '%s' had a lossy action on extraction (e.g. an "
-            "undecodable /JS stream); dropping it rather than writing "
-            "back a placeholder.",
-            title,
-        )
-        node = {k: v for k, v in node.items() if k not in ("action", "action_lossy")}
+    node = _drop_lossy_action(node, title)
 
     if "action" in node:
         # Handles Launch, GoToR, Named, JavaScript, etc. natively
         action_dict = _from_python_types(node["action"], pdf)
-        item = pikepdf.OutlineItem(title, action=action_dict)
+        return pikepdf.OutlineItem(title, action=action_dict)
 
-    elif "dest" in node:
+    if "dest" in node:
         # The API accepts a string reference name directly for named destinations
-        item = pikepdf.OutlineItem(title, node["dest"])
+        return pikepdf.OutlineItem(title, node["dest"])
 
-    elif "uri" in node:
+    if "uri" in node:
         action = pikepdf.Dictionary(S=pikepdf.Name("/URI"), URI=node["uri"])
-        item = pikepdf.OutlineItem(title, action=action)
+        return pikepdf.OutlineItem(title, action=action)
 
-    elif "page" in node:
-        page_num = node["page"]
-        if page_num < 1 or page_num > len(pdf.pages):
-            raise ValueError(
-                f"Validation Error: Bookmark '{title}' points to page {page_num}, "
-                f"but the document only has {len(pdf.pages)} pages."
-            )
+    if "launch" in node:
+        return _build_launch_item(title, node)
 
-        page_index = page_num - 1  # pikepdf uses 0-based page indexing
-        view_args = node.get("view", ["Fit"])
+    if "goto_remote" in node:
+        return _build_goto_remote_item(title, node["goto_remote"], pdf)
 
-        if view_args == ["Fit"]:
-            # Simplest API usage: default Fit destination
-            item = pikepdf.OutlineItem(title, page_index)
-        else:
-            # Create default and then overwrite the destination array for complex views
-            item = pikepdf.OutlineItem(title, page_index)
-            dest_type = pikepdf.Name(f"/{view_args[0]}")
-            item.destination = pikepdf.Array(
-                [pdf.pages[page_index].obj, dest_type, *view_args[1:]]
-            )
+    if "named_action" in node:
+        return _build_named_action_item(title, node)
 
-    else:
-        # Fallback to the first page if nothing is specified
-        item = pikepdf.OutlineItem(title, 0)
+    if "page" in node:
+        return _build_page_item(title, node, pdf)
 
-    return item
+    # Fallback to the first page if nothing is specified
+    return pikepdf.OutlineItem(title, 0)

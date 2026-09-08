@@ -45,6 +45,19 @@ extractor natively supports and outputs the following properties:
 * **`uri`**: An external web link (used if the bookmark points to a URL rather than a page).
 * **`dest`**: A string reference to a Named Destination embedded inside the PDF.
 * **`view`**: The precise zoom/viewport array (e.g., `["XYZ", 0, 700, 2.5]`, `["FitH", 500]`).
+* **`launch`**: The filename of another document the bookmark opens (a PDF `/Launch` action).
+  Add `new_window: true` alongside it to request opening in a new window.
+* **`goto_remote`**: Jumps into another PDF (a `/GoToR` action). A dict with `file`
+  and exactly one of a 1-indexed `page` (plus optional `view`) or a named `dest`
+  (a destination in the *other* file's own namespace, which can't be resolved to
+  a page number without opening it), plus optional `new_window`, e.g.
+  `{file: chapter3.pdf, page: 3, new_window: true}` or `{file: catalog.pdf, dest: section-3}`.
+* **`named_action`**: A predefined viewer action such as `NextPage`, `PrevPage`,
+  `FirstPage`, or `LastPage`.
+* **`action`**: A catch-all, byte-for-byte preservation of any other PDF action
+  (e.g. `/JavaScript`, `/SetOCGState`, a `/Launch` too exotic to simplify) as a
+  literal ISO action dictionary. Present only when none of the friendlier keys
+  above could safely represent the action without losing information.
 
 ### Skipping Destination Resolution
 By default, named destinations are automatically resolved into exact `page` and `view` parameters

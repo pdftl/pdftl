@@ -16,14 +16,22 @@ from pdftl.exceptions import OperationError
 from pdftl.info.toc import (
     _extract_action,
     _build_item,
+    _extract_goto_remote,
     _extract_item,
+    _extract_launch_filename,
+    _extract_named_action,
+    _extract_simple_filespec,
     _from_python_types,
+    _sanitize_dest_and_action_conflicts,
     _to_python_types,
     build_toc_tree,
     extract_toc_tree,
 )
 from pdftl.utils.pikepdf_compatibility_utils import set_outline_item_style_compat
 from pdftl.utils.pikepdf_compatibility_utils import outline_item_has_style_properties
+from pdftl.info.toc import (
+    _already_visited_outline_item,
+)
 
 
 @pytest.fixture
@@ -73,7 +81,7 @@ def exotic_pdf():
         parent.children.append(child)
         outline.root.append(parent)
 
-        # 7. Generic Launch Action
+        # 7. Launch Action (a simple /F string -- the "safe to simplify" shape)
         action_launch = pikepdf.Dictionary(S=pikepdf.Name("/Launch"), F=pikepdf.String("file.pdf"))
         outline.root.append(pikepdf.OutlineItem("7. Launch", action=action_launch))
 
@@ -105,12 +113,12 @@ def test_extract_toc_tree_exotic(exotic_pdf):
     assert data[5]["children"][0]["view"] == ["FitH", 500]
 
     assert data[6]["title"] == "7. Launch"
-    assert data[6]["action"]["S"] == {"__name__": "/Launch"}
-    assert data[6]["action"]["F"] == "file.pdf"
+    assert data[6]["launch"] == "file.pdf"
+    assert "action" not in data[6]
 
     assert data[7]["title"] == "8. Named"
-    assert data[7]["action"]["S"] == {"__name__": "/Named"}
-    assert data[7]["action"]["N"] == {"__name__": "/NextPage"}
+    assert data[7]["named_action"] == "NextPage"
+    assert "action" not in data[7]
 
 
 def test_build_toc_tree_roundtrip(exotic_pdf):
@@ -494,6 +502,266 @@ def test_extract_action_goto_is_skipped():
     assert "action" not in node
 
 
+def test_extract_simple_filespec_shapes():
+    """A bare string, a dict with only F, a dict with only UF, and a dict
+    with matching F/UF all simplify; anything richer returns None.
+    """
+    assert _extract_simple_filespec(pikepdf.String("plain.pdf")) == "plain.pdf"
+    assert _extract_simple_filespec(pikepdf.Dictionary(F="only-f.pdf")) == "only-f.pdf"
+    assert _extract_simple_filespec(pikepdf.Dictionary(UF="only-uf.pdf")) == "only-uf.pdf"
+    assert _extract_simple_filespec(pikepdf.Dictionary(F="same.pdf", UF="same.pdf")) == "same.pdf"
+    # /UF preferred when both present but differ isn't reached: differing
+    # values are exactly the "don't guess" case.
+    assert _extract_simple_filespec(pikepdf.Dictionary(F="legacy.pdf", UF="unicode.pdf")) is None
+    # An embedded-file reference (/EF) is richer than this helper understands.
+    assert _extract_simple_filespec(pikepdf.Dictionary(F="f.pdf", EF=pikepdf.Dictionary())) is None
+    assert _extract_simple_filespec(None) is None
+
+
+def test_extract_launch_filename_f_and_win_shapes():
+    """Covers both safe-to-simplify /Launch shapes, and the guards that
+    keep a /Win with print/parameter semantics from being collapsed.
+    """
+    plain_f = pikepdf.Dictionary(S=pikepdf.Name("/Launch"), F=pikepdf.String("chapter1.pdf"))
+    assert _extract_launch_filename(plain_f) == "chapter1.pdf"
+
+    win_open = pikepdf.Dictionary(
+        S=pikepdf.Name("/Launch"),
+        Win=pikepdf.Dictionary(F=pikepdf.String("appendix.pdf"), O=pikepdf.String("open")),
+    )
+    assert _extract_launch_filename(win_open) == "appendix.pdf"
+
+    win_no_o = pikepdf.Dictionary(
+        S=pikepdf.Name("/Launch"), Win=pikepdf.Dictionary(F=pikepdf.String("appendix.pdf"))
+    )
+    assert _extract_launch_filename(win_no_o) == "appendix.pdf"
+
+    win_print = pikepdf.Dictionary(
+        S=pikepdf.Name("/Launch"),
+        Win=pikepdf.Dictionary(F=pikepdf.String("appendix.pdf"), O=pikepdf.String("print")),
+    )
+    assert _extract_launch_filename(win_print) is None
+
+    win_with_param = pikepdf.Dictionary(
+        S=pikepdf.Name("/Launch"),
+        Win=pikepdf.Dictionary(F=pikepdf.String("app.exe"), P=pikepdf.String("--flag")),
+    )
+    assert _extract_launch_filename(win_with_param) is None
+
+    f_and_win_together = pikepdf.Dictionary(
+        S=pikepdf.Name("/Launch"),
+        F=pikepdf.String("modern.pdf"),
+        Win=pikepdf.Dictionary(F=pikepdf.String("legacy.pdf")),
+    )
+    assert _extract_launch_filename(f_and_win_together) is None
+
+    no_target = pikepdf.Dictionary(S=pikepdf.Name("/Launch"))
+    assert _extract_launch_filename(no_target) is None
+
+
+def test_extract_goto_remote_shapes():
+    """Covers the friendly page-number-D shape, the view/new_window
+    passthrough, the friendly named-remote-destination shape, and the
+    fallback when the filename itself is ambiguous.
+    """
+    by_number = pikepdf.Dictionary(
+        S=pikepdf.Name("/GoToR"),
+        F=pikepdf.String("other.pdf"),
+        D=pikepdf.Array([7, pikepdf.Name("/Fit")]),
+        NewWindow=True,
+    )
+    assert _extract_goto_remote(by_number) == {
+        "file": "other.pdf",
+        "page": 8,
+        "new_window": True,
+    }
+
+    with_view = pikepdf.Dictionary(
+        S=pikepdf.Name("/GoToR"),
+        F=pikepdf.String("other.pdf"),
+        D=pikepdf.Array([0, pikepdf.Name("/XYZ"), 0, 700, None]),
+    )
+    result = _extract_goto_remote(with_view)
+    assert result["page"] == 1
+    assert result["view"] == ["XYZ", 0, 700, None]
+    assert "new_window" not in result
+
+    by_name = pikepdf.Dictionary(
+        S=pikepdf.Name("/GoToR"), F=pikepdf.String("other.pdf"), D=pikepdf.String("remote-name")
+    )
+    assert _extract_goto_remote(by_name) == {"file": "other.pdf", "dest": "remote-name"}
+
+    # A named remote destination is still resolvable friendlily -- it's
+    # the *filename* that has to be unambiguous, same as any other shape.
+    by_name_ambiguous_filespec = pikepdf.Dictionary(
+        S=pikepdf.Name("/GoToR"),
+        F=pikepdf.Dictionary(F="legacy.pdf", UF="unicode.pdf"),
+        D=pikepdf.String("remote-name"),
+    )
+    assert _extract_goto_remote(by_name_ambiguous_filespec) is None
+
+    no_dest = pikepdf.Dictionary(S=pikepdf.Name("/GoToR"), F=pikepdf.String("other.pdf"))
+    assert _extract_goto_remote(no_dest) is None
+
+    unrecognized_key = pikepdf.Dictionary(
+        S=pikepdf.Name("/GoToR"),
+        F=pikepdf.String("other.pdf"),
+        D=pikepdf.Array([0, pikepdf.Name("/Fit")]),
+        Mystery=pikepdf.String("?"),
+    )
+    assert _extract_goto_remote(unrecognized_key) is None
+
+
+def test_extract_named_action_shapes():
+    named = pikepdf.Dictionary(S=pikepdf.Name("/Named"), N=pikepdf.Name("/FirstPage"))
+    assert _extract_named_action(named) == "FirstPage"
+
+    no_name = pikepdf.Dictionary(S=pikepdf.Name("/Named"))
+    assert _extract_named_action(no_name) is None
+
+    unrecognized_key = pikepdf.Dictionary(
+        S=pikepdf.Name("/Named"), N=pikepdf.Name("/NextPage"), Extra=pikepdf.String("?")
+    )
+    assert _extract_named_action(unrecognized_key) is None
+
+
+def test_build_toc_tree_launch_goto_remote_named_action_roundtrip():
+    """End-to-end: build a PDF from friendly launch/goto_remote/named_action
+    YAML-shaped nodes, then re-extract and confirm it comes back identical.
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    nodes = [
+        {"title": "Open a file", "launch": "chapter1.pdf"},
+        {"title": "Open in new window", "launch": "chapter2.pdf", "new_window": True},
+        {
+            "title": "Remote page",
+            "goto_remote": {"file": "other.pdf", "page": 3, "view": ["FitH", 700]},
+        },
+        {
+            "title": "Remote named destination",
+            "goto_remote": {"file": "catalog.pdf", "dest": "section-3", "new_window": True},
+        },
+        {"title": "Next", "named_action": "NextPage"},
+    ]
+    build_toc_tree(pdf, nodes)
+
+    data = extract_toc_tree(pdf)
+    assert data == nodes
+
+
+def test_launch_goto_remote_named_action_fallback_shapes_roundtrip():
+    """Covers the *other* half of the launch/goto_remote/named_action
+    feature: every shape deliberately excluded from the friendly keys
+    (see _extract_launch_filename/_extract_goto_remote/_extract_named_
+    action's docstrings) must still fall back to the generic 'action'
+    dict, and that fallback must itself round-trip -- extracting a
+    PDF's raw actions, rebuilding a fresh PDF from the extracted data,
+    and re-extracting it must reproduce the exact same data. This is
+    the "don't guess, preserve losslessly instead" half of the design;
+    the happy-path friendly shapes are covered separately above.
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    fallback_actions = [
+        # Launch: /Mac present alongside /F -- not read, not simplified.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/Launch"),
+            F=pikepdf.String("modern.pdf"),
+            Mac=pikepdf.Dictionary(),
+        ),
+        # Launch: /Win present with an /O of "print", not the default "open".
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/Launch"),
+            Win=pikepdf.Dictionary(F=pikepdf.String("doc.pdf"), O=pikepdf.String("print")),
+        ),
+        # Launch: /F (modern) and /Win (legacy) both present.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/Launch"),
+            F=pikepdf.String("modern.pdf"),
+            Win=pikepdf.Dictionary(F=pikepdf.String("legacy.pdf")),
+        ),
+        # Launch: filespec /F and /UF disagree.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/Launch"),
+            F=pikepdf.Dictionary(F="legacy.pdf", UF="unicode.pdf"),
+        ),
+        # GoToR: filespec /F and /UF disagree.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/GoToR"),
+            F=pikepdf.Dictionary(F="legacy.pdf", UF="unicode.pdf"),
+            D=pikepdf.Array([0, pikepdf.Name("/Fit")]),
+        ),
+        # GoToR: /D's first element isn't a page number or a name/string.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/GoToR"),
+            F=pikepdf.String("other.pdf"),
+            D=pikepdf.Array([pikepdf.String("not-a-page-number"), pikepdf.Name("/Fit")]),
+        ),
+        # GoToR: an action key this feature doesn't understand.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/GoToR"),
+            F=pikepdf.String("other.pdf"),
+            D=pikepdf.Array([0, pikepdf.Name("/Fit")]),
+            Mystery=pikepdf.String("?"),
+        ),
+        # Named: an action key this feature doesn't understand.
+        pikepdf.Dictionary(
+            S=pikepdf.Name("/Named"), N=pikepdf.Name("/NextPage"), Extra=pikepdf.String("?")
+        ),
+    ]
+
+    with pdf.open_outline() as outline:
+        for i, action in enumerate(fallback_actions):
+            outline.root.append(pikepdf.OutlineItem(f"Fallback {i}", action=action))
+
+    data = extract_toc_tree(pdf)
+
+    # Every one of these must have actually fallen back, not silently
+    # been simplified with the wrong/lossy value.
+    assert len(data) == len(fallback_actions)
+    for node in data:
+        assert "action" in node, node
+        assert "launch" not in node
+        assert "goto_remote" not in node
+        assert "named_action" not in node
+
+    new_pdf = pikepdf.Pdf.new()
+    new_pdf.add_blank_page()
+    build_toc_tree(new_pdf, data)
+
+    assert extract_toc_tree(new_pdf) == data
+
+
+def test_build_goto_remote_missing_keys_raises():
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    with pytest.raises(OperationError, match="'goto_remote' must be a dict"):
+        build_toc_tree(pdf, [{"title": "Bad", "goto_remote": {"file": "x.pdf"}}])
+
+
+def test_build_goto_remote_page_out_of_range_raises():
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    with pytest.raises(ValueError, match="page numbers must be >= 1"):
+        build_toc_tree(pdf, [{"title": "Bad", "goto_remote": {"file": "x.pdf", "page": 0}}])
+
+
+def test_build_goto_remote_both_page_and_dest_raises():
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    with pytest.raises(OperationError, match="exactly one of 'page' or 'dest'"):
+        build_toc_tree(
+            pdf,
+            [{"title": "Bad", "goto_remote": {"file": "x.pdf", "page": 1, "dest": "y"}}],
+        )
+
+
 def test_build_toc_tree_empty_with_no_prior_outlines():
     """Covers branch 205->207: calling build_toc_tree([]) on a PDF that
     never had an /Outlines entry to begin with. The existing empty-input
@@ -571,6 +839,119 @@ def _make_cyclic_outline_pdf():
     return pdf
 
 
+def _make_dest_and_action_conflict_pdf():
+    """Builds a PDF with one outline item carrying both /Dest and /A,
+    pointing at *different* pages -- spec-illegal per ISO 32000-2 Table
+    153. pikepdf.OutlineItem's constructor won't let us build this
+    through the normal API (it raises unconditionally, even with
+    strict=False), so this drops to raw dictionary construction to mimic
+    a malformed/adversarial PDF, the same way _make_cyclic_outline_pdf
+    does for /Next cycles.
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(612, 792))
+    pdf.add_blank_page(page_size=(612, 792))
+
+    item = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Title=pikepdf.String("Contested"),
+            Dest=pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")]),
+            A=pikepdf.Dictionary(
+                S=pikepdf.Name("/GoTo"),
+                D=pikepdf.Array([pdf.pages[1].obj, pikepdf.Name("/Fit")]),
+            ),
+        )
+    )
+
+    outlines = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name("/Outlines"),
+            First=item,
+            Last=item,
+            Count=1,
+        )
+    )
+    item.Parent = outlines
+    pdf.Root.Outlines = outlines
+    return pdf
+
+
+def test_extract_toc_tree_dest_and_action_conflict_does_not_crash(caplog):
+    """Regression test: an outline item with both /Dest and /A used to
+    crash dump_bookmarks for the *entire* document, because pikepdf's
+    OutlineItem constructor raises ValueError("Only one of destination
+    and action may be set") unconditionally while loading the tree,
+    aborting pdf.open_outline()'s walk before pdftl's own per-item code
+    ever runs. It should instead keep the bookmark, preferring /Dest
+    (matching ISO 32000-2 12.6.4.2's own stated preference for a direct
+    destination over an equivalent /GoTo action), and warn rather than
+    silently dropping the conflict.
+    """
+    pdf = _make_dest_and_action_conflict_pdf()
+
+    with caplog.at_level(logging.WARNING):
+        data = extract_toc_tree(pdf)
+
+    assert len(data) == 1
+    assert data[0]["title"] == "Contested"
+    assert data[0]["page"] == 1  # /Dest's page (page 1), not /A's (page 2)
+    assert "action" not in data[0]
+    assert "both /Dest and /A" in caplog.text
+    assert "Contested" in caplog.text
+
+
+def test_build_toc_tree_sanitizes_preexisting_conflict(caplog):
+    """Regression test: build_toc_tree() also calls pdf.open_outline()
+    (to clear the existing tree before writing the new one), which loads
+    the *existing* outline first -- so a /Dest+/A conflict already
+    present on the document being replaced crashed update_bookmarks the
+    same way it crashed dump_bookmarks, even though the new tree being
+    written has nothing to do with the old one.
+    """
+    pdf = _make_dest_and_action_conflict_pdf()
+
+    with caplog.at_level(logging.WARNING):
+        build_toc_tree(pdf, [{"title": "Replacement", "page": 1}])
+
+    assert "both /Dest and /A" in caplog.text
+    data = extract_toc_tree(pdf)
+    assert data == [{"title": "Replacement", "page": 1}]
+
+
+def test_sanitize_dest_and_action_conflicts_untitled_item():
+    """Covers the fallback label when the conflicting item has no /Title
+    (itself spec-illegal, but shouldn't crash the warning message).
+    """
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+
+    item = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Dest=pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")]),
+            A=pikepdf.Dictionary(S=pikepdf.Name("/GoTo")),
+        )
+    )
+    outlines = pdf.make_indirect(
+        pikepdf.Dictionary(Type=pikepdf.Name("/Outlines"), First=item, Last=item, Count=1)
+    )
+    item.Parent = outlines
+    pdf.Root.Outlines = outlines
+
+    _sanitize_dest_and_action_conflicts(pdf)
+
+    assert "/A" not in item
+    assert "/Dest" in item
+
+
+def test_sanitize_dest_and_action_conflicts_no_outlines():
+    """Covers the early-return when the PDF has no /Outlines at all."""
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+    assert "/Outlines" not in pdf.Root
+
+    _sanitize_dest_and_action_conflicts(pdf)  # must not raise
+
+
 def test_extract_toc_tree_cyclic_outline_does_not_hang():
     """Regression test.
     A /Next pointer forming a cycle is spec-illegal but not something
@@ -621,3 +1002,30 @@ def test_extract_toc_tree_deep_nesting_does_not_recursionerror():
                 "outline tree — needs an iterative walk or an explicit, "
                 "documented depth cap."
             )
+
+
+def test_already_visited_outline_item_no_objgen():
+    """Covers the except AttributeError branch: an object with no
+    .objgen attribute (not a real pikepdf outline item) must be treated
+    as not-yet-visited rather than crashing the cycle guard.
+    """
+
+    class NoObjgen:
+        pass
+
+    assert _already_visited_outline_item(NoObjgen(), set()) is False
+
+
+def test_extract_simple_filespec_unsupported_type():
+    """Covers the final fallback return None: an input that is neither
+    None, a string/pikepdf.String, nor a pikepdf.Dictionary.
+    """
+    assert _extract_simple_filespec(pikepdf.Array([1, 2, 3])) is None
+
+
+def test_extract_launch_filename_win_not_a_dict():
+    """Covers the /Win-present-but-not-a-Dictionary guard: a malformed
+    action where /Win is e.g. a bare string rather than a sub-dictionary.
+    """
+    win_not_dict = pikepdf.Dictionary(S=pikepdf.Name("/Launch"), Win=pikepdf.String("not-a-dict"))
+    assert _extract_launch_filename(win_not_dict) is None

@@ -148,6 +148,9 @@ def _enforce_precedence_and_warn(nodes: list[dict], warning_state: dict):
             _enforce_precedence_and_warn(node["children"], warning_state)
 
 
+_ACTION_ROUTING_KEYS = ("launch", "goto_remote", "named_action")
+
+
 def _validate_node_routing(title, node):
     """Validates routing collisions and view dependencies."""
     if "uri" in node and ("page" in node or "dest" in node):
@@ -158,6 +161,15 @@ def _validate_node_routing(title, node):
     if "view" in node and "page" not in node and "dest" not in node:
         raise OperationError(
             f"Validation Error in '{title}': A 'view' array requires a target 'page'."
+        )
+
+    present_action_keys = [k for k in _ACTION_ROUTING_KEYS if k in node]
+    other_targets = [k for k in ("uri", "page", "dest") if k in node]
+    if present_action_keys and (other_targets or len(present_action_keys) > 1):
+        conflicting = ", ".join(present_action_keys + other_targets)
+        raise OperationError(
+            f"Validation Error in '{title}': A bookmark can only have one "
+            f"action target; found multiple: {conflicting}."
         )
 
 
@@ -176,14 +188,48 @@ def _validate_node_color(title, node):
         )
 
 
+def _validate_goto_remote_types(title, goto_remote):
+    """Validates the shape and field types of a 'goto_remote' value."""
+    has_valid_shape = (
+        isinstance(goto_remote, dict)
+        and "file" in goto_remote
+        and (("page" in goto_remote) ^ ("dest" in goto_remote))
+    )
+    if not has_valid_shape:
+        raise OperationError(
+            f"Validation Error in '{title}': 'goto_remote' must be a dict with "
+            "'file' and exactly one of 'page' (integer) or 'dest' (string)."
+        )
+    if not isinstance(goto_remote["file"], str):
+        raise OperationError(
+            f"Validation Error in '{title}': 'goto_remote.file' must be a string."
+        )
+    if "page" in goto_remote and not isinstance(goto_remote["page"], int):
+        raise OperationError(
+            f"Validation Error in '{title}': 'goto_remote.page' must be an integer."
+        )
+    if "dest" in goto_remote and not isinstance(goto_remote["dest"], str):
+        raise OperationError(
+            f"Validation Error in '{title}': 'goto_remote.dest' must be a string."
+        )
+
+
 def _validate_node_types(title, node):
-    """Validates field types for page, children, and view."""
+    """Validates field types for page, children, view, and the friendly
+    action-target keys (launch/goto_remote/named_action).
+    """
     if "page" in node and not isinstance(node["page"], int):
         raise OperationError(f"Validation Error in '{title}': 'page' must be an integer.")
     if "children" in node and not isinstance(node["children"], list):
         raise OperationError(f"Validation Error in '{title}': 'children' must be a list.")
     if "view" in node and not isinstance(node["view"], list):
         raise OperationError(f"Validation Error in '{title}': 'view' must be a list.")
+    if "launch" in node and not isinstance(node["launch"], str):
+        raise OperationError(f"Validation Error in '{title}': 'launch' must be a string.")
+    if "named_action" in node and not isinstance(node["named_action"], str):
+        raise OperationError(f"Validation Error in '{title}': 'named_action' must be a string.")
+    if "goto_remote" in node:
+        _validate_goto_remote_types(title, node["goto_remote"])
 
 
 def _validate_node_schema(nodes):

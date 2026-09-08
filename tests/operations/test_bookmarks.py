@@ -535,6 +535,45 @@ def test_update_bookmarks_validation_zero_indexing(tmp_path, six_page_pdf):
         ),
         # Root is not a list (it's a dict)
         ("title: Intro\npage: 1\n", "Root element must be a list"),
+        # Routing Collision (launch + page)
+        (
+            "- title: Intro\n  page: 1\n  launch: file.pdf\n",
+            "can only have one action target",
+        ),
+        # Routing Collision (launch + goto_remote)
+        (
+            "- title: Intro\n  launch: file.pdf\n  goto_remote: {file: x.pdf, page: 1}\n",
+            "can only have one action target",
+        ),
+        # Invalid launch type (list instead of string)
+        ("- title: Intro\n  launch: [file.pdf]\n", "'launch' must be a string"),
+        # Invalid named_action type (int instead of string)
+        ("- title: Intro\n  named_action: 1\n", "'named_action' must be a string"),
+        # goto_remote missing both 'page' and 'dest'
+        (
+            "- title: Intro\n  goto_remote: {file: x.pdf}\n",
+            "'goto_remote' must be a dict",
+        ),
+        # goto_remote with both 'page' and 'dest' (ambiguous)
+        (
+            "- title: Intro\n  goto_remote: {file: x.pdf, page: 1, dest: y}\n",
+            "exactly one of 'page'",
+        ),
+        # goto_remote wrong field types
+        (
+            "- title: Intro\n  goto_remote: {file: x.pdf, page: one}\n",
+            "'goto_remote.page' must be an integer",
+        ),
+        # goto_remote non-string file
+        (
+            "- title: Intro\n  goto_remote: {file: 123, page: 1}\n",
+            "'goto_remote.file' must be a string",
+        ),
+        # goto_remote non-string dest
+        (
+            "- title: Intro\n  goto_remote: {file: x.pdf, dest: 456}\n",
+            "'goto_remote.dest' must be a string",
+        ),
     ],
     ids=[
         "missing_title",
@@ -548,6 +587,15 @@ def test_update_bookmarks_validation_zero_indexing(tmp_path, six_page_pdf):
         "invalid_children_type",
         "nested_invalid_child",
         "root_not_list",
+        "launch_page_collision",
+        "launch_goto_remote_collision",
+        "invalid_launch_type",
+        "invalid_named_action_type",
+        "goto_remote_missing_target",
+        "goto_remote_ambiguous_target",
+        "goto_remote_invalid_field_types",
+        "goto_remote_file_not_string",
+        "goto_remote_dest_not_string",
     ],
 )
 def test_update_bookmarks_schema_validation(tmp_path, six_page_pdf, yaml_content, expected_error):
@@ -646,6 +694,120 @@ def test_round_trip_uri_survives(tmp_path, bookmarked_pdf):
     assert uri_nodes[0]["uri"] == "https://example.com"
 
 
+def test_round_trip_launch_goto_remote_named_action_survives(tmp_path, six_page_pdf):
+    """Verifies the friendly launch/goto_remote/named_action bookmark keys
+    survive an update_bookmarks -> dump_bookmarks round trip unchanged.
+    """
+    import pdftl
+
+    yaml_file = tmp_path / "bookmarks.yaml"
+    yaml_file.write_text(
+        "- title: Open a companion PDF\n"
+        "  launch: chapter1.pdf\n"
+        "- title: Jump into another document\n"
+        "  goto_remote: {file: other.pdf, page: 3, new_window: true}\n"
+        "- title: Jump to a named spot in another document\n"
+        "  goto_remote: {file: catalog.pdf, dest: section-3}\n"
+        "- title: Next page\n"
+        "  named_action: NextPage\n"
+    )
+
+    edited_pdf = pdftl.api.update_bookmarks(six_page_pdf, str(yaml_file))
+    bookmarks = pdftl.api.dump_bookmarks(edited_pdf)
+
+    assert bookmarks[0] == {"title": "Open a companion PDF", "launch": "chapter1.pdf"}
+    assert bookmarks[1] == {
+        "title": "Jump into another document",
+        "goto_remote": {"file": "other.pdf", "page": 3, "new_window": True},
+    }
+    assert bookmarks[2] == {
+        "title": "Jump to a named spot in another document",
+        "goto_remote": {"file": "catalog.pdf", "dest": "section-3"},
+    }
+    assert bookmarks[3] == {"title": "Next page", "named_action": "NextPage"}
+
+
+def test_round_trip_realistic_launch_targets_toc():
+    """Regression test replicating the real-world case that motivated
+    the launch/goto_remote feature: a table-of-contents PDF whose
+    bookmarks open companion PDFs, in the shapes real authoring tools
+    actually produce -- an indirect filespec *dictionary* /F (the
+    "<</F 251 0 R/S/Launch>>" shape a sibling project's operator hit),
+    a direct /F string, a legacy /Win-only fallback (/F absent), and a
+    /GoToR with /NewWindow. Verifies the full dump_bookmarks ->
+    update_bookmarks -> dump_bookmarks cycle through pdftl.api
+    (not just extract_toc_tree/build_toc_tree directly) reproduces the
+    friendly form exactly, matching what dump_bookmarks reported
+    manually against the equivalent real fixture file.
+    """
+    import pdftl
+
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+    pdf.add_blank_page()
+    pdf.add_blank_page()
+
+    with pdf.open_outline() as outline:
+        outline.root.append(
+            pikepdf.OutlineItem(
+                "Chapter 1 - Foundations",
+                action=pikepdf.Dictionary(
+                    S=pikepdf.Name("/Launch"),
+                    F=pdf.make_indirect(
+                        pikepdf.Dictionary(
+                            Type=pikepdf.Name("/Filespec"),
+                            F=pikepdf.String("chapter1.pdf"),
+                            UF=pikepdf.String("chapter1.pdf"),
+                        )
+                    ),
+                ),
+            )
+        )
+        outline.root.append(
+            pikepdf.OutlineItem(
+                "Chapter 2 - Methods",
+                action=pikepdf.Dictionary(S=pikepdf.Name("/Launch"), F="chapter2.pdf"),
+            )
+        )
+        outline.root.append(
+            pikepdf.OutlineItem(
+                "Appendix - Legacy",
+                action=pikepdf.Dictionary(
+                    S=pikepdf.Name("/Launch"),
+                    Win=pikepdf.Dictionary(F="appendix.pdf", O="open"),
+                ),
+            )
+        )
+        outline.root.append(
+            pikepdf.OutlineItem(
+                "Chapter 3 - Results",
+                action=pikepdf.Dictionary(
+                    S=pikepdf.Name("/GoToR"),
+                    F="chapter3.pdf",
+                    D=pikepdf.Array([2, pikepdf.Name("/Fit")]),
+                    NewWindow=True,
+                ),
+            )
+        )
+
+    expected = [
+        {"title": "Chapter 1 - Foundations", "launch": "chapter1.pdf"},
+        {"title": "Chapter 2 - Methods", "launch": "chapter2.pdf"},
+        {"title": "Appendix - Legacy", "launch": "appendix.pdf"},
+        {
+            "title": "Chapter 3 - Results",
+            "goto_remote": {"file": "chapter3.pdf", "page": 3, "new_window": True},
+        },
+    ]
+
+    first_dump = pdftl.api.dump_bookmarks(pdf)
+    assert first_dump == expected
+
+    rebuilt_pdf = pdftl.api.update_bookmarks(pdf, bookmarks=first_dump)
+    second_dump = pdftl.api.dump_bookmarks(rebuilt_pdf)
+    assert second_dump == first_dump
+
+
 def test_dump_bookmarks_no_resolve_preserves_dest(get_pdf_path):
     """Verifies that no_resolve keeps dest intact and suppresses page/view injection."""
     import pdftl
@@ -720,3 +882,48 @@ def test_update_bookmarks_valid_color(tmp_path, six_page_pdf):
     with pikepdf.open(six_page_pdf) as pdf:
         res = update_toc(pdf, [str(good_file)])
         assert res.success is True
+
+
+def test_round_trip_dest_and_action_conflict_survives_full_cycle():
+    """Regression test at the operation level (not just extract_toc_tree/
+    build_toc_tree directly): a document whose outline has an item with
+    both /Dest and /A used to crash dump_bookmarks entirely, and a
+    second bug (found via this exact round-trip check) meant
+    update_bookmarks crashed too, since build_toc_tree also calls
+    pdf.open_outline() to clear the existing tree before writing the new
+    one -- loading the same malformed existing item in the process.
+
+    Verifies the full dump_bookmarks -> update_bookmarks -> dump_bookmarks
+    cycle completes without crashing, and reaches a stable fixed point
+    (re-dumping the rebuilt PDF gives back exactly what update_bookmarks
+    was fed) rather than merely "not raising".
+    """
+    import pdftl
+
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page()
+    pdf.add_blank_page()
+
+    item = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Title=pikepdf.String("Contested"),
+            Dest=pikepdf.Array([pdf.pages[0].obj, pikepdf.Name("/Fit")]),
+            A=pikepdf.Dictionary(
+                S=pikepdf.Name("/GoTo"),
+                D=pikepdf.Array([pdf.pages[1].obj, pikepdf.Name("/Fit")]),
+            ),
+        )
+    )
+    outlines = pdf.make_indirect(
+        pikepdf.Dictionary(Type=pikepdf.Name("/Outlines"), First=item, Last=item, Count=1)
+    )
+    item.Parent = outlines
+    pdf.Root.Outlines = outlines
+
+    first_dump = pdftl.api.dump_bookmarks(pdf)
+    assert first_dump == [{"title": "Contested", "page": 1}]
+
+    rebuilt_pdf = pdftl.api.update_bookmarks(pdf, bookmarks=first_dump)
+    second_dump = pdftl.api.dump_bookmarks(rebuilt_pdf)
+
+    assert second_dump == first_dump

@@ -8,11 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- `dump_bookmarks`: friendlier `launch`, `goto_remote`, `named_action` keys for `/Launch`,
+  `/GoToR`, and `/Named` outline actions (previously a raw ISO action dict)
+
 ### Fixed
 
 - `dump_images` PPI calculation fixed to take CTM into account
 
 - `dump_images` now shows image masks
+
+- `dump_bookmarks`/`update_bookmarks`: fix a crash on outline items with both `/Dest` and `/A` (keeps `/Dest`)
 
 ## [0.28.0] - 2026-08-30
 
