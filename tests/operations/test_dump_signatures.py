@@ -7,6 +7,7 @@ import pikepdf
 import pytest
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers
+from pdftl.utils.async_helpers import run_sync
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
@@ -52,7 +53,8 @@ def signed_pdf_path(tmp_path, cert_and_key):
     w = IncrementalPdfFileWriter(buf)
     signer = signers.SimpleSigner.load(key, cert)
     with open(pdf_path, "wb") as out:
-        signers.sign_pdf(
+        run_sync(
+            signers.sign_pdf,
             w,
             signers.PdfSignatureMetadata(field_name="Signature1"),
             signer=signer,
@@ -81,7 +83,8 @@ def encrypted_signed_pdf_path(tmp_path, cert_and_key):
 
     signer = signers.SimpleSigner.load(key, cert)
     with open(pdf_path, "wb") as out:
-        signers.sign_pdf(
+        run_sync(
+            signers.sign_pdf,
             w,
             signers.PdfSignatureMetadata(field_name="Signature1"),
             signer=signer,
@@ -697,7 +700,8 @@ def cert_chain_and_signed_pdf(tmp_path: Path):
             w, sig_field_spec=fields.SigFieldSpec(sig_field_name="Signature1")
         )
         with open(signed_pdf, "wb") as outf:
-            signers.sign_pdf(
+            run_sync(
+                signers.sign_pdf,
                 w,
                 signers.PdfSignatureMetadata(field_name="Signature1"),
                 signer=signer,
