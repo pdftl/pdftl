@@ -113,6 +113,8 @@ Arguments:
   * By default, images are only replaced if the resulting compressed stream is
     smaller than the original. Use `allow_growth=true` to prioritize DPI
     compliance over file size.
+  * Inline images embedded directly inside page content streams are resampled too,
+    following the same DPI/colorspace/force rules as XObject images.
 
 **Limitations:**
 
@@ -124,8 +126,6 @@ Arguments:
   * JPEG images are decoded, resized, and re-encoded when resampling is
     required. Original JPEG quantization tables, chroma subsampling settings,
     and progressive encoding are not preserved.
-  * Inline images embedded directly inside page content streams are not
-    currently targeted.
 """
 
 _RESAMPLE_IMAGES_EXAMPLES = [
@@ -253,6 +253,13 @@ def _prepare_image_for_worker(
     """Extracts PIL data and metadata from pikepdf objects safely on the main thread."""
     import pikepdf
     from pikepdf.models import PdfImage
+
+    if img.get("inline"):
+        logger.debug(
+            "Skipping inline image on page %s (not yet supported).",
+            img.get("page", "?"),
+        )
+        return None
 
     dims = _get_resample_dims(img, dpi, allow_upscale)
     if not dims:
@@ -445,6 +452,93 @@ def _commit_resampled_data(
     return True
 
 
+def _build_inline_replacement(
+    pdf, ref: dict, dpi: int, quality: int, allow_upscale: bool, force: bool
+):
+    """Decodes, resizes, and re-encodes one inline image ref, returning the
+    raw BI...EI bytes to splice back in, or None if the ref does not
+    qualify or fails at any stage. Split out of _resample_inline_images to
+    keep that function's branching within complexity limits."""
+    from PIL import Image
+    from pdftl.utils.images.inline_images import decode_inline_pil, encode_inline_replacement
+
+    dims = _get_resample_dims(ref, dpi, allow_upscale)
+    if not dims:
+        return None
+    new_width, new_height = dims
+
+    pil_img = decode_inline_pil(pdf, ref)
+    if pil_img is None:
+        return None
+
+    is_bitonal = int(ref.get("bits", 8)) == 1
+    if pil_img.mode not in _SAFE_PIL_MODES and not force:
+        logger.debug(
+            "Skipping inline resample: PIL decoded to mode '%s' on page %s. "
+            "Use force=true to resample anyway.",
+            pil_img.mode,
+            ref.get("page", "?"),
+        )
+        return None
+
+    try:
+        if pil_img.mode not in _SAFE_PIL_MODES:
+            target = _FORCE_CONVERT_MODES.get(pil_img.mode, "RGB")
+            pil_img = pil_img.convert(target)
+
+        if is_bitonal:
+            resized = pil_img.resize((new_width, new_height), Image.Resampling.NEAREST).convert(
+                "1"
+            )
+        else:
+            resized = pil_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    except (ValueError, OSError) as exc:
+        logger.debug("Skipping inline resample on page %s: %s", ref.get("page", "?"), exc)
+        return None
+
+    return encode_inline_replacement(resized, ref.get("format"), quality)
+
+
+def _resample_inline_images(
+    pdf,
+    inline_refs: list[dict],
+    dpi: int,
+    quality: int,
+    allow_upscale: bool,
+    force: bool,
+) -> int:
+    """Synchronously resamples eligible inline images in place.
+
+    Runs outside the thread-pool pipeline used for XObject images
+    (run_parallel_image_job / _worker_compute_resample / _commit_resampled_data)
+    because inline images have no indirect xobj to hand a worker thread a
+    clean unit of work for -- decode, resize, and re-encode all happen here
+    on the main thread (mirroring _worker_compute_resample's own
+    force-conversion and bitonal/JPEG branching), then
+    inline_images.apply_inline_rewrites splices each stream's specific
+    instruction(s) back in, at most once per host stream.
+
+    `inline_refs` should be the `inline: True` subset of an
+    extract_pdf_images() result; entries lacking host_objgen/
+    instruction_index are silently skipped by apply_inline_rewrites.
+    """
+    from pdftl.utils.images.inline_images import apply_inline_rewrites
+
+    eligible_refs = []
+    replacement_bytes: dict[int, bytes] = {}  # id(ref) -> raw BI...EI bytes
+
+    for ref in inline_refs:
+        raw = _build_inline_replacement(pdf, ref, dpi, quality, allow_upscale, force)
+        if raw is None:
+            continue
+        eligible_refs.append(ref)
+        replacement_bytes[id(ref)] = raw
+
+    if not eligible_refs:
+        return 0
+    return apply_inline_rewrites(pdf, eligible_refs, lambda ref: replacement_bytes.get(id(ref)))
+
+
 @register_operation(
     "resample_images",
     tags=["in_place", "images", "optimization"],
@@ -471,6 +565,7 @@ def resample_images(pdf, operation_args: list) -> OpResult:
     )
 
     images = extract_pdf_images(pdf, target_pages)
+    inline_images = [img for img in images if img.get("inline")]
 
     def prepare_wrapper(
         img_dict: dict, seen_set: set
@@ -499,6 +594,13 @@ def resample_images(pdf, operation_args: list) -> OpResult:
             "%s",
             exc,
         )
+
+    try:
+        resample_count += _resample_inline_images(
+            pdf, inline_images, dpi, quality, allow_upscale, force
+        )
+    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
+        logger.warning("Skipped resampling inline image(s) due to an error: %s", exc)
 
     logger.info(
         "Resampled %d image(s) to max %s DPI (JPEG Quality: %d, Guard Active: %s, Threads: %d).",

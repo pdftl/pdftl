@@ -80,6 +80,12 @@ def prepare_recolor_payload(
 
     for grayscale conversion, then extracts and safelines its PIL representation.
     """
+    if img.get("inline"):
+        logger.warning(
+            "Skipping inline image on page %s (not yet supported).", img.get("page", "?")
+        )
+        return None
+
     xobj = img["xobj"]
 
     if not _is_eligible_for_recolor(xobj, seen_objgens):
@@ -158,3 +164,57 @@ def commit_recolored_stream(
     except pikepdf.PdfError as exc:
         logger.error("Failed to commit recolored stream layout modifications: %s", exc)
         return False
+
+
+def recolor_inline_images(pdf, inline_refs: list[dict], quality: int) -> int:
+    """Synchronously grayscale-converts eligible inline images in place.
+
+    Runs outside the thread-pool pipeline used for XObject images
+    (run_parallel_image_job / worker_recolor_pixels / commit_recolored_stream)
+    because inline images have no indirect xobj to hand a worker thread
+    a clean unit of work for -- decode, convert, and re-encode all
+    happen here on the main thread (mirroring worker_recolor_pixels'
+    own FlateDecode-vs-DCTDecode branching), then
+    inline_images.apply_inline_rewrites splices each stream's specific
+    instruction(s) back in, at most once per host stream.
+
+    `inline_refs` should be the `inline: True` subset of an
+    extract_pdf_images() result; entries lacking host_objgen/
+    instruction_index are silently skipped by apply_inline_rewrites.
+    """
+    from pdftl.utils.images.inline_images import (
+        apply_inline_rewrites,
+        decode_inline_pil,
+        encode_inline_replacement,
+    )
+
+    eligible_refs = []
+    replacement_bytes: dict[int, bytes] = {}  # id(ref) -> raw BI...EI bytes
+
+    for ref in inline_refs:
+        if ref.get("colorspace") == "DeviceGray" or int(ref.get("bits", 8)) == 1:
+            continue  # already grayscale, or a 1-bit stencil-ish image
+
+        pil_img = decode_inline_pil(pdf, ref)
+        if pil_img is None:
+            continue
+        if pil_img.mode in ("L", "1"):
+            continue
+
+        try:
+            gray = pil_img.convert("L")
+        except ValueError:
+            logger.debug(
+                "Skipping inline recolor: PIL conversion failed for page %s", ref.get("page")
+            )
+            continue
+
+        raw = encode_inline_replacement(
+            gray, ref.get("format"), quality, cs_name="DeviceGray", bits=8
+        )
+        eligible_refs.append(ref)
+        replacement_bytes[id(ref)] = raw
+
+    if not eligible_refs:
+        return 0
+    return apply_inline_rewrites(pdf, eligible_refs, lambda ref: replacement_bytes.get(id(ref)))

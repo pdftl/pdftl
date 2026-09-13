@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `delete_images`, `export_images`, `import_images`, `recolor_images`, and `resample_images`
+  now target inline images (`BI`/`ID`/`EI` content stream blocks), not just XObject images
+
 ## [0.28.1] - 2026-09-11
 
 ### Changed

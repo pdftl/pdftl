@@ -6,6 +6,7 @@
 
 import io
 import pytest
+from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
 import pikepdf
 from PIL import Image
@@ -461,3 +462,111 @@ def test_commit_handles_nested_smask_neutralization(empty_pdf):
 
     assert success is True
     assert smask_stream.ColorSpace == pikepdf.Name("/DeviceGray")
+
+
+def test_prepare_recolor_payload_skips_inline_images():
+    """Covers the `if img.get("inline"): ... return None` early-exit in
+    prepare_recolor_payload -- an inline image entry (no 'xobj' key at
+    all) must be skipped via this guard rather than reaching the
+    `img["xobj"]` lookup a few lines later, which would KeyError."""
+    img = {"inline": True, "page": 3, "name": None}
+    assert mod.prepare_recolor_payload(img, 75, set()) is None
+
+
+def test_commit_recolored_stream_smask_without_colorspace_is_left_alone(empty_pdf):
+    """Covers the branch where /SMask is present and IS a real
+    pikepdf.Stream, but does NOT itself carry a /ColorSpace entry --
+    distinct from test_commit_recolored_stream_mutations (which gives
+    the smask a /ColorSpace) and from a case with no /SMask at all.
+    The smask must be left untouched rather than raising or having a
+    /ColorSpace added to it."""
+    smask = empty_pdf.make_stream(b"")
+    assert "/ColorSpace" not in smask
+
+    xobj = empty_pdf.make_stream(b"")
+    xobj["/ColorSpace"] = pikepdf.Name("/DeviceRGB")
+    xobj["/SMask"] = smask
+
+    ctx = ImageContext(xobj=xobj, smask_xobj=None, orig_size=0, img_dict={}, page_num=1)
+    payload = mod.RecolorPayload(pil_img=None, fmt="dctdecode", quality=75)
+    result = mod.RecolorResult(compressed_bytes=b"fake_jpeg_bytes")
+
+    status = mod.commit_recolored_stream(ctx, result, payload)
+
+    assert status is True
+    assert "/ColorSpace" not in smask
+    assert xobj["/ColorSpace"] == pikepdf.Name("/DeviceGray")
+
+
+class TestRecolorInlineImages:
+    def test_already_gray_colorspace_skipped(self):
+        refs = [{"colorspace": "DeviceGray", "bits": 8}]
+        assert mod.recolor_inline_images(MagicMock(), refs, 75) == 0
+
+    def test_one_bit_stencil_skipped(self):
+        refs = [{"colorspace": "DeviceRGB", "bits": 1}]
+        assert mod.recolor_inline_images(MagicMock(), refs, 75) == 0
+
+    def test_decode_returns_none_skipped(self):
+        refs = [{"colorspace": "DeviceRGB", "bits": 8, "page": 1}]
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=None):
+            assert mod.recolor_inline_images(MagicMock(), refs, 75) == 0
+
+    def test_already_gray_mode_skipped(self):
+        refs = [{"colorspace": "DeviceRGB", "bits": 8}]
+        gray_img = Image.new("L", (5, 5))
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=gray_img):
+            assert mod.recolor_inline_images(MagicMock(), refs, 75) == 0
+
+    def test_convert_valueerror_is_skipped(self, monkeypatch):
+        refs = [{"colorspace": "DeviceRGB", "bits": 8, "page": 2}]
+        rgb_img = Image.new("RGB", (5, 5))
+
+        def bad_convert(mode):
+            raise ValueError("channel mismatch")
+
+        monkeypatch.setattr(rgb_img, "convert", bad_convert)
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=rgb_img):
+            assert mod.recolor_inline_images(MagicMock(), refs, 75) == 0
+
+    def test_dctdecode_branch_success(self):
+        refs = [{"colorspace": "DeviceRGB", "bits": 8, "format": "dctdecode"}]
+        rgb_img = Image.new("RGB", (5, 5), color="red")
+        with (
+            patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=rgb_img),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"raw",
+            ) as mock_build,
+            patch(
+                "pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=1
+            ) as mock_apply,
+        ):
+            result = mod.recolor_inline_images(MagicMock(), refs, 80)
+        assert result == 1
+        mock_build.assert_called_once()
+        mock_apply.assert_called_once()
+
+    def test_flate_default_branch_success(self):
+        refs = [{"colorspace": "DeviceRGB", "bits": 8, "format": "flatedecode"}]
+        rgb_img = Image.new("RGB", (5, 5), color="green")
+        with (
+            patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=rgb_img),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"raw",
+            ),
+            patch(
+                "pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=1
+            ) as mock_apply,
+        ):
+            result = mod.recolor_inline_images(MagicMock(), refs, 75)
+        assert result == 1
+        mock_apply.assert_called_once()
+
+    def test_no_eligible_refs_returns_zero_without_calling_rewrites(self):
+        refs = [{"colorspace": "DeviceGray", "bits": 8}]
+        with patch("pdftl.utils.images.inline_images.apply_inline_rewrites") as mock_apply:
+            result = mod.recolor_inline_images(MagicMock(), refs, 75)
+        assert result == 0
+        mock_apply.assert_not_called()

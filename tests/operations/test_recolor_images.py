@@ -201,3 +201,35 @@ def test_recolor_images_parallel_exception_logged(mocker, caplog):
         in record.message
         for record in caplog.records
     )
+
+
+def test_recolor_inline_images_exception_logged(mocker, caplog):
+    """Exercises the inline recolor exception-handling branch."""
+    import logging
+    from pdftl.operations.recolor_images import recolor_images
+
+    inline_img = {"inline": True, "page": 1, "name": "Im0"}
+    mocker.patch(
+        "pdftl.operations.recolor_images.extract_pdf_images",
+        return_value=[inline_img],
+    )
+    mocker.patch(
+        "pdftl.operations.recolor_images.run_parallel_image_job",
+        return_value=0,
+    )
+    mocker.patch(
+        "pdftl.operations.recolor_images.recolor_inline_images",
+        side_effect=RuntimeError("Simulated inline recolor failure"),
+    )
+
+    mock_pdf = mocker.MagicMock()
+    mock_pdf.pages = [mocker.MagicMock()]
+
+    with caplog.at_level(logging.WARNING, logger="pdftl.operations.recolor_images"):
+        result = recolor_images(mock_pdf, [])
+
+    assert result.success is True
+    assert any(
+        "Skipped recoloring inline image(s) due to an error" in record.message
+        for record in caplog.records
+    )

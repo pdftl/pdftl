@@ -409,3 +409,205 @@ def test_resample_images_parallel_exception_logged(mocker, caplog):
         in record.message
         for record in caplog.records
     )
+
+
+from pdftl.operations.resample_images import _resample_inline_images
+
+
+class TestPrepareImageForWorkerInlineGuard:
+    def test_prepare_image_for_worker_skips_inline_images(self):
+        """Inline entries are routed to _resample_inline_images instead;
+        this guard just prevents run_parallel_image_job from KeyError'ing
+        on the missing 'xobj' key."""
+        img = {"inline": True, "page": 4, "name": None}
+        seen = set()
+
+        result = _prepare_image_for_worker(
+            img,
+            dpi=150,
+            quality=75,
+            allow_upscale=False,
+            allow_growth=False,
+            force=False,
+            seen_objgens=seen,
+        )
+
+        assert result is None
+        assert seen == set()
+
+
+class TestResampleInlineImages:
+    def test_no_qualifying_dims_skipped(self):
+        ref = {"page": 1, "bbox": [0, 0, 10, 10], "width_px": 10, "height_px": 10}
+        with patch("pdftl.utils.images.inline_images.apply_inline_rewrites") as mock_apply:
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=False
+            )
+        assert count == 0
+        mock_apply.assert_not_called()
+
+    def test_decode_returns_none_skipped(self):
+        ref = {"page": 1, "bbox": [0, 0, 96, 96], "width_px": 400, "height_px": 400}
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=None):
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=False
+            )
+        assert count == 0
+
+    def test_exotic_mode_without_force_skipped(self):
+        ref = {"page": 1, "bbox": [0, 0, 96, 96], "width_px": 400, "height_px": 400, "bits": 8}
+        exotic_img = Image.new("P", (400, 400))
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=exotic_img):
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=False
+            )
+        assert count == 0
+
+    def test_exotic_mode_with_force_converts_and_resamples(self):
+        ref = {
+            "page": 1,
+            "bbox": [0, 0, 96, 96],
+            "width_px": 400,
+            "height_px": 400,
+            "bits": 8,
+            "format": "flatedecode",
+        }
+        exotic_img = Image.new("P", (400, 400))
+        with (
+            patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=exotic_img),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes", return_value=b"raw"
+            ) as mock_build,
+            patch(
+                "pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=1
+            ) as mock_apply,
+        ):
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=True
+            )
+        assert count == 1
+        mock_build.assert_called_once()
+        mock_apply.assert_called_once()
+
+    def test_resize_raises_is_skipped(self, monkeypatch):
+        ref = {"page": 1, "bbox": [0, 0, 96, 96], "width_px": 400, "height_px": 400, "bits": 8}
+        rgb_img = Image.new("RGB", (400, 400))
+
+        def bad_resize(*args, **kwargs):
+            raise OSError("decode buffer exhausted")
+
+        monkeypatch.setattr(rgb_img, "resize", bad_resize)
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=rgb_img):
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=False
+            )
+        assert count == 0
+
+    def test_bitonal_uses_nearest_and_flate(self):
+        ref = {
+            "page": 1,
+            "bbox": [0, 0, 96, 96],
+            "width_px": 400,
+            "height_px": 400,
+            "bits": 1,
+            "format": "flatedecode",
+        }
+        bitonal_img = Image.new("1", (400, 400))
+        with (
+            patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=bitonal_img),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes", return_value=b"raw"
+            ) as mock_build,
+            patch("pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=1),
+        ):
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=False
+            )
+        assert count == 1
+        _, kwargs = mock_build.call_args
+        assert kwargs["filter_name"] == "FlateDecode"
+        assert kwargs["bits"] == 1
+
+    def test_dctdecode_branch_reencodes_as_jpeg(self):
+        ref = {
+            "page": 1,
+            "bbox": [0, 0, 96, 96],
+            "width_px": 400,
+            "height_px": 400,
+            "bits": 8,
+            "format": "dctdecode",
+        }
+        rgb_img = Image.new("RGB", (400, 400), color="red")
+        with (
+            patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=rgb_img),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes", return_value=b"raw"
+            ) as mock_build,
+            patch("pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=1),
+        ):
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=80, allow_upscale=False, force=False
+            )
+        assert count == 1
+        _, kwargs = mock_build.call_args
+        assert kwargs["filter_name"] == "DCTDecode"
+        assert kwargs["colorspace_name"] == "DeviceRGB"
+
+    def test_no_eligible_refs_apply_not_called(self):
+        ref = {"page": 1, "bbox": [0, 0, 10, 10], "width_px": 10, "height_px": 10}
+        with patch("pdftl.utils.images.inline_images.apply_inline_rewrites") as mock_apply:
+            count = _resample_inline_images(
+                None, [ref], dpi=72, quality=75, allow_upscale=False, force=False
+            )
+        assert count == 0
+        mock_apply.assert_not_called()
+
+
+class TestResampleImagesInlineIntegration:
+    @patch("pdftl.operations.resample_images.extract_pdf_images")
+    @patch("pdftl.operations.resample_images._resample_inline_images", return_value=2)
+    def test_resample_images_calls_inline_resampler(self, mock_inline, mock_extract, real_pdf):
+        real_pdf.add_blank_page(page_size=(612, 792))
+        inline_entry = {
+            "inline": True,
+            "page": 1,
+            "bbox": [0, 0, 96, 96],
+            "width_px": 400,
+            "height_px": 400,
+        }
+        mock_extract.return_value = [inline_entry]
+
+        res = resample_images(real_pdf, [])
+        assert res.success is True
+        mock_inline.assert_called_once()
+
+    @patch("pdftl.operations.resample_images.extract_pdf_images")
+    def test_resample_images_inline_exception_logged(self, mock_extract, real_pdf, caplog):
+        import logging
+
+        real_pdf.add_blank_page(page_size=(612, 792))
+        mock_extract.return_value = [
+            {"inline": True, "page": 1, "bbox": [0, 0, 96, 96], "width_px": 400, "height_px": 400}
+        ]
+
+        with patch(
+            "pdftl.operations.resample_images._resample_inline_images",
+            side_effect=RuntimeError("Simulated inline resample failure"),
+        ):
+            with caplog.at_level(logging.WARNING, logger="pdftl.operations.resample_images"):
+                result = resample_images(real_pdf, [])
+
+        assert result.success is True
+        assert any(
+            "Skipped resampling inline image(s) due to an error" in r.message
+            for r in caplog.records
+        )
+
+
+def test_apply_metadata_updates_unrecognized_mode_no_colorspace_set(real_pdf):
+    """Covers the implicit else of the mode if/elif chain (line 412->exit):
+    an unrecognized PIL mode should leave ColorSpace untouched rather than
+    matching any of the RGB/L/CMYK branches."""
+    stream = real_pdf.make_stream(b"")
+    _apply_metadata_updates(stream, "RGBA", is_bitonal=False, force=True)
+    assert "/ColorSpace" not in stream

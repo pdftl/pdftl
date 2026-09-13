@@ -582,3 +582,146 @@ def test_delete_images_from_page_with_inherited_resources():
     # 'if Name.Resources in page' evaluated to False, skipping _process_resources entirely
     assert image_stream.Width == 1
     assert image_stream.Height == 1
+
+
+# ---------------------------------------------------------------------------
+# _inline_image_matches
+# ---------------------------------------------------------------------------
+
+from pdftl.operations.delete_images import (
+    _inline_image_matches,
+    _delete_inline_images_on_pages,
+    _delete_images_from_pages,
+)
+
+
+class TestInlineImageMatches:
+    def test_no_params_always_matches(self):
+        assert _inline_image_matches({}, {}) is True
+
+    def test_minbytes_passes(self):
+        entry = {"stream_bytes": 200}
+        assert _inline_image_matches(entry, {"minbytes": "100"}) is True
+
+    def test_minbytes_fails(self):
+        entry = {"stream_bytes": 50}
+        assert _inline_image_matches(entry, {"minbytes": "100"}) is False
+
+    def test_maxbytes_fails(self):
+        entry = {"stream_bytes": 500}
+        assert _inline_image_matches(entry, {"maxbytes": "100"}) is False
+
+    def test_minpixels_missing_dims_returns_false(self):
+        entry = {"width_px": None, "height_px": None}
+        assert _inline_image_matches(entry, {"minpixels": "10x10"}) is False
+
+    def test_minpixels_wxh_passes(self):
+        entry = {"width_px": 200, "height_px": 400}
+        assert _inline_image_matches(entry, {"minpixels": "100x200"}) is True
+
+    def test_minpixels_wxh_fails(self):
+        entry = {"width_px": 50, "height_px": 400}
+        assert _inline_image_matches(entry, {"minpixels": "100x200"}) is False
+
+    def test_minpixels_area_form(self):
+        entry = {"width_px": 100, "height_px": 100}
+        assert _inline_image_matches(entry, {"minpixels": "5000"}) is True
+
+    def test_maxpixels_wxh_form(self):
+        entry = {"width_px": 50, "height_px": 50}
+        assert _inline_image_matches(entry, {"maxpixels": "100x100"}) is True
+
+    def test_maxpixels_area_form_fails(self):
+        entry = {"width_px": 100, "height_px": 100}
+        assert _inline_image_matches(entry, {"maxpixels": "5000"}) is False
+
+    def test_format_passes(self):
+        entry = {"format": "dctdecode"}
+        assert _inline_image_matches(entry, {"format": "dct"}) is True
+
+    def test_format_fails(self):
+        entry = {"format": "flatedecode"}
+        assert _inline_image_matches(entry, {"format": "dct"}) is False
+
+    def test_format_missing_key(self):
+        entry = {}
+        assert _inline_image_matches(entry, {"format": "dct"}) is False
+
+
+# ---------------------------------------------------------------------------
+# _delete_inline_images_on_pages
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteInlineImagesOnPages:
+    def test_non_inline_entries_are_skipped(self):
+        entries = [{"inline": False}]
+        with (
+            patch("pdftl.operations.delete_images.extract_pdf_images", return_value=entries),
+            patch("pdftl.operations.delete_images.apply_inline_replacements") as mock_apply,
+        ):
+            count = _delete_inline_images_on_pages(MagicMock(), [1], {}, set())
+        mock_apply.assert_not_called()
+        assert count == 0
+
+    def test_entries_missing_identity_are_skipped(self):
+        entries = [{"inline": True, "host_objgen": None, "instruction_index": None}]
+        with (
+            patch("pdftl.operations.delete_images.extract_pdf_images", return_value=entries),
+            patch("pdftl.operations.delete_images.apply_inline_replacements") as mock_apply,
+        ):
+            count = _delete_inline_images_on_pages(MagicMock(), [1], {}, set())
+        mock_apply.assert_not_called()
+        assert count == 0
+
+    def test_already_modified_entry_is_skipped(self):
+        entries = [{"inline": True, "host_objgen": (1, 0), "instruction_index": 0}]
+        modified = {((1, 0), 0)}
+        with (
+            patch("pdftl.operations.delete_images.extract_pdf_images", return_value=entries),
+            patch("pdftl.operations.delete_images.apply_inline_replacements") as mock_apply,
+        ):
+            count = _delete_inline_images_on_pages(MagicMock(), [1], {}, modified)
+        mock_apply.assert_not_called()
+        assert count == 0
+
+    def test_non_matching_entry_is_skipped(self):
+        entries = [{"inline": True, "host_objgen": (1, 0), "instruction_index": 0}]
+        with (
+            patch("pdftl.operations.delete_images.extract_pdf_images", return_value=entries),
+            patch("pdftl.operations.delete_images._inline_image_matches", return_value=False),
+            patch("pdftl.operations.delete_images.apply_inline_replacements") as mock_apply,
+        ):
+            count = _delete_inline_images_on_pages(MagicMock(), [1], {}, set())
+        mock_apply.assert_not_called()
+        assert count == 0
+
+    def test_matching_entry_is_replaced(self):
+        entry = {"inline": True, "host_objgen": (2, 0), "instruction_index": 1}
+        modified = set()
+        with (
+            patch("pdftl.operations.delete_images.extract_pdf_images", return_value=[entry]),
+            patch("pdftl.operations.delete_images._inline_image_matches", return_value=True),
+            patch(
+                "pdftl.operations.delete_images.apply_inline_replacements", return_value=3
+            ) as mock_apply,
+        ):
+            count = _delete_inline_images_on_pages(MagicMock(), [1], {}, modified)
+        mock_apply.assert_called_once()
+        assert count == 3
+        assert ((2, 0), 1) in modified
+
+
+class TestDeleteImagesFromPagesInlineDispatch:
+    def test_empty_target_pages_skips_inline_pass(self):
+        pdf = MagicMock()
+        pdf.pages = []
+        with (
+            patch(
+                "pdftl.operations.delete_images.page_numbers_matching_page_spec",
+                return_value=[],
+            ),
+            patch("pdftl.operations.delete_images._delete_inline_images_on_pages") as mock_inline,
+        ):
+            _delete_images_from_pages("99", pdf, {}, set(), set(), __import__("pikepdf"))
+        mock_inline.assert_not_called()

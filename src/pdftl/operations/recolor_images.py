@@ -20,6 +20,7 @@ from pdftl.utils.images.grayscale import (
     prepare_recolor_payload,
     worker_recolor_pixels,
     commit_recolored_stream,
+    recolor_inline_images,
 )
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
@@ -109,6 +110,7 @@ def recolor_images(pdf, operation_args: list) -> OpResult:
     )
 
     images = extract_pdf_images(pdf, target_pages)
+    inline_images = [img for img in images if img.get("inline")]
     recolor_count = 0
     try:
         recolor_count = run_parallel_image_job(
@@ -124,6 +126,11 @@ def recolor_images(pdf, operation_args: list) -> OpResult:
             "%s",
             exc,
         )
+
+    try:
+        recolor_count += recolor_inline_images(pdf, inline_images, quality)
+    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
+        logger.warning("Skipped recoloring inline image(s) due to an error: %s", exc)
 
     logger.info("Recolored %d image asset(s) to grayscale.", recolor_count)
     return OpResult(success=True, pdf=pdf)

@@ -565,3 +565,361 @@ class TestImportImages:
             result = import_images(pdf, specs=[str(tmp_path), f"manifest={manifest_file}"])
             assert result.success is True
             mock_encode.assert_called_once()
+
+
+class TestExportSkipsInlineImagesViaRealFinder:
+    def test_export_skips_inline_image_from_real_extract_pdf_images(self, tmp_path):
+        """Covers _build_manifest's `if img.get("inline"): ... continue` branch
+        via the real extract_pdf_images path (not a mocked return value) -- an
+        actual inline BI/ID/EI block on the page must be skipped with a
+        warning, and must not prevent a sibling XObject image on the same
+        page from being exported normally."""
+        pdf = _make_pdf_with_image(color="red", mode="RGB", fmt="flatedecode")
+        page = pdf.pages[0]
+        old_contents = bytes(page.obj["/Contents"].read_bytes())
+        inline_bytes = b"BI /W 1 /H 1 /BPC 8 /CS /RGB ID \x80\x80\x80 EI"
+        page.obj["/Contents"] = pikepdf.Stream(pdf, old_contents + b" " + inline_bytes)
+
+        out_dir = tmp_path / "exports"
+        result = export_images(pdf, specs=[str(out_dir)])
+
+        assert result.success is True
+        # Only the one real XObject image should be in the manifest --
+        # the inline image must have been skipped, not exported or crashed on.
+        assert len(result.data["image_streams"]) == 1
+
+
+import pdftl.operations.export_import_images as eii_mod
+
+
+class TestExportSingleInlineImage:
+    def test_decode_returns_none(self, tmp_path):
+        img = {"page": 1, "host_objgen": (1, 0), "instruction_index": 0}
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=None):
+            result = eii_mod._export_single_inline_image(MagicMock(), img, tmp_path)
+        assert result is None
+
+    def test_successful_export_png(self, tmp_path):
+        img = {
+            "page": 1,
+            "host_objgen": (5, 0),
+            "instruction_index": 2,
+            "format": "flatedecode",
+        }
+        pil_img = Image.new("RGB", (5, 5), color="red")
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=pil_img):
+            result = eii_mod._export_single_inline_image(MagicMock(), img, tmp_path)
+        assert result is not None
+        filename, file_hash = result
+        assert filename == "inline_5_0_2.png"
+        assert (tmp_path / filename).exists()
+
+    def test_successful_export_jpeg(self, tmp_path):
+        img = {
+            "page": 1,
+            "host_objgen": (6, 0),
+            "instruction_index": 0,
+            "format": "dctdecode",
+        }
+        pil_img = Image.new("RGB", (5, 5), color="blue")
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=pil_img):
+            result = eii_mod._export_single_inline_image(MagicMock(), img, tmp_path)
+        assert result is not None
+        filename, _ = result
+        assert filename.endswith(".jpg")
+
+    def test_cmyk_png_converted_to_rgb(self, tmp_path):
+        img = {
+            "page": 1,
+            "host_objgen": (7, 0),
+            "instruction_index": 0,
+            "format": "flatedecode",
+        }
+        pil_img = Image.new("CMYK", (5, 5))
+        with patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=pil_img):
+            result = eii_mod._export_single_inline_image(MagicMock(), img, tmp_path)
+        filename, _ = result
+        saved = Image.open(tmp_path / filename)
+        assert saved.mode == "RGB"
+
+    def test_save_failure_returns_none(self, tmp_path):
+        img = {
+            "page": 1,
+            "host_objgen": (8, 0),
+            "instruction_index": 0,
+            "format": "flatedecode",
+        }
+        pil_img = Image.new("RGB", (5, 5))
+        with (
+            patch("pdftl.utils.images.inline_images.decode_inline_pil", return_value=pil_img),
+            patch("PIL.Image.Image.save", side_effect=OSError("disk full")),
+        ):
+            result = eii_mod._export_single_inline_image(MagicMock(), img, tmp_path)
+        assert result is None
+
+
+class TestBuildManifestInlineImages:
+    def test_inline_entry_added_to_manifest(self, tmp_path):
+        entry = {
+            "inline": True,
+            "host_objgen": (1, 0),
+            "instruction_index": 0,
+            "format": "flatedecode",
+            "width_px": 10,
+            "height_px": 10,
+            "colorspace": {"family": "rgb"},
+            "bits": 8,
+            "page": 1,
+            "bbox": [0, 0, 10, 10],
+            "ppi_x": 72,
+            "ppi_y": 72,
+        }
+        with (
+            patch("pdftl.utils.images.finders.extract_pdf_images", return_value=[entry]),
+            patch(
+                "pdftl.operations.export_import_images._export_single_inline_image",
+                return_value=("inline_1_0_0.png", "abc123"),
+            ),
+        ):
+            manifest = eii_mod._build_manifest(MagicMock(), [1], tmp_path)
+
+        key = "inline_1_0_0"
+        assert key in manifest["image_streams"]
+        stream = manifest["image_streams"][key]
+        assert stream["inline"] is True
+        assert stream["host_objgen"] == [1, 0]
+        assert stream["export_file"] == "inline_1_0_0.png"
+        assert stream["placements"] == [
+            {"page": 1, "name": None, "bbox": [0, 0, 10, 10], "ppi_x": 72, "ppi_y": 72}
+        ]
+
+    def test_inline_entry_export_failure_skips(self, tmp_path):
+        entry = {
+            "inline": True,
+            "host_objgen": (1, 0),
+            "instruction_index": 0,
+            "format": "flatedecode",
+            "width_px": 10,
+            "height_px": 10,
+            "colorspace": {"family": "rgb"},
+            "bits": 8,
+            "page": 1,
+            "bbox": [0, 0, 10, 10],
+            "ppi_x": 72,
+            "ppi_y": 72,
+        }
+        with (
+            patch("pdftl.utils.images.finders.extract_pdf_images", return_value=[entry]),
+            patch(
+                "pdftl.operations.export_import_images._export_single_inline_image",
+                return_value=None,
+            ),
+        ):
+            manifest = eii_mod._build_manifest(MagicMock(), [1], tmp_path)
+        assert manifest["image_streams"] == {}
+
+
+class TestImportSingleInlineImage:
+    def test_missing_export_file_key(self, tmp_path):
+        assert eii_mod._import_single_inline_image(None, {}, tmp_path, 75) is False
+
+    def test_file_not_resolved(self, tmp_path):
+        stream_info = {"export_file": "missing.png"}
+        assert eii_mod._import_single_inline_image(None, stream_info, tmp_path, 75) is False
+
+    def test_hash_unchanged_skips(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("RGB", (5, 5)).save(img_file)
+        h = eii_mod._file_hash(img_file)
+        stream_info = {"export_file": "im.png", "file_hash": h}
+        assert eii_mod._import_single_inline_image(None, stream_info, tmp_path, 75) is False
+
+    def test_missing_host_objgen_or_index(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("RGB", (5, 5)).save(img_file)
+        stream_info = {"export_file": "im.png", "file_hash": "oldhash"}
+        assert eii_mod._import_single_inline_image(None, stream_info, tmp_path, 75) is False
+
+    def test_image_open_fails(self, tmp_path):
+        img_file = tmp_path / "corrupt.png"
+        img_file.write_bytes(b"not an image")
+        stream_info = {
+            "export_file": "corrupt.png",
+            "file_hash": "oldhash",
+            "host_objgen": [1, 0],
+            "instruction_index": 0,
+        }
+        assert eii_mod._import_single_inline_image(None, stream_info, tmp_path, 75) is False
+
+    def test_dctdecode_success(self, tmp_path):
+        img_file = tmp_path / "im.jpg"
+        Image.new("RGB", (5, 5), color="blue").save(img_file, format="JPEG")
+        stream_info = {
+            "export_file": "im.jpg",
+            "file_hash": "oldhash",
+            "host_objgen": [2, 0],
+            "instruction_index": 1,
+            "format": "dctdecode",
+            "placements": [{"page": 1}],
+        }
+        with (
+            patch(
+                "pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=True
+            ) as mock_apply,
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"raw",
+            ),
+        ):
+            result = eii_mod._import_single_inline_image(MagicMock(), stream_info, tmp_path, 80)
+        assert result is True
+        mock_apply.assert_called_once()
+
+    def test_flate_default_success(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("L", (5, 5)).save(img_file)
+        stream_info = {
+            "export_file": "im.png",
+            "file_hash": "oldhash",
+            "host_objgen": [3, 0],
+            "instruction_index": 2,
+            "format": "flatedecode",
+        }
+        with (
+            patch("pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=True),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"raw",
+            ),
+        ):
+            result = eii_mod._import_single_inline_image(MagicMock(), stream_info, tmp_path, 75)
+        assert result is True
+
+    def test_unsupported_mode_converts_to_rgb(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("P", (5, 5)).save(img_file)
+        stream_info = {
+            "export_file": "im.png",
+            "file_hash": "oldhash",
+            "host_objgen": [6, 0],
+            "instruction_index": 0,
+        }
+        with (
+            patch("pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=True),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"raw",
+            ),
+        ):
+            result = eii_mod._import_single_inline_image(MagicMock(), stream_info, tmp_path, 75)
+        assert result is True
+
+    def test_apply_rewrites_raises_is_caught(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("RGB", (5, 5)).save(img_file)
+        stream_info = {
+            "export_file": "im.png",
+            "file_hash": "oldhash",
+            "host_objgen": [4, 0],
+            "instruction_index": 0,
+        }
+        with (
+            patch(
+                "pdftl.utils.images.inline_images.apply_inline_rewrites",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"x",
+            ),
+        ):
+            result = eii_mod._import_single_inline_image(MagicMock(), stream_info, tmp_path, 75)
+        assert result is False
+
+    def test_changed_false_returns_false(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("RGB", (5, 5)).save(img_file)
+        stream_info = {
+            "export_file": "im.png",
+            "file_hash": "oldhash",
+            "host_objgen": [5, 0],
+            "instruction_index": 0,
+        }
+        with (
+            patch("pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=False),
+            patch(
+                "pdftl.utils.images.inline_images.build_inline_image_bytes",
+                return_value=b"x",
+            ),
+        ):
+            result = eii_mod._import_single_inline_image(MagicMock(), stream_info, tmp_path, 75)
+        assert result is False
+
+
+class TestImportImagesInlineDispatch:
+    def test_inline_stream_routed_to_inline_importer(self, tmp_path):
+        pdf = MagicMock()
+        manifest_file = tmp_path / "manifest.json"
+        manifest_data = {
+            "image_streams": {"inline_1_0_0": {"inline": True, "export_file": "x.png"}}
+        }
+        with open(manifest_file, "w") as f:
+            json.dump(manifest_data, f)
+
+        with patch(
+            "pdftl.operations.export_import_images._import_single_inline_image",
+            return_value=True,
+        ) as mock_inline:
+            result = eii_mod.import_images(pdf, specs=[str(tmp_path), f"manifest={manifest_file}"])
+        assert result.success is True
+        mock_inline.assert_called_once()
+
+    def test_inline_stream_import_returns_false_not_counted(self, tmp_path):
+        """Sibling to test_inline_stream_routed_to_inline_importer: the
+        false-return path from _import_single_inline_image must not be
+        counted toward updated_count."""
+        pdf = MagicMock()
+        manifest_file = tmp_path / "manifest.json"
+        manifest_data = {
+            "image_streams": {"inline_1_0_0": {"inline": True, "export_file": "x.png"}}
+        }
+        with open(manifest_file, "w") as f:
+            json.dump(manifest_data, f)
+
+        with patch(
+            "pdftl.operations.export_import_images._import_single_inline_image",
+            return_value=False,
+        ) as mock_inline:
+            result = import_images(pdf, specs=[str(tmp_path), f"manifest={manifest_file}"])
+        assert result.success is True
+        mock_inline.assert_called_once()
+
+    # tests/operations/test_export_import_images.py
+
+    def test_bitonal_mode_preserved_not_converted_to_rgb(self, tmp_path):
+        img_file = tmp_path / "im.png"
+        Image.new("1", (5, 5)).save(img_file)
+        stream_info = {
+            "export_file": "im.png",
+            "file_hash": "oldhash",
+            "host_objgen": [9, 0],
+            "instruction_index": 0,
+            "format": "flatedecode",
+        }
+        captured = {}
+
+        def fake_encode(pil_img, fmt, quality):
+            captured["mode"] = pil_img.mode
+            return b"raw"
+
+        with (
+            patch("pdftl.utils.images.inline_images.apply_inline_rewrites", return_value=True),
+            patch(
+                "pdftl.utils.images.inline_images.encode_inline_replacement",
+                side_effect=fake_encode,
+            ),
+        ):
+            result = eii_mod._import_single_inline_image(MagicMock(), stream_info, tmp_path, 75)
+
+        assert result is True
+        assert captured["mode"] == "1"

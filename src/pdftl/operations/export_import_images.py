@@ -192,6 +192,34 @@ def _export_single_image(xobj, img: dict, out_dir: Path) -> tuple[str, str] | No
     return filename, _file_hash(filepath)
 
 
+def _export_single_inline_image(pdf, img: dict, out_dir: Path) -> tuple[str, str] | None:
+    """Like _export_single_image, but for an inline image: decodes via
+    inline_images.decode_inline_pil() (which re-locates the actual
+    PdfInlineImage operand by host_objgen/instruction_index) rather than
+    extract_to_pil(xobj), since there is no xobj."""
+    from pdftl.utils.images.inline_images import decode_inline_pil
+
+    pil_img = decode_inline_pil(pdf, img)
+    if pil_img is None:
+        logger.warning("Could not decode inline image on page %s", img.get("page", "?"))
+        return None
+
+    fmt = img.get("format", "unknown")
+    ext = "jpg" if fmt == "dctdecode" else "png"
+    g0, g1 = img["host_objgen"]
+    filename = f"inline_{g0}_{g1}_{img['instruction_index']}.{ext}"
+    filepath = out_dir / filename
+
+    try:
+        save_img = pil_img.convert("RGB") if pil_img.mode == "CMYK" and ext == "png" else pil_img
+        save_img.save(filepath)
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to save inline image %s: %s", filepath, exc)
+        return None
+
+    return filename, _file_hash(filepath)
+
+
 def _build_manifest(pdf, target_pages: list[int], out_dir: Path) -> dict:
     """Iterates over embedded PDF images and builds the manifest dictionary."""
     from pdftl.utils.images.finders import extract_pdf_images
@@ -200,6 +228,38 @@ def _build_manifest(pdf, target_pages: list[int], out_dir: Path) -> dict:
     manifest: dict = {"image_streams": {}}
 
     for img in image_data:
+        if img.get("inline"):
+            export_info = _export_single_inline_image(pdf, img, out_dir)
+            if export_info is None:
+                continue
+            filename, file_hash = export_info
+            g0, g1 = img["host_objgen"]
+            key = f"inline_{g0}_{g1}_{img['instruction_index']}"
+            # Unlike XObject images, an inline image is physically
+            # embedded per-occurrence (never shared across placements),
+            # so this key is always new -- one entry, one placement.
+            manifest["image_streams"][key] = {
+                "inline": True,
+                "host_objgen": [g0, g1],
+                "instruction_index": img["instruction_index"],
+                "format": img.get("format", "unknown"),
+                "width_px": img["width_px"],
+                "height_px": img["height_px"],
+                "colorspace": img["colorspace"],
+                "bits": img["bits"],
+                "export_file": filename,
+                "file_hash": file_hash,
+                "placements": [
+                    {
+                        "page": img["page"],
+                        "name": None,
+                        "bbox": img["bbox"],
+                        "ppi_x": img["ppi_x"],
+                        "ppi_y": img["ppi_y"],
+                    }
+                ],
+            }
+            continue
         xobj = img.pop("xobj")
 
         # Inline Collision Guard: Skip direct objects to prevent mapping crashes
@@ -453,6 +513,72 @@ def _import_single_image(
         return False
 
 
+def _import_single_inline_image(pdf, stream_info: dict, out_dir: Path, quality: int) -> bool:
+    """Like _import_single_image, but re-embeds pixel data directly into
+    the host content stream via inline_images.apply_inline_rewrites,
+    since there is no indirect xobj to hand to encode_and_update_pdf_image."""
+    from PIL import Image
+    from pdftl.utils.images.inline_images import apply_inline_rewrites, encode_inline_replacement
+
+    filename = stream_info.get("export_file")
+    if not filename:
+        return False
+
+    filepath = _resolve_import_filepath(filename, out_dir)
+    if not filepath:
+        return False
+
+    current_hash = _file_hash(filepath)
+    if current_hash == stream_info.get("file_hash"):
+        logger.debug("Skipping %s, file hash unchanged.", filename)
+        return False
+
+    host_objgen = stream_info.get("host_objgen")
+    idx = stream_info.get("instruction_index")
+    if host_objgen is None or idx is None:
+        logger.warning(
+            "Inline manifest entry missing host_objgen/instruction_index; skipping %s", filename
+        )
+        return False
+
+    try:
+        pil_img = Image.open(filepath)
+        pil_img.load()
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to read image %s: %s", filepath, exc)
+        return False
+
+    _check_dimensions(filepath.name, pil_img, stream_info)
+
+    # encode_inline_replacement already handles mode "1" natively (bit-packed
+    # tobytes(), DeviceGray colorspace, 1 bpc), so bitonal images round-trip
+    # faithfully instead of being blown up to 8-bit RGB.
+    if pil_img.mode not in ("L", "RGB", "CMYK", "1"):
+        pil_img = pil_img.convert("RGB")
+
+    raw = encode_inline_replacement(pil_img, stream_info.get("format"), quality)
+
+    placements = stream_info.get("placements", [])
+    ref = {
+        "inline": True,
+        "host_objgen": tuple(host_objgen),
+        "instruction_index": idx,
+        "page": placements[0].get("page") if placements else None,
+    }
+
+    try:
+        changed = apply_inline_rewrites(pdf, [ref], lambda _r: raw)
+    except (RuntimeError, ValueError, TypeError) as exc:
+        logger.warning("Failed to re-embed inline image %s: %s", filename, exc)
+        return False
+
+    if changed:
+        logger.info(
+            "Imported and updated inline image at %s[%d] from %s", host_objgen, idx, filepath.name
+        )
+    return bool(changed)
+
+
 @register_operation(
     "import_images",
     tags=["in_place", "images", "import", "replace"],
@@ -496,7 +622,10 @@ def import_images(pdf, specs) -> OpResult:
     updated_count = 0
 
     for obj_id, stream_info in image_streams.items():
-        if _import_single_image(obj_id, stream_info, out_dir, objgen_map, quality):
+        if stream_info.get("inline"):
+            if _import_single_inline_image(pdf, stream_info, out_dir, quality):
+                updated_count += 1
+        elif _import_single_image(obj_id, stream_info, out_dir, objgen_map, quality):
             updated_count += 1
 
     logger.info("Successfully imported %d image(s).", updated_count)

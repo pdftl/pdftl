@@ -12,6 +12,8 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
+from pdftl.utils.images.finders import extract_pdf_images
+from pdftl.utils.images.inline_images import apply_inline_replacements
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.pikepdf_helpers import get_inheritable
@@ -87,6 +89,59 @@ def _parse_size_str(size_str: str) -> int:
         if size_str.endswith(unit):
             return int(float(size_str[:-1]) * mult)
     return int(size_str)  # Will raise ValueError if size_str isn't a number
+
+
+def _inline_bytes_limits_satisfied(entry: dict, params) -> bool:
+    if "minbytes" not in params and "maxbytes" not in params:
+        return True
+    stream_bytes = entry.get("stream_bytes", 0)
+    minbytes = _parse_size_str(params["minbytes"]) if "minbytes" in params else None
+    maxbytes = _parse_size_str(params["maxbytes"]) if "maxbytes" in params else None
+    if (minbytes is not None and stream_bytes < minbytes) or (
+        maxbytes is not None and stream_bytes > maxbytes
+    ):
+        return False
+    return True
+
+
+def _inline_pixels_limits_satisfied(entry: dict, params) -> bool:
+    w, h = entry.get("width_px"), entry.get("height_px")
+    for pname in ("minpixels", "maxpixels"):
+        if pname not in params:
+            continue
+        if w is None or h is None:
+            return False
+        limit = _parse_pixels_limit(params[pname])
+        s = 1 if pname.startswith("min") else -1
+        if len(limit) == 2:
+            if not (s * w >= s * limit[0] and s * h >= s * limit[1]):
+                return False
+        elif not (s * w * h >= s * limit[0]):
+            return False
+    return True
+
+
+def _inline_image_matches(entry: dict, params) -> bool:
+    """Like _image_matches, but evaluates an extract_pdf_images() inline
+    entry dict directly rather than a pikepdf.Stream -- an inline image
+    has no indirect object to call .read_raw_bytes()/.Width/.Height on,
+    so this reads the same information off the metadata finders.py
+    already computed instead."""
+    if not params:
+        return True
+
+    if not (
+        _inline_bytes_limits_satisfied(entry, params)
+        and _inline_pixels_limits_satisfied(entry, params)
+    ):
+        return False
+
+    if "format" in params:
+        f = (entry.get("format") or "").lower()
+        if params["format"] not in f:
+            return False
+
+    return True
 
 
 def _overwrite_with_stub(obj):
@@ -201,6 +256,32 @@ def _process_resources(resources, params, modified_objects) -> None:
                 modified_objects.add(obj.objgen)
 
 
+def _delete_inline_images_on_pages(pdf, target_pages, params, modified_inline: set) -> int:
+    """Finds and stubs inline images on `target_pages` matching `params`.
+
+    `modified_inline` is a set of (host_objgen, instruction_index) pairs
+    shared across every spec in this delete_images() call -- same role
+    as `modified_objects` plays for XObject images, but content-stream
+    instructions have no objgen of their own, so the pair stands in for
+    identity. Re-extracts fresh each call since a prior spec's
+    apply_inline_replacements may have already mutated these streams.
+    """
+    entries = extract_pdf_images(pdf, target_pages)
+    matches = []
+    for entry in entries:
+        if not entry.get("inline"):
+            continue
+        host_objgen, idx = entry.get("host_objgen"), entry.get("instruction_index")
+        if host_objgen is None or idx is None:
+            continue
+        key = (tuple(host_objgen), idx)
+        if key in modified_inline or not _inline_image_matches(entry, params):
+            continue
+        matches.append(entry)
+        modified_inline.add(key)
+    return apply_inline_replacements(pdf, matches) if matches else 0
+
+
 @register_operation(
     "delete_images",
     tags=["in_place", "images", "optimization", "delete"],
@@ -224,15 +305,19 @@ def delete_images(pdf, specs) -> OpResult:
 
     # Track Object IDs to prevent double-processing and get an accurate count
     modified_objects: set[tuple] = set()
+    modified_inline: set[tuple] = set()
 
     for spec in specs:
-        _apply_spec(pdf, spec, modified_objects, pikepdf)
+        _apply_spec(pdf, spec, modified_objects, modified_inline, pikepdf)
 
-    logger.info("Permanently overwritten %d unique images with 1x1 stubs.", len(modified_objects))
+    logger.info(
+        "Permanently overwritten %d unique images with 1x1 stubs.",
+        len(modified_objects) + len(modified_inline),
+    )
     return OpResult(success=True, pdf=pdf)
 
 
-def _apply_spec(pdf, spec, modified_objects, pikepdf):
+def _apply_spec(pdf, spec, modified_objects, modified_inline, pikepdf):
     selector = spec
     params_str = ""
     if "(" in spec and spec.endswith(")"):
@@ -241,13 +326,15 @@ def _apply_spec(pdf, spec, modified_objects, pikepdf):
 
     # ROUTING: Treat empty selector or "-" as Global Mode
     if not selector or selector == "-":
-        _delete_images_globally(pdf, params, modified_objects, pikepdf)
+        _delete_images_globally(pdf, params, modified_objects, modified_inline, pikepdf)
     else:
-        _delete_images_from_pages(selector, pdf, params, modified_objects, pikepdf)
+        _delete_images_from_pages(
+            selector, pdf, params, modified_objects, modified_inline, pikepdf
+        )
 
 
-def _delete_images_globally(pdf, params, modified_objects, pikepdf):
-    _delete_images_from_pages("-", pdf, params, modified_objects, pikepdf)
+def _delete_images_globally(pdf, params, modified_objects, modified_inline, pikepdf):
+    _delete_images_from_pages("-", pdf, params, modified_objects, modified_inline, pikepdf)
     for obj in pdf.objects:
         if (
             isinstance(obj, pikepdf.Stream)
@@ -260,7 +347,7 @@ def _delete_images_globally(pdf, params, modified_objects, pikepdf):
             modified_objects.add(obj.objgen)
 
 
-def _delete_images_from_pages(selector, pdf, params, modified_objects, pikepdf):
+def _delete_images_from_pages(selector, pdf, params, modified_objects, modified_inline, pikepdf):
     # ROUTING: Specific page selector -> Page-Based Mode
     target_pages = page_numbers_matching_page_spec(selector, len(pdf.pages))
     for p_num in target_pages:
@@ -268,6 +355,8 @@ def _delete_images_from_pages(selector, pdf, params, modified_objects, pikepdf):
         resources = get_inheritable(page, "/Resources")
         if resources is not None:
             _process_resources(resources, params, modified_objects)
+    if target_pages:
+        _delete_inline_images_on_pages(pdf, target_pages, params, modified_inline)
 
 
 def _get_params(params_str):
