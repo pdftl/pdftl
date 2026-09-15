@@ -249,3 +249,38 @@ def test_modification_rules_hypothesis_no_parens_require_keyval(spec):
     """Any non-empty string without parens should raise when require_keyval=True."""
     with pytest.raises((ValueError, TypeError)):
         ma_parser.specs_to_modification_rules([spec], total_pages=10, require_keyval=True)
+
+
+def test_parse_kv_pair_bare_key_allowed_when_not_require_keyval():
+    key, val = ma_parser._parse_kv_pair("A", require_keyval=False)
+    assert key == "A"
+    assert val is ma_parser.EXISTS
+
+
+def test_parse_kv_pair_bare_key_rejected_by_default():
+    with pytest.raises(ValueError):
+        ma_parser._parse_kv_pair("A")
+
+
+def test_parse_kv_pair_bare_key_empty_still_fails():
+    with pytest.raises(ValueError, match="Key cannot be empty"):
+        ma_parser._parse_kv_pair("  ", require_keyval=False)
+
+
+def test_parse_modification_string_bare_key_mixed_with_kv():
+    result = ma_parser._parse_modification_string("A, Border=null", require_keyval=False)
+    assert result[0] == ("A", ma_parser.EXISTS)
+    assert result[1] == ("Border", "null")
+
+
+def test_specs_to_selection_rules_bare_key_existence():
+    rules = ma_parser.specs_to_selection_rules(["/Link(A)"], total_pages=10)
+    assert len(rules) == 1
+    assert rules[0].type_selector == "/Link"
+    assert rules[0].value_selectors == [("A", ma_parser.EXISTS)]
+
+
+def test_specs_to_modification_rules_non_string_spec_raises():
+    """Covers the isinstance check guarding against non-string specs."""
+    with pytest.raises(ValueError, match="Invalid spec: not a string"):
+        ma_parser.specs_to_modification_rules([123], total_pages=10)

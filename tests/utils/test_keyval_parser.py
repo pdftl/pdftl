@@ -285,3 +285,77 @@ class TestConstrainedChoice:
         validator = constrained_choice("western", "japanese")
         with pytest.raises(ValueError, match="must be one of western, japanese"):
             validator("chinese")
+
+
+# ---------------------------------------------------------------------------
+# _parse_array_value / parse_value_to_python (PDF-literal syntax)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch
+
+from pdftl.utils.keyval_parser import _parse_array_value, parse_value_to_python
+
+
+class TestParseArrayValue:
+    def test_no_brackets_returns_single_item_list(self):
+        assert _parse_array_value("not_an_array") == ["not_an_array"]
+
+    def test_numeric_and_name_items(self):
+        assert _parse_array_value("[0 0 1]") == [0.0, 0.0, 1.0]
+        assert _parse_array_value("[1.5 /Name]") == [1.5, "/Name"]
+
+    def test_malformed_numeric_like_item_falls_back_to_string(self):
+        assert _parse_array_value("[1.2.3 /Name]") == ["1.2.3", "/Name"]
+
+    def test_conversion_exception_falls_back_to_string(self):
+        with patch("pdftl.utils.keyval_parser.float") as mock_float:
+            mock_float.side_effect = ValueError("forced")
+            assert _parse_array_value("[1.0]") == ["1.0"]
+
+
+class TestParseValueToPython:
+    def test_static_values(self):
+        assert parse_value_to_python("null") is None
+        assert parse_value_to_python("true") is True
+        assert parse_value_to_python("false") is False
+
+    def test_pdf_string(self):
+        assert parse_value_to_python("(My String)") == "My String"
+
+    def test_pdf_string_mismatched_parens_warns_and_returns_literal(self, caplog):
+        with caplog.at_level("WARNING"):
+            result = parse_value_to_python("(Unbalanced (String)")
+        assert result == "Unbalanced (String"
+        assert "Mismatched parentheses" in caplog.text
+
+    def test_pdf_array(self):
+        assert parse_value_to_python("[0 0 1]") == [0.0, 0.0, 1.0]
+
+    def test_pdf_array_mismatched_brackets_raises(self):
+        with pytest.raises(ValueError, match="Mismatched brackets"):
+            parse_value_to_python("[[0 0 1]")
+
+    def test_pdf_name(self):
+        from pikepdf import Name
+
+        result = parse_value_to_python("/Foo")
+        assert isinstance(result, Name)
+        assert result == Name("/Foo")
+
+    def test_number(self):
+        assert parse_value_to_python("1.5") == 1.5
+        assert parse_value_to_python("10") == 10.0
+
+    def test_number_conversion_exception_falls_through_to_string_path(self):
+        with patch("pdftl.utils.keyval_parser.float") as mock_float:
+            mock_float.side_effect = TypeError("forced")
+            assert parse_value_to_python("123") == "123"
+
+    def test_malformed_unbalanced_delimiters_raises(self):
+        with pytest.raises(ValueError, match="Malformed value string"):
+            parse_value_to_python("[0 0 1")
+        with pytest.raises(ValueError, match="Malformed value string"):
+            parse_value_to_python("Unbalanced(String")
+
+    def test_plain_string_default(self):
+        assert parse_value_to_python("PlainString") == "PlainString"

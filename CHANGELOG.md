@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `delete_images`, `export_images`, `import_images`, `recolor_images`, and `resample_images`
   now target inline images (`BI`/`ID`/`EI` content stream blocks), not just XObject images
 
+- `dump_annots` and `delete_annots` now support filtering by nested annotation properties using
+  slash-separated key paths, both by value and existence
+
+### Fixed
+- `dump_annots` and `delete_annots` handle malformed arguments better
+
 ## [0.28.1] - 2026-09-11
 
 ### Changed

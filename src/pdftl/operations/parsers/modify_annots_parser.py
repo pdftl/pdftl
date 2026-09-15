@@ -26,13 +26,29 @@ def _unquote_string(val: str) -> str:
     return val
 
 
-def _parse_kv_pair(part: str) -> tuple[str, str]:
+# Sentinel used as the "value" half of a bare-key selector (no "=Value"),
+# e.g. "A" inside "/Link(A)". Means "annotation has this property" rather
+# than a value comparison. Only produced when require_keyval=False.
+EXISTS = object()
+
+
+def _parse_kv_pair(part: str, require_keyval: bool = True) -> tuple[str, str]:
     """
     Parses a single 'Key=Value' string, respecting quotes in the value.
     (Adapted from add_text_parser._parse_kv_pair)
+
+    If require_keyval is False, a bare key with no '=' (e.g. "A") is
+    accepted and returned as (key, EXISTS) — an existence check rather
+    than a value comparison. If require_keyval is True (default), a
+    bare key raises ValueError as before.
     """
     all_parts = split_string_respecting_quotes(part, delimiter="=")
     if len(all_parts) < 2:
+        if not require_keyval:
+            key = part.strip()
+            if not key:
+                raise ValueError(f"Invalid modification: '{part}'. Key cannot be empty.")
+            return key, EXISTS
         raise ValueError(f"Invalid modification: '{part}'. Expected format 'Key=Value'.")
 
     key = all_parts[0].strip()
@@ -74,10 +90,12 @@ class SelectionRule:
     value_selectors: list[tuple[str, str]] | None
 
 
-def _parse_modification_string(mod_str: str) -> list[tuple[str, str]]:
+def _parse_modification_string(mod_str: str, require_keyval: bool = True) -> list[tuple[str, str]]:
     """
     Parses the comma-separated key=value string from inside the parentheses.
     e.g., "Border=null, Foo=bar, 'T=(New Author Name)'"
+    If require_keyval is False, bare keys (no '=') are accepted as
+    existence checks — see _parse_kv_pair.
     """
     if not mod_str:
         raise ValueError("Empty modification list '()'. Must specify modifications.")
@@ -86,7 +104,7 @@ def _parse_modification_string(mod_str: str) -> list[tuple[str, str]]:
     modifications = []
     for part in mod_parts:
         if part.strip():
-            modifications.append(_parse_kv_pair(part))
+            modifications.append(_parse_kv_pair(part, require_keyval=require_keyval))
     return modifications
 
 
@@ -161,7 +179,9 @@ def specs_to_modification_rules(
             )
 
         page_spec, type_selector = _parse_selector_string(selector_str.strip())
-        modifications = _parse_modification_string(mod_str) if mod_str else []
+        modifications = (
+            _parse_modification_string(mod_str, require_keyval=require_keyval) if mod_str else []
+        )
         page_numbers = page_numbers_matching_page_spec(page_spec, total_pages)
 
         rules.append(ModificationRule(page_numbers, type_selector, modifications))

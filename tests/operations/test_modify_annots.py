@@ -23,7 +23,6 @@ from pikepdf import Array, Dictionary, Name, Pdf
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.modify_annots import (
     _apply_mods_to_annot,
-    _parse_array_value,
     _parse_value_to_python,
     modify_annots,
 )
@@ -445,18 +444,6 @@ def test_modify_annots_empty_rules_warning(pdf, caplog):
     assert "No modification rules parsed" in caplog.text
 
 
-# --- merged from test_modify_annots_coverage_2.py ---
-
-
-def test_parse_array_value_edge_cases():
-    # Trigger line 75: arr_str that does not start/end with brackets
-    assert _parse_array_value("not_an_array") == ["not_an_array"]
-
-    # Trigger lines 86-88: ValueError/TypeError in array parsing
-    # This happens if an item looks like a number but float() fails
-    assert _parse_array_value("[1.2.3 /Name]") == ["1.2.3", "/Name"]
-
-
 def test_parse_value_to_python_mismatched_delimiters(caplog):
     # Trigger lines 112-117: Mismatched parentheses in PDF string
     with caplog.at_level(logging.WARNING):
@@ -540,28 +527,16 @@ def test_apply_rule_logic():
     assert page.Annots[0].T == "New Title"
 
 
-def test_coverage_mop_up_array_exceptions():
-    """
-    Targets lines 86-88: The except (ValueError, TypeError) block in _parse_array_value.
-    We force this by mocking float() to raise an error during the loop.
-    """
-    with patch("pdftl.operations.modify_annots.float") as mock_float:
-        mock_float.side_effect = ValueError("Forced error")
-        # "1.0" will pass the 'if looks like number' check, then hit mock_float
-        result = _parse_array_value("[1.0]")
-        assert result == ["1.0"], "Should have fallen back to returning the string item"
-
-
 def test_coverage_mop_up_value_to_python_exceptions():
     """
-    Targets lines 134-135: The except (ValueError, TypeError) block in _parse_value_to_python.
+    The except (ValueError, TypeError) block in _parse_value_to_python.
     We use a string that passes the .isdigit() / .replace() check but fails float().
     In Python, some Unicode characters return True for isdigit() but fail float().
     Alternatively, we can use a mock.
     """
     # String with a superset of digits that might pass checks but fail conversion
     # Or simply mock float again for this specific scope
-    with patch("pdftl.operations.modify_annots.float") as mock_float:
+    with patch("pdftl.utils.keyval_parser.float") as mock_float:
         mock_float.side_effect = TypeError("Forced type error")
         # "123" passes the digit check, then hits the mock
         result = _parse_value_to_python("123")

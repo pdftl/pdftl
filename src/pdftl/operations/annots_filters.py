@@ -15,27 +15,25 @@ if TYPE_CHECKING:
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
+from pdftl.exceptions import InvalidArgumentError
+from pdftl.operations.parsers.modify_annots_parser import EXISTS, specs_to_selection_rules
+from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open
 from pdftl.utils.json import pdf_obj_to_json
+from pdftl.utils.keyval_parser import parse_value_to_python
 from pdftl.utils.string_utils import compact_json_string, xml_encode_for_info
 
 logger = logging.getLogger(__name__)
 
-_DELETE_ANNOTS_LONG_DESC = """
-
-The `delete_annots` operation deletes annotations in a PDF file.
-
-Without selectors, all annotations are removed from all pages.
-
-### Filtering
-
-Annotations can be filtered using the same selector syntax as
-`dump_annots` and `modify_annots`. Selectors are optional.
-
+_ANNOTS_FILTER_SYNTAX = """
 The syntax is `selector` or `selector(Key=Value, ...)`, where:
   - `selector` is a page range (e.g., `1-5`, `odd`, see [[`page_specs`]]) and/or an
     annotation type (e.g., `/Link`, `/Highlight`).
-  - `Key=Value` pairs filter annotations by property value.
+  - `Key=Value` pairs filter annotations by property value. `Key` may be a
+    slash-separated path to reach into nested dictionaries, e.g. `A/S=/URI`
+    matches Link annotations whose action subtype is URI.
+  - A bare `Key` with no `=Value` (e.g. `A`) filters for annotations that
+    simply have that property, regardless of its value.
 
 ### Value Syntax
   - PDF Names: `/Name`
@@ -46,6 +44,23 @@ The syntax is `selector` or `selector(Key=Value, ...)`, where:
   - Plain strings are treated as PDF Strings: `Value` is interpreted as `(Value)`
 
 """
+
+
+_DELETE_ANNOTS_LONG_DESC = (
+    """
+
+The `delete_annots` operation deletes annotations in a PDF file.
+
+Without selectors, all annotations are removed from all pages.
+
+### Filtering
+
+Annotations can be filtered using the same selector syntax as
+`dump_annots` and `modify_annots`. Selectors are optional.
+
+"""
+    + _ANNOTS_FILTER_SYNTAX
+)
 
 _DELETE_ANNOTS_EXAMPLES = [
     {
@@ -64,10 +79,19 @@ _DELETE_ANNOTS_EXAMPLES = [
         "cmd": 'in.pdf delete_annots "/Link(Border=[0 0 0])" output out.pdf',
         "desc": "Delete only Link annotations with a zero border",
     },
+    {
+        "cmd": 'in.pdf delete_annots "/Link(A/S=/URI)" output out.pdf',
+        "desc": "Delete only Link annotations that are URI links",
+    },
+    {
+        "cmd": 'in.pdf delete_annots "/Link(A)" output out.pdf',
+        "desc": "Delete only Link annotations that have an action at all",
+    },
 ]
 
 
-_DUMP_ANNOTS_LONG_DESC = """
+_DUMP_ANNOTS_LONG_DESC = (
+    """
 
 Extracts all annotations from the PDF and dumps them in a
 structured JSON format.
@@ -87,37 +111,35 @@ Annotations can be filtered using the same selector syntax as
 `modify_annots`. Selectors are optional; without them, all
 annotations are dumped.
 
-The syntax is `selector` or `selector(Key=Value, ...)`, where:
-  - `selector` is a page range (e.g., `1-5`, `odd`, see [[`page_specs`]]) and/or an
-    annotation type (e.g., `/Link`, `/Highlight`).
-  - `Key=Value` pairs filter annotations by property value.
-
-### Value Syntax
-  - PDF Names: `/Name`
-  - PDF Strings: `(My String)`
-  - PDF Arrays: `[0 0 1]`
-  - PDF Booleans: `true` / `false`
-  - Numbers: `1.5`, `10`
-  - Plain strings are treated as PDF Strings: `Value` is interpreted as `(Value)`
-
 """
+    + _ANNOTS_FILTER_SYNTAX
+)
+
 
 _DUMP_ANNOTS_EXAMPLES = [
     {
         "cmd": "in.pdf dump_annots",
-        "desc": "Show all annotation data for a file:",
+        "desc": "Show all annotation data for a file",
     },
     {
         "cmd": "in.pdf dump_annots 1-5/Link",
-        "desc": "Show only Link annotations on pages 1-5:",
+        "desc": "Show only Link annotations on pages 1-5",
     },
     {
         "cmd": "in.pdf dump_annots odd/Highlight",
-        "desc": "Show only Highlight annotations on odd pages:",
+        "desc": "Show only Highlight annotations on odd pages",
     },
     {
         "cmd": 'in.pdf dump_annots "/Link(Border=[0 0 0])"',
-        "desc": "Show only Link annotations with a zero border:",
+        "desc": "Show only Link annotations with a zero border",
+    },
+    {
+        "cmd": 'in.pdf dump_annots "/Link(A/S=/URI)"',
+        "desc": "Show only Link annotations that are URI links",
+    },
+    {
+        "cmd": 'in.pdf dump_annots "/Link(A)" output out.pdf',
+        "desc": "Show only Link annotations that have an action at all",
     },
 ]
 
@@ -129,8 +151,6 @@ def dump_annots_cli_hook(result: OpResult, stage, _pipeline):
     """
 
     import json
-
-    from pdftl.utils.hooks import from_result_meta
 
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
@@ -162,13 +182,15 @@ def dump_annots(pdf, specs=None, output_file=None) -> OpResult:
     Dumps all annotations from a PDF in JSON format, with compact arrays.
     Optionally filtered by selector specs using the same syntax as modify_annots.
     """
-    from pdftl.operations.parsers.modify_annots_parser import specs_to_selection_rules
 
     logger.debug("Dumping annotations for PDF with %s pages.", len(pdf.pages))
 
     rules = None
     if specs:
-        rules = specs_to_selection_rules(specs, len(pdf.pages))
+        try:
+            rules = specs_to_selection_rules(specs, len(pdf.pages))
+        except ValueError as exc:
+            raise InvalidArgumentError(str(exc)) from exc
 
     all_annots_data = _get_all_annots_data(pdf, compat=False, rules=rules)
     return OpResult(
@@ -201,7 +223,7 @@ analysis. For a complete dataset, use `dump_annots`.
 _DUMP_DATA_ANNOTS_EXAMPLES = [
     {
         "cmd": "in.pdf dump_data_annots",
-        "desc": "Show annotation data for a file:",
+        "desc": "Show annotation data for a file",
     }
 ]
 
@@ -228,7 +250,6 @@ def dump_data_annots_cli_hook(result: OpResult, stage, _pipeline):
     CLI Hook for dump_data_annots.
     Formats the raw structured data into the pdftk style report.
     """
-    from pdftl.utils.hooks import from_result_meta
 
     output_file = from_result_meta(result, c.META_OUTPUT_FILE)
 
@@ -286,7 +307,6 @@ def delete_annots(pdf, specs) -> OpResult:
     Delete annotations from a PDF, optionally filtered by selector specs.
     Without selectors, deletes all annotations from all pages.
     """
-    from pdftl.operations.parsers.modify_annots_parser import specs_to_selection_rules
 
     if not specs:
         # Original behaviour: wipe everything
@@ -296,7 +316,10 @@ def delete_annots(pdf, specs) -> OpResult:
         return OpResult(success=True, pdf=pdf)
 
     num_pages = len(pdf.pages)
-    rules = specs_to_selection_rules(specs, num_pages)
+    try:
+        rules = specs_to_selection_rules(specs, num_pages)
+    except ValueError as exc:
+        raise InvalidArgumentError(str(exc)) from exc
     included_pages = {pn for rule in rules for pn in rule.page_numbers}
 
     # Build the same JSON view dump_annots uses, so _annot_passes_rule works
@@ -322,8 +345,6 @@ def _delete_annots_in_page(page_num, page, rules, page_object_to_num_map):
 
     # Iterate backwards so deletion doesn't shift indices
     for i in range(len(annots) - 1, -1, -1):
-        from pdftl.utils.json import pdf_obj_to_json
-
         props = pdf_obj_to_json(annots[i], page_object_to_num_map, {}, compat=False)
         annot_entry = {"Page": page_num, "AnnotationIndex": i + 1, "Properties": props}
         if any(_annot_passes_rule(annot_entry, r) for r in page_rules):
@@ -335,17 +356,47 @@ def _delete_annots_in_page(page_num, page, rules, page_object_to_num_map):
 
 def _annot_matches_filters(annot_props: dict, value_selectors: list[tuple[str, str]]) -> bool:
     """Returns True if annotation properties match all K=V filter criteria."""
-    from pdftl.operations.modify_annots import _parse_value_to_python
-
     for key_str, val_str in value_selectors:
+        actual = _get_nested_prop(annot_props, key_str)
+        if val_str is EXISTS:
+            if actual is None:
+                return False
+            continue
         try:
-            py_value = _parse_value_to_python(val_str)
+            py_value = parse_value_to_python(val_str)
         except ValueError:
             return False
-        actual = annot_props.get(f"/{key_str}")
         if actual is None or not _values_equal(actual, py_value):
             return False
     return True
+
+
+def _get_nested_prop(props: dict, key_path: str):
+    """
+    Resolves a key path against an annotation's (nested) properties dict.
+
+    A plain key (e.g. "Rect") looks up props["/Rect"], matching the prior
+    behaviour exactly. A slash-separated path (e.g. "A/S") walks into
+    nested dicts one segment at a time: props["/A"]["/S"]. Numeric segments
+    index into lists, e.g. "C/0" looks up props["/C"][0].
+
+    Returns None if any segment is missing or the path runs into a
+    non-dict/non-list value partway through.
+    """
+    current = props
+    for segment in key_path.split("/"):
+        if isinstance(current, dict):
+            current = current.get(f"/{segment}")
+        elif isinstance(current, list):
+            try:
+                current = current[int(segment)]
+            except (ValueError, IndexError):
+                return None
+        else:
+            return None
+        if current is None:
+            return None
+    return current
 
 
 def _values_equal(actual, expected) -> bool:

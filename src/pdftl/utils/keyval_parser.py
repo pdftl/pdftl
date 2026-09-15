@@ -6,9 +6,13 @@
 
 """Shared utility for parsing key=value argument strings with schema and range validation."""
 
+import logging
+from contextlib import suppress
 from typing import Any
 from collections.abc import Callable
 from pdftl.exceptions import InvalidArgumentError
+
+logger = logging.getLogger(__name__)
 
 
 def constrained_int(
@@ -168,3 +172,97 @@ def parse_keyval_string(
         return {}
     tokens = [t for t in params_str.split(",") if t.strip()]
     return parse_keyval_list(tokens, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# PDF value-literal parsing
+#
+# The functions above parse `key=value` tokens against a fixed schema of
+# generic types (int, bool, choice). The functions below parse *values*
+# written in pdftl's own PDF-literal syntax (Names, Strings, Arrays,
+# Booleans, Numbers) into Python/pikepdf-compatible types, independent of
+# any particular key's expected type. Used by operations whose values are
+# PDF objects rather than plain CLI scalars (e.g. modify_annots,
+# dump_annots's filter values).
+# ---------------------------------------------------------------------------
+
+
+def _parse_array_value(arr_str: str) -> list:
+    """Parses a string like '[0 0 1]' into a list of numbers/strings."""
+    # Ensure we actually have brackets and content
+    if not (arr_str.startswith("[") and arr_str.endswith("]")):
+        return [arr_str]
+
+    items = arr_str[1:-1].strip().split()
+    py_items: list[Any] = []
+    for item in items:
+        try:
+            # Try parsing as float, but only if it looks like a number
+            if item.count(".") <= 1 and item.replace(".", "", 1).lstrip("-+").isdigit():
+                py_items.append(float(item))
+            else:
+                py_items.append(item)  # Add as string (e.g. /Name inside array)
+        except (ValueError, TypeError):
+            # Fallback for unexpected parsing edge cases
+            py_items.append(item)
+    return py_items
+
+
+def parse_value_to_python(val_str: str):
+    """
+    Converts a value string written in pdftl's PDF-literal syntax into a
+    Python type that pikepdf can use in its high-level API.
+
+    Supported syntax:
+      - PDF Names: /Name
+      - PDF Strings: (My String)
+      - PDF Arrays: [0 0 1]
+      - PDF Booleans: true / false
+      - Null (caller-defined meaning, e.g. "delete this key"): null
+      - Numbers: 1.5, 10
+      - Plain strings are treated as PDF Strings: Value -> (Value)
+    """
+    from pikepdf import Name
+
+    val_str = val_str.strip()
+
+    static_values = {
+        "null": None,
+        "true": True,
+        "false": False,
+    }
+    if val_str in static_values:
+        return static_values[val_str]
+
+    # Handle PDF Literal Strings (Parentheses)
+    if val_str.startswith("(") and val_str.endswith(")"):
+        # Validate balanced parentheses - simplified check
+        if val_str.count("(") != val_str.count(")"):
+            logger.warning(
+                "Mismatched parentheses in string: '%s'. Attempting to treat as literal.",
+                val_str,
+            )
+        return val_str[1:-1]
+
+    # Handle PDF Arrays
+    if val_str.startswith("[") and val_str.endswith("]"):
+        if val_str.count("[") != val_str.count("]"):
+            raise ValueError(f"Mismatched brackets in array: '{val_str}'")
+        return _parse_array_value(val_str)
+
+    # Handle PDF Names
+    if val_str.startswith("/"):
+        return Name(val_str)
+
+    # Handle Numbers or Fallback Strings
+    with suppress(ValueError, TypeError):
+        # Check if it looks like a number before converting to float
+        if val_str.replace(".", "", 1).lstrip("-+").isdigit():
+            return float(val_str)
+
+    # Final validation for malformed selector-like characters
+    if (val_str.count("(") != val_str.count(")")) or (val_str.count("[") != val_str.count("]")):
+        raise ValueError(f"Malformed value string (unbalanced delimiters): '{val_str}'")
+
+    # Default: A plain string -> Python String
+    return val_str

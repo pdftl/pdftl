@@ -7,8 +7,7 @@
 """Modify properties of existing annotations"""
 
 import logging
-from contextlib import suppress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pikepdf import Pdf
@@ -20,6 +19,9 @@ from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.parsers.modify_annots_parser import specs_to_modification_rules
+from pdftl.utils.keyval_parser import (
+    parse_value_to_python as _parse_value_to_python,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,78 +68,6 @@ _MODIFY_ANNOTS_EXAMPLES = [
         "desc": "Delete the custom key '/MyKey' from all annotations on pages 1-5.",
     },
 ]
-
-
-def _parse_array_value(arr_str: str) -> list:
-    """Parses a string like '[0 0 1]' into a list of numbers/strings."""
-    # Ensure we actually have brackets and content
-    if not (arr_str.startswith("[") and arr_str.endswith("]")):
-        return [arr_str]
-
-    items = arr_str[1:-1].strip().split()
-    py_items: list[Any] = []
-    for item in items:
-        try:
-            # Try parsing as float, but only if it looks like a number
-            if item.count(".") <= 1 and item.replace(".", "", 1).lstrip("-+").isdigit():
-                py_items.append(float(item))
-            else:
-                py_items.append(item)  # Add as string (e.g. /Name inside array)
-        except (ValueError, TypeError):
-            # Fallback for unexpected parsing edge cases
-            py_items.append(item)
-    return py_items
-
-
-def _parse_value_to_python(val_str: str):
-    """
-    Converts a value string from the parser into a Python type that
-    pikepdf can use in its high-level API.
-    """
-    from pikepdf import Name
-
-    val_str = val_str.strip()
-
-    static_values = {
-        "null": None,
-        "true": True,
-        "false": False,
-    }
-    if val_str in static_values:
-        return static_values[val_str]
-
-    # Handle PDF Literal Strings (Parentheses)
-    if val_str.startswith("(") and val_str.endswith(")"):
-        # Validate balanced parentheses - simplified check
-        if val_str.count("(") != val_str.count(")"):
-            logger.warning(
-                "Mismatched parentheses in string: '%s'. Attempting to treat as literal.",
-                val_str,
-            )
-        return val_str[1:-1]
-
-    # Handle PDF Arrays
-    if val_str.startswith("[") and val_str.endswith("]"):
-        if val_str.count("[") != val_str.count("]"):
-            raise ValueError(f"Mismatched brackets in array: '{val_str}'")
-        return _parse_array_value(val_str)
-
-    # Handle PDF Names
-    if val_str.startswith("/"):
-        return Name(val_str)
-
-    # Handle Numbers or Fallback Strings
-    with suppress(ValueError, TypeError):
-        # Check if it looks like a number before converting to float
-        if val_str.replace(".", "", 1).lstrip("-+").isdigit():
-            return float(val_str)
-
-    # Final validation for malformed selector-like characters
-    if (val_str.count("(") != val_str.count(")")) or (val_str.count("[") != val_str.count("]")):
-        raise ValueError(f"Malformed value string (unbalanced delimiters): '{val_str}'")
-
-    # Default: A plain string -> Python String
-    return val_str
 
 
 def _apply_mods_to_annot(annot, modifications: list[tuple[str, str]], page_num: int) -> int:
