@@ -916,14 +916,16 @@ def test_object_extent_missing_endobj():
 
 
 def test_push_children_stream_or_dict_none():
-    # Line 337: _stream_or_dict returns None for a Dictionary instance
+    # kind=None (neither dict/stream/array) means no children are ever
+    # pushed, regardless of what stream_or_dict would return for obj --
+    # _push_children is given `d` directly by its caller and no longer
+    # calls stream_or_dict itself.
     class StreamOrDictNone(pikepdf.Dictionary):
         pass
 
     obj = StreamOrDictNone()
     stack = []
-    with patch("pdftl.utils.space_usage._stream_or_dict", return_value=None):
-        _push_children(obj, None, None, None, None, "", False, stack)
+    _push_children(obj, None, None, None, None, "", False, stack)
     assert stack == []
 
 
@@ -1097,8 +1099,11 @@ def test_xref_section_ranges_missing_eof_line_451():
     assert _xref_section_ranges(data_xref) == []
 
 
-def test_push_children_getitem_exceptions(monkeypatch):
-    # Tests dictionary lookup errors during stack iteration
+def test_push_children_getitem_exceptions():
+    # Tests dictionary lookup errors during stack iteration. `d` is
+    # passed straight to _push_children by its caller now (no internal
+    # stream_or_dict call to patch) -- these duck-typed dicts also lack
+    # .get(), exercising the is_catalog AttributeError guard.
     real_dict = pikepdf.Dictionary()
 
     class KeyErrorDict:
@@ -1123,14 +1128,14 @@ def test_push_children_getitem_exceptions(monkeypatch):
             raise pikepdf.PdfError("pdf error")
 
     for mock_dict in (KeyErrorDict(), AttributeErrorDict(), PdfErrorDict()):
-        monkeypatch.setattr("pdftl.utils.space_usage._stream_or_dict", lambda _: mock_dict)
         stack = []
         _push_children(real_dict, "dict", mock_dict, None, None, "", False, stack)
         assert stack == []
 
 
-def test_push_children_keys_and_iter_exceptions(monkeypatch):
-    # Tests AttributeError/PdfError raised when inspecting dictionary keys
+def test_push_children_keys_and_iter_exceptions():
+    # Tests AttributeError/PdfError raised when inspecting dictionary
+    # keys; same note as above re: no internal stream_or_dict call.
     real_dict = pikepdf.Dictionary()
 
     class BadKeysAttributeDict:
@@ -1142,7 +1147,6 @@ def test_push_children_keys_and_iter_exceptions(monkeypatch):
             raise pikepdf.PdfError("keys pdf failure")
 
     for mock_dict in (BadKeysAttributeDict(), BadKeysPdfErrorDict()):
-        monkeypatch.setattr("pdftl.utils.space_usage._stream_or_dict", lambda _: mock_dict)
         stack = []
         _push_children(real_dict, "dict", mock_dict, None, None, "", False, stack)
         assert stack == []
@@ -1164,3 +1168,44 @@ def test_object_extent_header_no_match():
     # Covers the 'not match' branch when offset > 0
     data = b"   INVALID_HEADER"
     assert _object_extent(data, offset=3, obj_num=1, obj=None) == 0
+
+
+def test_vendor_extension_key_on_root_not_document_structure(tmp_path):
+    """A key hung directly off /Root that PDF 32000-2:2020 Table 29 does
+    not define for the Catalog must not inherit /Root's own
+    document_structure category -- it's a vendor/private extension."""
+    path = tmp_path / "vendor_ext.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 200))
+    pdf.Root.NotARealCatalogKey = pdf.make_indirect(
+        pikepdf.Dictionary(Sessions=[pdf.make_stream(b"vendor payload" * 50)])
+    )
+    pdf.save(str(path))
+
+    file_bytes = path.read_bytes()
+    with pikepdf.open(path) as open_pdf:
+        report = analyze_space_usage(open_pdf, file_bytes)
+
+    by_id = {row["id"]: row for row in report["categories"]}
+    assert by_id["vendor_extension"]["bytes"] > 0
+    vendor_names = {d["name"] for d in by_id["vendor_extension"]["detail"]}
+    assert "/NotARealCatalogKey" in vendor_names
+
+
+def test_known_catalog_key_still_document_structure(tmp_path):
+    """A key the spec does define for the Catalog (e.g. /Threads) keeps
+    inheriting document_structure as before -- the vendor-extension gate
+    only fires for keys outside Table 29."""
+    path = tmp_path / "known_catalog_key.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 200))
+    pdf.Root.Threads = pdf.make_indirect(pikepdf.Array([]))
+    pdf.save(str(path))
+
+    file_bytes = path.read_bytes()
+    with pikepdf.open(path) as open_pdf:
+        report = analyze_space_usage(open_pdf, file_bytes)
+
+    by_id = {row["id"]: row for row in report["categories"]}
+    ds_names = {d["name"] for d in by_id["document_structure"]["detail"]}
+    assert "/Threads" in ds_names

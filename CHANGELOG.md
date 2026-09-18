@@ -16,7 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dump_annots` and `delete_annots` now support filtering by nested annotation properties using
   slash-separated key paths, both by value and existence
 
+- New output options:
+  - `drop_meta`
+  - `drop_vendor_extensions`
+  - `drop_xmp_streams`
+
+### Changed
+
+- `usage` now reports private vendor/application data hung directly off the document catalog in a
+  new `vendor_extension` category, rather than as part of `document_structure`
+
 ### Fixed
+
 - `dump_annots` and `delete_annots` handle malformed arguments better
 
 - `redact` no longer leaves single-character regex matches (e.g. `/e/`) in the content

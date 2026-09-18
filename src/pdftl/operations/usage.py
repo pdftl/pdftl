@@ -29,9 +29,9 @@ _USAGE_LONG_DESC = """
 The `usage` operation reports which part of a PDF file is spending its
 bytes, broken down by category: images, fonts, content streams,
 annotations, forms, embedded files, bookmarks, named destinations, tagged
-structure, document structure, metadata, javascript, other objects, and a
-residual `overhead` category (cross-reference tables, unreferenced
-objects, and other structural bytes).
+structure, document structure, metadata, javascript, vendor extensions,
+other objects, and a residual `overhead` category (cross-reference tables,
+unreferenced objects, and other structural bytes).
 
 Categories with zero bytes are omitted from the default tabular output
 (a document with no embedded fonts simply has no `fonts` row). The

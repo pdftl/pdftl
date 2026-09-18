@@ -1353,3 +1353,104 @@ def test_save_pdf_prune_resources_skipped_when_signing():
         save_pdf(mock_pdf, "out.pdf", MagicMock(), options)
 
     mock_pdf.remove_unreferenced_resources.assert_not_called()
+
+
+def test_drop_vendor_extensions_removes_non_catalog_root_keys():
+    """drop_vendor_extensions strips any /Root entry outside PDF
+    32000-2:2020 Table 29, leaving spec-defined entries untouched."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.Root.VendorPrivateKey = pdf.make_indirect(pikepdf.Dictionary(Foo="bar"))
+    real_pages_objgen = pdf.Root.Pages.objgen
+
+    _action_drop_flags(pdf, {"drop_vendor_extensions": True})
+
+    assert "/VendorPrivateKey" not in pdf.Root
+    assert pdf.Root.Pages.objgen == real_pages_objgen
+
+
+def test_drop_vendor_extensions_noop_when_not_requested():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.Root.VendorPrivateKey = pdf.make_indirect(pikepdf.Dictionary(Foo="bar"))
+
+    _action_drop_flags(pdf, {})
+
+    assert "/VendorPrivateKey" in pdf.Root
+
+
+def test_drop_xmp_noop_when_no_metadata_present():
+    """drop_xmp with no /Metadata on /Root at all must not raise --
+    covers the false branch of the 'in pdf.Root' check."""
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    assert "/Metadata" not in pdf.Root
+
+    _action_drop_flags(pdf, {"drop_xmp": True})
+
+    assert "/Metadata" not in pdf.Root
+
+
+def test_drop_object_keys_removes_matching_key_from_stream_and_dict():
+    """_drop_object_keys walks the whole graph and removes the named
+    key(s) wherever they appear, on both stream dicts and plain dicts."""
+    from pdftl.output.save import _drop_object_keys
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    stream = pdf.make_stream(b"content", Metadata="placeholder")
+    page.Contents = stream
+    pdf.Root.Metadata = pdf.make_indirect(pikepdf.Dictionary(Foo="bar"))
+
+    _drop_object_keys(pdf, ["/Metadata"])
+
+    assert "/Metadata" not in stream.stream_dict
+    assert "/Metadata" not in pdf.Root
+
+
+def test_drop_object_keys_skips_non_dict_non_stream_objects():
+    """An indirect object that is neither a Stream nor a Dictionary
+    (e.g. an Array) makes stream_or_dict return None -- _drop_object_keys
+    must skip it rather than raise."""
+    from pdftl.output.save import _drop_object_keys
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.Root.SomeArray = pdf.make_indirect(pikepdf.Array([1, 2, 3]))
+
+    # Should complete without raising, even though SomeArray's own
+    # object (an Array) has no dict to check "/Metadata" against.
+    _drop_object_keys(pdf, ["/Metadata"])
+
+
+def test_drop_meta_option_drops_info_and_all_metadata_keys():
+    """drop_meta drops docinfo plus every EDGE_CATEGORIES 'metadata' key
+    anywhere in the graph (not just document-level /Metadata)."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Thumb = pdf.make_stream(b"thumbnail bytes")
+    pdf.Root.Metadata = pdf.make_indirect(pikepdf.Dictionary(Foo="bar"))
+    pdf.docinfo["/Title"] = "Some Title"
+
+    _action_drop_flags(pdf, {"drop_meta": True})
+
+    assert "/Thumb" not in page
+    assert "/Metadata" not in pdf.Root
+    with pytest.raises(Exception):
+        _ = pdf.docinfo["/Title"]
+
+
+def test_drop_xmp_streams_only_drops_metadata_not_thumb_or_info():
+    """drop_xmp_streams (without drop_meta) is narrower than drop_meta:
+    it must only remove /Metadata, leaving /Thumb and /Info intact."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Thumb = pdf.make_stream(b"thumbnail bytes")
+    page.Metadata = pdf.make_stream(b"<xmp/>")
+    pdf.docinfo["/Title"] = "Keep Me"
+
+    _action_drop_flags(pdf, {"drop_xmp_streams": True})
+
+    assert "/Metadata" not in page
+    assert "/Thumb" in page
+    assert str(pdf.docinfo["/Title"]) == "Keep Me"

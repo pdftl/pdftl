@@ -37,6 +37,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from pdftl.utils.object_walker import pikepdf_types, stream_or_dict
 
 if TYPE_CHECKING:
     import pikepdf
@@ -55,6 +56,7 @@ CATEGORY_IDS = (
     "tagged_structure",
     "document_structure",
     "metadata",
+    "vendor_extension",
     "javascript",
     "other_objects",
     "overhead",
@@ -98,7 +100,7 @@ _UNNAMED_EDGES = frozenset(
 )
 
 # Edges that decide a child's category purely by where it hangs.
-_EDGE_CATEGORIES = {
+EDGE_CATEGORIES = {
     "/FontFile": "fonts",
     "/FontFile2": "fonts",
     "/FontFile3": "fonts",
@@ -133,6 +135,44 @@ _EDGE_CATEGORIES = {
     "/Threads": "document_structure",
 }
 
+# PDF 32000-2:2020, Table 29 — Entries in the catalog dictionary.
+# Anything on /Root outside this set is, by definition, not part of
+# the document's structure as the spec defines it -- whatever else
+# it is, it isn't "document_structure".
+_CATALOG_DICTIONARY_KEYS = frozenset(
+    {
+        "/Type",
+        "/Version",
+        "/Extensions",
+        "/Pages",
+        "/PageLabels",
+        "/Names",
+        "/Dests",
+        "/ViewerPreferences",
+        "/PageLayout",
+        "/PageMode",
+        "/Outlines",
+        "/Threads",
+        "/OpenAction",
+        "/AA",
+        "/URI",
+        "/AcroForm",
+        "/Metadata",
+        "/StructTreeRoot",
+        "/MarkInfo",
+        "/Lang",
+        "/SpiderInfo",
+        "/OutputIntents",
+        "/PieceInfo",
+        "/OCProperties",
+        "/Perms",
+        "/Legal",
+        "/Requirements",
+        "/Collection",
+        "/NeedsRendering",
+    }
+)
+
 # What an object declares itself to be (/Type, /Subtype). Checked after
 # the keyed edges above, so e.g. a font program reached via /FontFile2 is
 # a font wherever it hangs, while a /Widget annotation reached via
@@ -151,34 +191,19 @@ _TYPE_CATEGORIES = {
     "/Metadata": "metadata",
 }
 
-# Lazily-cached pikepdf classes. Importing pikepdf inside every hot-path
-# helper (as this module previously did) costs a sys.modules lookup plus
-# attribute-chain traversal on every one of the millions of calls made
-# during attribution. Resolve the classes once and hand back a tuple.
-_PIKEPDF_TYPES: tuple | None = None
-
-
-def _pikepdf_types():
-    global _PIKEPDF_TYPES
-    if _PIKEPDF_TYPES is None:
-        import pikepdf
-
-        _PIKEPDF_TYPES = (pikepdf.Stream, pikepdf.Dictionary, pikepdf.Array, pikepdf.PdfError)
-    return _PIKEPDF_TYPES
-
 
 def _classify(obj: Any):
     """Single type-check pass: returns (kind, dict_or_None).
 
     `kind` is 'stream', 'dict', 'array', or None. This replaces the old
-    pattern where `_stream_or_dict(obj)` (an isinstance-and-unwrap) was
+    pattern where `stream_or_dict(obj)` (an isinstance-and-unwrap) was
     called once from the category-resolution path and then AGAIN from
     `_push_children` on the very same object -- doubling every isinstance
     check and every `.stream_dict` access across 790K+ objects. Callers
     that need the dict and the descent behavior now get both from one
     call.
     """
-    Stream, Dictionary, Array, _ = _pikepdf_types()
+    Stream, Dictionary, Array, _ = pikepdf_types()
     if isinstance(obj, Stream):
         return "stream", obj.stream_dict
     if isinstance(obj, Dictionary):
@@ -191,20 +216,11 @@ def _classify(obj: Any):
 def _as_str(value: Any) -> str:
     if value is None:
         return ""
-    _, _, _, PdfError = _pikepdf_types()
+    _, _, _, PdfError = pikepdf_types()
     try:
         return str(value)
     except (TypeError, ValueError, PdfError):
         return ""
-
-
-def _stream_or_dict(obj: Any):
-    Stream, Dictionary, _, _ = _pikepdf_types()
-    if isinstance(obj, Stream):
-        return obj.stream_dict
-    if isinstance(obj, Dictionary):
-        return obj
-    return None
 
 
 def _self_declared_category(obj: Any, kind: str, d, cache: dict | None = None) -> str | None:
@@ -245,11 +261,11 @@ def _uncached_self_declared_category(obj: Any, kind: str, d) -> str | None:
 
 def _edge_declared_category(key: str, child: Any) -> str | None:
     if key in ("/SMask", "/Mask", "/Alternates"):
-        d = _stream_or_dict(child)
+        d = stream_or_dict(child)
         if d is not None and _as_str(d.get("/Subtype")) == "/Image":
             return "images"
         return None
-    return _EDGE_CATEGORIES.get(key)
+    return EDGE_CATEGORIES.get(key)
 
 
 # ---------------------------------------------------------------------
@@ -285,7 +301,7 @@ def _extract_stream_extent(data: bytes, pos: int, obj: Any) -> int | None:
 
 def _object_extent(data: bytes, offset: int, obj_num: int, obj: Any) -> int:
     """Stored length of a top-level object, header through `endobj`."""
-    Stream, _, _, _ = _pikepdf_types()
+    Stream, _, _, _ = pikepdf_types()
     if offset <= 0 or offset >= len(data):
         return 0
     match = _OBJ_HEADER_RE.match(data, offset)
@@ -379,14 +395,38 @@ def _push_children(
     sticky: bool,
     stack: list,
 ):
-    _, _, _, PdfError = _pikepdf_types()
+    _, _, _, PdfError = pikepdf_types()
     child_sticky = sticky or edge_key in _STICKY_EDGES
     push = stack.append
+    # /Root's own resolved category is "document_structure" (it self-
+    # declares via _TYPE_CATEGORIES["/Catalog"]), but that must not
+    # cascade onto every key hung directly off it -- only entries the
+    # spec actually defines for the Catalog dictionary (PDF 32000-2:2020
+    # Table 29) are real document structure. Detected via /Type /Catalog
+    # rather than object identity, so this is spec-derived rather than
+    # tied to any particular document's object numbering.
+    try:
+        is_catalog = kind == "dict" and d is not None and _as_str(d.get("/Type")) == "/Catalog"
+    except (AttributeError, PdfError):
+        # Duck-typed / malformed dict-likes (e.g. test doubles, or a
+        # broken object graph) may not implement .get() at all.
+        is_catalog = False
     try:
         if kind in ("dict", "stream"):
             for child_key in d.keys():
                 try:
-                    push((d[child_key], category, page, str(child_key), child_sticky))
+                    key_str = str(child_key)
+                    child_inherited = category
+                    if is_catalog and key_str not in _CATALOG_DICTIONARY_KEYS:
+                        # A non-spec key hung directly off /Root is, by
+                        # definition, outside Table 29 -- tag it (and
+                        # its whole subtree, absent a more specific
+                        # self-declaration) as a vendor extension
+                        # rather than letting it either inherit
+                        # "document_structure" or fall to the generic
+                        # "we don't know what this is" other_objects.
+                        child_inherited = "vendor_extension"
+                    push((d[child_key], child_inherited, page, key_str, child_sticky))
                 except (KeyError, AttributeError, PdfError):
                     continue
         elif kind == "array":
@@ -463,24 +503,24 @@ def _attribute_objects(pdf: pikepdf.Pdf) -> _Attribution:
 
 
 def _is_xref_stream(obj: Any) -> bool:
-    d = _stream_or_dict(obj)
+    d = stream_or_dict(obj)
     return d is not None and _as_str(d.get("/Type")) == "/XRef"
 
 
 def _is_object_stream(obj: Any) -> bool:
-    d = _stream_or_dict(obj)
+    d = stream_or_dict(obj)
     return d is not None and _as_str(d.get("/Type")) == "/ObjStm"
 
 
 def _linearization_objgens(pdf: pikepdf.Pdf, offset_by_objgen: dict) -> set:
-    _, _, _, PdfError = _pikepdf_types()
+    _, _, _, PdfError = pikepdf_types()
     out: set = set()
     for objgen, _offset in offset_by_objgen.items():
         try:
             obj = pdf.get_object(objgen[0], objgen[1])
         except (KeyError, PdfError):
             continue
-        d = _stream_or_dict(obj)
+        d = stream_or_dict(obj)
         if d is None or "/Linearized" not in d:
             continue
         out.add(objgen)
@@ -516,8 +556,8 @@ def _xref_section_ranges(data: bytes) -> list:
 
 
 def _filter_label(obj: Any) -> str:
-    _, _, Array, _ = _pikepdf_types()
-    d = _stream_or_dict(obj)
+    _, _, Array, _ = pikepdf_types()
+    d = stream_or_dict(obj)
     if d is None:
         return ""
     value = d.get("/Filter")
@@ -618,7 +658,7 @@ def _charge_top_level_objects(
 
 
 def _compute_stream_member_weights(pdf: pikepdf.Pdf, member_objgens: list) -> tuple[list, int]:
-    _, _, _, PdfError = _pikepdf_types()
+    _, _, _, PdfError = pikepdf_types()
     weights = []
     for objgen in member_objgens:
         try:
@@ -640,7 +680,7 @@ def _charge_stream_members(
     objects_by_objgen: dict,
     record: Any,
 ) -> tuple[int, int]:
-    _, _, _, PdfError = _pikepdf_types()
+    _, _, _, PdfError = pikepdf_types()
     unref_count = 0
     unref_packed_bytes = 0
 

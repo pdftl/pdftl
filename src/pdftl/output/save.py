@@ -20,6 +20,7 @@ from pdftl.exceptions import InvalidArgumentError, MissingArgumentError, PdftlOu
 from pdftl.fonts.form_font_replacer import replace_form_fonts
 from pdftl.output.flatten import flatten_pdf
 from pdftl.output.sign import parse_sign_options, save_and_sign
+from pdftl.utils.object_walker import walk_objects
 
 logger = logging.getLogger(__name__)
 
@@ -213,9 +214,27 @@ def _linearize_option():
     pass
 
 
+@register_option("drop_meta", desc="Discard all metadata", type="flag")
 @register_option("drop_info", desc="Discard document-level info metadata", type="flag")
 @register_option("drop_xmp", desc="Discard document-level XMP metadata", type="flag")
+@register_option("drop_xmp_streams", desc="Discard all XMP metadata streams", type="flag")
 @register_option("drop_xfa", desc="Discard form XFA data if present", type="flag")
+@register_option(
+    "drop_vendor_extensions",
+    desc="Discard private vendor/application data hung directly off the document catalog",
+    long_desc=(
+        "Removes any entry on the document Catalog (/Root) that is not one "
+        "of the entries PDF 32000-2:2020 Table 29 defines for it, along "
+        "with everything nested beneath it. Such entries are, by "
+        "definition, private application extensions (prepress/preflight "
+        "tool bookkeeping, editor session state, etc.) rather than "
+        "anything a conformant PDF reader consults -- safe to remove for "
+        "distribution or archival copies, at the cost of losing whatever "
+        "state the originating application would have restored on reopen."
+    ),
+    type="flag",
+    tags=["metadata", "cleanup"],
+)
 def _drop_options():
     pass
 
@@ -483,16 +502,57 @@ def _save_by_type(item, path, input_context, **kwargs):
 
 
 def _action_drop_flags(pdf, options):
-    if options.get("drop_info"):
+    drop_meta = options.get("drop_meta")
+    if drop_meta:
+        from pdftl.utils.space_usage import EDGE_CATEGORIES
+
+        all_meta_keys = [x for x in EDGE_CATEGORIES if EDGE_CATEGORIES[x] == "metadata"]
+
+    if drop_meta or options.get("drop_info"):
         del pdf.docinfo
-    if options.get("drop_xmp") and "/Metadata" in pdf.Root:
-        del pdf.Root.Metadata
+    if drop_meta:
+        _drop_object_keys(pdf, all_meta_keys)
+    elif options.get("drop_xmp_streams"):
+        _drop_object_keys(pdf, ["/Metadata"])
+
+    if options.get("drop_xmp"):
+        if "/Metadata" in pdf.Root:
+            del pdf.Root.Metadata
+
     if options.get("drop_xfa"):
         if "/AcroForm" in pdf.Root:
             acro_form = pdf.Root["/AcroForm"]
             if "/XFA" in acro_form:
-                # Delete the XFA entry
                 del acro_form["/XFA"]
+
+    if options.get("drop_vendor_extensions"):
+        _drop_vendor_extension_keys(pdf)
+
+
+def _drop_vendor_extension_keys(pdf):
+    """Remove any /Root entry not defined by PDF 32000-2:2020 Table 29.
+    Structural, not classifier-dependent: doesn't touch anything the
+    walk merely failed to recognize elsewhere in the document (that
+    stays in other_objects, untouched)."""
+    from pdftl.utils.space_usage import _CATALOG_DICTIONARY_KEYS
+
+    for key in list(pdf.Root.keys()):
+        if key not in _CATALOG_DICTIONARY_KEYS:
+            del pdf.Root[key]
+
+
+def _drop_object_keys(pdf, keys):
+    from pdftl.utils.object_walker import stream_or_dict
+
+    def visit(obj, objgen):
+        d = stream_or_dict(obj)
+        if d is None:
+            return
+        for k in keys:
+            if k in d:
+                del d[k]
+
+    walk_objects(pdf, visit)
 
 
 def _apply_need_appearances(pdf, options):
@@ -588,7 +648,6 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         replace_form_fonts(pdf, replacement_font)
 
     if options.get("flatten"):
-        # breakpoint()
         # pdf.flatten_annotations()
         pdf = flatten_pdf(pdf)
 
