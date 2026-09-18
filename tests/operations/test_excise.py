@@ -116,6 +116,22 @@ class TestParseSingleSpec:
         with pytest.raises(InvalidArgumentError, match="'partial'"):
             _parse_single_spec("1(abs,0,0,100,100,partial=sideways)", total_pages=1)
 
+    def test_glyph_overlap_defaults_to_box(self):
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100)", total_pages=1)
+        assert tr.glyph_overlap == "box"
+
+    def test_glyph_overlap_center_parsed_via_spec_string(self):
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100,glyph_overlap=center)", total_pages=1)
+        assert tr.glyph_overlap == "center"
+
+    def test_glyph_overlap_box_explicit_via_spec_string(self):
+        _, tr, _ = _parse_single_spec("1(abs,0,0,100,100,glyph_overlap=box)", total_pages=1)
+        assert tr.glyph_overlap == "box"
+
+    def test_bad_glyph_overlap_value_raises(self):
+        with pytest.raises(InvalidArgumentError, match="'glyph_overlap'"):
+            _parse_single_spec("1(abs,0,0,100,100,glyph_overlap=sideways)", total_pages=1)
+
 
 class TestParseSingleSpecBox:
     def test_box_media_parsed(self):
@@ -156,6 +172,11 @@ class TestParseSingleSpecBox:
     def test_box_with_extra_coordinates_raises(self):
         with pytest.raises(InvalidArgumentError, match="no coordinates"):
             _parse_single_spec("1(box=crop,10,10,100,100)", total_pages=1)
+
+    def test_box_with_glyph_overlap_center(self):
+        _, tr, box_name = _parse_single_spec("1(box=trim,glyph_overlap=center)", total_pages=1)
+        assert box_name == "trim"
+        assert tr.glyph_overlap == "center"
 
     def test_box_repeated_raises(self):
         with pytest.raises(InvalidArgumentError, match="only appear once"):

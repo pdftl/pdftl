@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `dump_annots` and `delete_annots` handle malformed arguments better
 
+- `redact` no longer leaves single-character regex matches (e.g. `/e/`) in the content
+  stream; glyph deletion now uses real overlap/containment against the glyph's own box
+  (`excise`'s new `glyph_overlap` option) instead of only a center-point test
+
 ## [0.28.1] - 2026-09-11
 
 ### Changed

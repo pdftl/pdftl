@@ -107,8 +107,8 @@ units are physically removed from the PDF.
 
 ## Specification format for `<spec>`
 
-    <pages>(abs,<x0>,<y0>,<x1>,<y1>[,delete=inside|outside][,partial=inside|outside])
-    <pages>(box=media|crop|trim|bleed|art[,delete=inside|outside][,partial=inside|outside])
+    <pages>(abs,<x0>,<y0>,<x1>,<y1>[,delete=inside|outside][,partial=inside|outside][,glyph_overlap=box|center])
+    <pages>(box=media|crop|trim|bleed|art[,delete=inside|outside][,partial=inside|outside][,glyph_overlap=box|center])
 
 - `<pages>` follows the same page-spec syntax as other operations
   (e.g. `1-5`, `1,3,5-end`).
@@ -142,14 +142,24 @@ units are physically removed from the PDF.
   touching the box at all. `delete=outside,partial=outside` keeps
   only units entirely inside the box, deleting everything else,
   including straddlers.
+- `glyph_overlap` controls how a text glyph's own box is tested,
+  independent of `partial` for images/paths (those are always tested
+  the same way). `glyph_overlap=box` (default) tests the glyph's
+  nominal advance-width box for real overlap/containment against the
+  rectangle, honoring `delete`/`partial` exactly like an image or path
+  would. `glyph_overlap=center` instead tests only the glyph's own
+  midpoint, ignoring `partial` (a point can't straddle a boundary) --
+  a coarser, more tolerant test, useful when the rectangle's own
+  coordinates carry some uncertainty and a glyph sitting right at the
+  boundary should not flip deletion outcome on a fraction of a point.
 
 ## Current limitations
 
 Image, vector path (fill + stroke), and text (glyph-level) deletion are
 all implemented, including vertical writing mode. Clipping paths are
-never deletion candidates regardless of overlap. Glyph deletion uses each
-glyph's nominal 1-em bounding box, not exact outline geometry -- see
-_glyph_should_delete's docstring for the tradeoff.
+never deletion candidates regardless of overlap. Glyph deletion uses
+each glyph's nominal 1-em bounding box, not exact outline geometry --
+see `glyph_should_delete`'s docstring for the tradeoff.
 """
 
 
@@ -224,12 +234,14 @@ def _parse_single_spec(spec: str, total_pages: int) -> tuple[str, ExciseRect, st
     parts = [p.strip() for p in content_str.split(",")]
 
     box_name, rest = _parse_spec_prefix(parts, content_str, spec)
-    delete, partial, numeric_parts = _parse_spec_modifiers(rest, spec)
+    delete, partial, glyph_overlap, numeric_parts = _parse_spec_modifiers(rest, spec)
 
     if box_name is not None:
-        return _build_box_result(page_range_str, box_name, numeric_parts, delete, partial, spec)
+        return _build_box_result(
+            page_range_str, box_name, numeric_parts, delete, partial, glyph_overlap, spec
+        )
 
-    return _build_abs_result(page_range_str, numeric_parts, delete, partial, spec)
+    return _build_abs_result(page_range_str, numeric_parts, delete, partial, glyph_overlap, spec)
 
 
 def _parse_spec_prefix(
@@ -253,17 +265,20 @@ def _parse_spec_prefix(
     )
 
 
-def _parse_spec_modifiers(rest: list[str], spec: str) -> tuple[str, str, list[str]]:
-    """Splits the remaining spec parts into delete=/partial= modifiers
-    (with defaults) and leftover numeric coordinate parts."""
+def _parse_spec_modifiers(rest: list[str], spec: str) -> tuple[str, str, str, list[str]]:
+    """Splits the remaining spec parts into delete=/partial=/glyph_overlap=
+    modifiers (with defaults) and leftover numeric coordinate parts."""
     delete = "inside"
     partial = "inside"
+    glyph_overlap = "box"
     numeric_parts = []
     for p in rest:
         if p.lower().startswith("delete="):
             delete = p.split("=", 1)[1].strip().lower()
         elif p.lower().startswith("partial="):
             partial = p.split("=", 1)[1].strip().lower()
+        elif p.lower().startswith("glyph_overlap="):
+            glyph_overlap = p.split("=", 1)[1].strip().lower()
         elif p.lower().startswith("box="):
             raise InvalidArgumentError(
                 f"excise: 'box=' may only appear once, at the start of the spec, in spec '{spec}'."
@@ -279,7 +294,12 @@ def _parse_spec_modifiers(rest: list[str], spec: str) -> tuple[str, str, list[st
         raise InvalidArgumentError(
             f"excise: 'partial' must be 'inside' or 'outside', got '{partial}' in spec '{spec}'."
         )
-    return delete, partial, numeric_parts
+    if glyph_overlap not in ("box", "center"):
+        raise InvalidArgumentError(
+            f"excise: 'glyph_overlap' must be 'box' or 'center', got '{glyph_overlap}' "
+            f"in spec '{spec}'."
+        )
+    return delete, partial, glyph_overlap, numeric_parts
 
 
 def _build_box_result(
@@ -288,6 +308,7 @@ def _build_box_result(
     numeric_parts: list[str],
     delete: str,
     partial: str,
+    glyph_overlap: str,
     spec: str,
 ) -> tuple[str, ExciseRect, str | None]:
     if numeric_parts:
@@ -298,12 +319,19 @@ def _build_box_result(
     # Placeholder rect -- _process_page overwrites this with the
     # actual per-page box extent (see box_name in page_box_names)
     # before any geometry test ever reads it.
-    placeholder = ExciseRect(rect=[0.0, 0.0, 0.0, 0.0], delete=delete, partial=partial)
+    placeholder = ExciseRect(
+        rect=[0.0, 0.0, 0.0, 0.0], delete=delete, partial=partial, glyph_overlap=glyph_overlap
+    )
     return page_range_str or "-", placeholder, box_name
 
 
 def _build_abs_result(
-    page_range_str: str, numeric_parts: list[str], delete: str, partial: str, spec: str
+    page_range_str: str,
+    numeric_parts: list[str],
+    delete: str,
+    partial: str,
+    glyph_overlap: str,
+    spec: str,
 ) -> tuple[str, ExciseRect, str | None]:
     if len(numeric_parts) != 4:
         raise InvalidArgumentError(
@@ -325,7 +353,11 @@ def _build_abs_result(
         raise InvalidArgumentError(f"excise: invalid coordinate in spec '{spec}': {e}") from e
 
     rect = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
-    return page_range_str or "-", ExciseRect(rect=rect, delete=delete, partial=partial), None
+    return (
+        page_range_str or "-",
+        ExciseRect(rect=rect, delete=delete, partial=partial, glyph_overlap=glyph_overlap),
+        None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +385,7 @@ def _process_page(
             rect=_resolve_box_rect(page, box_name),
             delete=excise_rect.delete,
             partial=excise_rect.partial,
+            glyph_overlap=excise_rect.glyph_overlap,
         )
 
     _filter_annots(page, excise_rect, stats)

@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from pdftl.utils.geometry import transform_rect_bbox
+from pdftl.operations.helpers.excise_geometry import overlap_means_delete
 from pdftl.operations.helpers.excise_types import ExciseRect, ExciseStats
 
 
@@ -407,21 +408,23 @@ def glyph_should_delete(
     whichever side of the box the glyph sits, which is why over-deletion
     was showing up on both the left and right of the visible black box.
 
-    Uses CENTER-POINT containment, not any-overlap, to decide the glyph's
-    fate -- unlike overlap_means_delete's ANY-overlap policy used for
-    paths/images. A glyph's box here is built from its font's nominal
-    /advance width, while the drawn/deletion rect comes from pdfium's
-    INK-based per-line bbox (see redact.py/grep) -- two different
-    measurements of "where the glyph is" that routinely disagree by a
-    point or so right at a boundary, especially with side bearings.
-    Any-overlap treats that sub-pixel disagreement as a full match,
-    silently deleting a glyph adjacent to (but visually outside) the
-    drawn box -- e.g. redacting "ather" out of "gathering" also ate the
-    "a", even though the drawn box never covered it. Center-point
+    `excise_rect.glyph_overlap` picks the test: "box" (default) is true
+    overlap/containment (via `overlap_means_delete`) against the glyph's
+    own nominal box, honoring `partial` exactly like paths/images do.
+    "center" uses CENTER-POINT containment instead, ignoring `partial` --
+    a glyph's box here is built from its font's nominal /advance width,
+    while a caller's own match rect can come from a different measurement
+    entirely (e.g. a rendered/ink-based per-line bbox) that routinely
+    disagrees by a point or so right at a boundary, especially with side
+    bearings. Any-overlap treats that sub-pixel disagreement as a full
+    match, silently deleting a glyph adjacent to (but visually outside)
+    the drawn box -- e.g. redacting "ather" out of "gathering" also ate
+    the "a", even though the drawn box never covered it. Center-point
     containment tolerates that boundary noise: a glyph only gets deleted
     when its own midpoint genuinely falls inside (or outside, for
-    delete="outside") the target region, matching what a human looking
-    at the drawn box would expect.
+    delete="outside") the target region. Plain `excise` (an exact,
+    directly supplied rect, nothing to reconcile) has no need for that
+    tolerance, which is why "box" -- not "center" -- is the default.
 
     advance_1000 is expected to already exclude char/word spacing (pass
     the raw glyph width, not the spacing-augmented pen advance) -- the
@@ -442,17 +445,20 @@ def glyph_should_delete(
     else:
         bbox_local = [0.0, 0.0, advance, 1.0] if advance >= 0 else [advance, 0.0, 0.0, 1.0]
     bbox = transform_rect_bbox(bbox_local, trm)
-    return _center_means_delete(bbox, excise_rect)
+    if excise_rect.glyph_overlap == "center":
+        return _center_means_delete(bbox, excise_rect)
+    return overlap_means_delete(bbox, excise_rect)
 
 
 def _center_means_delete(bbox: list[float], excise_rect: ExciseRect) -> bool:
-    """Center-point variant of excise_geometry.overlap_means_delete, used
-    ONLY for glyph deletion (see glyph_should_delete's docstring for why
-    any-overlap is the wrong test there). Applies the same delete
-    inside/outside direction as overlap_means_delete, but the underlying
-    "is this unit inside the region" test is midpoint containment against
-    the region's rects union, not overlap -- `partial` has no meaning
-    here (a point either is or isn't inside a rect) and is ignored."""
+    """Center-point variant (glyph_overlap="center") -- see
+    glyph_should_delete's docstring for why this tolerance exists and
+    when it's the right choice instead of the default `overlap_means_delete`
+    ("box") test. Applies the same delete inside/outside direction as
+    overlap_means_delete, but the underlying "is this unit inside the
+    region" test is midpoint containment against the region's rects
+    union, not overlap -- `partial` has no meaning here (a point either
+    is or isn't inside a rect) and is ignored."""
     cx = (bbox[0] + bbox[2]) / 2.0
     cy = (bbox[1] + bbox[3]) / 2.0
     is_inside = any(r[0] <= cx <= r[2] and r[1] <= cy <= r[3] for r in excise_rect.rects)

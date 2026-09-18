@@ -1014,3 +1014,12 @@ class TestRedactVerifyOption:
         search_regex = re.compile(r"\d{3}-\d{2}-\d{4}")
         with pytest.raises(OperationError, match="page 1.*page 2|page 2.*page 1"):
             _verify_redaction(pdf, [1, 2], search_regex)
+
+
+class TestRedactSingleCharacterPattern:
+    def test_single_character_pattern_removes_all_matches_from_content_stream(self):
+        pdf = pikepdf.open("tests/files/pdfs/redact_single_char_embedded_font.pdf")
+        result = redact(pdf, [r"/e/"])
+        assert result.success is True
+        strings = "".join(_tj_strings(pdf))
+        assert "e" not in strings

@@ -43,6 +43,25 @@ class ExciseRect:
     #                           same as a fully-outside unit (i.e. only
     #                           units ENTIRELY inside the box count as
     #                           inside).
+    glyph_overlap: str = "box"  # "box" | "center" -- how a text glyph's
+    #                           own nominal advance-width box is tested
+    #                           against the region, independent of how
+    #                           images/paths are tested (those always use
+    #                           `partial`-aware overlap, unconditionally).
+    #                           "box" (default): the glyph's box is tested
+    #                           the same way as an image/path -- true
+    #                           overlap/containment, honoring `partial`
+    #                           exactly like every other unit type.
+    #                           "center": only the glyph's own midpoint is
+    #                           tested for containment, ignoring `partial`
+    #                           entirely (a point can't straddle). Exists
+    #                           for callers whose match rect comes from a
+    #                           different measurement than the glyph's own
+    #                           box (e.g. a rendered/ink-based bbox vs. a
+    #                           font-advance-derived one) and disagrees by
+    #                           a point or so at a boundary; center-point
+    #                           containment tolerates that noise instead of
+    #                           over/under-deleting at it.
 
     @property
     def rects(self) -> list[list[float]]:

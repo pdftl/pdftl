@@ -296,6 +296,72 @@ class TestGlyphShouldDeleteDirect:
         assert _glyph_should_delete(None, 0.0, False, rect) is False
 
 
+class TestGlyphOverlapBoxVsCenter:
+    """Glyph deletion used to ALWAYS test only the glyph's center point,
+    silently ignoring `partial`, unlike images/paths. A glyph straddling
+    a boundary -- box overlaps, center doesn't -- survived even under
+    the documented default (delete=inside, partial=inside, "deletes
+    anything touching the box at all"). These pin the fix:
+    `glyph_overlap` now genuinely selects between the two behaviors
+    instead of `partial` being silently dropped for text."""
+
+    # trm = (100, 0, 0, 100, 10, 10): font-size-100 scale, positioned at
+    # (10, 10). advance_1000=500 -> a 0.5-em glyph -> real box
+    # x:[10, 60], y:[10, 110]. Center is (35, 60).
+    _TRM = (100.0, 0.0, 0.0, 100.0, 10.0, 10.0)
+    _ADVANCE_1000 = 500.0
+
+    def test_straddling_glyph_survives_under_center_default_delete_inside(self):
+        # rect x:[0,30] -- box [10,60] overlaps it (10-30), but the
+        # glyph's own center (35) sits outside -- glyph_overlap="center"
+        # must NOT delete it.
+        rect = ExciseRect(rect=[0, 0, 30, 120], delete="inside", glyph_overlap="center")
+        assert _glyph_should_delete(self._TRM, self._ADVANCE_1000, False, rect) is False
+
+    def test_same_straddling_glyph_deleted_under_box_default(self):
+        # Identical geometry, glyph_overlap="box" (the new default):
+        # any overlap counts as "touching the box at all" under
+        # partial=inside (default) -- matches excise's own documented
+        # behavior, unlike the center-only test above.
+        rect = ExciseRect(rect=[0, 0, 30, 120], delete="inside", glyph_overlap="box")
+        assert _glyph_should_delete(self._TRM, self._ADVANCE_1000, False, rect) is True
+
+    def test_box_mode_is_the_dataclass_default(self):
+        # Constructing an ExciseRect without naming glyph_overlap at all
+        # must get "box" -- confirms the default itself, not just that
+        # "box" behaves correctly when explicitly requested.
+        rect = ExciseRect(rect=[0, 0, 30, 120], delete="inside")
+        assert rect.glyph_overlap == "box"
+        assert _glyph_should_delete(self._TRM, self._ADVANCE_1000, False, rect) is True
+
+    def test_box_mode_honors_partial_outside_full_containment_required(self):
+        # Same straddling box [10,60] against rect x:[0,30]: under
+        # partial="outside", a unit only counts as "inside" if it's
+        # ENTIRELY contained -- the straddler must survive, same as
+        # images/paths already do via excise_geometry.overlap_means_delete.
+        rect = ExciseRect(
+            rect=[0, 0, 30, 120], delete="inside", partial="outside", glyph_overlap="box"
+        )
+        assert _glyph_should_delete(self._TRM, self._ADVANCE_1000, False, rect) is False
+
+    def test_box_mode_partial_outside_deletes_fully_contained_glyph(self):
+        # Control for the previous test: a glyph fully inside the rect
+        # (not straddling) is still deleted under partial="outside".
+        rect = ExciseRect(
+            rect=[0, 0, 200, 200], delete="inside", partial="outside", glyph_overlap="box"
+        )
+        assert _glyph_should_delete(self._TRM, self._ADVANCE_1000, False, rect) is True
+
+    def test_center_mode_ignores_partial_entirely(self):
+        # A point can't straddle a boundary -- partial="outside" must
+        # make no difference to center-mode's result versus the default
+        # partial="inside" used elsewhere in this class.
+        rect = ExciseRect(
+            rect=[0, 0, 30, 120], delete="inside", partial="outside", glyph_overlap="center"
+        )
+        assert _glyph_should_delete(self._TRM, self._ADVANCE_1000, False, rect) is False
+
+
 class TestFilterShowElementsDirect:
     def _gs(self, font_size=100.0):
         gs = GraphicsState()
@@ -440,7 +506,12 @@ class TestFilterShowElementsNumericOnlySegmentDiscarded:
         gs = self._gs()
         cache = _FontCache(_simple_font_resources(width=500.0))
         stats = ExciseStats()
-        rect = ExciseRect(rect=[0, 0, 140, 120], delete="inside")
+        # glyph_overlap=center: this test is about numeric-only-run
+        # bookkeeping, using each glyph's CENTER (per the docstring
+        # above) to decide survival -- box mode (the default) would
+        # also catch B, since B's box [120,170] genuinely overlaps the
+        # rect's right edge at 140.
+        rect = ExciseRect(rect=[0, 0, 140, 120], delete="inside", glyph_overlap="center")
         elements = [
             pikepdf.String(b"A"),
             -100.0,
@@ -477,7 +548,12 @@ class TestExciseContentTextLineMatrixRestoration:
         # isolates 'A' alone without also catching 'C's center.
         content = b"BT /F1 100 Tf 1 0 0 1 10 10 Tm (AB) Tj 0 -20 Td (C) Tj ET"
         pdf = _make_pdf_with_content(content, resources=_simple_font_resources(width=500.0))
-        excise_content(pdf, ["1(abs,10,50,60,120)"])
+        # glyph_overlap=center: this test isolates 'A' from 'B' by their
+        # CENTER positions (see the comment above) -- unrelated to the
+        # TLM-restoration mechanic under test, so pin the mode
+        # explicitly rather than let the box-overlap default change
+        # which glyphs get caught by this rect.
+        excise_content(pdf, ["1(abs,10,50,60,120,glyph_overlap=center)"])
 
         instructions = pikepdf.parse_content_stream(pdf.pages[0].Contents)
         text_ops = [
@@ -540,7 +616,13 @@ class TestExciseContentTextLineMatrixRestoration:
         pdf = _make_pdf_with_content(content, resources=_simple_font_resources(width=500.0))
         # y-restricted to A/B's line (~y=60) so 'C' (~y=40, after Td) is
         # left untouched -- isolates the fully-deleted-run case cleanly.
-        excise_content(pdf, ["1(abs,0,50,300,120)"])
+        # glyph_overlap=center: C's CENTER (~40) sits below the rect, but
+        # C's nominal 1-em box (baseline -10 to ~90 at this font size)
+        # genuinely overlaps y=50..120 -- box mode (the default) would
+        # correctly also delete C, which isn't what this test (a
+        # TLM-restoration check, not a glyph_overlap policy check) is
+        # about, so pin the mode explicitly.
+        excise_content(pdf, ["1(abs,0,50,300,120,glyph_overlap=center)"])
 
         instructions = pikepdf.parse_content_stream(pdf.pages[0].Contents)
         text_ops = [

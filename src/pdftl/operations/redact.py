@@ -633,7 +633,15 @@ def _process_redact_page(
         merged_delete.extend(group_delete)
         merged_box.extend(group_box)
 
-    excise_rect = ExciseRect(rect=merged_delete[0], extra_rects=merged_delete[1:] or None)
+    excise_rect = ExciseRect(
+        rect=merged_delete[0],
+        extra_rects=merged_delete[1:] or None,
+        # Explicit even though "box" is the dataclass default: a glyph
+        # left behind here is a real redaction leak, not a cosmetic
+        # over-deletion, so redact always wants the strict overlap test
+        # regardless of any future default change. See ExciseRect.glyph_overlap.
+        glyph_overlap="box",
+    )
     _excise_mod._process_page(pdf, page_1_indexed, excise_rect, stats)
 
     if options.draw_box:
