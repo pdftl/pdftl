@@ -295,6 +295,23 @@ def _to_adaptive_params(val: str) -> tuple[int, int]:
         )
 
 
+def _to_despeckle_size(val: str) -> int | bool:
+    v = val.strip().lower()
+    if v in ("true", "yes", "1"):
+        return 3
+    if v in ("false", "no", "0"):
+        return False
+    try:
+        size = int(v)
+    except ValueError:
+        raise InvalidArgumentError(
+            f"Despeckle size '{val}' must be true/false or an odd integer >= 3"
+        )
+    if size < 3 or size % 2 == 0:
+        raise InvalidArgumentError(f"Despeckle size '{size}' must be an odd integer >= 3")
+    return size
+
+
 # --- PLUGIN IMPLEMENTATIONS ---
 
 
@@ -334,18 +351,19 @@ def filter_invert(img: Any, enabled: bool) -> Any:
 @register_image_modifier(
     "despeckle",
     "Despeckle Noise",
-    "Applies a 3x3 median filter to eliminate salt-and-pepper noise.\n\n"
-    "Argument `enabled` (boolean): "
-    "Pass 'true' to apply the filter or 'false' to bypass.",
-    _to_bool,
+    "Applies a median filter to eliminate salt-and-pepper noise.\n\n"
+    "Argument `size` (integer): "
+    "An odd window size >= 3 (larger removes bigger specks, but also erodes thin "
+    "strokes). 'true' means 3; 'false' bypasses.",
+    _to_despeckle_size,
 )
-def filter_despeckle(img: Any, enabled: bool) -> Any:
-    if not enabled:
+def filter_despeckle(img: Any, size: int) -> Any:
+    if not size:
         return img
     from PIL import ImageFilter
 
     was_one_bit = img.mode == "1"
-    img = convert_to_continuous(img).filter(ImageFilter.MedianFilter(size=3))
+    img = convert_to_continuous(img).filter(ImageFilter.MedianFilter(size=size))
     if was_one_bit:
         return img.convert("1")
     return img

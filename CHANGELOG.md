@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `usage` now reports private vendor/application data hung directly off the document catalog in a
   new `vendor_extension` category, rather than as part of `document_structure`
 
+- `modify_images`: `despeckle` transformation now takes a size parameter
+
 ### Fixed
 
 - `dump_annots` and `delete_annots` handle malformed arguments better

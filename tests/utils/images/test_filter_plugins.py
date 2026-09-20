@@ -12,6 +12,7 @@ from pdftl.utils.images.filter_plugins import (
     _to_levels,
     _to_bits,
     _to_adaptive_params,
+    _to_despeckle_size,
     convert_to_continuous,
     preserve_alpha,
     filter_invert,
@@ -98,6 +99,41 @@ def test_to_bits():
         _to_bits("9")
     with pytest.raises(InvalidArgumentError, match="between 1 and 8"):
         _to_bits("abc")
+
+
+def test_to_despeckle_size():
+    # Truthy aliases map to the default window size of 3
+    assert _to_despeckle_size("true") == 3
+    assert _to_despeckle_size("yes") == 3
+    assert _to_despeckle_size("1") == 3
+    assert _to_despeckle_size("  TRUE  ") == 3
+
+    # Falsy aliases disable the filter
+    assert _to_despeckle_size("false") is False
+    assert _to_despeckle_size("no") is False
+    assert _to_despeckle_size("0") is False
+    assert _to_despeckle_size(" No ") is False
+
+    # Explicit odd sizes >= 3 pass through
+    assert _to_despeckle_size("3") == 3
+    assert _to_despeckle_size(" 5 ") == 5
+    assert _to_despeckle_size("11") == 11
+
+    # Non-integer input
+    with pytest.raises(InvalidArgumentError, match="must be true/false or an odd integer"):
+        _to_despeckle_size("abc")
+    with pytest.raises(InvalidArgumentError, match="must be true/false or an odd integer"):
+        _to_despeckle_size("3.5")
+
+    # Even sizes
+    with pytest.raises(InvalidArgumentError, match="Despeckle size '4' must be an odd integer"):
+        _to_despeckle_size("4")
+
+    # Too small (note "1" is a truthy alias, so use 2 and negatives)
+    with pytest.raises(InvalidArgumentError, match="Despeckle size '2' must be an odd integer"):
+        _to_despeckle_size("2")
+    with pytest.raises(InvalidArgumentError, match="Despeckle size '-5' must be an odd integer"):
+        _to_despeckle_size("-5")
 
 
 # --- 2. REGISTRY & DECORATOR TESTS ---
