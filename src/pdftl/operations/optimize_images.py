@@ -13,6 +13,7 @@
 """Optimize images in a PDF using ocrmypdf"""
 
 import logging
+import tempfile
 
 import pdftl.core.constants as c
 from pdftl.core.core_types import Compatibility, FeatureType, OpResult, Status
@@ -186,26 +187,25 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
     )
     from pathlib import Path
 
-    root = Path(output_filename).parent / "images"
-    root.mkdir(exist_ok=True)
-    executor = DEFAULT_EXECUTOR
-    try:
-        jpegs, pngs = extract_images_generic(pdf, root, options)
-        transcode_jpegs(pdf, jpegs, root, options, executor)
-        deflate_jpegs(pdf, root, options, executor)
-        transcode_pngs(pdf, pngs, png_name, root, options, executor)
+    with tempfile.TemporaryDirectory(prefix="pdftl_opt_img_") as tmp_dir:
+        root = Path(tmp_dir)
+        executor = DEFAULT_EXECUTOR
+        try:
+            jpegs, pngs = extract_images_generic(pdf, root, options)
+            transcode_jpegs(pdf, jpegs, root, options, executor)
+            deflate_jpegs(pdf, root, options, executor)
+            transcode_pngs(pdf, pngs, png_name, root, options, executor)
 
-        jbig2_groups = extract_images_jbig2(pdf, root, options)
-        convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
-    except MissingDependencyError as exc:
-        raise OperationError(
-            f"An external dependency required by OCRmyPDF is missing: {exc}"
-        ) from exc
-    except SubprocessOutputError as exc:
-        raise OperationError(f"An external tool executed by OCRmyPDF failed: {exc}") from exc
-    except FileNotFoundError as exc:
-        raise OperationError(f"Failed to execute an underlying system tool: {exc}") from exc
-
+            jbig2_groups = extract_images_jbig2(pdf, root, options)
+            convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
+        except MissingDependencyError as exc:
+            raise OperationError(
+                f"An external dependency required by OCRmyPDF is missing: {exc}"
+            ) from exc
+        except SubprocessOutputError as exc:
+            raise OperationError(f"An external tool executed by OCRmyPDF failed: {exc}") from exc
+        except FileNotFoundError as exc:
+            raise OperationError(f"Failed to execute an underlying system tool: {exc}") from exc
     return OpResult(success=True, pdf=pdf)
 
 
@@ -237,14 +237,14 @@ def _parse_args_to_options(operation_args):
         elif "=" in clean_arg:
             # next method raises on invalid keyval arguments
             var, val = _parse_keyval_option(clean_arg, arg)
-            if var == "jpeg_quality":
+            if var in ("jpeg_quality", "jpg_quality"):
                 jpeg_quality = val
             elif var == "png_quality":
                 png_quality = val
             elif var == "quality":
                 jpeg_quality = val
                 png_quality = val
-            elif var == "jobs":
+            else:  # jobs (the only other key _parse_keyval_option returns)
                 jobs = val
         else:
             _raise_for_invalid_keyword(arg)

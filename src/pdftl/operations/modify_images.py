@@ -21,7 +21,7 @@ from pdftl.operations.helpers.image_processor import (
 )
 from pdftl.operations.parsers.modify_images_parser import parse_modify_images_args
 from pdftl.utils.dependencies import ensure_dependencies
-from pdftl.utils.pdf_resources import get_resources
+from pdftl.utils.images.finders import extract_pdf_images
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
 
@@ -135,6 +135,10 @@ def modify_images_operation(pdf: Any, args: list[str]) -> OpResult:
         # 3. Perform string-to-primitive casting natively on the main thread
         steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(cmd)
 
+        if not have_image_modifiers:
+            logger.info("No image modifications requested; nothing to do.")
+            continue
+
         total_pages = len(pdf.pages)
         target_pages = page_numbers_matching_page_spec(page_spec_str, total_pages)
         if not target_pages:
@@ -223,10 +227,16 @@ def _compile_pipeline_steps(cmd: Any) -> tuple[list[tuple[str, Any]], bool, str 
     return steps, have_image_modifiers, forced_codec
 
 
+def _op_value(op: Any, default: Any = None) -> Any:
+    """An op's `value` param, or `default` if absent/blank."""
+    raw = op.params.get("value")
+    return default if raw is None or str(raw).strip() == "" else raw
+
+
 def _parse_format_op(op: Any) -> str:
     """Validates and normalizes a `format=` directive's value."""
-    raw_val = op.params.get("value")
-    if raw_val is None or str(raw_val).strip() == "":
+    raw_val = _op_value(op)
+    if raw_val is None:
         raise InvalidArgumentError("Image modifier 'format': missing value")
     try:
         return _to_format(raw_val)
@@ -243,9 +253,7 @@ def _compile_one_step(op: Any) -> tuple[str, Any]:
     plugin = registry.image_modifiers[op.name]
 
     # Handle standalone flags! If no value is provided, treat it as "true"
-    raw_val = op.params.get("value")
-    if raw_val is None or str(raw_val).strip() == "":
-        raw_val = "true"
+    raw_val = _op_value(op, "true")
 
     try:
         coerced_val = plugin.validator(raw_val)
@@ -256,18 +264,21 @@ def _compile_one_step(op: Any) -> tuple[str, Any]:
 
 
 def _discover_target_images(pdf: Any, target_pages: list[int], total_pages: int) -> list[dict]:
-    """Locates and references all embedded image XObjects within the target pages."""
+    """Locates all image XObjects drawn on the target pages, including those
+    reached through nested Form XObjects. Inline images are skipped (no
+    stream object to rewrite)."""
+    valid_pages = [p for p in target_pages if 1 <= p <= total_pages]
     images_to_process = []
-    for p_num in target_pages:
-        if not 1 <= p_num <= total_pages:
+    for meta in extract_pdf_images(pdf, valid_pages):
+        xobj = meta.get("xobj")
+        if xobj is None:  # inline image
+            logger.debug(
+                "Page %s: skipping inline image (no stream object to rewrite)", meta["page"]
+            )
             continue
-        page = pdf.pages[p_num - 1]
-
-        resources = get_resources(page)
-        if resources is not None and "/XObject" in resources:
-            for name, xobj in resources["/XObject"].items():
-                if xobj.get("/Subtype") == "/Image":
-                    images_to_process.append({"xobj": xobj, "name": str(name), "page_num": p_num})
+        images_to_process.append(
+            {**meta, "xobj": xobj, "name": meta["name"], "page_num": meta["page"]}
+        )
     return images_to_process
 
 

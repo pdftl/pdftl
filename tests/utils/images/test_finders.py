@@ -4,7 +4,12 @@ import pikepdf
 import pytest
 from PIL import Image
 
-from pdftl.utils.images.finders import extract_pdf_images, _get_format, _extract_image_metadata
+from pdftl.utils.images.finders import (
+    extract_pdf_images,
+    _get_format,
+    _extract_image_metadata,
+    _read_stream_bytes,
+)
 
 
 @pytest.fixture
@@ -137,6 +142,27 @@ def test_get_format_unknown_filter(empty_pdf):
     if "/Filter" in img_xobj:
         del img_xobj["/Filter"]
     assert _get_format(img_xobj) == "unknown"
+
+
+def test_get_format_empty_filter_array(empty_pdf):
+    img_xobj = create_real_image_stream(
+        empty_pdf, fmt="RAW", extra_entries={"/Filter": pikepdf.Array([])}
+    )
+    assert _get_format(img_xobj) == "unknown"
+
+
+def test_extract_pdf_images_empty_filter_array_does_not_crash(empty_pdf):
+    """Regression: `/Filter []` used to raise IndexError, which the content
+    stream parser doesn't catch, aborting the whole crawl."""
+    page = empty_pdf.add_blank_page()
+    img_xobj = create_real_image_stream(
+        empty_pdf, fmt="RAW", extra_entries={"/Filter": pikepdf.Array([])}
+    )
+    page.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/EmptyF": img_xobj})})
+    page.Contents = empty_pdf.make_stream(b"/EmptyF Do")
+
+    result = extract_pdf_images(empty_pdf, [1])
+    assert [r["format"] for r in result] == ["unknown"]
 
 
 def test_extract_image_metadata_stream_bytes_exception(empty_pdf):
@@ -319,9 +345,8 @@ def test_extract_image_metadata_with_smask(empty_pdf):
     assert mask["format"] == "unknown"
 
 
-def test_extract_image_metadata_with_mask_stencil(empty_pdf, monkeypatch):
-    """Covers the /Mask (not /SMask) stencil branch, and the mask's own
-    unreadable-stream-bytes fallback to 0."""
+def test_extract_image_metadata_with_mask_stencil(empty_pdf):
+    """Covers the /Mask (not /SMask) stencil branch."""
     page = empty_pdf.add_blank_page()
     img_xobj = create_real_image_stream(empty_pdf)
 
@@ -333,15 +358,6 @@ def test_extract_image_metadata_with_mask_stencil(empty_pdf, monkeypatch):
     mask_xobj["/BitsPerComponent"] = 1
     img_xobj["/Mask"] = mask_xobj
 
-    from pdftl.utils.images import finders as finders_mod
-
-    def raise_on_mask(xobj):
-        if xobj.objgen == mask_xobj.objgen:
-            raise ValueError("Simulated mask read crash")
-        return len(xobj.read_raw_bytes())
-
-    monkeypatch.setattr(finders_mod, "_read_stream_bytes", raise_on_mask)
-
     page.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/DirectImg": img_xobj})})
     page.Contents = empty_pdf.make_stream(b"/DirectImg Do")
 
@@ -351,7 +367,20 @@ def test_extract_image_metadata_with_mask_stencil(empty_pdf, monkeypatch):
     assert mask["role"] == "stencil"
     assert mask["width_px"] == 5
     assert mask["height_px"] == 5
-    assert mask["stream_bytes"] == 0
+    assert mask["stream_bytes"] == len(b"CORRUPTED")
+
+
+class TestReadStreamBytes:
+    def test_returns_raw_length(self, empty_pdf):
+        assert _read_stream_bytes(empty_pdf.make_stream(b"abcde")) == 5
+
+    @pytest.mark.parametrize("exc", [ValueError("boom"), pikepdf.PdfError("boom")])
+    def test_unreadable_stream_returns_zero(self, exc):
+        class Unreadable:
+            def read_raw_bytes(self):
+                raise exc
+
+        assert _read_stream_bytes(Unreadable()) == 0
 
 
 def test_extract_mask_metadata_color_key_array(empty_pdf):

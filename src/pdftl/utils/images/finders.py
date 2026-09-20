@@ -52,8 +52,24 @@ _INLINE_COLORSPACE_ABBREVIATIONS = {
 MAX_FORM_DEPTH = 12
 
 
-def _read_stream_bytes(xobj):
-    return len(xobj.read_raw_bytes())
+def _read_stream_bytes(xobj) -> int:
+    """Raw (still-filtered) byte count; 0 if the stream can't be read."""
+    import pikepdf
+
+    try:
+        return len(xobj.read_raw_bytes())
+    except (pikepdf.PdfError, ValueError):
+        return 0
+
+
+def _drawn_size(ctm) -> tuple[float, float]:
+    """Drawn width/height in points implied by a CTM."""
+    a, b, c, d, _, _ = ctm
+    return math.hypot(a, b), math.hypot(c, d)
+
+
+def _ppi(px: int, drawn_pts: float) -> int:
+    return round(px / drawn_pts * 72) if drawn_pts > 0 else 0
 
 
 def _page_content_stream_objects(page_obj):
@@ -228,19 +244,25 @@ def _read_inline_data_bytes(iimage, data_operand) -> int:
         return 0
 
 
+def _first_filter_name(filt) -> str | None:
+    """Lowercased name of the first filter in a /Filter (or /F) value, or
+    None if there is none (absent, or an empty array)."""
+    import pikepdf
+
+    if isinstance(filt, (pikepdf.Array, list, tuple)):
+        filt = filt[0] if len(filt) else None
+    if filt is None:
+        return None
+    return str(filt).lstrip("/").lower()
+
+
 def _get_inline_format(filt) -> str:
     """Like _get_format(), but for an inline image's own /F (or /Filter)
     value, which may use the PDF spec's abbreviated filter names (Table
     93) instead of the full ones an XObject's /Filter always uses."""
-    import pikepdf
-
-    if filt is None:
+    name = _first_filter_name(filt)
+    if name is None:
         return "unknown"
-    if isinstance(filt, (pikepdf.Array, list, tuple)):
-        filt = filt[0] if len(filt) else None
-    if filt is None:
-        return "unknown"
-    name = str(filt).lstrip("/").lower()
     return _INLINE_FILTER_ABBREVIATIONS.get(name, name)
 
 
@@ -309,9 +331,7 @@ def _extract_inline_image_metadata(
     height_px = int(_inline_dict_get(header, "/Height", "/H") or 0)
     bits = int(_inline_dict_get(header, "/BitsPerComponent", "/BPC") or 8)
 
-    a, b, c, d, _, _ = ctm
-    drawn_width_pts = math.hypot(a, b)
-    drawn_height_pts = math.hypot(c, d)
+    drawn_width_pts, drawn_height_pts = _drawn_size(ctm)
 
     entry = {
         "name": None,
@@ -321,8 +341,8 @@ def _extract_inline_image_metadata(
         "bbox": bbox,
         "width_px": width_px,
         "height_px": height_px,
-        "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
-        "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
+        "ppi_x": _ppi(width_px, drawn_width_pts),
+        "ppi_y": _ppi(height_px, drawn_height_pts),
         "colorspace": _inline_colorspace(_inline_dict_get(header, "/ColorSpace", "/CS")),
         "bits": bits,
         "stream_bytes": stream_bytes,
@@ -392,10 +412,7 @@ def _extract_mask_metadata(xobj, drawn_width_pts: float, drawn_height_pts: float
         # Color-key masking: an Array of component ranges, not a stencil image.
         return None
 
-    try:
-        stream_bytes = _read_stream_bytes(mask_xobj)
-    except (pikepdf.PdfError, ValueError):
-        stream_bytes = 0
+    stream_bytes = _read_stream_bytes(mask_xobj)
 
     width_px = int(mask_xobj.get("/Width", 0))
     height_px = int(mask_xobj.get("/Height", 0))
@@ -405,8 +422,8 @@ def _extract_mask_metadata(xobj, drawn_width_pts: float, drawn_height_pts: float
         "obj_id": mask_xobj.objgen[0],
         "width_px": width_px,
         "height_px": height_px,
-        "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
-        "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
+        "ppi_x": _ppi(width_px, drawn_width_pts),
+        "ppi_y": _ppi(height_px, drawn_height_pts),
         "bits": int(mask_xobj.get("/BitsPerComponent", 1)),
         "stream_bytes": stream_bytes,
         "format": _get_format(mask_xobj),
@@ -418,16 +435,11 @@ def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> N
 
     bbox = _calculate_bbox(ctm)
 
-    try:
-        stream_bytes = _read_stream_bytes(xobj)
-    except (pikepdf.PdfError, ValueError):
-        stream_bytes = 0
+    stream_bytes = _read_stream_bytes(xobj)
 
     width_px = int(xobj.get("/Width", 0))
     height_px = int(xobj.get("/Height", 0))
-    a, b, c, d, _, _ = ctm
-    drawn_width_pts = math.hypot(a, b)
-    drawn_height_pts = math.hypot(c, d)
+    drawn_width_pts, drawn_height_pts = _drawn_size(ctm)
 
     entry = {
         "name": obj_name_str,
@@ -435,8 +447,8 @@ def _extract_image_metadata(xobj, obj_name_str, ctm, resources, image_list) -> N
         "bbox": bbox,
         "width_px": width_px,
         "height_px": height_px,
-        "ppi_x": round(width_px / drawn_width_pts * 72) if drawn_width_pts > 0 else 0,
-        "ppi_y": round(height_px / drawn_height_pts * 72) if drawn_height_pts > 0 else 0,
+        "ppi_x": _ppi(width_px, drawn_width_pts),
+        "ppi_y": _ppi(height_px, drawn_height_pts),
         "colorspace": image_colorspace(xobj, resources, pikepdf),
         "bits": int(xobj.get("/BitsPerComponent", 8)),
         "stream_bytes": stream_bytes,
@@ -464,11 +476,5 @@ def _calculate_bbox(ctm) -> list[float]:
 
 
 def _get_format(xobj) -> str:
-    import pikepdf
-
-    f = xobj.get("/Filter")
-    if f is None:
-        return "unknown"
-    if isinstance(f, pikepdf.Array):
-        f = f[0]
-    return str(f).lstrip("/").lower()
+    name = _first_filter_name(xobj.get("/Filter"))
+    return "unknown" if name is None else name

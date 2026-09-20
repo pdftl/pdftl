@@ -549,15 +549,20 @@ class TestDumpImages:
         assert _get_format(xobj) == "flatedecode"
 
     def test_extract_image_metadata_read_raw_bytes_fails(self):
-        pdf = pikepdf.Pdf.new()
-        xobj = _make_image_stream(pdf)
-        with patch(
-            "pdftl.utils.images.finders._read_stream_bytes",
-            side_effect=pikepdf.PdfError("fail"),
-        ):
-            image_list = []
-            _extract_image_metadata(xobj, "/Im1", [100, 0, 0, 100, 0, 0], None, image_list)
-            assert image_list[0]["stream_bytes"] == 0
+        class Unreadable:
+            objgen = (99, 0)
+
+            def get(self, key, default=None):
+                if key in ("/Width", "/Height"):
+                    return 10
+                return default
+
+            def read_raw_bytes(self):
+                raise pikepdf.PdfError("fail")
+
+        image_list = []
+        _extract_image_metadata(Unreadable(), "/Im1", [100, 0, 0, 100, 0, 0], None, image_list)
+        assert image_list[0]["stream_bytes"] == 0
 
     def test_min_dpi_filters_low_resolution_images(self):
         # Image placed at 300x150 pixels in a 300x150 point bbox = 72 PPI — below threshold

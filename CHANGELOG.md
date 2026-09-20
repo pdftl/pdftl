@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stream; glyph deletion now uses real overlap/containment against the glyph's own box
   (`excise`'s new `glyph_overlap` option) instead of only a center-point test
 
+- `modify_images` now finds images drawn through Form XObjects (common in scanned PDFs)
+  instead of reporting that no images were found
+
+- `optimize_images` no longer creates an `images` directory next to the output file (or
+  writes into an existing one); intermediate files now go in a temporary directory that
+  is removed afterwards
+
+- `optimize_images`: the `jpg_quality=<n>` option is no longer silently ignored
+
+- `dump_images` and `modify_images` no longer crash on images whose `/Filter` is an empty
+  array
+
 ## [0.28.1] - 2026-09-11
 
 ### Changed

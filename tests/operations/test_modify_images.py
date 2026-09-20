@@ -31,6 +31,19 @@ def mock_pdf():
     return pdf
 
 
+def _cmd(*ops):
+    """Build a mock command from (name, value) pairs; value=None omits params."""
+    mock_ops = []
+    for name, value in ops:
+        op = MagicMock()
+        op.name = name  # set after construction: MagicMock(name=...) is special
+        op.params = {} if value is None else {"value": value}
+        mock_ops.append(op)
+    cmd = MagicMock()
+    cmd.operations = mock_ops
+    return cmd
+
+
 # --- TESTS FOR LazyImageModifierHelpProxy ---
 
 
@@ -127,61 +140,23 @@ def test_compile_pipeline_steps_empty_val_to_true(mock_registry):
     assert forced_codec is None
 
 
-def test_compile_pipeline_steps_format_png(mock_registry):
+@pytest.mark.parametrize("raw, expected", [("png", "png"), ("JPG", "jpeg"), ("png8", "png8")])
+def test_compile_pipeline_steps_format_values(mock_registry, raw, expected):
     mock_registry.image_modifiers = {}
-    mock_op = MagicMock()
-    mock_op.name = "format"
-    mock_op.params = {"value": "png"}
-
-    mock_cmd = MagicMock()
-    mock_cmd.operations = [mock_op]
-
-    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
-
+    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(_cmd(("format", raw)))
     assert steps == []
     assert have_image_modifiers is True
-    assert forced_codec == "png"
+    assert forced_codec == expected
 
 
-def test_compile_pipeline_steps_format_jpg_normalizes_to_jpeg(mock_registry):
+@pytest.mark.parametrize(
+    "raw, pattern",
+    [("  ", "missing value"), ("gif", "must be one of")],
+)
+def test_compile_pipeline_steps_format_errors(mock_registry, raw, pattern):
     mock_registry.image_modifiers = {}
-    mock_op = MagicMock()
-    mock_op.name = "format"
-    mock_op.params = {"value": "JPG"}
-
-    mock_cmd = MagicMock()
-    mock_cmd.operations = [mock_op]
-
-    steps, have_image_modifiers, forced_codec = _compile_pipeline_steps(mock_cmd)
-
-    assert forced_codec == "jpeg"
-    assert have_image_modifiers is True
-
-
-def test_compile_pipeline_steps_format_missing_value(mock_registry):
-    mock_registry.image_modifiers = {}
-    mock_op = MagicMock()
-    mock_op.name = "format"
-    mock_op.params = {"value": "  "}
-
-    mock_cmd = MagicMock()
-    mock_cmd.operations = [mock_op]
-
-    with pytest.raises(InvalidArgumentError, match="Image modifier 'format': missing value"):
-        _compile_pipeline_steps(mock_cmd)
-
-
-def test_compile_pipeline_steps_format_invalid_value(mock_registry):
-    mock_registry.image_modifiers = {}
-    mock_op = MagicMock()
-    mock_op.name = "format"
-    mock_op.params = {"value": "gif"}
-
-    mock_cmd = MagicMock()
-    mock_cmd.operations = [mock_op]
-
-    with pytest.raises(InvalidArgumentError, match="Image modifier 'format':.*must be one of"):
-        _compile_pipeline_steps(mock_cmd)
+    with pytest.raises(InvalidArgumentError, match=f"Image modifier 'format':.*{pattern}"):
+        _compile_pipeline_steps(_cmd(("format", raw)))
 
 
 def test_compile_pipeline_steps_format_plus_modifier(mock_registry):
@@ -242,30 +217,84 @@ def test_compile_pipeline_steps_all_false_image_modifiers(mock_registry):
 # --- TESTS FOR _discover_target_images ---
 
 
-def test_discover_target_images_success():
+@patch("pdftl.operations.modify_images.extract_pdf_images")
+def test_discover_target_images_success(mock_extract):
     pdf = MagicMock()
-    # Create a page with an image
-    page1 = {"/Resources": {"/XObject": {"/Im1": {"/Subtype": "/Image"}}}}
-    # Create a page missing /XObject
-    page2 = {"/Resources": {}}
-    # Create a page missing /Resources entirely
-    page3 = {}
+    xobj = MagicMock()
+    mock_extract.return_value = [{"name": "/X4", "xobj": xobj, "page": 2, "ppi_x": 87}]
 
-    pdf.pages = [page1, page2, page3]
+    images = _discover_target_images(pdf, target_pages=[1, 2, 3, 99, 0], total_pages=3)
 
-    images = _discover_target_images(pdf, target_pages=[1, 2, 3, 99], total_pages=3)
+    # Out-of-range pages are filtered out before the crawl
+    mock_extract.assert_called_once_with(pdf, [1, 2, 3])
+    assert len(images) == 1
+    assert images[0]["name"] == "/X4"
+    assert images[0]["page_num"] == 2
+    assert images[0]["xobj"] is xobj
+    assert images[0]["ppi_x"] == 87  # finder metadata is carried through
+
+
+@patch("pdftl.operations.modify_images.extract_pdf_images")
+def test_discover_target_images_skips_inline_images(mock_extract):
+    xobj = MagicMock()
+    mock_extract.return_value = [
+        {"name": None, "inline": True, "page": 1},  # no "xobj" key: nothing to rewrite
+        {"name": "/Im1", "xobj": xobj, "page": 1},
+    ]
+
+    images = _discover_target_images(MagicMock(), target_pages=[1], total_pages=1)
+
+    assert [i["name"] for i in images] == ["/Im1"]
+
+
+@patch("pdftl.operations.modify_images.extract_pdf_images")
+def test_discover_target_images_none_found(mock_extract):
+    mock_extract.return_value = []
+    assert _discover_target_images(MagicMock(), target_pages=[99], total_pages=3) == []
+    mock_extract.assert_called_once_with(mock_extract.call_args[0][0], [])
+
+
+def _build_pdf_with_image(wrap_in_form):
+    """One-page PDF drawing a 2x2 RGB image, directly or via a Form XObject."""
+    import pikepdf
+
+    pdf = pikepdf.new()
+    image = pikepdf.Stream(pdf, b"\xff\x00\x00" * 4)
+    image["/Type"] = pikepdf.Name.XObject
+    image["/Subtype"] = pikepdf.Name.Image
+    image["/Width"] = 2
+    image["/Height"] = 2
+    image["/ColorSpace"] = pikepdf.Name.DeviceRGB
+    image["/BitsPerComponent"] = 8
+
+    page = pdf.add_blank_page(page_size=(100, 100))
+    if wrap_in_form:
+        form = pikepdf.Stream(pdf, b"/Im0 Do")
+        form["/Type"] = pikepdf.Name.XObject
+        form["/Subtype"] = pikepdf.Name.Form
+        form["/BBox"] = pikepdf.Array([0, 0, 1, 1])
+        form["/Resources"] = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=image))
+        page.obj["/Resources"] = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Fm0=form))
+        content = b"q 100 0 0 100 0 0 cm /Fm0 Do Q"
+    else:
+        page.obj["/Resources"] = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=image))
+        content = b"q 100 0 0 100 0 0 cm /Im0 Do Q"
+    page.obj["/Contents"] = pdf.make_stream(content)
+    return pdf, image
+
+
+@pytest.mark.parametrize("wrap_in_form", [False, True], ids=["direct", "form-wrapped"])
+def test_discover_target_images_real_pdf(wrap_in_form):
+    """Regression: images reached only through a Form XObject (typical scanner
+    output) were previously invisible to modify_images."""
+    pdf, image = _build_pdf_with_image(wrap_in_form)
+
+    images = _discover_target_images(pdf, target_pages=[1], total_pages=1)
 
     assert len(images) == 1
-    assert images[0]["name"] == "/Im1"
+    assert images[0]["name"] == "/Im0"
     assert images[0]["page_num"] == 1
-
-
-def test_discover_target_images_no_image_subtype():
-    pdf = MagicMock()
-    page1 = {"/Resources": {"/XObject": {"/Font1": {"/Subtype": "/Font"}}}}
-    pdf.pages = [page1]
-    images = _discover_target_images(pdf, target_pages=[1], total_pages=1)
-    assert len(images) == 0
+    assert images[0]["xobj"].objgen == image.objgen
 
 
 # --- TESTS FOR _build_callbacks ---
@@ -423,6 +452,24 @@ def test_modify_images_operation_no_images_discovered(
 
     res = modify_images_operation(mock_pdf, ["1(contrast=1)"])
     assert res.success is True
+
+
+@patch("pdftl.operations.modify_images.run_parallel_image_job")
+@patch("pdftl.operations.modify_images._discover_target_images")
+@patch("pdftl.operations.modify_images.parse_modify_images_args")
+@patch("pdftl.operations.modify_images._compile_pipeline_steps")
+def test_modify_images_operation_no_modifiers_skips_discovery(
+    mock_compile, mock_parse_args, mock_discover, mock_run_job, mock_pdf
+):
+    """All-false pipelines (e.g. sharpen=false) must not crawl content streams."""
+    mock_parse_args.return_value = [MagicMock()]
+    mock_compile.return_value = ([("sharpen", False)], False, None)
+
+    res = modify_images_operation(mock_pdf, ["1(sharpen=false)"])
+
+    assert res.success is True
+    mock_discover.assert_not_called()
+    mock_run_job.assert_not_called()
 
 
 def test_worker_callback_converts_value_error_to_operation_error():

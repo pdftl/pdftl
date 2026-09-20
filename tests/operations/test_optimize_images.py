@@ -50,6 +50,13 @@ def test_optimize_args_quality_specific():
     assert opts[2] == 60
 
 
+def test_optimize_args_jpg_quality_alias():
+    """Regression: jpg_quality was accepted by the keyval parser but silently dropped."""
+    opts = optimize_images_module._parse_args_to_options(["jpg_quality=50"])
+    assert opts[1] == 50
+    assert opts[2] == 0
+
+
 def test_optimize_args_quality_general():
     """Test generic 'quality' flag."""
     # Should set both JPEG and PNG
@@ -226,3 +233,94 @@ def test_optimize_images_file_not_found_error(two_page_pdf):
                 OperationError, match="Failed to execute an underlying system tool"
             ):
                 optimize_images_module.optimize_images_pdf(pdf, ["medium"], "out.pdf")
+
+
+# --- 4. Intermediate files live in a temp dir, not beside the output ---
+
+
+def _ocrmypdf_modules(mock_lib):
+    mock_exceptions = types.ModuleType("exceptions")
+    mock_exceptions.MissingDependencyError = MockMissingDependencyError
+    mock_exceptions.SubprocessOutputError = MockSubprocessOutputError
+    return {
+        "ocrmypdf": MagicMock(),
+        "ocrmypdf.optimize": mock_lib,
+        "ocrmypdf.exceptions": mock_exceptions,
+    }
+
+
+def _mock_lib(extract_side_effect):
+    lib = MagicMock()
+    lib.DEFAULT_JPEG_QUALITY = 0
+    lib.DEFAULT_PNG_QUALITY = 0
+    lib.extract_images_generic.side_effect = extract_side_effect
+    return lib
+
+
+def test_optimize_images_works_in_temp_dir_and_leaves_output_dir_alone(two_page_pdf, tmp_path):
+    """Regression: intermediates used to go in <output dir>/images and were never removed."""
+    import pikepdf
+
+    out_dir = tmp_path / "outdir"
+    out_dir.mkdir()
+    seen = {}
+
+    def fake_extract(pdf, root, options):
+        seen["root"] = root
+        seen["existed"] = root.is_dir()
+        return [], []
+
+    with patch.dict(sys.modules, _ocrmypdf_modules(_mock_lib(fake_extract))):
+        with pikepdf.open(two_page_pdf) as pdf:
+            optimize_images_module.optimize_images_pdf(pdf, ["medium"], str(out_dir / "out.pdf"))
+
+    assert seen["existed"]  # the work dir really existed while the helpers ran
+    assert seen["root"].parent != out_dir
+    assert not seen["root"].exists()  # ... and was removed afterwards
+    assert list(out_dir.iterdir()) == []  # nothing (e.g. images/) left beside the output
+
+
+def test_optimize_images_does_not_touch_existing_images_dir(two_page_pdf, tmp_path):
+    import pikepdf
+
+    keep = tmp_path / "images" / "keep.txt"
+    keep.parent.mkdir()
+    keep.write_text("mine")
+
+    with patch.dict(sys.modules, _ocrmypdf_modules(_mock_lib(lambda *a: ([], [])))):
+        with pikepdf.open(two_page_pdf) as pdf:
+            optimize_images_module.optimize_images_pdf(pdf, ["medium"], str(tmp_path / "out.pdf"))
+
+    assert [p.name for p in (tmp_path / "images").iterdir()] == ["keep.txt"]
+    assert keep.read_text() == "mine"
+
+
+def test_optimize_images_temp_dir_removed_on_error(two_page_pdf, tmp_path):
+    import pikepdf
+
+    seen = {}
+
+    def failing_extract(pdf, root, options):
+        seen["root"] = root
+        raise MockMissingDependencyError("test missing tool")
+
+    with patch.dict(sys.modules, _ocrmypdf_modules(_mock_lib(failing_extract))):
+        with pikepdf.open(two_page_pdf) as pdf:
+            with pytest.raises(OperationError):
+                optimize_images_module.optimize_images_pdf(
+                    pdf, ["medium"], str(tmp_path / "out.pdf")
+                )
+
+    assert not seen["root"].exists()
+
+
+def test_optimize_images_non_debug_level_skips_ocrmypdf_logger_setup(two_page_pdf, tmp_path):
+    import pikepdf
+
+    with patch.object(optimize_images_module.logger, "getEffectiveLevel", return_value=20):
+        with patch.dict(sys.modules, _ocrmypdf_modules(_mock_lib(lambda *a: ([], [])))):
+            with pikepdf.open(two_page_pdf) as pdf:
+                res = optimize_images_module.optimize_images_pdf(
+                    pdf, ["medium"], str(tmp_path / "out.pdf")
+                )
+    assert res.success is True
