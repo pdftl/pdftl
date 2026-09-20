@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_UPLOAD_MB = 100
 DEFAULT_TIMEOUT_SECONDS = 300
 
+# After rejecting an oversized upload we briefly swallow the unread request
+# body so closing the socket sends a clean FIN rather than an RST (which,
+# notably on Windows, can make the client lose the 413 response entirely).
+# Both bounds keep a hostile or endless upload from pinning a handler thread.
+_LINGER_DRAIN_MAX_BYTES = 16 * 1024 * 1024
+_LINGER_DRAIN_TIMEOUT_SECONDS = 2.0
+
 MAX_CONCURRENT_WORKERS = int(
     os.environ.get("PDFTL_MAX_CONCURRENT_WORKERS", min(4, os.cpu_count() or 1))
 )
@@ -362,14 +369,29 @@ class PdftlServerRequestHandlerMixIn:
 
         self._run_with_error_handling(operation, lambda: self._handle_execute(operation))
 
+    def _drain_request_body(self, content_length: int) -> None:
+        """Best-effort, bounded read-and-discard of an unread request body."""
+        deadline = time.monotonic() + _LINGER_DRAIN_TIMEOUT_SECONDS
+        remaining = min(content_length, _LINGER_DRAIN_MAX_BYTES)
+        try:
+            while remaining > 0:
+                budget = deadline - time.monotonic()
+                if budget <= 0:
+                    break
+                self.connection.settimeout(budget)
+                chunk = self.rfile.read(min(65536, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except OSError as exc:  # includes socket timeouts and resets
+            logger.debug("Stopped draining rejected upload: %s", exc)
+
     def _reject_if_oversized(self, content_length: int) -> bool:
         if content_length <= self.max_upload_bytes:
             return False
-        # The client may still be mid-upload when we reject here. Don't try
-        # to keep the connection alive for a pipelined next request -- the
-        # remaining body bytes are still in flight and nothing will drain
-        # them, which can leave this handler thread (and its socket) never
-        # cleanly exiting under keep-alive. Force the connection closed.
+        # The client may still be mid-upload when we reject here. Don't keep
+        # the connection alive for a pipelined next request; force it closed,
+        # after sending the 413 and draining (boundedly) what's in flight.
         self.close_connection = True
         limit_mb = self.max_upload_bytes / (1024 * 1024)
         self._send_error(
@@ -377,6 +399,7 @@ class PdftlServerRequestHandlerMixIn:
             f"Request body of {content_length} bytes exceeds the server's "
             f"{limit_mb:.0f}MB upload limit (max_upload_mb={round(limit_mb)}).",
         )
+        self._drain_request_body(content_length)
         return True
 
     def _initialize_pdfs(

@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dump_images` and `modify_images` no longer crash on images whose `/Filter` is an empty
   array
 
+- `server`: oversized uploads are now rejected with a properly delivered 413 on Windows, instead of
+  a connection error.
+
+- `server`: correct stale file logging in verbose mode
+
 ## [0.28.1] - 2026-09-11
 
 ### Changed

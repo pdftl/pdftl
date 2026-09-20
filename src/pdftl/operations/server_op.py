@@ -296,7 +296,7 @@ def _parse_server_args(args: list[str]) -> tuple[str, int, bool, int, int]:
 
 
 def _attempt_replace_existing(host: str, port: int) -> None:
-    """Sends a shutdown sequence to an existinon active on the targeted port."""
+    """Sends a shutdown sequence to an existing active on the targeted port."""
     import urllib.request
     import urllib.error
 
@@ -354,7 +354,7 @@ def _sweep_stale_pipeline_temp_files() -> None:
             try:
                 if now - os.path.getmtime(stale_path) > STALE_TIME_S:
                     os.remove(stale_path)
-                logger.info("Removed stale temp file from a previous run: %s", stale_path)
+                    logger.info("Removed stale temp file from a previous run: %s", stale_path)
             except OSError as exc:
                 logger.debug("Could not remove stale temp file %s: %s", stale_path, exc)
 

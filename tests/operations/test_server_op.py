@@ -285,6 +285,22 @@ def test_attempt_replace_existing_ignores_connection_errors() -> None:
         _attempt_replace_existing("127.0.0.1", 4080)  # must not raise
 
 
+def test_attempt_replace_existing_non_200_does_not_wait() -> None:
+    """A non-200 response to the shutdown POST means we didn't actually
+    shut anything down, so we must not pause waiting for the port to free."""
+    mock_response = MagicMock()
+    mock_response.status = 204
+    mock_response.__enter__.return_value = mock_response
+
+    with (
+        patch("urllib.request.urlopen", return_value=mock_response),
+        patch("pdftl.operations.server_op.time.sleep") as mock_sleep,
+    ):
+        _attempt_replace_existing("127.0.0.1", 4080)  # must not raise
+
+    mock_sleep.assert_not_called()
+
+
 def test_server_replace_port_handling(server) -> None:
     """Verifies that launching the server with the 'replace' keyword overrides
     port bindings, end-to-end. The shutdown-request logic itself is covered
@@ -879,6 +895,32 @@ def test_sweep_stale_pipeline_temp_files_oserror(monkeypatch, tmp_path) -> None:
             pass
 
 
+def test_sweep_stale_pipeline_temp_files_only_logs_actual_removals(
+    monkeypatch, tmp_path, caplog
+) -> None:
+    """Regression: the 'Removed stale temp file' message used to be logged for
+    every matching file, including fresh ones that were (correctly) left alone."""
+    import logging
+
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+
+    stale = tmp_path / "pdftl_server_stale.pdf"
+    fresh = tmp_path / "pdftl_server_fresh.pdf"
+    stale.write_bytes(b"x")
+    fresh.write_bytes(b"x")
+    old = time.time() - 600
+    os.utime(stale, (old, old))
+
+    with caplog.at_level(logging.INFO, logger="pdftl.operations.server_op"):
+        _sweep_stale_pipeline_temp_files()
+
+    removed_msgs = [r.getMessage() for r in caplog.records if "Removed stale" in r.getMessage()]
+    assert not stale.exists()
+    assert fresh.exists()
+    assert any(str(stale) in m for m in removed_msgs)
+    assert not any(str(fresh) in m for m in removed_msgs)
+
+
 def test_mixin_run_with_error_handling_timeout() -> None:
     """Verifies _run_with_error_handling properly translates TimeoutError into a 504."""
     handler = PdftlServerRequestHandlerMixIn()
@@ -912,15 +954,59 @@ def test_mixin_reject_if_oversized() -> None:
     handler = PdftlServerRequestHandlerMixIn()
     handler.max_upload_bytes = 100
     handler._send_error = MagicMock()
+    handler._drain_request_body = MagicMock()
 
     assert handler._reject_if_oversized(50) is False
     handler._send_error.assert_not_called()
+    handler._drain_request_body.assert_not_called()
 
     assert handler._reject_if_oversized(150) is True
     handler._send_error.assert_called_once()
+    handler._drain_request_body.assert_called_once_with(150)
     args, kwargs = handler._send_error.call_args
     assert args[0] == 413
     assert "exceeds the server's" in args[1]
+
+
+def _drain_handler(body: bytes) -> PdftlServerRequestHandlerMixIn:
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.connection = MagicMock()
+    handler.rfile = io.BytesIO(body)
+    return handler
+
+
+def test_drain_request_body_consumes_declared_length() -> None:
+    handler = _drain_handler(b"x" * 1000)
+    handler._drain_request_body(1000)
+    assert handler.rfile.read() == b""
+
+
+def test_drain_request_body_stops_at_eof() -> None:
+    handler = _drain_handler(b"abc")
+    handler._drain_request_body(1000)  # client sent less than declared
+    assert handler.rfile.read() == b""
+
+
+def test_drain_request_body_respects_byte_cap(monkeypatch) -> None:
+    monkeypatch.setattr("pdftl.server.handler._LINGER_DRAIN_MAX_BYTES", 100)
+    handler = _drain_handler(b"x" * 1000)
+    handler._drain_request_body(1000)
+    assert len(handler.rfile.read()) == 900
+
+
+def test_drain_request_body_respects_time_budget(monkeypatch) -> None:
+    monkeypatch.setattr("pdftl.server.handler._LINGER_DRAIN_TIMEOUT_SECONDS", 0)
+    handler = _drain_handler(b"x" * 1000)
+    handler._drain_request_body(1000)
+    assert len(handler.rfile.read()) == 1000  # nothing read
+
+
+def test_drain_request_body_swallows_oserror() -> None:
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.connection = MagicMock()
+    handler.rfile = MagicMock()
+    handler.rfile.read.side_effect = ConnectionResetError("peer gone")
+    handler._drain_request_body(1000)  # must not raise
 
 
 def test_server_payload_too_large(server) -> None:
@@ -951,13 +1037,16 @@ def test_server_payload_too_large(server) -> None:
             if check_body:
                 assert "exceeds the server's" in exc.read().decode("utf-8")
         except urllib.error.URLError as exc:
-            # Expected path on macOS/Darwin where the OS TCP stack forcefully tears
-            # down the connection (RST) mid-upload when the server closes its socket.
+            # Some stacks (macOS, Windows) may still tear down the connection
+            # mid-upload. Windows reports WSAECONNRESET/WSAECONNABORTED
+            # (10054/10053), which don't equal errno.ECONNRESET, so accept
+            # any ConnectionError as well as the POSIX errnos.
             underlying = exc.reason
             assert isinstance(underlying, OSError), f"Expected OSError, got {type(underlying)}"
-            assert underlying.errno in (errno.ECONNRESET, errno.EPIPE), (
-                f"Expected ECONNRESET (54) or EPIPE (32), got errno {underlying.errno}"
-            )
+            assert isinstance(underlying, ConnectionError) or underlying.errno in (
+                errno.ECONNRESET,
+                errno.EPIPE,
+            ), f"Expected a connection reset/broken pipe, got {underlying!r}"
 
     # Execute endpoint
     req_exec = urllib.request.Request(
@@ -1698,3 +1787,53 @@ def test_dump_streams_end_to_end_over_server_uses_api_serializer(server) -> None
         text = response.read().decode("utf-8")
         assert "Page 1" in text
         assert "===" in text  # confirms real block-format output, not raw tuples
+
+
+# ==============================================================================
+# Coverage: remaining handler.py branch gaps
+# ==============================================================================
+
+
+def test_shutdown_valid_token_proceeds(monkeypatch) -> None:
+    """A correct X-Shutdown-Token passes the auth check and shuts the server down."""
+    monkeypatch.setenv("PDFTL_SERVER_SHUTDOWN_TOKEN", "correct-password")
+    handler = PdftlServerRequestHandlerMixIn()
+    handler.headers = {"X-Shutdown-Token": "correct-password"}
+    handler._send_json = MagicMock()
+    handler.server = MagicMock()
+
+    with patch("pdftl.server.handler.threading.Thread") as mock_thread:
+        handler.do_shutdown()
+
+    handler._send_json.assert_called_once_with({"status": "shutting_down"})
+    mock_thread.assert_called_once_with(target=handler.server.shutdown)
+    mock_thread.return_value.start.assert_called_once()
+
+
+def test_format_client_error_debug_without_traceback(monkeypatch) -> None:
+    """PDFTL_SERVER_DEBUG set, but the exception carries no worker traceback:
+    the plain message is returned with nothing appended."""
+    monkeypatch.setenv("PDFTL_SERVER_DEBUG", "1")
+    handler = PdftlServerRequestHandlerMixIn()
+
+    msg = handler._format_client_error("op", ValueError("bad"))
+
+    assert msg == "Bad request parameters for operation 'op': bad"
+
+
+def test_initialize_pdfs_unnamed_upload_gets_no_alias(tmp_path) -> None:
+    """An upload with an empty field name is opened but not registered as an alias."""
+    pdf_path = tmp_path / "x.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.save(str(pdf_path))
+
+    handler = PdftlServerRequestHandlerMixIn()
+    opened, aliases = handler._initialize_pdfs(
+        [{"name": "", "filename": "x.pdf", "path": str(pdf_path)}]
+    )
+    try:
+        assert len(opened) == 1
+        assert aliases == {}
+    finally:
+        handler._cleanup_pdfs(opened)
