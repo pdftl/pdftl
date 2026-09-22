@@ -149,6 +149,7 @@ pythonpath = ["src"]
 minversion = "6.0"
 addopts = "-s --strict-markers -rs"
 testpaths = ["tests"]
+timeout = 300
 
 filterwarnings = [
     "ignore::DeprecationWarning",

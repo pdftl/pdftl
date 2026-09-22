@@ -307,7 +307,11 @@ def _to_despeckle_size(val: str) -> int | bool:
         raise InvalidArgumentError(
             f"Despeckle size '{val}' must be true/false or an odd integer >= 3"
         )
-    if size < 3 or size % 2 == 0:
+    return _check_despeckle_size(size)
+
+
+def _check_despeckle_size(size: int) -> int:
+    if isinstance(size, bool) or not isinstance(size, int) or size < 3 or size % 2 == 0:
         raise InvalidArgumentError(f"Despeckle size '{size}' must be an odd integer >= 3")
     return size
 
@@ -360,6 +364,8 @@ def filter_invert(img: Any, enabled: bool) -> Any:
 def filter_despeckle(img: Any, size: int) -> Any:
     if not size:
         return img
+    # Pillow 12.3.0 dies with SIGFPE on size 1 (== True) instead of raising.
+    size = 3 if size is True else _check_despeckle_size(size)
     from PIL import ImageFilter
 
     was_one_bit = img.mode == "1"

@@ -17,6 +17,7 @@ jobs:
   tests:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -56,7 +57,7 @@ jobs:
       - name: Run tests
         working-directory: ${{ github.workspace }}
         run: |
-            python -X utf8 -m pytest -n auto --dist loadfile ${{ matrix.coverage && matrix.os == 'ubuntu-latest' && '--cov=pdftl --cov-report=xml' || '' }}
+            python -X utf8 -m pytest -n auto --dist loadfile --max-worker-restart=0 ${{ matrix.coverage && matrix.os == 'ubuntu-latest' && '--cov=pdftl --cov-report=xml' || '' }}
 
       - name: Upload coverage artifact
         if: matrix.coverage && matrix.os == 'ubuntu-latest'
@@ -69,6 +70,7 @@ jobs:
   distro-tests:
     name: Tests (${{ matrix.distro }} / ${{ matrix.arch }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container:
       image: ${{ matrix.image }}
     strategy:
@@ -104,12 +106,13 @@ jobs:
           python3 -m pip install --break-system-packages -e .[dev-all]
 
       - name: Run tests
-        run: python3 -X utf8 -m pytest -n auto --dist loadfile
+        run: python3 -X utf8 -m pytest -n auto --dist loadfile --max-worker-restart=0
 
   # 3. Compatibility Test Suite
   phptests:
     name: php-pdftk test suite
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0

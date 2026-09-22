@@ -192,8 +192,27 @@ def test_filter_invert(rgb_img, rgba_img):
 
 
 def test_filter_despeckle(rgb_img):
-    res = filter_despeckle(rgb_img, True)
+    res = filter_despeckle(rgb_img, 3)
     assert isinstance(res, Image.Image)
+
+
+def test_filter_despeckle_true_means_size_3():
+    import random
+
+    from PIL import ImageFilter
+
+    rng = random.Random(0)
+    noisy = Image.new("L", (12, 12))
+    noisy.putdata([rng.choice((0, 255)) for _ in range(144)])
+
+    expected = noisy.filter(ImageFilter.MedianFilter(size=3))
+    assert filter_despeckle(noisy, True).tobytes() == expected.tobytes()
+
+
+@pytest.mark.parametrize("bad", [1, 2, 4, -3, 3.0, "3"])
+def test_filter_despeckle_rejects_bad_size(rgb_img, bad):
+    with pytest.raises(InvalidArgumentError, match="must be an odd integer >= 3"):
+        filter_despeckle(rgb_img, bad)
 
 
 def test_filter_autocontrast(rgb_img):
@@ -363,7 +382,7 @@ def test_one_bit_and_grayscale_filter_passthroughs():
     assert filter_invert(img_1bit, True).mode == "1"
 
     # Line 220: filter_despeckle 1-bit reconversion boundary
-    assert filter_despeckle(img_1bit, True).mode == "1"
+    assert filter_despeckle(img_1bit, 3).mode == "1"
 
     # Line 251 & 270: brightness/contrast early-exit for 1-bit
     assert filter_brightness(img_1bit, 1.5) is img_1bit
