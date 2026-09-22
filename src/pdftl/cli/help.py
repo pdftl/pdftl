@@ -10,6 +10,7 @@ import logging
 import sys
 
 from pdftl.cli.console import get_console
+from pdftl.cli.constants import HELP_FLAGS
 from pdftl.cli.help_data import (
     SPECIAL_HELP_TOPICS_MAP,
     SYNOPSIS_TEMPLATE,
@@ -427,6 +428,132 @@ def find_image_mod_topic_command(help_topics):
         ),
         None,
     )
+
+
+def _resolve_topic_token(token):
+    """Resolve a single raw CLI token to a help topic name, or None.
+
+    Priority mirrors the original per-category search order: special
+    topics, then operators, then options, then image modifiers.
+    """
+    if (cmd := find_special_topic_command(token.lower())) is not None:
+        return cmd
+    if (cmd := find_operator_topic_command([token])) is not None:
+        return cmd
+    if (cmd := find_option_topic_command([token])) is not None:
+        return cmd
+    if (cmd := find_image_mod_topic_command([token])) is not None:
+        return cmd
+    return None
+
+
+def _stage_ranges(cli_args):
+    """Split cli_args into (start, end) index ranges, one per '---'-delimited stage."""
+    ranges = []
+    start = 0
+    for i, arg in enumerate(cli_args):
+        if arg == "---":
+            ranges.append((start, i - 1))
+            start = i + 1
+    ranges.append((start, len(cli_args) - 1))
+    return ranges
+
+
+def _stage_range_for_index(ranges, index):
+    for start, end in ranges:
+        if start <= index <= end:
+            return start, end
+    return None
+
+
+def _is_valid_pipeline_done(cli_args, idx):
+    """A 'DONE' token only resolves to the pipeline topic if it actually
+    closes an EACH...DONE block. If a '---' stage boundary intervenes
+    between it and the nearest preceding EACH, the block was already
+    severed and DONE is not a resolvable pipeline candidate here."""
+    for i in range(idx - 1, -1, -1):
+        if cli_args[i] == "EACH":
+            return True
+        if cli_args[i] == "---":
+            return False
+    return False
+
+
+def _nearest_topic(cli_args, candidate_indices, help_indices):
+    """Find the topic among candidate_indices nearest to any help_indices.
+
+    On an exact distance tie, a pipeline-keyword candidate (EACH/DONE/---)
+    wins over a plain operator/option candidate. Any remaining tie is
+    broken by earliest position in cli_args, so behavior stays
+    deterministic for equidistant matches.
+    """
+    best_idx = None
+    best_dist = None
+    best_topic = None
+    best_is_pipeline = False
+    for idx in candidate_indices:
+        token = cli_args[idx]
+        if token in HELP_FLAGS:
+            continue
+        if token == "DONE" and not _is_valid_pipeline_done(cli_args, idx):
+            continue
+        topic = _resolve_topic_token(token)
+        if topic is None:
+            continue
+        is_pipeline = topic == "pipeline"
+        dist = min(abs(idx - h) for h in help_indices)
+        if (
+            best_dist is None
+            or dist < best_dist
+            or (dist == best_dist and is_pipeline and not best_is_pipeline)
+            or (dist == best_dist and is_pipeline == best_is_pipeline and idx < best_idx)
+        ):
+            best_idx, best_dist, best_topic, best_is_pipeline = idx, dist, topic, is_pipeline
+    return best_topic
+
+
+def find_help_command(cli_args):
+    """
+    Determines the specific help command based on CLI arguments.
+
+    Search order:
+      1. tag: queries always win outright.
+      2. The nearest recognized topic keyword to any 'help' occurrence,
+         searched within that help's own '---'-delimited stage first.
+      3. If nothing matched within a stage, the nearest topic keyword
+         anywhere in the full argument list (ignoring stage boundaries).
+      4. A legacy fallback: if a second help-flag token is itself a
+         special topic name (e.g. 'help all', 'help help'), use that.
+    """
+    tag_queries = [arg for arg in cli_args if arg.startswith(TAG_PREFIX)]
+    if tag_queries:
+        return tag_queries[0]
+
+    help_indices = [i for i, arg in enumerate(cli_args) if arg in HELP_FLAGS]
+    if not help_indices:
+        return None
+
+    ranges = _stage_ranges(cli_args)
+    same_stage_indices = set()
+    for h in help_indices:
+        stage_range = _stage_range_for_index(ranges, h)
+        if stage_range:
+            same_stage_indices.update(range(stage_range[0], stage_range[1] + 1))
+
+    if topic := _nearest_topic(cli_args, sorted(same_stage_indices), help_indices):
+        return topic
+
+    if topic := _nearest_topic(cli_args, range(len(cli_args)), help_indices):
+        return topic
+
+    help_args = [arg for arg in cli_args if arg in HELP_FLAGS]
+    if len(help_args) > 1:
+        # help_args only ever contains tokens drawn from HELP_FLAGS, so a
+        # second entry here is itself a help flag (e.g. "help help") --
+        # it names the "help" topic directly.
+        return "help"
+
+    return None
 
 
 @register_help_topic(

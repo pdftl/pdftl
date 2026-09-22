@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `optimize_images` accepts `jbig2_group_size` parameter to allow better compression
 
+- `help` now prioritizes nearby keywords/help topics in the same pipline stage rather than always
+  choosing the first one
+
 ### Fixed
 
 - `dump_annots` and `delete_annots` handle malformed arguments better

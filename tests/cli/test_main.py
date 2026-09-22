@@ -45,26 +45,7 @@ def patch_help_functions(monkeypatch):
     """Patch help functions so print_help/print_version can be monitored."""
     monkeypatch.setattr(mainmod, "print_help", MagicMock())
     monkeypatch.setattr(mainmod, "print_version", MagicMock())
-    monkeypatch.setattr(
-        mainmod,
-        "find_special_topic_command",
-        lambda x: "special" if x == "special" else None,
-    )
-    monkeypatch.setattr(
-        mainmod,
-        "find_operator_topic_command",
-        lambda x: "operator" if x and "op" in x else None,
-    )
-    monkeypatch.setattr(
-        mainmod,
-        "find_option_topic_command",
-        lambda x: "option" if x and "opt" in x else None,
-    )
-    monkeypatch.setattr(
-        mainmod,
-        "find_image_mod_topic_command",
-        lambda x: "image_mod" if x and "mod" in x else None,
-    )
+    monkeypatch.setattr(mainmod, "find_help_command", MagicMock(return_value=None))
 
 
 class StopExecution(Exception):
@@ -96,15 +77,20 @@ def test_setup_logging_no_handlers_debug_and_normal():
         assert "handlers" not in call_args
 
 
-def test_find_help_command_order():
-    # Special topic has precedence
-    assert mainmod._find_help_command(["--help", "special"]) == "special"
-    # Operator next
-    assert mainmod._find_help_command(["--help", "op"]) == "operator"
-    # Option last
-    assert mainmod._find_help_command(["--help", "opt"]) == "option"
-    # Unknown topic returns None
-    assert mainmod._find_help_command(["--help", "unknown"]) is None
+def test_handle_special_flags_delegates_to_find_help_command(monkeypatch):
+    """main._handle_special_flags must call help.find_help_command and pass
+    its result straight through to _print_help_and_chill. The resolution
+    logic itself (priority, nearest-wins, stage boundaries) is tested
+    directly against pdftl.cli.help.find_help_command in test_help.py --
+    this test only covers the wiring between main.py and help.py."""
+    monkeypatch.setattr(mainmod, "find_help_command", MagicMock(return_value="some_topic"))
+    monkeypatch.setattr(mainmod, "_print_help_and_chill", MagicMock(return_value=0))
+
+    ret = mainmod._handle_special_flags(["--help", "combine"])
+
+    mainmod.find_help_command.assert_called_once_with(["--help", "combine"])
+    mainmod._print_help_and_chill.assert_called_once_with("some_topic")
+    assert ret == 0
 
 
 def test_get_flags_and_setup_logging():

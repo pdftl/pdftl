@@ -248,6 +248,126 @@ def test_find_image_mod_topic_command(patch_environment):
     assert helpmod.find_image_mod_topic_command(["unknown"]) is None
 
 
+class TestFindHelpCommand:
+    """Covers pdftl.cli.help.find_help_command: tag precedence, nearest-wins
+    resolution within a '---'-delimited stage, cross-stage fallback, and
+    the legacy 'help help' / 'help all' second-token fallback."""
+
+    def test_tag_query_always_wins(self, patch_environment):
+        assert helpmod.find_help_command(["--help", "tag:merge", "combine"]) == "tag:merge"
+
+    def test_exact_help_keyword(self, patch_environment):
+        assert helpmod.find_help_command(["--help", "combine"]) == "combine"
+        assert helpmod.find_help_command(["--help", "output"]) == "output"
+
+    def test_help_after_keyword_same_distance_as_before(self, patch_environment):
+        """The motivating bug fix: 'combine help' resolves to combine,
+        not just 'help <first token>' scanning left-to-right."""
+        assert helpmod.find_help_command(["combine", "help"]) == "combine"
+
+    def test_nearest_wins_within_stage(self, patch_environment):
+        """With two candidate keywords in the same stage, the one closer
+        to 'help' wins, regardless of scan order."""
+        # "output" is 1 token from help, "combine" is 3 tokens away
+        assert helpmod.find_help_command(["combine", "1-3", "output", "help"]) == "output"
+
+    def test_stage_boundary_restricts_search(self, patch_environment):
+        """A keyword in a different '---' stage than 'help' must not
+        win over one in help's own stage, even if it appears earlier."""
+        assert helpmod.find_help_command(["combine", "---", "output", "help"]) == "output"
+
+    def test_pipeline_keyword_resolves_via_special_topics(self):
+        """'---' is itself a valid special-topic keyword (mapped to
+        'pipeline'), and must not be treated as an inert separator when
+        searching for a topic. Runs against the real SPECIAL_HELP_TOPICS_MAP
+        (not patch_environment's fake, which omits the pipeline entry)."""
+        assert helpmod.find_help_command(["help", "---"]) == "pipeline"
+
+    def test_no_topic_in_own_stage_falls_back_to_full_list(self, patch_environment):
+        """When help's own stage has no resolvable keyword, search
+        falls back to the full argument list ignoring stage boundaries."""
+        assert helpmod.find_help_command(["combine", "---", "help"]) == "combine"
+
+    def test_help_help_uses_legacy_second_token_fallback(self, patch_environment):
+        assert helpmod.find_help_command(["help", "help"]) == "help"
+
+    def test_no_help_flag_returns_none(self, patch_environment):
+        assert helpmod.find_help_command(["combine", "output"]) is None
+
+    def test_unresolvable_topic_returns_none(self, patch_environment):
+        assert helpmod.find_help_command(["help", "nonsense_token"]) is None
+
+
+class TestFindHelpCommandAdversarial:
+    """Adversarial cases mixing '---' stage boundaries, EACH/DONE (which
+    double as both structural keywords and 'pipeline' special-topic
+    aliases), and a real 'help' occurrence buried deep inside. These run
+    against the real SPECIAL_HELP_TOPICS_MAP/registry, not
+    patch_environment's fakes, since EACH/DONE/--- need their real
+    special-topic mapping and we want a real operator name too."""
+
+    def test_help_nearest_operator_inside_each_stage_over_done(self):
+        """a.pdf b.pdf EACH cat 1-3 --- rotate right help DONE cat ...
+        'help' sits in the '---' sub-stage with 'rotate' (distance 1);
+        'DONE' (a pipeline-topic keyword) is outside that stage. Nearest
+        real operator inside help's own stage must win over the
+        structurally-closer-looking DONE token."""
+        args = [
+            "a.pdf",
+            "b.pdf",
+            "EACH",
+            "cat",
+            "1-3",
+            "---",
+            "rotate",
+            "right",
+            "help",
+            "DONE",
+            "cat",
+            "output",
+            "out.pdf",
+        ]
+        assert helpmod.find_help_command(args) == "rotate"
+
+    def test_help_falls_back_to_each_when_stage_has_no_operator(self):
+        """help sits alone in its own '---' stage with no operator
+        keyword; nearest match must come from the EACH token outside
+        that stage (found via the full-list fallback), not from 'cat'
+        which is further away."""
+        args = ["a.pdf", "EACH", "cat", "---", "help", "DONE"]
+        assert helpmod.find_help_command(args) == "pipeline"
+
+    def test_done_wins_when_it_is_the_only_same_stage_candidate(self):
+        """'help DONE' with no other candidate in the same stage: DONE
+        (pipeline topic) must resolve, not silently return None."""
+        args = ["a.pdf", "EACH", "cat", "help", "DONE"]
+        assert helpmod.find_help_command(args) == "pipeline"
+
+    def test_tie_break_picks_earliest_index(self):
+        """Two operator keywords equidistant from help (one before, one
+        after) must resolve deterministically to the earlier one."""
+        args = ["cat", "help", "rotate"]
+        assert helpmod.find_help_command(args) == "cat"
+
+    def test_multiple_help_occurrences_use_nearest_to_any(self):
+        """With two 'help' tokens, a candidate need only be near one of
+        them to win -- distance is measured against the closest help
+        occurrence, not e.g. their average or the first one only."""
+        args = ["help", "cat", "x", "x", "x", "x", "x", "rotate", "help"]
+        # 'cat' is distance 1 from the first help; 'rotate' is distance 1
+        # from the second help. Both are equally close to *a* help
+        # occurrence, so the earliest-index tie-break applies.
+        assert helpmod.find_help_command(args) == "cat"
+
+    def test_double_dash_dash_dash_topic_beats_farther_operator_across_boundary(self):
+        """rotate --- help: '---' itself is the nearest candidate (it's
+        the previous token), and must resolve to 'pipeline' rather than
+        reaching back across the boundary for 'rotate' when a same-stage
+        (post-boundary) candidate exists right next to help."""
+        args = ["rotate", "---", "help"]
+        assert helpmod.find_help_command(args) == "pipeline"
+
+
 ##################################################
 
 
@@ -677,3 +797,62 @@ def test_print_help_all_combinations(monkeypatch):
             for raw_val in (True, False):
                 for dest_val in (None, io.StringIO()):
                     helpmod.print_help(command=cmd, dest=dest_val, raw=raw_val)
+
+
+def test_resolve_topic_token_image_modifier(patch_environment):
+    """Covers the image-modifier branch of _resolve_topic_token: a token
+    that isn't a special topic, operator, or option, but matches a
+    registered image modifier."""
+    assert helpmod._resolve_topic_token("test_mod") == "test_mod"
+
+
+def test_stage_range_for_index_returns_none_outside_ranges():
+    """An index that falls outside every known stage range resolves to
+    None rather than raising."""
+    assert helpmod._stage_range_for_index([], 0) is None
+
+
+def test_is_valid_pipeline_done_false_without_each_or_boundary():
+    """A DONE token with ordinary tokens (no EACH, no '---') preceding
+    it all the way back to the start of the arg list is not a valid
+    pipeline close."""
+    assert helpmod._is_valid_pipeline_done(["cat", "DONE"], 1) is False
+
+
+def test_find_help_command_skips_unmapped_stage_range(monkeypatch, patch_environment):
+    """When a help occurrence's stage range can't be resolved (e.g. an
+    inconsistent/patched _stage_ranges), that help index contributes no
+    same-stage candidates, and search falls through to the full-list
+    fallback."""
+    monkeypatch.setattr(helpmod, "_stage_ranges", lambda cli_args: [])
+    assert helpmod.find_help_command(["combine", "help"]) == "combine"
+
+
+def test_help_markdown_renders_h2_heading():
+    """Covers the h2 branch of LeftJustifiedHeading.__rich_console__:
+    an h2 heading must emit the extra blank Text() line before the
+    heading text itself, distinct from the h1 (bordered Panel) path."""
+    from pdftl.cli.help_render import _load_help_markdown
+
+    HelpMarkdown = _load_help_markdown()
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, width=80)
+    console.print(HelpMarkdown("## A Subheading"))
+
+    output = buffer.getvalue()
+    assert "A Subheading" in output
+
+
+def test_help_markdown_renders_h3_heading():
+    """Covers a branch of LeftJustifiedHeading.__rich_console__:
+    an h3+ heading must skip the extra blank Text() line that only h2
+    gets, going straight from the if to yielding the heading text."""
+    from pdftl.cli.help_render import _load_help_markdown
+
+    HelpMarkdown = _load_help_markdown()
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, width=80)
+    console.print(HelpMarkdown("### A Sub-subheading"))
+
+    output = buffer.getvalue()
+    assert "A Sub-subheading" in output

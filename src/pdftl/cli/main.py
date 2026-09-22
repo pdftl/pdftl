@@ -20,11 +20,7 @@ from pdftl.cli.constants import (
     VERSION_FLAGS,
 )
 from pdftl.cli.help import (
-    TAG_PREFIX,
-    find_image_mod_topic_command,
-    find_operator_topic_command,
-    find_option_topic_command,
-    find_special_topic_command,
+    find_help_command,
     print_help,
 )
 from pdftl.cli.help_version import print_version
@@ -219,26 +215,6 @@ def _print_help_and_chill(command, raw=False):
     return 0
 
 
-def _find_help_command(cli_args):
-    """
-    Determines the specific help command based on CLI arguments.
-    It searches topics in a specific order: special, operator, then option.
-    """
-    tag_queries = [arg for arg in cli_args if arg.startswith(TAG_PREFIX)]
-    help_topics = [arg for arg in cli_args if arg not in HELP_FLAGS]
-    first_topic = help_topics[0].lower() if help_topics else None
-    help_args = [arg for arg in cli_args if arg in HELP_FLAGS]
-    return (
-        (tag_queries and tag_queries[0])
-        or find_special_topic_command(first_topic)
-        or find_operator_topic_command(help_topics)
-        or find_option_topic_command(help_topics)
-        or find_image_mod_topic_command(help_topics)
-        or (len(help_args) > 1 and find_special_topic_command(help_args[1]))
-        or None
-    )
-
-
 def _get_flags_and_setup_logging(cli_args) -> tuple[set, list[str]]:
     """Initializes standard logging and filters flags."""
     found_flags = set()
@@ -286,7 +262,7 @@ def _handle_special_flags(nonverbose_cli_args):
         return 0
 
     if any(arg in HELP_FLAGS for arg in nonverbose_cli_args):
-        command = _find_help_command(nonverbose_cli_args)
+        command = find_help_command(nonverbose_cli_args)
         return _print_help_and_chill(command)
 
     try:
