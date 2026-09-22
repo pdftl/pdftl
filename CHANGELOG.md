@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `modify_images`: `despeckle` transformation now takes a size parameter
 
+- `optimize_images` accepts `jbig2_group_size` parameter to allow better compression
+
 ### Fixed
 
 - `dump_annots` and `delete_annots` handle malformed arguments better

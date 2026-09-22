@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 # Static defaults for help text generation to avoid importing ocrmypdf
 DEFAULT_JPEG_QUALITY_STR = "75"
 DEFAULT_PNG_QUALITY_STR = "70"
+DEFAULT_JBIG2_GROUP_SIZE_STR = "10"
+_JBIG2_GROUP_SIZE_ALL = object()  # sentinel
 
 _OPTIMIZE_IMAGES_LONG_DESC_MD = f"""
 
@@ -51,6 +53,36 @@ These options can be passed as arguments following `optimize_images`.
 * **jbig2_lossy**:
     * Enable JBIG2 lossy mode (see ocrmypdf documentation).
     * This is independent of the preceding options.
+
+* **jbig2_group_size=**`<n>` (default: {DEFAULT_JBIG2_GROUP_SIZE_STR},
+  only applies when `jbig2_lossy` is set)
+    * Number of pages to batch into a single shared JBIG2 symbol dictionary.
+    * Larger values allow more cross-page symbol sharing (smaller output) at
+      the cost of higher peak memory/CPU during encoding.
+    * `<n>` must be a positive integer, or **all** / **infinity** to force a
+      single, document-wide shared dictionary regardless of page count.
+
+> **Known limitation:** `jbig2_lossy` (and `jbig2_group_size`) only apply to
+> images that are **not already** JBIG2-encoded. This comes from ocrmypdf's
+> own image selection logic (`extract_image_jbig2`), which explicitly skips
+> any image whose current filter is already `/JBIG2Decode` -- on the
+> assumption that ocrmypdf itself produced it and it's already optimized.
+> If your input PDF already has per-page JBIG2 images (e.g. from a scanner
+> or a different tool), `optimize_images jbig2_lossy` will report success
+> but leave those images completely untouched, even with `jbig2_group_size`
+> set.
+>
+> **Workaround:** decode the images to a different format first, so they no
+> longer look "already JBIG2" to ocrmypdf, then re-encode:
+> ```
+> in.pdf modify_images '(format=png)' --- \
+>   optimize_images jbig2_lossy jbig2_group_size=all output out.pdf
+> ```
+> This costs an extra decode/re-encode pass (PNG round-trip) and is
+> noticeably slower on large documents, but produces a genuine
+> document-wide shared JBIG2 symbol dictionary. A lower-overhead fix
+> (decoding straight to a raw bitmap and skipping the PNG stage) is
+> possible but more invasive, and is not implemented yet.
 
 * **all** (aliases: `full`):
     * Use all of the above.
@@ -82,7 +114,7 @@ _OPTIMIZE_IMAGES_EXAMPLES = [
 class OptimizeOptions:
     """Emulate ocrmypdf's options."""
 
-    def __init__(self, jobs, optimize, jpeg_quality, png_quality, jb2lossy):
+    def __init__(self, jobs, optimize, jpeg_quality, png_quality, jb2lossy, jbig2_group_size=None):
         self.jobs = jobs
         self.optimize = optimize
         self.jpeg_quality = jpeg_quality
@@ -91,7 +123,10 @@ class OptimizeOptions:
         self.jbig2_threshold = 0.85
         self.quiet = True
         self.progress_bar = False
-        self.jbig2_page_group_size = 10 if jb2lossy else 1
+        if jbig2_group_size is not None:
+            self.jbig2_page_group_size = jbig2_group_size
+        else:
+            self.jbig2_page_group_size = 10 if jb2lossy else 1
 
 
 _COMPATIBILITY_INFO = Compatibility(
@@ -164,18 +199,23 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
     #                             0.85), range 0.4 to 0.9.
 
     options = _parse_args_to_options(operation_args)
-    optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = options
+    optimize, jpeg_quality, png_quality, jbig2_lossy, jobs, jbig2_group_size = options
 
     jpeg_quality = jpeg_quality or DEFAULT_JPEG_QUALITY
     png_quality = png_quality or DEFAULT_PNG_QUALITY
 
+    if jbig2_group_size is _JBIG2_GROUP_SIZE_ALL:
+        jbig2_group_size = len(pdf.pages)
+
     logger.debug(
-        "optimize, jpeg_quality, png_quality, jbig2_lossy, jobs = %s, %s, %s, %s, %s",
+        "optimize, jpeg_quality, png_quality, jbig2_lossy, jobs, jbig2_group_size = "
+        "%s, %s, %s, %s, %s, %s",
         optimize,
         jpeg_quality,
         png_quality,
         jbig2_lossy,
         jobs,
+        jbig2_group_size,
     )
 
     options = OptimizeOptions(
@@ -184,6 +224,7 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
         jpeg_quality=jpeg_quality,
         png_quality=png_quality,
         jb2lossy=jbig2_lossy,
+        jbig2_group_size=jbig2_group_size,
     )
     from pathlib import Path
 
@@ -220,6 +261,7 @@ def _parse_args_to_options(operation_args):
     png_quality = 0
     jbig2_lossy = False
     jobs = 0
+    jbig2_group_size = None
 
     for arg in operation_args:
         clean_arg = arg.strip().lower()
@@ -244,16 +286,21 @@ def _parse_args_to_options(operation_args):
             elif var == "quality":
                 jpeg_quality = val
                 png_quality = val
-            else:  # jobs (the only other key _parse_keyval_option returns)
+            elif var == "jobs":
                 jobs = val
+            else:  # jbig2_group_size (only other key _parse_keyval_option returns)
+                jbig2_group_size = val
         else:
             _raise_for_invalid_keyword(arg)
 
-    return optimize, jpeg_quality, png_quality, jbig2_lossy, jobs
+    return optimize, jpeg_quality, png_quality, jbig2_lossy, jobs, jbig2_group_size
 
 
 def _parse_keyval_option(clean_arg, original_arg):
     key, val = (x.strip() for x in clean_arg.split("=", 1))
+
+    if key == "jbig2_group_size" and val in ("all", "infinity", "inf"):
+        return key, _JBIG2_GROUP_SIZE_ALL
 
     try:
         val_int = int(val)
@@ -268,6 +315,13 @@ def _parse_keyval_option(clean_arg, original_arg):
         if njobs < 0:
             raise InvalidArgumentError(f"jobs value '{njobs}' cannot be negative.")
         return key, njobs
+
+    if key == "jbig2_group_size":
+        if val_int < 1:
+            raise InvalidArgumentError(
+                f"jbig2_group_size value '{val_int}' must be a positive integer."
+            )
+        return key, val_int
 
     if key not in ("quality", "jpeg_quality", "jpg_quality", "png_quality"):
         _raise_for_invalid_keyword(key)

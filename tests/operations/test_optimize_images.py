@@ -25,19 +25,26 @@ class MockSubprocessOutputError(Exception):
 
 def test_optimize_args_keywords():
     """Test standard keyword aliases."""
-    # optimize, jpeg, png, jbig2, jobs
-    assert optimize_images_module._parse_args_to_options(["low"]) == (1, 0, 0, False, 0)
-    assert optimize_images_module._parse_args_to_options(["medium"]) == (2, 0, 0, False, 0)
-    assert optimize_images_module._parse_args_to_options(["high"]) == (3, 0, 0, False, 0)
+    # optimize, jpeg, png, jbig2, jobs, jbig2_group_size
+    assert optimize_images_module._parse_args_to_options(["low"]) == (1, 0, 0, False, 0, None)
+    assert optimize_images_module._parse_args_to_options(["medium"]) == (2, 0, 0, False, 0, None)
+    assert optimize_images_module._parse_args_to_options(["high"]) == (3, 0, 0, False, 0, None)
     # 'all' implies max optimize + jbig2
-    assert optimize_images_module._parse_args_to_options(["all"]) == (3, 0, 0, True, 0)
+    assert optimize_images_module._parse_args_to_options(["all"]) == (3, 0, 0, True, 0, None)
 
 
 def test_optimize_args_jbig2_alias():
     """Test JBIG2 aliases."""
     # jbig2_lossy sets boolean to True, leaves optimize at default (2)
-    assert optimize_images_module._parse_args_to_options(["jbig2_lossy"]) == (2, 0, 0, True, 0)
-    assert optimize_images_module._parse_args_to_options(["jb2lossy"]) == (2, 0, 0, True, 0)
+    assert optimize_images_module._parse_args_to_options(["jbig2_lossy"]) == (
+        2,
+        0,
+        0,
+        True,
+        0,
+        None,
+    )
+    assert optimize_images_module._parse_args_to_options(["jb2lossy"]) == (2, 0, 0, True, 0, None)
 
 
 def test_optimize_args_quality_specific():
@@ -69,6 +76,33 @@ def test_optimize_args_jobs():
     """Test jobs flag."""
     opts = optimize_images_module._parse_args_to_options(["jobs=4"])
     assert opts[4] == 4
+
+
+def test_optimize_args_jbig2_group_size():
+    """Explicit integer jbig2_group_size is parsed and returned as-is."""
+    opts = optimize_images_module._parse_args_to_options(["jbig2_group_size=5"])
+    assert opts[5] == 5
+
+
+@pytest.mark.parametrize("val", ["all", "infinity", "inf"])
+def test_optimize_args_jbig2_group_size_sentinel(val):
+    """all/infinity/inf resolve to the sentinel, not an int."""
+    opts = optimize_images_module._parse_args_to_options([f"jbig2_group_size={val}"])
+    assert opts[5] is optimize_images_module._JBIG2_GROUP_SIZE_ALL
+
+
+def test_optimize_args_jbig2_group_size_invalid():
+    """Non-positive jbig2_group_size is rejected."""
+    with pytest.raises(InvalidArgumentError, match="must be a positive integer"):
+        optimize_images_module._parse_args_to_options(["jbig2_group_size=0"])
+
+
+def test_optimize_options_explicit_group_size_overrides_default():
+    """Passing jbig2_group_size explicitly bypasses the jb2lossy-based default."""
+    opts = optimize_images_module.OptimizeOptions(
+        jobs=0, optimize=2, jpeg_quality=0, png_quality=0, jb2lossy=True, jbig2_group_size=3
+    )
+    assert opts.jbig2_page_group_size == 3
 
 
 def test_optimize_args_errors():
@@ -324,3 +358,25 @@ def test_optimize_images_non_debug_level_skips_ocrmypdf_logger_setup(two_page_pd
                     pdf, ["medium"], str(tmp_path / "out.pdf")
                 )
     assert res.success is True
+
+
+def test_optimize_images_group_size_all_resolves_to_page_count(two_page_pdf, tmp_path):
+    """jbig2_group_size=all resolves against the actual page count before use."""
+    import pikepdf
+
+    seen = {}
+
+    def fake_extract(pdf_arg, root, options):
+        seen["jbig2_page_group_size"] = options.jbig2_page_group_size
+        return {}
+
+    mock_lib = _mock_lib(lambda *a: ([], []))
+    mock_lib.extract_images_jbig2.side_effect = fake_extract
+
+    with patch.dict(sys.modules, _ocrmypdf_modules(mock_lib)):
+        with pikepdf.open(two_page_pdf) as pdf:
+            optimize_images_module.optimize_images_pdf(
+                pdf, ["jbig2_lossy", "jbig2_group_size=all"], str(tmp_path / "out.pdf")
+            )
+
+    assert seen["jbig2_page_group_size"] == len(pdf.pages) == 2
