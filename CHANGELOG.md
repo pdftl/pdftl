@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
-## Unreleased
+## [0.29.0] - 2026-09-23
 
 ### Added
 
@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slash-separated key paths, both by value and existence
 
 - New output options:
-  - `drop_meta`
-  - `drop_vendor_extensions`
-  - `drop_xmp_streams`
+  - `drop_meta`: discard all metadata
+  - `drop_vendor_extensions`: discard private vendor/application data hung directly off the document catalog
+  - `drop_xmp_streams`: discard all XMP metadata streams
 
 ### Changed
 
