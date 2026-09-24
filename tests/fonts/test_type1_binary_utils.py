@@ -99,11 +99,38 @@ def mock_t1lib(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_open_type1_font_utilizes_other_kind(mock_t1lib):
+def test_open_type1_font_utilizes_other_kind(mock_t1lib, tmp_path):
     """Ensures _open_type1_font correctly enforces kind='OTHER' and parses."""
-    font = _open_type1_font(Path("mock_font.pfb"))
+    path = tmp_path / "mock_font.pfb"
+    path.write_bytes(b"%!FontType1-1.0: Mock\n")
+    font = _open_type1_font(path)
     assert isinstance(font, DummyT1Font)
     assert font.kind == "OTHER"
+    assert font.filepath == str(path)
+
+
+def test_open_type1_font_completes_trailerless_program(mock_t1lib, tmp_path):
+    """A program with no eexec trailer is parsed from a completed temp copy,
+    which is removed afterwards; the caller's file is left untouched."""
+    from pdftl.fonts.type1_trailer import TRAILER
+
+    raw = b"%!FontType1-1.0: Mock\ncurrentfile eexec\n\x8f\x12\xa0"
+    path = tmp_path / "mock_font.pfb"
+    path.write_bytes(raw)
+    seen = {}
+
+    class RecordingT1Font(DummyT1Font):
+        def __init__(self, filepath, kind=None):
+            super().__init__(filepath, kind)
+            seen["path"] = filepath
+            seen["data"] = Path(filepath).read_bytes()
+
+    mock_t1lib.T1Font = RecordingT1Font
+    _open_type1_font(path)
+    assert seen["path"] != str(path)
+    assert seen["data"] == raw + TRAILER
+    assert not Path(seen["path"]).exists()
+    assert path.read_bytes() == raw
 
 
 def test_find_width_operator_locates_hsbw_and_sbw():
@@ -181,7 +208,7 @@ def test_get_widths_from_type1_parse_error(mock_t1lib, monkeypatch):
 
 def test_get_widths_from_type1_success(mock_t1lib):
     """Verify successful extraction of multiple glyph widths from a mock Type 1 font."""
-    font = _open_type1_font(Path("test.pfb"))
+    font = DummyT1Font("test.pfb", kind="OTHER")
     font.font["CharStrings"] = {
         "A": DummyCharString([10, 250, "hsbw"]),
         "B": DummyCharString([10, 20, 300, 40, "sbw"]),
@@ -254,7 +281,7 @@ def test_patch_type1_widths_parse_error(mock_t1lib, monkeypatch):
 
 def test_patch_type1_widths_no_matching_glyphs(mock_t1lib):
     """Verify that if no requested glyphs match the font program, nothing is patched."""
-    font = _open_type1_font(Path("test.pfb"))
+    font = DummyT1Font("test.pfb", kind="OTHER")
     font.font["CharStrings"] = {
         "A": DummyCharString([10, 250, "hsbw"]),
     }
@@ -266,7 +293,7 @@ def test_patch_type1_widths_no_matching_glyphs(mock_t1lib):
 
 def test_patch_type1_widths_compile_error(mock_t1lib):
     """Verify that overall re-compilation failures are caught safely."""
-    font = _open_type1_font(Path("test.pfb"))
+    font = DummyT1Font("test.pfb", kind="OTHER")
     font._fail_create = True
     font.font["CharStrings"] = {
         "A": DummyCharString([10, 250, "hsbw"]),
@@ -278,7 +305,7 @@ def test_patch_type1_widths_compile_error(mock_t1lib):
 
 def test_patch_type1_widths_success(mock_t1lib):
     """Verify successful multi-glyph patching and font program serialization."""
-    font = _open_type1_font(Path("test.pfb"))
+    font = DummyT1Font("test.pfb", kind="OTHER")
     cs_a = DummyCharString([10, 250, "hsbw"])
     cs_b = DummyCharString([10, 20, 300, 40, "sbw"])
     font.font["CharStrings"] = {

@@ -72,15 +72,6 @@ def _install_fast_eexec_decrypt() -> None:
     ft_eexec._pdftl_fast_patched = True
 
 
-# The standard Type 1 cleartext trailer (Adobe Type 1 Font Format,
-# Chapter 7): 512 zero characters as 8 lines of 64, followed by
-# `cleartomark`. fontTools.t1Lib's own EEXECEND regex requires exactly
-# this many zero characters to recognize the end of the eexec-encrypted
-# section at all (see open_type1_font_bytes below for why this matters
-# for real-world PDFs specifically, not just hand-crafted test fixtures).
-_SYNTHETIC_TYPE1_TRAILER = (b"0" * 64 + b"\n") * 8 + b"cleartomark\n"
-
-
 def open_type1_font_bytes(t1_bytes: bytes) -> Any | None:
     """
     Parses a raw Type 1 (/FontFile) byte stream into a real, fully
@@ -93,68 +84,42 @@ def open_type1_font_bytes(t1_bytes: bytes) -> Any | None:
     can't be parsed at all, rather than raising, so a single malformed
     font can't abort a caller iterating over many fonts.
 
-    A PDF's /FontFile stream is only required to carry its cleartext
-    header (/Length1) and its encrypted eexec body (/Length2); the
-    trailing 512-zeros-plus-cleartomark trailer /Length3 covers is
-    explicitly optional padding (PDF 32000-1 Table 111) and is routinely
-    omitted by real-world PDF producers -- confirmed directly against
-    real embedded fonts, not just a theoretical edge case: both Type 1
-    fonts in the originally reported test PDF have /Length3 0.
-    fontTools.t1Lib's own EEXECEND regex requires that trailer to
-    recognize the end of the eexec section at all
-    (`t1Lib.findEncryptedChunks` raises `T1Error("can't find end of
-    eexec part")` without it), so a first parse attempt failing with
-    exactly that error is retried once with a synthesized trailer
-    (_SYNTHETIC_TYPE1_TRAILER) appended, before giving up.
+    A program whose optional eexec trailer was omitted (/Length3 0,
+    routine in real-world PDFs) is completed before its single parse
+    attempt; see type1_trailer.py.
     """
     _install_fast_eexec_decrypt()
-    from fontTools.misc.psLib import PSError, PSTokenError
-    from fontTools.t1Lib import T1Error, T1Font
+    from fontTools.t1Lib import T1Font
 
-    for candidate_bytes in (t1_bytes, t1_bytes + _SYNTHETIC_TYPE1_TRAILER):
-        with tempfile.NamedTemporaryFile(suffix=".t1", delete=False) as tmp:
-            tmp.write(candidate_bytes)
-            tmp_path = Path(tmp.name)
+    from pdftl.fonts.type1_binary_utils import _type1_parse_errors
+    from pdftl.fonts.type1_interp_guard import bounded_type1_interpreter
+    from pdftl.fonts.type1_trailer import ZeroRunTooIrregular, completed_if_needed
 
-        try:
-            # T1Font defaults to encoding="ascii" for decoding its
-            # cleartext PostScript header, which breaks on anything
-            # outside 7-bit ASCII -- a "©" in a copyright comment is
-            # common and enough to trigger it. latin-1 maps every byte
-            # 0x00-0xFF to a unique code point and back, so nothing here
-            # can fail to decode regardless of what the header contains.
-            font = T1Font(str(tmp_path), encoding="latin-1", kind="OTHER")
+    try:
+        program = completed_if_needed(t1_bytes)
+    except ZeroRunTooIrregular as e:
+        logger.debug("Type 1 program rejected before parsing: %s", e)
+        return None
+
+    with tempfile.NamedTemporaryFile(suffix=".t1", delete=False) as tmp:
+        tmp.write(program)
+        tmp_path = Path(tmp.name)
+
+    try:
+        # T1Font defaults to encoding="ascii" for decoding its cleartext
+        # PostScript header, which breaks on anything outside 7-bit ASCII
+        # -- a "©" in a copyright comment is common and enough to
+        # trigger it. latin-1 maps every byte 0x00-0xFF to a unique code
+        # point and back, so nothing here can fail to decode.
+        font = T1Font(str(tmp_path), encoding="latin-1", kind="OTHER")
+        with bounded_type1_interpreter():
             font.parse()
-            return font
-        except T1Error as e:
-            if "can't find end of eexec part" not in str(e):
-                logger.debug("Failed to parse Type 1 font program: %s", e)
-                return None
-            # Missing/truncated trailer -- retry once with the
-            # synthesized trailer appended.
-            logger.debug("Type 1 program missing eexec trailer; retrying with synthesized one.")
-            continue
-        except (
-            OSError,
-            ValueError,
-            KeyError,
-            IndexError,
-            AssertionError,
-            AttributeError,
-            PSError,
-            PSTokenError,
-            RuntimeError,
-            struct.error,
-        ) as e:
-            # Same audited exception set as type1_binary_utils._open_type1_font
-            # covers for this identical parse path -- see that module's
-            # get_widths_from_type1 for the full site-by-site justification.
-            logger.debug("Failed to parse Type 1 font program: %s", e)
-            return None
-        finally:
-            tmp_path.unlink(missing_ok=True)
-
-    return None
+        return font
+    except _type1_parse_errors() as e:
+        logger.debug("Failed to parse Type 1 font program: %s", e)
+        return None
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def resolve_glyph_names(
@@ -251,9 +216,18 @@ def _draw_charstrings(glyph_set: Any, glyph_names: set[str]) -> dict[str, Any]:
     therefore drawn twice: once onto a throwaway RecordingPen purely to
     discover its width, then replayed into a real T2CharStringPen that's
     now constructed with that width already known.
+
+    Drawing a Type 1 glyph follows its subroutine calls through the same
+    fontTools interpreter as CFF, so each draw runs under a per-glyph
+    charstring work budget (see charstring_work_guard.py).
     """
     from fontTools.pens.recordingPen import RecordingPen
     from fontTools.pens.t2CharStringPen import T2CharStringPen
+
+    from pdftl.fonts.charstring_work_guard import (
+        CharstringBudgetExceeded,
+        bounded_charstring_interpreter,
+    )
 
     charstrings: dict[str, Any] = {}
     for name in glyph_names:
@@ -262,13 +236,21 @@ def _draw_charstrings(glyph_set: Any, glyph_names: set[str]) -> dict[str, Any]:
         try:
             glyph = glyph_set[name]
             probe_pen = RecordingPen()
-            glyph.draw(probe_pen)
+            with bounded_charstring_interpreter():
+                glyph.draw(probe_pen)
             width = getattr(glyph, "width", 0)
 
             pen = T2CharStringPen(width=width, glyphSet=glyph_set)
             probe_pen.replay(pen)
             charstrings[name] = pen.getCharString()
-        except (AttributeError, KeyError, ValueError, TypeError, struct.error) as e:
+        except (
+            AttributeError,
+            KeyError,
+            ValueError,
+            TypeError,
+            struct.error,
+            CharstringBudgetExceeded,
+        ) as e:
             logger.debug("Failed to convert Type 1 glyph %r to CFF: %s", name, e)
             continue
     return charstrings

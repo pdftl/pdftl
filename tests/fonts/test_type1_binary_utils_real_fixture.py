@@ -20,6 +20,7 @@ font.createData() re-serialization.
 
 from __future__ import annotations
 
+import io
 import sys
 from pathlib import Path
 
@@ -84,3 +85,66 @@ class TestPatchType1WidthsRealFont:
 
     def test_no_matching_glyph_returns_none(self, simple_type1_path):
         assert patch_type1_widths(simple_type1_path, {"NoSuchGlyph": 1.0}) is None
+
+
+class TestTrailerlessType1Program:
+    """A /Length3 0 program (eexec trailer omitted, ISO 32000-2 Table 125)
+    must be readable, patchable and subsettable alike."""
+
+    @pytest.fixture
+    def trailerless_path(self, tmp_path) -> Path:
+        data = build_type1_bytes(
+            {
+                ".notdef": (0, []),
+                "A": (500, [0, 0, "rmoveto", 500, 0, "rlineto"]),
+                "B": (300, [0, 0, "rmoveto", 300, 0, "rlineto"]),
+            }
+        )
+        trailer_start = data.index(b"0" * 64, data.index(b"currentfile eexec"))
+        path = tmp_path / "trailerless.pfb"
+        path.write_bytes(data[:trailer_start])
+        return path
+
+    def test_reads_widths(self, trailerless_path):
+        assert get_widths_from_type1(trailerless_path) == {".notdef": 0, "A": 500, "B": 300}
+
+    def test_subsets(self, trailerless_path):
+        from fontTools.cffLib import CFFFontSet
+        from fontTools.pens.basePen import NullPen
+
+        from pdftl.fonts.type1_to_cff import type1_to_cff
+
+        cff_bytes = type1_to_cff(trailerless_path.read_bytes(), codes={65})
+        assert cff_bytes is not None
+        cff = CFFFontSet()
+        cff.decompile(io.BytesIO(cff_bytes), otFont=None)
+        charstrings = cff[cff.fontNames[0]].CharStrings
+        assert set(charstrings.keys()) == {".notdef", "A"}
+        glyph = charstrings["A"]
+        glyph.draw(NullPen())
+        assert glyph.width == 500
+
+    def test_patches_and_round_trips(self, trailerless_path, tmp_path):
+        patched = patch_type1_widths(trailerless_path, {"A": 640.0})
+        assert patched is not None
+        patched_path = tmp_path / "patched.pfb"
+        patched_path.write_bytes(patched)
+        assert get_widths_from_type1(patched_path) == {".notdef": 0, "A": 640, "B": 300}
+
+    def test_source_file_unchanged(self, trailerless_path):
+        before = trailerless_path.read_bytes()
+        get_widths_from_type1(trailerless_path)
+        patch_type1_widths(trailerless_path, {"A": 640.0})
+        assert trailerless_path.read_bytes() == before
+
+    def test_irregular_zero_runs_degrade_gracefully(self, tmp_path):
+        from pdftl.fonts.type1_to_cff import open_type1_font_bytes
+        from pdftl.fonts.type1_trailer import MAX_SHORT_ZERO_BLOCKS
+
+        runs = b"x".join([b"0" * 16] * (MAX_SHORT_ZERO_BLOCKS + 1))
+        data = b"%!FontType1-1.0: Test\ncurrentfile eexec\n" + runs
+        path = tmp_path / "irregular.pfb"
+        path.write_bytes(data)
+        assert get_widths_from_type1(path) == {}
+        assert patch_type1_widths(path, {"A": 1.0}) is None
+        assert open_type1_font_bytes(data) is None

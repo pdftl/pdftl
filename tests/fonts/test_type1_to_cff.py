@@ -136,8 +136,8 @@ class TestType1ToCffMissingTrailer:
     program's eexec section conventionally ends with (PDF 32000-1 Table
     111 makes /Length3 -- and therefore this trailer -- optional).
     fontTools.t1Lib requires that trailer to recognize the end of the
-    eexec section at all, so without the retry-with-synthesized-trailer
-    fallback, every font missing it fails to parse outright.
+    eexec section at all, so without completing it first, every font
+    missing it fails to parse outright.
     """
 
     def test_converts_font_with_no_trailer_at_all(self, three_glyph_type1_bytes):
@@ -363,9 +363,9 @@ class TestType1ToCffCoverageExtensions:
     """Additional unit tests targeting 100% line and branch coverage in
     pdftl.fonts.type1_to_cff."""
 
-    def test_open_type1_font_bytes_retry_synthesized_trailer(self, three_glyph_type1_bytes):
-        """Exercises lines 110-111: retrying with synthesized trailer when
-        the font is missing both trailing zeroes and cleartomark."""
+    def test_open_type1_font_bytes_completes_trailerless_program(self, three_glyph_type1_bytes):
+        """A program missing both its trailing zeros and cleartomark is
+        completed before parsing."""
         cleartomark_idx = three_glyph_type1_bytes.find(b"cleartomark")
         assert cleartomark_idx != -1
         truncated = three_glyph_type1_bytes[:cleartomark_idx].rstrip(b"0\r\n\t ")
@@ -374,7 +374,7 @@ class TestType1ToCffCoverageExtensions:
         assert font is not None
 
     def test_open_type1_font_bytes_other_t1_error(self, monkeypatch):
-        """Exercises lines 105-107: T1Error without 'can't find end of eexec part'."""
+        """Any T1Error during parse degrades to None."""
         from fontTools.t1Lib import T1Error, T1Font
 
         monkeypatch.setattr(T1Font, "__init__", lambda self, *a, **kw: None)
@@ -387,7 +387,7 @@ class TestType1ToCffCoverageExtensions:
         assert font is None
 
     def test_open_type1_font_bytes_ps_error(self, monkeypatch):
-        """Exercises lines 112-128: PSError / ValueError during parse."""
+        """A PSError during parse degrades to None."""
         from fontTools.misc.psLib import PSError
         from fontTools.t1Lib import T1Font
 
@@ -400,18 +400,22 @@ class TestType1ToCffCoverageExtensions:
         font = open_type1_font_bytes(b"some bytes")
         assert font is None
 
-    def test_open_type1_font_bytes_all_attempts_fail_eexec_end(self, monkeypatch):
-        """Exercises line 132: both candidate attempts raise 'can't find end of eexec part'."""
+    def test_open_type1_font_bytes_eexec_end_error_not_retried(self, monkeypatch):
+        """Completion is decided from the bytes up front, so an eexec-end
+        T1Error is final: exactly one parse attempt, then None."""
         from fontTools.t1Lib import T1Error, T1Font
 
         monkeypatch.setattr(T1Font, "__init__", lambda self, *a, **kw: None)
+        calls = []
 
         def mock_parse(self):
+            calls.append(1)
             raise T1Error("can't find end of eexec part")
 
         monkeypatch.setattr(T1Font, "parse", mock_parse)
         font = open_type1_font_bytes(b"some bytes")
         assert font is None
+        assert len(calls) == 1
 
     def test_draw_charstrings_glyph_not_in_set_and_draw_exception(self, three_glyph_type1_bytes):
         """Exercises line 236 (glyph not in glyph_set) and lines 246-248 (exception during draw)."""

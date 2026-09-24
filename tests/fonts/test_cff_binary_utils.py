@@ -843,3 +843,146 @@ class TestStepWidthPresenceEmptyArgsBeforeCall:
             carried_len=0,
         )
         assert verdict == (None, None)
+
+
+def _strip_charset_operator(data: bytes) -> bytes:
+    """Recompiles a bare CFF with its Top DICT `charset` operator absent
+    altogether (not merely set to a predefined value)."""
+    import io
+
+    from fontTools.cffLib import CFFFontSet
+
+    from pdftl.fonts.cff_binary_utils import _MinimalOTFontStub
+
+    font_set = CFFFontSet()
+    font_set.decompile(io.BytesIO(data), otFont=None)
+    top = font_set[font_set.fontNames[0]]
+    _ = top.CharStrings
+    top.order = [op for op in top.order if op != "charset"]
+    del top.charset
+    buf = io.BytesIO()
+    font_set.compile(buf, otFont=_MinimalOTFontStub())
+    stripped = buf.getvalue()
+    check = CFFFontSet()
+    check.decompile(io.BytesIO(stripped), otFont=None)
+    assert "charset" not in check[check.fontNames[0]].rawDict
+    return stripped
+
+
+_SQUARE = _SQUARE_A[1]
+_ISOADOBE_PREFIX_GLYPHS = {
+    "space": (250, []),
+    "exclam": (333, _SQUARE),
+    "quotedbl": (408, _SQUARE),
+}
+
+
+class TestMissingCharsetDefaultsToIsoAdobe:
+    """A Top DICT with no `charset` operator means ISOAdobe (Adobe TN
+    #5176); fontTools only applies that default when the operator is
+    present."""
+
+    @pytest.fixture
+    def charsetless_path(self, tmp_path) -> Path:
+        path = tmp_path / "charsetless.cff"
+        path.write_bytes(_strip_charset_operator(_build_bare_cff_bytes(_ISOADOBE_PREFIX_GLYPHS)))
+        return path
+
+    def test_widths_recovered(self, charsetless_path):
+        assert get_widths_from_cff(charsetless_path) == {
+            ".notdef": 0,
+            "space": 250,
+            "exclam": 333,
+            "quotedbl": 408,
+        }
+
+    def test_patch_round_trips(self, charsetless_path, tmp_path):
+        patched = patch_cff_widths(charsetless_path, {"exclam": 390.0})
+        assert patched is not None
+        out = tmp_path / "patched.cff"
+        out.write_bytes(patched)
+        assert get_widths_from_cff(out)["exclam"] == 390
+
+    def test_glyph_name_for_gid_uses_default(self, charsetless_path):
+        from pdftl.fonts.cff_binary_utils import _decompile_bare_cff, _glyph_name_for_gid
+
+        _, topdict = _decompile_bare_cff(charsetless_path.read_bytes())
+        assert [_glyph_name_for_gid(topdict, gid) for gid in range(5)] == [
+            ".notdef",
+            "space",
+            "exclam",
+            "quotedbl",
+            None,
+        ]
+
+    def test_noncid_cidfonttype0_read_by_gid(self, charsetless_path):
+        assert get_widths_from_cff(charsetless_path, cid_to_gid_map="cff_native") == {
+            "0000": 0,
+            "0001": 250,
+            "0002": 333,
+            "0003": 408,
+        }
+
+    def test_real_world_times_roman_program(self, tmp_path):
+        """A real embedded Times-Roman CFF (poppler corpus) with no charset
+        operator, checked against Adobe's published Times-Roman AFM."""
+        fixture = Path(__file__).parent / "fixtures/corpus_regressions/cff_missing_charset.cff"
+        widths = get_widths_from_cff(fixture)
+        afm = {"space": 250, "exclam": 333, "A": 722, "W": 944, "a": 444, "m": 778}
+        assert {name: widths[name] for name in afm} == afm
+        assert len(widths) == 229
+
+        patched = patch_cff_widths(fixture, {"A": 700.0})
+        assert patched is not None
+        out = tmp_path / "patched.cff"
+        out.write_bytes(patched)
+        repatched = get_widths_from_cff(out)
+        assert repatched["A"] == 700
+        assert {k: v for k, v in repatched.items() if k != "A"} == {
+            k: v for k, v in widths.items() if k != "A"
+        }
+
+    def test_more_glyphs_than_isoadobe_not_truncated(self, tmp_path):
+        from fontTools.cffLib import cffISOAdobeStrings
+
+        names = list(cffISOAdobeStrings[1:]) + [f"extra{i}" for i in range(5)]
+        glyphs = {name: (100, _SQUARE) for name in names}
+        path = tmp_path / "oversized.cff"
+        path.write_bytes(_strip_charset_operator(_build_bare_cff_bytes(glyphs)))
+        assert get_widths_from_cff(path) == {}
+        assert patch_cff_widths(path, {"A": 700.0}) is None
+
+    def test_cid_keyed_program_not_given_fabricated_charset(self, tmp_path):
+        path = tmp_path / "cid_charsetless.cff"
+        path.write_bytes(_strip_charset_operator(build_cid_keyed_cff_bytes({1: SQUARE_500})))
+        assert get_widths_from_cff(path, cid_to_gid_map="cff_native") == {}
+        assert get_widths_from_cff(path) == {}
+        assert patch_cff_widths(path, {"0001": 700.0}, cid_to_gid_map="cff_native") is None
+
+    def test_present_charset_untouched(self, simple_cff_path):
+        from pdftl.fonts.cff_binary_utils import _decompile_bare_cff
+
+        _, topdict = _decompile_bare_cff(simple_cff_path.read_bytes())
+        assert topdict.charset == [".notdef", "A", "B"]
+
+    def test_no_default_without_known_glyph_count(self):
+        from pdftl.fonts.cff_binary_utils import _default_missing_charset
+
+        class TopDictWithoutGlyphCount:
+            rawDict = {"CharStrings": 100}
+
+            def __getattr__(self, name):
+                raise AttributeError(name)
+
+        topdict = TopDictWithoutGlyphCount()
+        _default_missing_charset(topdict)
+        assert "charset" not in topdict.rawDict
+
+    def test_glyph_name_for_gid_without_any_charset(self):
+        from pdftl.fonts.cff_binary_utils import _glyph_name_for_gid
+
+        class NoCharset:
+            def __getattr__(self, name):
+                raise AttributeError(name)
+
+        assert _glyph_name_for_gid(NoCharset(), 0) is None

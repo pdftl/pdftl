@@ -110,7 +110,12 @@ def _glyph_name_for_gid(topdict: Any, gid: int) -> str | None:
     actually defines, which can happen with a mismatched or corrupted
     font/PDF pairing.
     """
-    charset = topdict.charset
+    try:
+        charset = topdict.charset
+    except AttributeError:
+        # No charset operator and no default applicable; see
+        # _default_missing_charset.
+        return None
     if 0 <= gid < len(charset):
         return charset[gid]
     return None
@@ -128,7 +133,43 @@ def _decompile_bare_cff(data: bytes):
     cff_font_set = CFFFontSet()
     cff_font_set.decompile(BytesIO(data), otFont=None)
     topdict = cff_font_set[cff_font_set.fontNames[0]]
+    _default_missing_charset(topdict)
+    try:
+        topdict.CharStrings
+    except AttributeError as e:
+        # cffLib resolves CharStrings through the charset; failing here
+        # means neither is usable, so the program is treated as unreadable.
+        raise ValueError("CFF Top DICT has no usable charset") from e
     return cff_font_set, topdict
+
+
+def _default_missing_charset(topdict: Any) -> None:
+    """
+    Supplies the ISOAdobe default charset to a Top DICT that omits the
+    `charset` operator entirely.
+
+    Absent means ISOAdobe (Adobe TN #5176, Top DICT default 0), but
+    fontTools.cffLib only applies that default when the operator is
+    present with value 0; absent, every charset or CharStrings access
+    raises AttributeError. Setting the raw value to 0 before first access
+    lets cffLib apply its own default, truncated to the glyph count.
+
+    Not applied to a CID-keyed Top DICT (ROS present): it must declare its
+    own charset, and defaulting one would fabricate a CID->GID mapping.
+    Nor when the glyph count exceeds ISOAdobe's: cffLib would silently
+    drop the extra glyphs, and a width patch would write them out
+    truncated.
+    """
+    from fontTools.cffLib import cffISOAdobeStrings
+
+    raw = topdict.rawDict
+    if "charset" in raw or "CharStrings" not in raw or _is_cid_keyed(topdict):
+        return
+    if getattr(topdict, "numGlyphs", None) is None:
+        return
+    if topdict.numGlyphs > len(cffISOAdobeStrings):
+        return
+    raw["charset"] = 0
 
 
 def _measure_charstring_width(charstring: Any) -> float | None:
@@ -139,15 +180,25 @@ def _measure_charstring_width(charstring: Any) -> float | None:
     encoded as an optional leading numeric operand consumed by whichever
     path/hint operator first clears the argument stack. Any pen suffices
     here since only `.width` is read afterwards, not the drawn outline.
+
+    Both decompile() and draw() follow subroutine calls, so both run under
+    one per-glyph charstring work budget (see charstring_work_guard.py).
     """
     from fontTools.pens.basePen import NullPen
 
+    from pdftl.fonts.charstring_work_guard import (
+        CharstringBudgetExceeded,
+        bounded_charstring_interpreter,
+    )
+
     try:
-        charstring.decompile()
-        charstring.draw(NullPen())
-    except (AttributeError, IndexError, KeyError, ValueError) as e:
-        # A malformed or truncated charstring program (e.g. a corrupted font/PDF pairing)
-        # shouldn't abort reading every other glyph's width; skip just this one.
+        with bounded_charstring_interpreter():
+            charstring.decompile()
+            charstring.draw(NullPen())
+    except (AttributeError, IndexError, KeyError, ValueError, CharstringBudgetExceeded) as e:
+        # A malformed, truncated or runaway charstring program (e.g. a corrupted
+        # font/PDF pairing, or recursive subroutines) shouldn't abort reading
+        # every other glyph's width; skip just this one.
         logger.debug("Failed to interpret CFF charstring for width: %s", e)
         return None
     return charstring.width
@@ -194,14 +245,7 @@ def get_widths_from_cff(filepath: Path, cid_to_gid_map: str | None = None) -> di
 def _get_cff_name_widths(topdict: Any) -> dict[str, float]:
     """Reads widths for every glyph in a Simple-font (name-keyed) CFF program."""
     widths: dict[str, float] = {}
-    try:
-        charstrings = topdict.CharStrings
-    except AttributeError:
-        # Some real-world fonts omit the 'charset' operator entirely, which
-        # is legal (implies default predefined ISOAdobe charset) but which
-        # fontTools' TopDict.__getattr__ can't resolve without it explicitly
-        # present. Treat as "no usable width data" rather than crashing.
-        return {}
+    charstrings = topdict.CharStrings
     for glyph_name in charstrings.keys():
         width = _measure_charstring_width(charstrings[glyph_name])
         if width is not None:

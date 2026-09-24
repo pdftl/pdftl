@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Possible headings: Added, Changed, Deprecated, Fixed, Removed, Security -->
 
+## [Unreleased]
+
+### Security
+
+- Parsing an embedded Type 1 font program is now bounded in steps, operand stack and memory, so
+  a crafted font can no longer hang pdftl or exhaust memory
+
+- Interpreting a glyph's charstring (reading CFF widths, converting Type 1 to CFF) is now bounded
+  in work and subroutine nesting; a glyph with runaway subroutines is skipped rather than hanging
+  or crashing the operation
+
+### Fixed
+
+- Embedded Type 1 fonts with no eexec trailer (`/Length3 0`, as TeX-produced PDFs commonly
+  have) now get their widths read and patched, rather than silently skipped
+
+- Embedded CFF fonts whose Top DICT omits `charset` (meaning the standard ISOAdobe charset) now
+  get their widths read and patched; patching such a font, or a CID-keyed one missing its
+  charset, no longer crashes
+
 ## [0.29.0] - 2026-09-23
 
 ### Added

@@ -51,6 +51,7 @@ a single, shared, verified mechanism that isn't exposed to that gap.
 from __future__ import annotations
 
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -78,11 +79,32 @@ def _open_type1_font(filepath: Path) -> Any:
     the extension entirely. Verified directly: a hand-built plain-form
     font saved under a ".pfb" name fails via the default extension-based
     dispatch and succeeds via `kind="OTHER"`.
+
+    A program whose optional eexec trailer was omitted (/Length3 0) is
+    completed first; see type1_trailer.py.
     """
+    from pdftl.fonts.type1_trailer import completed, needs_completion
+
+    raw = filepath.read_bytes()
+    if not needs_completion(raw):
+        return _parse_type1_file(filepath)
+    with tempfile.NamedTemporaryFile(suffix=filepath.suffix or ".t1", delete=False) as tmp:
+        tmp.write(completed(raw))
+        tmp_path = Path(tmp.name)
+    try:
+        return _parse_type1_file(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _parse_type1_file(path: Path) -> Any:
     from fontTools.t1Lib import T1Font
 
-    font = T1Font(str(filepath), kind="OTHER")
-    font.parse()
+    from pdftl.fonts.type1_interp_guard import bounded_type1_interpreter
+
+    font = T1Font(str(path), kind="OTHER")
+    with bounded_type1_interpreter():
+        font.parse()
     return font
 
 
@@ -142,6 +164,54 @@ def _read_charstring_width(charstring: Any) -> float | None:
     return value
 
 
+def _type1_parse_errors() -> tuple[type[BaseException], ...]:
+    """
+    The exceptions `_open_type1_font` can raise for an unreadable or
+    malformed program. Raises ImportError if fontTools is unavailable.
+
+    Every type has been traced to a real raise site on fontTools' Type 1
+    parsing path (t1Lib.parse() -> psLib.suckfont() ->
+    PSInterpreter.interpret() / psCharStrings decode), or to pdftl's own
+    pre-parse checks:
+      T1Error        - t1Lib: corrupt PFB/LWFN, missing/malformed eexec section
+      PSTokenError   - psLib tokenizer: malformed string/hexstring/token
+      PSError        - psLib interpreter: unresolvable PS name, stack underflow
+      RuntimeError   - psOperators: PS stack/dictstack underflow during execution
+      struct.error   - psCharStrings: truncated/malformed binary numeric operand
+                       (NOT a ValueError subclass, must be listed explicitly)
+      ValueError/AttributeError/KeyError/IndexError/OSError/AssertionError -
+                       malformed tokens, None-valued items, missing data, I/O
+      ZeroRunTooIrregular - type1_trailer: refused before parsing
+      InterpreterBudgetExceeded - type1_interp_guard: step/stack/memory budget
+    This is not a blanket catch: it's the complete, audited set, based on
+    tracing every `raise` site in psLib.py, psOperators.py,
+    psCharStrings.py, t1Lib/__init__.py.
+    """
+    import struct
+
+    from fontTools.misc.psLib import PSError, PSTokenError
+    from fontTools.t1Lib import T1Error
+
+    from pdftl.fonts.type1_interp_guard import InterpreterBudgetExceeded
+    from pdftl.fonts.type1_trailer import ZeroRunTooIrregular
+
+    return (
+        OSError,
+        ValueError,
+        KeyError,
+        IndexError,
+        AssertionError,
+        AttributeError,
+        T1Error,
+        PSError,
+        PSTokenError,
+        RuntimeError,
+        struct.error,
+        ZeroRunTooIrregular,
+        InterpreterBudgetExceeded,
+    )
+
+
 def get_widths_from_type1(filepath: Path) -> dict[str, float]:
     """
     Measures advance widths of every glyph in a bare Type 1 (/FontFile)
@@ -156,42 +226,14 @@ def get_widths_from_type1(filepath: Path) -> dict[str, float]:
     """
     widths: dict[str, float] = {}
     try:
-        from fontTools.t1Lib import T1Error
-        from fontTools.misc.psLib import PSError, PSTokenError
-        import struct
+        parse_errors = _type1_parse_errors()
     except ImportError as exc:
         logger.debug("ImportError: %s", exc)
         return widths
 
     try:
         font = _open_type1_font(filepath)
-    except (
-        OSError,
-        ValueError,
-        KeyError,
-        IndexError,
-        AssertionError,
-        AttributeError,
-        T1Error,
-        PSError,
-        PSTokenError,
-        RuntimeError,
-        struct.error,
-    ) as e:
-        # Every exception type here has been traced to a specific, real raise
-        # site reachable from fontTools' Type 1 parsing path (t1Lib.parse() ->
-        # psLib.suckfont() -> PSInterpreter.interpret() / psCharStrings decode):
-        #   T1Error        - t1Lib: corrupt PFB/LWFN, missing/malformed eexec section
-        #   PSTokenError   - psLib tokenizer: malformed string/hexstring/token
-        #   PSError        - psLib interpreter: unresolvable PS name, stack underflow
-        #   RuntimeError   - psOperators: PS stack/dictstack underflow during execution
-        #   struct.error   - psCharStrings: truncated/malformed binary numeric operand
-        #                    (NOT a ValueError subclass, must be listed explicitly)
-        #   ValueError/AttributeError/KeyError/IndexError/OSError/AssertionError -
-        #                    malformed tokens, None-valued items, missing data, I/O
-        # This is not a blanket catch: it's the complete, audited set of exception
-        # types fontTools can raise from this call, based on tracing every `raise`
-        # site in psLib.py, psOperators.py, psCharStrings.py, t1Lib/__init__.py.
+    except parse_errors as e:
         logger.debug("Failed to read Type 1 font file %s: %s", filepath.name, e)
         return widths
     charstrings = font.font["CharStrings"]
@@ -265,13 +307,13 @@ def patch_type1_widths(filepath: Path, pdf_widths: dict[str, float]) -> bytes | 
     `T1Font.createData()`, not just the touched glyphs.
     """
     try:
-        from fontTools.t1Lib import T1Error
+        parse_errors = _type1_parse_errors()
     except ImportError:
         return None
 
     try:
         font = _open_type1_font(filepath)
-    except (OSError, ValueError, KeyError, IndexError, AssertionError, T1Error) as e:
+    except parse_errors as e:
         logger.debug("Failed to read Type 1 font file %s: %s", filepath.name, e)
         return None
 
