@@ -8,11 +8,38 @@ import pytest
 from pdftl.utils.async_helpers import run_sync
 
 
+def _in_fresh_thread(func):
+    """Call func in a new thread, which is guaranteed to have no running
+    event loop regardless of state leaked into the test worker's main thread."""
+    outcome = {}
+
+    def target():
+        try:
+            outcome["result"] = func()
+        except BaseException as exc:  # noqa: BLE001
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["result"]
+
+
 def test_run_sync_without_active_event_loop():
     def sync_func():
         return asyncio.run(asyncio.sleep(0, result="validated"))
 
-    assert run_sync(sync_func) == "validated"
+    assert _in_fresh_thread(lambda: run_sync(sync_func)) == "validated"
+
+
+def test_run_sync_without_active_event_loop_calls_in_same_thread():
+    def check():
+        caller_thread = threading.current_thread()
+        return run_sync(lambda: threading.current_thread() is caller_thread)
+
+    assert _in_fresh_thread(check) is True
 
 
 def test_run_sync_active_event_loop():
@@ -22,7 +49,7 @@ def test_run_sync_active_event_loop():
 
         return run_sync(sync_func)
 
-    result = asyncio.run(_async_runner())
+    result = _in_fresh_thread(lambda: asyncio.run(_async_runner()))
 
     assert result == "validated"
 
@@ -56,7 +83,7 @@ def test_run_sync_active_event_loop_propagates_exception():
         return run_sync(sync_func)
 
     with pytest.raises(ExpectedError, match="boom"):
-        asyncio.run(_async_runner())
+        _in_fresh_thread(lambda: asyncio.run(_async_runner()))
 
 
 def test_run_sync_active_event_loop_uses_different_thread():
@@ -68,6 +95,6 @@ def test_run_sync_active_event_loop_uses_different_thread():
 
         return run_sync(sync_func)
 
-    result = asyncio.run(_async_runner())
+    result = _in_fresh_thread(lambda: asyncio.run(_async_runner()))
 
     assert result is False
