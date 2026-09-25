@@ -219,3 +219,15 @@ class TestGetStatus:
         result = _get_status(pkgs)
 
         assert result == [("installed_pkg", "1.5.0"), ("missing_pkg", None)]
+
+
+def test_parse_changelog_version_climbs_past_changelog_without_version(tmp_path, monkeypatch):
+    import pdftl.core.metadata as metadata_mod
+
+    inner = tmp_path / "outer" / "inner"
+    inner.mkdir(parents=True)
+    (inner / "CHANGELOG.md").write_text("# Changelog\n\n## Unreleased\n- notes\n")
+    (tmp_path / "outer" / "CHANGELOG.md").write_text("# Changelog\n\n## [3.4.5]\n")
+    monkeypatch.setattr(metadata_mod, "__file__", str(inner / "metadata.py"))
+
+    assert _parse_changelog_version() == ("3.4.5", False)

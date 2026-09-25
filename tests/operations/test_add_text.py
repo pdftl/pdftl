@@ -130,6 +130,31 @@ class TestAddTextLogic(unittest.TestCase):
             target_page, overlay_page_empty, pdf
         )  # Should return cleanly without error
 
+    def test_copy_annotations_appends_to_existing_annots_and_keeps_rectless(self):
+        from pikepdf import Array, Dictionary, Name, Pdf
+
+        from pdftl.operations.add_text import _copy_annotations
+
+        pdf = Pdf.new()
+        target_page = pdf.add_blank_page(page_size=(500, 800))
+        existing = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Text))
+        target_page.Annots = Array([existing])
+
+        overlay_pdf = Pdf.new()
+        overlay_page = overlay_pdf.add_blank_page(page_size=(500, 800))
+        rectless = overlay_pdf.make_indirect(
+            Dictionary(Type=Name.Annot, Subtype=Name.Popup, Open=True)
+        )
+        overlay_page.Annots = Array([rectless])
+
+        _copy_annotations(target_page, overlay_page, pdf)
+
+        self.assertEqual(len(target_page.Annots), 2)
+        self.assertEqual(target_page.Annots[0].Subtype, Name.Text)
+        copied = target_page.Annots[1]
+        self.assertEqual(copied.Subtype, Name.Popup)
+        self.assertNotIn(Name.Rect, copied)
+
     def test_parse_error_raises_invalid_argument_error(self):
         # Line 259-260: ValueError from parser is wrapped in InvalidArgumentError
         from pdftl.exceptions import InvalidArgumentError

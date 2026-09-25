@@ -59,6 +59,7 @@ def test_fmt_color_gray(tokens, expected):
     [
         (["[", "2", "1", "]", "0", "d"], "dash=[2 1], phase=0"),
         (["[", "]", "10", "d"], "solid, phase=10"),
+        (["5", "[", "3", "]", "0", "d"], "dash=[3], phase=0"),  # stray leading operand
         (["10", "d"], "solid, phase=10"),  # Valid output per current implementation logic
         (["d"], ""),  # IndexError (less than 2 tokens)
     ],

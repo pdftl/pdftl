@@ -58,6 +58,11 @@ def test_parse_booklet_config_unknown_canvas():
         _parse_booklet_config(["canvas=NONSENSE"], [])
 
 
+def test_parse_booklet_config_rejects_unknown_key():
+    with pytest.raises(InvalidArgumentError, match="booklet: unknown parameter 'sgi'"):
+        _parse_booklet_config(["sgi=4"], [])
+
+
 def test_parse_booklet_config_page_specs_passthrough():
     page_specs = []
     _parse_booklet_config(["1-4", "sig=2"], page_specs)

@@ -203,6 +203,7 @@ class _Segmenter:
         ]
         self._current_has_curves = False
         self._current_op_count = 5
+        self._flush_subpath(closed=True)
 
     def _handle_painting(self, op: str, operands: Any, operator: Any) -> None:
         if self._current_path_ops or self._subpaths or self._current_pts:
@@ -327,6 +328,9 @@ def _connects(path_a: Path, path_b: Path) -> bool:
     sp_b = path_b.subpaths[0]
     if not sp_a.points or not sp_b.points:
         return False
+    # Splicing onto or from a closed subpath would lose its closing edge.
+    if sp_a.closed or sp_b.closed:
+        return False
 
     p1 = sp_a.points[-1]
     p2 = sp_b.points[0]
@@ -427,10 +431,9 @@ def _check_width_variance(
         new_min = min(group_min, w_val)
         new_max = max(group_max, w_val)
 
-        if new_min < float("inf"):
-            # Bound variance: total spread must not exceed 10% OR 0.05 points
-            if (new_max - new_min) > max(0.05, new_min * 0.10):
-                return True, group_min, group_max
+        # Bound variance: total spread must not exceed 10% OR 0.05 points
+        if (new_max - new_min) > max(0.05, new_min * 0.10):
+            return True, group_min, group_max
         return False, new_min, new_max
     except (IndexError, ValueError, TypeError):
         # Suppress parsing or indexing errors on malformed width operators

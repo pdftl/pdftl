@@ -134,10 +134,9 @@ def _process_content_stream(pdf, stream_dict, resolved_targets, processed_xobjs=
         processed_xobjs = set()
 
     # Prevent infinite recursion if XObjects reference each other
-    if hasattr(stream_dict, "objgen"):
-        if stream_dict.objgen in processed_xobjs:
-            return
-        processed_xobjs.add(stream_dict.objgen)
+    if stream_dict.objgen in processed_xobjs:
+        return
+    processed_xobjs.add(stream_dict.objgen)
 
     resources = stream_dict.get("/Resources")
     prop_map, xobj_map = get_page_layer_map(resources)

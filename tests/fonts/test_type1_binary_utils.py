@@ -291,6 +291,16 @@ def test_patch_type1_widths_no_matching_glyphs(mock_t1lib):
         assert patch_type1_widths(Path("test.pfb"), {"B": 500.0}) is None
 
 
+def test_patch_type1_widths_unpatchable_glyph_patches_nothing(mock_t1lib):
+    font = DummyT1Font("test.pfb", kind="OTHER")
+    cs = DummyCharString([10, 250, "other"])
+    font.font["CharStrings"] = {"A": cs}
+
+    with patch("pdftl.fonts.type1_binary_utils._open_type1_font", return_value=font):
+        assert patch_type1_widths(Path("test.pfb"), {"A": 500.0}) is None
+    assert cs.program == [10, 250, "other"]
+
+
 def test_patch_type1_widths_compile_error(mock_t1lib):
     """Verify that overall re-compilation failures are caught safely."""
     font = DummyT1Font("test.pfb", kind="OTHER")

@@ -146,6 +146,20 @@ def test_dump_dests_no_dests_tree(mock_pdf, capsys):
     assert result["errors"] == []
 
 
+@pytest.mark.parametrize("names", [None, {"/JavaScript": {"/Names": []}}])
+def test_dump_dests_without_dests_name_tree_is_empty(names):
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    if names is not None:
+        pdf.Root.Names = pikepdf.Dictionary(names)
+
+    result = dump_dests(pdf)
+
+    assert result.data == {"dests": [], "errors": []}
+
+
 def test_dump_dests_success(mock_pdf, capsys, patch_pikepdf_types):
     """
     Tests the happy path: a Dests tree is found, instantiated,

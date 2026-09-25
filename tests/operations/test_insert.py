@@ -29,6 +29,8 @@ from pdftl.utils.page_labels import get_all_page_label_dicts
         (["5", "after", "1"], (5, None, "after", "1")),
         # "insert 5 before 2" -> Insert 5 pages before range 2
         (["5", "before", "2"], (5, None, "before", "2")),
+        # Bare keyword keeps the default range
+        (["before"], (1, None, "before", "1-end")),
         # 5. Full Complexity
         # "insert 2(A4) before 1-5"
         (["2(A4)", "before", "1-5"], (2, "A4", "before", "1-5")),
@@ -198,6 +200,12 @@ def test_insert_malformed_custom_geometry(simple_pdf):
     with pytest.raises(UserCommandLineError) as exc:
         insert_pages(simple_pdf, ["(bad,data)"])
     assert "Unknown geometry spec" in str(exc.value)
+
+
+def test_insert_three_part_custom_geometry_raises(simple_pdf):
+    with pytest.raises(UserCommandLineError, match="Unknown geometry spec: 10,20,30"):
+        insert_pages(simple_pdf, ["(10,20,30)"])
+    assert len(simple_pdf.pages) == 1
 
 
 # --- PART 3: Page Label Preservation ---

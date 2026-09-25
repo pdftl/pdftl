@@ -162,6 +162,20 @@ def test_handle_widgets_parent_no_name(clean_pdf, caplog):
     assert page.Annots[0].Parent.objgen == parent.objgen
 
 
+def test_handle_widgets_leaves_nameless_orphan_widget_untouched(clean_pdf):
+    pdf = clean_pdf
+    pdf.add_blank_page()
+    page = pdf.pages[0]
+
+    widget = pikepdf.Dictionary(Subtype=pikepdf.Name.Widget, Rect=[0, 0, 10, 10])
+    page.Annots = pdf.make_indirect(pikepdf.Array([widget]))
+
+    handle_page_widgets(pdf, page, None, 1)
+
+    annot = page.Annots[0]
+    assert set(annot.keys()) == {"/Subtype", "/Rect"}
+
+
 # --- Tests for rebuild_acroform_index ---
 
 

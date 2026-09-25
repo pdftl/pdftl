@@ -308,3 +308,22 @@ def test_calculate_rect_returns_none_on_missing_bbox():
             0, {"mode": "fit-group", "source": "1", "padding": (0, 0, 0, 0)}, "str", {}
         )
         assert result is None  # This hits line 88
+
+
+def test_group_union_ignores_blank_pages():
+    doc = MagicMock()
+    doc.pages = [MockPikePdfPage() for _ in range(3)]
+    ctx = FitCropContext(doc)
+    ctx._pdfium_doc = [MagicMock() for _ in range(3)]
+    boxes = [(10, 10, 20, 20), (0, 0, 0, 0), (30, 5, 40, 15)]
+    with patch("pdftl.operations.helpers.crop_fit.get_visible_bbox", side_effect=boxes):
+        assert ctx._calculate_group_union("1-3", "rule", {}) == (10, 5, 40, 20)
+
+
+def test_close_releases_buffer():
+    ctx = FitCropContext(MagicMock())
+    buf = MagicMock()
+    ctx._pdf_buffer = buf
+    ctx.close()
+    buf.close.assert_called_once()
+    assert ctx._pdf_buffer is None

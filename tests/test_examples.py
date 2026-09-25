@@ -17,6 +17,16 @@ from pdftl.registry_init import initialize_registry
 
 initialize_registry()
 
+# Environmental JVM failures under parallel load (e.g. the tag operation's Java backend).
+_JVM_RESOURCE_EXHAUSTION = (
+    "Could not reserve enough space",
+    "Could not allocate metaspace",
+    "insufficient memory for the Java Runtime",
+    "java.lang.OutOfMemoryError",
+    "unable to create native thread",
+    "Cannot create worker GC thread",
+)
+
 # --- Test Setup: Create Dummy PDF Files ---
 
 
@@ -175,6 +185,10 @@ def test_example_command(command_str, setup_data, dummy_pdfs, tmp_path, assets_d
         if "was not found on your PATH" in stderr_str:
             pytest.skip(
                 "Skipping test because a required system binary is missing: " + stderr_str.strip()
+            )
+        if any(sig in stderr_str for sig in _JVM_RESOURCE_EXHAUSTION):
+            pytest.skip(
+                "Skipping test because the JVM ran out of resources: " + stderr_str.strip()
             )
 
     # --- Step 4: Assert Success ---

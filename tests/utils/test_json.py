@@ -200,6 +200,17 @@ def test_json_goto_action_resolved_simple(pdf_mocks):
     assert result[KEY_RESOLVED_DESTINATION] == expected_resolved
 
 
+def test_json_goto_action_without_page_map_reports_unknown_page(pdf_mocks):
+    action_dict = Dictionary({"/S": Name("/GoTo"), "/D": String("MyDest")})
+
+    result = pdf_obj_to_json(action_dict, None, pdf_mocks["named_dests"])
+
+    assert result[KEY_RESOLVED_DESTINATION] == {
+        "TargetPage": "Unknown",
+        "DestinationDetails": ["/XYZ", 100, 200, 0],
+    }
+
+
 def test_json_goto_action_resolved_in_dict(pdf_mocks):
     """
     Tests a /GoTo action where the named destination is a Dictionary

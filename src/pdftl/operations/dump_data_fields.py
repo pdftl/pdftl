@@ -471,8 +471,7 @@ def dump_data_fields(
     form = Form(pdf)
     smart_fields_map = {}
     for field in form:
-        if hasattr(field.obj, "objgen"):
-            smart_fields_map[field.obj.objgen] = field
+        smart_fields_map[field.obj.objgen] = field
 
     # 2. Prepare for Walk
     all_fields_data: list[dict[str, Any]] = []

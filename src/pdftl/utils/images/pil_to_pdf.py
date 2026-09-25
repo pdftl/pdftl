@@ -190,7 +190,7 @@ def _get_tiff_strip_parameters(tiff_bytes: bytes, endian: str) -> tuple[list[int
 
         if tag == 273:
             strip_offsets = values
-        elif tag == 279:
+        else:
             strip_byte_counts = values
 
     return strip_offsets, strip_byte_counts

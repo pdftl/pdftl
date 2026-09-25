@@ -37,8 +37,7 @@ class FitCropContext:
             self._pdfium_doc = None
 
         if self._pdf_buffer is not None:
-            if hasattr(self._pdf_buffer, "close"):
-                self._pdf_buffer.close()
+            self._pdf_buffer.close()
             self._pdf_buffer = None
 
     def __del__(self):
@@ -90,7 +89,7 @@ class FitCropContext:
             pikepdf_page = self.pikepdf_doc.pages[page_idx]
             final_bbox = get_visible_bbox(self.doc[page_idx], pikepdf_page)
 
-        elif mode == "fit-group":
+        else:
             source_spec = parsed["source"]
             # Cache implicit groups by rule string to avoid re-calculation
             cache_key = source_spec if source_spec else f"implicit:{rule_str}"

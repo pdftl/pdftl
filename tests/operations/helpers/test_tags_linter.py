@@ -828,3 +828,71 @@ def test_run_issues_new_layout_and_artifact_attributes_validation(mock_index, mo
         "Attribute 'InvalidArtifactKey' is not a valid standard attribute for owner 'Artifact'"
         in bad_issue["message"]
     )
+
+
+def _tagged_pdf(children, n_pages=1, content=b""):
+    pdf = pikepdf.new()
+    for _ in range(n_pages):
+        pdf.add_blank_page()
+    pdf.pages[0].obj.Contents = pdf.make_stream(content)
+    doc = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.StructElem, S=pikepdf.Name.Document, K=pikepdf.Array(children)
+        )
+    )
+    pdf.Root.MarkInfo = pikepdf.Dictionary(Marked=True)
+    pdf.Root.Lang = pikepdf.String("en")
+    pdf.Root.StructTreeRoot = pdf.make_indirect(
+        pikepdf.Dictionary(Type=pikepdf.Name.StructTreeRoot, K=doc)
+    )
+    return pdf
+
+
+def _elem(tag, **kw):
+    return pikepdf.Dictionary(Type=pikepdf.Name.StructElem, S=pikepdf.Name("/" + tag), **kw)
+
+
+def _codes(issues):
+    return [iss["code"] for iss in issues]
+
+
+def test_run_issues_reports_every_direct_struct_elem() -> None:
+    pdf = _tagged_pdf([])
+    pg = pdf.pages[0].obj
+    pdf.Root.StructTreeRoot.K.K.extend([_elem("Figure", Pg=pg), _elem("Figure", Pg=pg)])
+    issues = _run_issues(pdf, target_page_nums={1})
+    assert _codes(issues).count("FIGURE_NO_ALT") == 2
+
+
+def test_run_issues_mcid_without_any_page_is_not_attributed() -> None:
+    pdf = _tagged_pdf([], content=b"/P <</MCID 0>> BDC EMC")
+    pdf.Root.StructTreeRoot.K.K.append(_elem("P", K=0))
+    codes = _codes(_run_issues(pdf, target_page_nums={1}))
+    assert "ORPHAN_MCID" in codes
+    assert "MCID_NOT_IN_STREAM" not in codes
+
+
+def test_run_issues_ignores_object_reference_children() -> None:
+    pdf = _tagged_pdf([])
+    annot = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Annot))
+    pg = pdf.pages[0].obj
+    objr = pikepdf.Dictionary(Type=pikepdf.Name.OBJR, Obj=annot, Pg=pg)
+    pdf.Root.StructTreeRoot.K.K.extend([objr, _elem("Figure", Pg=pg)])
+    issues = _run_issues(pdf, target_page_nums={1})
+    assert _codes(issues).count("FIGURE_NO_ALT") == 1
+    assert all(iss["severity"] != "error" for iss in issues if iss["code"] != "FIGURE_NO_ALT")
+
+
+def test_run_issues_figure_outside_target_pages_not_reported() -> None:
+    pdf = _tagged_pdf([], n_pages=2)
+    pdf.Root.StructTreeRoot.K.K.append(_elem("Figure", Pg=pdf.pages[1].obj))
+    assert "FIGURE_NO_ALT" not in _codes(_run_issues(pdf, target_page_nums={1}))
+    assert "FIGURE_NO_ALT" in _codes(_run_issues(pdf, target_page_nums={2}))
+
+
+def test_run_issues_well_ordered_headings_have_no_warnings() -> None:
+    pdf = _tagged_pdf([_elem("H1"), _elem("H2"), _elem("H2")])
+    codes = _codes(_run_issues(pdf, target_page_nums={1}))
+    assert "HEADING_NOT_H1_FIRST" not in codes
+    assert "HEADING_LEVEL_SKIP" not in codes
+    assert "NO_HEADINGS" not in codes

@@ -116,7 +116,8 @@ def _get_field_widgets(field_obj, pikepdf, visited=None) -> list:
     if visited is None:
         visited = set()
 
-    if hasattr(field_obj, "objgen"):
+    # Direct objects all report objgen (0, 0) and cannot form cycles.
+    if field_obj.objgen != (0, 0):
         if field_obj.objgen in visited:
             return []
         visited.add(field_obj.objgen)

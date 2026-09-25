@@ -316,3 +316,36 @@ def test_get_attachments_from_args_coverage():
         # Assertions to prove lines were hit
         mock_parse.assert_called_once_with(args)
         mock_resolve.assert_called_once_with(mock_parsed_items, num_pages, mock_input_context)
+
+
+def test_later_relation_keyword_does_not_override_earlier_relation():
+    from pdftl.operations.attach_files import _parse_attach_specs_to_intent
+
+    parsed = _parse_attach_specs_to_intent(
+        ["a.txt", "relation", "data", "b.txt", "relation", "source"]
+    )
+
+    assert [(p.path, p.relationship) for p in parsed] == [
+        ("a.txt", "Data"),
+        ("b.txt", "Source"),
+    ]
+
+
+def test_second_attachment_on_same_page_appends_offset_annotation(tmp_path):
+    first = tmp_path / "first.txt"
+    second = tmp_path / "second.txt"
+    first.write_text("one")
+    second.write_text("two")
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(200, 200))
+
+    _attach_attachment_to_page(pdf, Attachment(path=first, pages=[1]), 1, 0)
+    _attach_attachment_to_page(pdf, Attachment(path=second, pages=[1]), 1, 1)
+
+    annots = pdf.pages[0].Annots
+    assert [str(a.Contents) for a in annots] == ["first.txt", "second.txt"]
+    assert [list(map(float, a.Rect)) for a in annots] == [
+        [10.0, 190.0, 37.0, 163.0],
+        [40.0, 160.0, 67.0, 133.0],
+    ]

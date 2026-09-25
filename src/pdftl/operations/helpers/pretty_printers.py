@@ -3,9 +3,7 @@
 
 def _format_stream_ref(obj, spaces: str) -> str:
     """Format a single Stream reference as a one-line string."""
-    info = "Stream"
-    if obj.objgen:
-        info += f" ({obj.objgen[0]}:{obj.objgen[1]})"
+    info = f"Stream ({obj.objgen[0]}:{obj.objgen[1]})"
     subtype = obj.get("/Subtype")
     if subtype:
         info += f" Subtype: {subtype}"

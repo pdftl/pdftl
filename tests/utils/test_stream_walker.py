@@ -1001,3 +1001,30 @@ def test_apply_ext_gstate(pikepdf_mock):
     # AttributeError — should not raise
     res.get.side_effect = AttributeError
     _apply_ext_gstate("/GS1", res, pikepdf_mock, gs)
+
+
+def test_walk_page_records_sc_operands_and_ignores_non_image_non_form_xobjects():
+    import pikepdf
+    from pikepdf import Dictionary, Name
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    page = pdf.pages[0]
+    ps_xobj = pdf.make_stream(b"", Type=Name.XObject, Subtype=Name.PS)
+    page.Resources = Dictionary(XObject=Dictionary(Bad=5, PS1=ps_xobj))
+    page.Contents = pdf.make_stream(
+        b"/Bad Do /PS1 Do /DeviceRGB cs 0.5 0.25 0 sc /DeviceGray CS 1 SC"
+    )
+    detail = {"fills": [], "strokes": [], "images": [], "shadings": []}
+
+    walk_page(page.obj, page.Resources, pikepdf, detail=detail, seen_stream_ids=set(), full=True)
+
+    assert detail["images"] == []
+    assert [(f.get("operator"), f.get("operands")) for f in detail["fills"]] == [
+        (None, None),
+        ("sc", [0.5, 0.25, 0.0]),
+    ]
+    assert [(s.get("operator"), s.get("operands")) for s in detail["strokes"]] == [
+        (None, None),
+        ("SC", [1.0]),
+    ]

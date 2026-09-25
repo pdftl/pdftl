@@ -125,18 +125,16 @@ def _resolve_single_node_dest(node: dict, page_map: dict, named_dests: Any) -> N
 
         node["page"] = resolved.page_num
 
-        # Inject 'view' config if it wasn't extracted originally
-        if "view" not in node:
-            # Clean up pikepdf data types into native python primitives for encoders
-            clean_args = [
-                int(arg)
-                if isinstance(arg, (int, pikepdf.Integer))
-                else float(arg)
-                if hasattr(arg, "__float__")
-                else arg
-                for arg in resolved.args
-            ]
-            node["view"] = [resolved.dest_type] + clean_args
+        # Clean up pikepdf data types into native python primitives for encoders
+        clean_args = [
+            int(arg)
+            if isinstance(arg, (int, pikepdf.Integer))
+            else float(arg)
+            if hasattr(arg, "__float__")
+            else arg
+            for arg in resolved.args
+        ]
+        node["view"] = [resolved.dest_type] + clean_args
     except (KeyError, IndexError, ValueError, TypeError, AttributeError, pikepdf.PdfError) as e:
         logger.warning(f"Failed to resolve destination '{node['dest']}': {e}")
 

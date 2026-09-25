@@ -117,10 +117,7 @@ def _write_field_as_fdf_to_file(field_name, field, file):
     _write("\n  <<")
     _write(f"\n    /T ({field_name})")
 
-    val_as_string = _get_val_as_string(field)
-
-    if val_as_string is not None:
-        _write(f"\n    /V {val_as_string}")
+    _write(f"\n    /V {_get_val_as_string(field)}")
 
     _write("\n  >>")
 
@@ -138,8 +135,6 @@ def _get_val_as_string(field):
         raw_v = field.obj.get("/V")
         if isinstance(raw_v, Array):
             val = raw_v
-
-    val_as_string = None
 
     if val is None:
         val_as_string = _val_string_from_none(field)
@@ -209,6 +204,6 @@ def _val_string_from_stringy(val):
             val_as_string = f"({val})"
     except (ValueError, UnicodeDecodeError):
         # Fallback to pikepdf's hex encoding <...> for binary safety
-        val_as_string = val.unparse()
+        val_as_string = val.unparse().decode("latin-1")
 
     return val_as_string

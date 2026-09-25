@@ -163,7 +163,8 @@ def _walk_struct_from(el, visited):
 
     if not isinstance(el, Dictionary):
         return None
-    if hasattr(el, "objgen"):
+    # Direct objects all report objgen (0, 0) and cannot form cycles.
+    if el.is_indirect:
         if el.objgen in visited:
             return None
         visited.add(el.objgen)

@@ -289,6 +289,21 @@ def test_write_named_dests(mocker):
     assert mock_pdf.Root.Names.Dests == "The Name Tree Object"
 
 
+def test_write_named_dests_keeps_existing_names_entries():
+    pdf = Pdf.new()
+    pdf.add_blank_page()
+    embedded = pdf.make_indirect(Dictionary(Names=Array([String("a.txt"), Dictionary()])))
+    pdf.Root.Names = Dictionary(EmbeddedFiles=embedded)
+    dest = Array([pdf.pages[0].obj, Name.Fit])
+
+    write_named_dests(pdf, [String("Dest1"), dest])
+
+    assert pdf.Root.Names.EmbeddedFiles.objgen == embedded.objgen
+    tree = NameTree(pdf.Root.Names.Dests)
+    assert list(tree.keys()) == ["Dest1"]
+    assert tree["Dest1"][1] == Name.Fit
+
+
 def test_write_named_dests_no_dests(mocker):
     """Tests that the function does nothing if no dests are provided."""
     mock_nametree_new = mocker.patch("pikepdf.NameTree.new")

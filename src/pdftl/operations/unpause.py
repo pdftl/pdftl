@@ -86,6 +86,12 @@ def _parse_unpause_args(args):
             ink = "auto" if raw == "auto" else _parse_arg(arg, "ink", int, lambda v: 0 < v <= 255)
         elif arg.startswith("survival="):
             survival_ratio = _parse_arg(arg, "survival", float, lambda v: 0.0 < v <= 1.0)
+        else:
+            from pdftl.exceptions import InvalidArgumentError
+
+            raise InvalidArgumentError(
+                f"'unpause': unknown argument '{arg}'. Expected dpi=, ink= or survival=."
+            )
 
     return dpi, ink, survival_ratio
 

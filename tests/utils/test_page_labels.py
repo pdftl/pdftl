@@ -195,6 +195,14 @@ class TestRemapPageLabelsEndToEnd:
         result = get_all_page_label_dicts(pdf)
         assert result[0] == {"St": 1, "S": pikepdf.Name("/D")}
 
+    def test_insert_at_very_start_before_styleless_label_gets_plain_numbering(self):
+        pdf = make_pdf(2)
+        set_labels(pdf, {0: pikepdf.Dictionary(St=5, P=pikepdf.String("A-"))})
+        remap_page_labels(pdf, pdf, [None, 0, 1], inherit_style=True)
+        result = get_all_page_label_dicts(pdf)
+        assert result[0] == {"St": 1}
+        assert result[1] == {"St": 5, "P": "A-"}
+
     def test_insert_with_inherit_style_at_very_start_no_following_labels(self):
         # First entry is inserted, and no later entry maps to a labeled
         # source page at all -> nxt stays None -> falls back to St=new_idx+1.

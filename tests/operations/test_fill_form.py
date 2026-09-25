@@ -436,3 +436,74 @@ def test_radio_no_kids_missing_slash(radio_no_kids):
 
     # It should prepend the slash automatically
     assert str(obj.V) == "/NewValNoSlash"
+
+
+def _add_text_field(pdf, name, value=""):
+    field = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot,
+            Subtype=pikepdf.Name.Widget,
+            FT=pikepdf.Name.Tx,
+            T=pikepdf.String(name),
+            V=pikepdf.String(value),
+            Rect=[0, 0, 100, 20],
+        )
+    )
+    pdf.Root.AcroForm.Fields.append(field)
+    return field
+
+
+def test_fill_form_fdf_untitled_parent_and_unknown_field(pdf, tmp_path):
+    _add_text_field(pdf, "Name", "old")
+    fdf = pikepdf.new()
+    fdf.Root.FDF = pikepdf.Dictionary(
+        Fields=[
+            pikepdf.Dictionary(
+                Kids=[pikepdf.Dictionary(T=pikepdf.String("Name"), V=pikepdf.String("new"))]
+            ),
+            pikepdf.Dictionary(T=pikepdf.String("NoSuchField"), V=pikepdf.String("x")),
+        ]
+    )
+    fdf_path = tmp_path / "data.fdf"
+    fdf.save(fdf_path)
+
+    fill_form(pdf, [str(fdf_path)], None)
+
+    assert [(f.fully_qualified_name, str(f.value)) for f in Form(pdf)] == [("Name", "new")]
+
+
+def test_fill_form_xfdf_skips_elements_before_fields(pdf, tmp_path):
+    _add_text_field(pdf, "Name", "old")
+    xfdf_path = tmp_path / "data.xfdf"
+    xfdf_path.write_bytes(
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<xfdf xmlns="http://ns.adobe.com/xfdf/"><f href="form.pdf"/>'
+        b'<fields><field name="Name"><value>new</value></field></fields></xfdf>'
+    )
+
+    fill_form(pdf, [str(xfdf_path)], None)
+
+    assert Form(pdf)["Name"].value == "new"
+
+
+def test_fill_form_xfdf_without_fields_element_changes_nothing(pdf, tmp_path):
+    _add_text_field(pdf, "Name", "old")
+    xfdf_path = tmp_path / "data.xfdf"
+    xfdf_path.write_bytes(
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<xfdf xmlns="http://ns.adobe.com/xfdf/"><f href="form.pdf"/></xfdf>'
+    )
+
+    fill_form(pdf, [str(xfdf_path)], None)
+
+    assert Form(pdf)["Name"].value == "old"
+
+
+def test_radio_no_kids_clear_off_without_value(radio_no_kids):
+    field, obj = radio_no_kids
+    del obj["/V"]
+
+    _set_form_field_value(field, "/Off")
+
+    assert "/V" not in obj
+    assert "/AS" not in obj

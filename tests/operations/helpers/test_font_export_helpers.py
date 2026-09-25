@@ -708,3 +708,47 @@ def test_make_font_entry_explicit_cid_to_gid(tmp_path, monkeypatch):
 
     font_entry = _make_font_entry(font_obj, 1, 0, "1_0", "/TestFont", "TestFont", tmp_path)
     assert font_entry["cid_to_gid_map"] == "explicit"
+
+
+def test_extract_style_without_panose_is_skipped():
+    from pdftl.operations.helpers.font_export_helpers import _extract_style
+
+    desc_data = {}
+    descriptor = pikepdf.Dictionary({"/Style": pikepdf.Dictionary({"/Other": 1})})
+    _extract_style(descriptor, desc_data, pikepdf)
+    assert desc_data == {}
+
+
+def test_assemble_unified_mappings_unicode_only_code_has_no_width():
+    mappings = _assemble_unified_mappings({}, {"05": "E"}, None)
+    assert mappings == {"05": {"unicode": "E"}}
+
+
+def test_export_unified_sidecar_ps_mode_writes_only_ps(tmp_path, sample_pdf_with_fonts):
+    _pdf, font_obj = sample_pdf_with_fonts
+    font_entry = {}
+    _export_unified_sidecar("1_0", font_obj, "MyFont", tmp_path, "ps", {}, None, font_entry)
+    assert "sidecar_json_file" not in font_entry
+    assert (tmp_path / font_entry["tounicode_ps_file"]).exists()
+    assert not list(tmp_path.glob("*.json"))
+
+
+def test_build_manifest_dedupes_fonts_and_usages(tmp_path, sample_pdf_with_fonts):
+    pdf, font_obj = sample_pdf_with_fonts
+    page2 = pdf.add_blank_page()
+    page2.Resources = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font_obj})})
+    forms = {}
+    for name in ("/X1", "/X2"):
+        form = pdf.make_stream(b"")
+        form["/Type"] = pikepdf.Name("/XObject")
+        form["/Subtype"] = pikepdf.Name("/Form")
+        form["/BBox"] = pikepdf.Array([0, 0, 10, 10])
+        form["/Resources"] = pikepdf.Dictionary({"/Font": pikepdf.Dictionary({"/F1": font_obj})})
+        forms[name] = form
+    pdf.pages[0].Resources["/XObject"] = pikepdf.Dictionary(forms)
+
+    manifest = build_manifest(pdf, [1, 2], tmp_path, "json")
+
+    assert list(manifest["fonts"]) == [f"{font_obj.objgen[0]}_{font_obj.objgen[1]}"]
+    usages = next(iter(manifest["fonts"].values()))["usages"]
+    assert usages == [{"page": 1, "local_alias": "/F1"}, {"page": 2, "local_alias": "/F1"}]

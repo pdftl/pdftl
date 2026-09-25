@@ -159,6 +159,11 @@ def test_set_props_open_action_clear(blank_pdf):
     assert "/OpenAction" not in blank_pdf.Root
 
 
+def test_set_props_open_action_clear_when_absent_is_noop(blank_pdf):
+    set_props(blank_pdf, ["open_action="])
+    assert "/OpenAction" not in blank_pdf.Root
+
+
 def test_set_props_open_action_errors(blank_pdf):
     """Tests various OpenAction failure modes."""
     # Out of bounds

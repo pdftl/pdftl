@@ -208,6 +208,16 @@ class TestScoping:
                 _run_ps(flood)
         assert len(_run_ps(flood).stack) > MAX_INTERP_STACK
 
+    def test_allocation_unbounded_outside_context(self, monkeypatch):
+        type1_interp_guard._install()
+        monkeypatch.setattr(type1_interp_guard, "MAX_INTERP_CELLS", 10)
+        interp = _run_ps(b"100 array 100 string")
+        assert len(interp.stack[-2].value) == 100
+        assert len(interp.stack[-1].value) == 100
+        with bounded_type1_interpreter():
+            with pytest.raises(InterpreterBudgetExceeded, match="memory"):
+                _run_ps(b"100 array")
+
     def test_nested_contexts_stay_bounded_until_outermost_exit(self):
         with bounded_type1_interpreter():
             with bounded_type1_interpreter():

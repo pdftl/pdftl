@@ -13,7 +13,7 @@ import pytest
 import pikepdf
 from PIL import Image
 
-from pdftl.utils.images.embedder import create_image_xobject
+from pdftl.utils.images.embedder import _is_grayscale_mode, create_image_xobject
 
 
 @pytest.fixture
@@ -127,6 +127,29 @@ def test_embed_1bit_monochrome(tmp_path, empty_pdf):
     assert xobj.ColorSpace == pikepdf.Name("/DeviceGray")
     assert xobj.Filter == pikepdf.Name("/CCITTFaxDecode")
     assert isinstance(xobj.DecodeParms, pikepdf.Dictionary)
+
+
+def test_embed_1bit_noise_prefers_flate_without_decodeparms(tmp_path, empty_pdf):
+    import random
+
+    rng = random.Random(0)
+    img = Image.new("1", (64, 64))
+    img.putdata([rng.choice((0, 255)) for _ in range(64 * 64)])
+    img_path = tmp_path / "noise.png"
+    img.save(img_path, format="PNG")
+
+    xobj = create_image_xobject(empty_pdf, img_path)
+
+    assert xobj.Filter == pikepdf.Name("/FlateDecode")
+    assert "/DecodeParms" not in xobj
+    assert xobj.BitsPerComponent == 1
+    assert xobj.read_bytes() == img.tobytes()
+
+
+def test_paletted_image_without_palette_is_not_grayscale():
+    img = MagicMock(mode="P")
+    img.getpalette.return_value = None
+    assert _is_grayscale_mode(img) is False
 
 
 def test_embed_rgb_fallback(tmp_path, empty_pdf):

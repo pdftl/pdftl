@@ -178,3 +178,31 @@ class TestDumpFontsOperation:
         assert result.success is True
         assert result.data == {"fonts": [{"base_font": "Arial"}]}
         assert result.meta[c.META_OUTPUT_FILE] == "out.json"
+
+
+def test_font_reused_by_form_xobject_on_same_page_lists_page_once():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica
+        )
+    )
+    form = pikepdf.Stream(pdf, b"BT /F1 12 Tf (x) Tj ET")
+    form.Type = pikepdf.Name.XObject
+    form.Subtype = pikepdf.Name.Form
+    form.BBox = [0, 0, 100, 100]
+    form.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page = pdf.pages[0]
+    page.Resources = pikepdf.Dictionary(
+        Font=pikepdf.Dictionary(F1=font), XObject=pikepdf.Dictionary(Fm0=form)
+    )
+    page.Contents = pdf.make_stream(b"BT /F1 12 Tf (y) Tj ET /Fm0 Do")
+
+    result = _extract_font_info(pdf)
+
+    assert [(f["base_font"], f["usages"]) for f in result["fonts"]] == [
+        ("Helvetica", {"/F1": [1]})
+    ]

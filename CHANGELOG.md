@@ -62,6 +62,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Over-aggressive content-stream cleanup in `excise` and redaction fixed
 
+- `unpause`: raise error on unknown arguments instead of silently ignoring them
+
+- `booklet` and `montage`: validate and reject unknown configuration keys
+
+- `set_info`: allow setting `PdfID0` metadata on PDFs lacking an existing trailer `/ID` array
+
+- `delete_attachments`: annotations of removed attachments are now removed too; `minbytes`/`maxbytes` compare the file size, not the compressed stream length
+
+- `dump_tags`: linter now checks every inline (direct) structure element, not just the first
+
+- `simplify_vectors`, `excise`: stroked rectangles no longer lose their fourth side; stroke merging no longer drops the closing edge of closed subpaths
+
+- `set_info`: an invalid `PageLabelStart` now skips the label, as its warning says, instead of writing `/St` anyway
+
+- `dump_bookmarks`, `dump_data`, `toc` and `delete_bookmarks`: destinations that target structure elements now resolve to the correct page when the page reference is on a later inline child
+
+- `stamp_fields`: inline widget kids after the first are no longer skipped
+
 ## [0.29.0] - 2026-09-23
 
 ### Added

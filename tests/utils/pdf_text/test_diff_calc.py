@@ -26,6 +26,14 @@ def test_tokenize_to_chars():
     assert enc_b == "\x00\x01\x03"
 
 
+def test_tokenize_to_chars_drops_empty_split_tokens():
+    enc_a, enc_b, tokens = _tokenize_to_chars(" a", "a ", r"(\W+)")
+
+    assert tokens == [" ", "a"]
+    assert enc_a == "\x00\x01"
+    assert enc_b == "\x01\x00"
+
+
 @patch("diff_match_patch.diff_match_patch")
 def test_compute_diff_chunks(MockDMP):
     mock_dmp = MockDMP.return_value
@@ -138,6 +146,25 @@ def test_process_diff_stream(mock_extract):
     # Ensure chunk lengths updated correctly
     # file_b offset should be len("skip") = 4 at the time of calling extract
     mock_extract.assert_called_with(mapper_b, 4, 9, False)
+
+
+@patch("pdftl.utils.pdf_text.text_diff_calc._extract_hit_data", return_value=[])
+def test_process_diff_stream_skips_changes_with_no_hits(mock_extract):
+    mapper_a, mapper_b = MagicMock(), MagicMock()
+    diffs = [(-1, "gone"), (1, "new")]
+
+    output = process_diff_stream(
+        diffs,
+        mapper_a,
+        mapper_b,
+        ignore_whitespace=False,
+        include_bboxes=False,
+        merge_bboxes=False,
+    )
+
+    assert output == []
+    assert mock_extract.call_args_list[0].args == (mapper_a, 0, 4, False)
+    assert mock_extract.call_args_list[1].args == (mapper_b, 0, 3, False)
 
 
 def test_compute_diff_chunks_soft_hyphens_integration():

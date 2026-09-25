@@ -114,3 +114,24 @@ def test_replace_form_fonts_initializes_missing_dr(mock_ensure, mock_embed, mock
     assert "/DR" in acroform
     assert "/Font" in acroform.DR
     assert "/PdftlReplacementFont" in acroform.DR.Font
+
+
+@patch("pdftl.fonts.form_font_replacer.embed_truetype_font")
+@patch("pdftl.fonts.form_font_replacer.ensure_dependencies")
+def test_replace_form_fonts_keeps_existing_dr_fonts(mock_ensure, mock_embed, mock_pdf):
+    new_font = pikepdf.Dictionary(Subtype=pikepdf.Name("/TrueType"))
+    mock_embed.return_value = new_font
+    helv = pikepdf.Dictionary(BaseFont=pikepdf.Name("/Helvetica"))
+    encoding = pikepdf.Dictionary(Type=pikepdf.Name("/Encoding"))
+    acroform = pikepdf.Dictionary(
+        DR=pikepdf.Dictionary(Font=pikepdf.Dictionary(Helv=helv), Encoding=encoding)
+    )
+    mock_pdf.Root.AcroForm = acroform
+
+    replace_form_fonts(mock_pdf, "font.ttf")
+
+    fonts = acroform.DR.Font
+    assert set(fonts.keys()) == {"/Helv", "/PdftlReplacementFont"}
+    assert fonts.Helv.BaseFont == "/Helvetica"
+    assert fonts.PdftlReplacementFont.Subtype == "/TrueType"
+    assert acroform.DR.Encoding.Type == "/Encoding"

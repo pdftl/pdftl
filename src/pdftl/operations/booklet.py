@@ -154,7 +154,13 @@ def _parse_booklet_config(specs: list[str], out_page_specs: list[str]) -> dict[s
         "gutter": 0.0,
         "rtl": False,
     }
-    pairs = parse_keyval_list(specs, bare_tokens=out_page_specs, lowercase_values=True)
+    pairs = parse_keyval_list(
+        specs,
+        bare_tokens=out_page_specs,
+        allowed_keys=["sig", "signature", "canvas", "margin", "gutter", "rtl"],
+        lowercase_values=True,
+        context="booklet",
+    )
     for k, v in pairs.items():
         config = _update_config_from_keyval(k, v, config)
     return config
@@ -181,7 +187,7 @@ def _update_config_from_keyval(key, val, config):
         config["margin"] = dim_str_to_pts(val)
     elif key == "gutter":
         config["gutter"] = dim_str_to_pts(val)
-    elif key == "rtl":
+    else:
         config["rtl"] = val.lower() in ["true", "1", "yes", "y"]
     return config
 

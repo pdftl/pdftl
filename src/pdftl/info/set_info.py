@@ -217,15 +217,22 @@ def _set_page_labels(pdf: "pikepdf.Pdf", label_list: list["PageLabelEntry"], del
 
 
 def _set_id_info(pdf: "pikepdf.Pdf", id_index, hex_string):
-    if pdf.trailer and hasattr(pdf.trailer, "ID"):
-        try:
-            pdf.trailer.ID[id_index] = bytes.fromhex(hex_string)
-        except ValueError:
-            logger.warning(
-                "Could not set PDFID%s to '%s'; invalid hex string?",
-                id_index,
-                hex_string,
-            )
+    import pikepdf
+
+    try:
+        value = bytes.fromhex(hex_string)
+    except ValueError:
+        logger.warning(
+            "Could not set PDFID%s to '%s'; invalid hex string?",
+            id_index,
+            hex_string,
+        )
+        return
+    if hasattr(pdf.trailer, "ID"):
+        pdf.trailer.ID[id_index] = value
+    else:
+        # The second ID is regenerated on save.
+        pdf.trailer.ID = pikepdf.Array([value, value])
 
 
 def _make_page_label(pdf: "pikepdf.Pdf", entry: "PageLabelEntry"):
@@ -265,6 +272,7 @@ def _make_page_label(pdf: "pikepdf.Pdf", entry: "PageLabelEntry"):
             logger.warning(
                 skip_warning_template, "Start", entry.start, "Must be a positive integer"
             )
+            return None, None
 
     if entry.start is not None and entry.start != 1:
         ret["/St"] = entry.start

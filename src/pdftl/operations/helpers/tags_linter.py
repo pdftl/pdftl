@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from pdftl.operations.helpers.tags_stream_parser import _build_mcid_stream_map
 from pdftl.operations.helpers.tags_tree_walker import (
+    _INLINE_OBJGEN,
     _build_page_objgen_index,
     _build_role_map,
     _collect_tree_roots,
@@ -312,15 +313,16 @@ def _record_mcid_ref(
 
 
 def _is_node_seen(elem, seen: set) -> bool:
-    """Helper to detect circular references and unhashable elements safely."""
+    """Detect circular references; inline objects have no identity and are never seen."""
+    objgen = getattr(elem, "objgen", None)
+    if objgen is None or objgen == _INLINE_OBJGEN:
+        return False
     try:
-        objgen = getattr(elem, "objgen", None)
-        if objgen and objgen in seen:
+        if objgen in seen:
             return True
-        if objgen:
-            seen.add(objgen)
-    except (AttributeError, TypeError):
-        pass  # object has no comparable ref; treat as unseen
+        seen.add(objgen)
+    except TypeError:
+        pass  # unhashable ref; treat as unseen
     return False
 
 

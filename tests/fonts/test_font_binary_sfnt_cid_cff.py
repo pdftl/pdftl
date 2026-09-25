@@ -140,6 +140,32 @@ def test_patch_cff_table_in_sfnt_glyph_name_none_skips(cid_keyed_sfnt_cff_path):
     assert patched is False
 
 
+def test_patch_cff_table_in_sfnt_skips_uninterpretable_charstring(cid_keyed_sfnt_cff_path):
+    from fontTools.pens.basePen import NullPen
+    from fontTools.ttLib import TTFont
+    from pdftl.fonts.font_binary_sfnt import _patch_cff_table_in_sfnt
+
+    tt = TTFont(cid_keyed_sfnt_cff_path)
+    cff = tt["CFF "].cff
+    topdict = cff[cff.fontNames[0]]
+    broken_program = [5, "callsubr", "endchar"]
+    topdict.CharStrings["cid00002"].setProgram(list(broken_program))
+
+    patched = _patch_cff_table_in_sfnt(
+        tt,
+        {"0002": 999.0, "0001": 650.0},
+        differences=None,
+        base_encoding=None,
+        cid_to_gid_map="Identity",
+    )
+    assert patched is True
+
+    good = topdict.CharStrings["cid00001"]
+    good.draw(NullPen())
+    assert good.width == 650.0
+    assert topdict.CharStrings["cid00002"].program == broken_program
+
+
 def test_squash_font_file_vectors_patches_cid_keyed_cff_table_via_fallback(
     cid_keyed_sfnt_cff_with_hmtx_path,
 ):

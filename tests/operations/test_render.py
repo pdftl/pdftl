@@ -52,6 +52,10 @@ def test_parse_render_args_format_defaults_to_none():
     assert fmt is None
 
 
+def test_parse_render_args_valid_dpi_and_compression():
+    assert _parse_render_args(["dpi=300", "png_compression=5", "2-3"]) == (300.0, ["2-3"], 5, None)
+
+
 def test_parse_render_args_format_lowercased():
     _, _, _, fmt = _parse_render_args(["format=PNG"])
     assert fmt == "png"

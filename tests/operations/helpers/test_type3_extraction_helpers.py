@@ -355,3 +355,33 @@ def test_process_inline_images_on_export_inner_match_skip(tmp_path):
 
     assert "%BEGIN_INLINE_IMAGE%" in res
     assert res.count("%BEGIN_INLINE_IMAGE%") == 1
+
+
+def test_decode_ccitt_image_decode_parms_without_k_uses_group4(monkeypatch):
+    import pdftl.operations.helpers.type3_extraction_helpers as t3
+
+    calls = []
+    real = t3._decode_ccitt_via_tiff_header
+
+    def spy(data, w, h, k_val, decoder, meta):
+        calls.append((k_val, decoder))
+        return real(data, w, h, k_val, decoder, meta)
+
+    monkeypatch.setattr(t3, "_decode_ccitt_via_tiff_header", spy)
+    meta = {"DecodeParms": "<</Columns 8 /Rows 1>>", "Filter": "/CCITTFaxDecode"}
+    t3._decode_ccitt_image(b"\x00", 8, 1, meta)
+    assert calls == [(-1, "group4")]
+
+
+def test_decode_native_pdf_image_non_mask_decodes_flate():
+    import zlib
+
+    from pdftl.operations.helpers.type3_extraction_helpers import _decode_native_pdf_image
+
+    raw = bytes(range(12))
+    meta = {"ImageMask": "false", "BitsPerComponent": "8", "Filter": "/FlateDecode"}
+    decoded, clean_meta = _decode_native_pdf_image(
+        zlib.compress(raw), 2, 2, "/FlateDecode", dict(meta, ColorSpace="/DeviceRGB")
+    )
+    assert decoded == raw
+    assert "Filter" not in clean_meta

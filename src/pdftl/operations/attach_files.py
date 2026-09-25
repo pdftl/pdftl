@@ -165,7 +165,7 @@ def _process_next_attach_arguments_for_intent(
         logger.debug("keyword=%s, next_arg=%s", keyword, next_arg)
         if keyword == "relation":
             _set_relationship_in_parsed_attachments(next_arg.capitalize(), parsed_attachments[:i])
-        elif keyword == "to_page":
+        else:
             # pdftk seems to only accept one to_page argument
             # but we accept: attach_files file1 to_page end file2 file3 to_page 5
             _set_page_specs_in_parsed_attachments(next_arg, parsed_attachments[:i])

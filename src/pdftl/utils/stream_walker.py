@@ -117,10 +117,7 @@ def _execute_pattern_walk(
         seen_stream_ids.add(obj_id)
 
     try:
-        pattern_resources = None
-        if hasattr(pattern_obj, "get"):
-            pattern_resources = pattern_obj.get("/Resources")
-
+        pattern_resources = pattern_obj.get("/Resources")
         if pattern_resources is None:
             pattern_resources = resources
 
@@ -236,10 +233,7 @@ def recurse_form_xobject(
         seen_stream_ids.add(obj_id)
 
     try:
-        form_resources = None
-        if hasattr(xobj, "get"):
-            form_resources = xobj.get("/Resources")
-
+        form_resources = xobj.get("/Resources")
         if form_resources is None:
             form_resources = resources
 

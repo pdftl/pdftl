@@ -413,3 +413,96 @@ def test_ensure_auto_state_updates_existing_view_event():
     # Assert it was successfully updated to contain all OCGs
     assert "/View" in events
     assert len(events["/View"].OCGs) == 2
+
+
+def _layered_pdf():
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page()
+
+    def ocg(name=None):
+        d = pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")})
+        if name:
+            d["/Name"] = pikepdf.String(name)
+        return pdf.make_indirect(d)
+
+    def form(oc=None):
+        f = pdf.make_stream(b"0 0 1 1 re f")
+        f["/Type"] = pikepdf.Name("/XObject")
+        f["/Subtype"] = pikepdf.Name("/Form")
+        f["/BBox"] = pikepdf.Array([0, 0, 1, 1])
+        if oc is not None:
+            f["/OC"] = oc
+        return f
+
+    ocg_a, ocg_b, ocg_unnamed = ocg("A"), ocg("B"), ocg()
+    image = pdf.make_stream(b"\x00")
+    image.update(
+        {
+            "/Type": pikepdf.Name("/XObject"),
+            "/Subtype": pikepdf.Name("/Image"),
+            "/Width": 1,
+            "/Height": 1,
+            "/ColorSpace": pikepdf.Name("/DeviceGray"),
+            "/BitsPerComponent": 8,
+        }
+    )
+    page.Resources = pikepdf.Dictionary(
+        {
+            "/Properties": pikepdf.Dictionary({"/oc1": ocg_a}),
+            "/XObject": pikepdf.Dictionary(
+                {"/Fm1": form(ocg_a), "/Fm2": form(ocg_b), "/Im1": image}
+            ),
+        }
+    )
+    page.Contents = pdf.make_stream(
+        b"EMC\n/OC /oc1 BDC 1 0 0 RG EMC\n/Fm1 Do\n/Fm1 Do\n/Fm2 Do\n/Im1 Do\n"
+    )
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        {
+            "/OCGs": pikepdf.Array([ocg_a, ocg_b, ocg_unnamed]),
+            "/D": pikepdf.Dictionary({"/Order": pikepdf.Array([ocg_a, ocg_b, ocg_unnamed])}),
+        }
+    )
+    return pdf, ocg_a, ocg_b, ocg_unnamed
+
+
+def test_modify_layers_merge_real_pdf():
+    from pdftl.operations.modify_layers import modify_layers
+
+    pdf, ocg_a, ocg_b, ocg_unnamed = _layered_pdf()
+    modify_layers(pdf, ["merge", "name=A"])
+
+    page = pdf.pages[0]
+    ops = [
+        (str(op), [str(o) for o in operands])
+        for operands, op in pikepdf.parse_content_stream(page)
+    ]
+    assert ops == [
+        ("EMC", []),
+        ("RG", ["1", "0", "0"]),
+        ("Do", ["/Fm1"]),
+        ("Do", ["/Fm1"]),
+        ("Do", ["/Fm2"]),
+        ("Do", ["/Im1"]),
+    ]
+    xobjs = page.Resources.XObject
+    assert "/OC" not in xobjs.Fm1
+    assert xobjs.Fm2.OC.objgen == ocg_b.objgen
+    remaining = [o.objgen for o in pdf.Root.OCProperties.OCGs]
+    assert remaining == [ocg_b.objgen, ocg_unnamed.objgen]
+
+
+def test_ensure_auto_state_leaves_other_events_alone():
+    pdf = pikepdf.Pdf.new()
+    ocg1 = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/OCG")}))
+    export = pikepdf.Dictionary({"/Event": pikepdf.Name("/Export"), "/OCGs": pikepdf.Array()})
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        {
+            "/D": pikepdf.Dictionary({"/AS": pikepdf.Array([export])}),
+            "/OCGs": pikepdf.Array([ocg1]),
+        }
+    )
+    _ensure_auto_state(pdf)
+    as_array = pdf.Root.OCProperties.D.AS
+    assert [str(d.Event) for d in as_array] == ["/Export", "/Print", "/View"]
+    assert len(as_array[0].OCGs) == 0

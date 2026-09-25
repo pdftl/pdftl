@@ -432,3 +432,26 @@ def test_struct_elem_array_of_kids_all_fail(temp_pdf):
     assert res is not None
     assert res.page_num == 1
     assert res.dest_type == "XYZ"
+
+
+def test_struct_elem_finds_page_on_later_direct_kid(temp_pdf):
+    temp_pdf.add_blank_page()
+    second_page = temp_pdf.pages[1]
+    struct_elem = temp_pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.StructElem,
+            K=pikepdf.Array(
+                [
+                    pikepdf.Dictionary(Type=pikepdf.Name.MCR, MCID=0),
+                    pikepdf.Dictionary(Type=pikepdf.Name.MCR, MCID=1, Pg=second_page.obj),
+                ]
+            ),
+        )
+    )
+
+    res = resolve_dest_to_page_num(
+        pikepdf.Array([struct_elem, pikepdf.Name.Fit]), temp_pdf.pages, None
+    )
+
+    assert res.page_num == 2
+    assert res.dest_type == "Fit"

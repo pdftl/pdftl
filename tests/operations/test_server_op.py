@@ -1214,6 +1214,17 @@ def test_split_multipart_segments_direct():
     assert b"value1" in segments[0]
 
 
+def test_split_multipart_segments_preamble_yields_no_field():
+    boundary = b"--BOUND"
+    body = (
+        b"preamble text\r\n" + boundary + b"\r\n"
+        b'Content-Disposition: form-data; name="a"\r\n\r\n'
+        b"value1\r\n" + boundary + b"--\r\n"
+    )
+    parsed = [parse_multipart_segment(s) for s in split_multipart_segments(body, boundary)]
+    assert parsed == [(None, None, None), ("a", None, b"value1")]
+
+
 def test_parse_multipart_segment_missing_header_terminator():
     result = parse_multipart_segment(b"no header terminator here")
     assert result == (None, None, None)
@@ -1244,6 +1255,23 @@ def test_parse_multipart_payload_handles_empty_segment_and_tail_trim(monkeypatch
 def test_cleanup_uploaded_files_swallows_oserror():
     with patch("os.remove", side_effect=OSError("denied")):
         cleanup_uploaded_files([{"path": "/nonexistent/file.pdf"}])  # must not raise
+
+
+def test_cleanup_uploaded_files_skips_entries_without_path(tmp_path):
+    spooled = tmp_path / "upload.pdf"
+    spooled.write_bytes(b"%PDF")
+    cleanup_uploaded_files([{"name": "x"}, {"path": str(spooled)}])
+    assert not spooled.exists()
+
+
+def test_run_pipeline_in_subprocess_passes_argless_steps_through():
+    from pdftl.server import _run_pipeline_in_subprocess
+
+    with patch("pdftl.server.subprocess_workers.run_pipeline") as mock_run:
+        mock_run.return_value = b"%PDF-FAKE"
+        _run_pipeline_in_subprocess([{"operation": "uncompress"}], [])
+
+    assert mock_run.call_args.args[0] == [{"operation": "uncompress"}]
 
 
 def test_serialize_subprocess_result_all_branches():

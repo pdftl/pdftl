@@ -1582,6 +1582,17 @@ def test_rekey_name_widths_to_hex_codes_skips_unmapped_glyph():
     assert res == {}
 
 
+def test_rekey_name_widths_to_hex_codes_drops_unparseable_table_codes(monkeypatch):
+    import pdftl.fonts.font_binary_utils as fbu
+
+    differences_map = {"ZZ": "A", "42": "B"}
+    base_encoding_map = {None: "C", 0x44: "D"}
+    monkeypatch.setattr(fbu, "_get_maps", lambda d, b: (differences_map, base_encoding_map))
+
+    res = fbu.rekey_name_widths_to_hex_codes({"A": 1.0, "B": 2.0, "C": 3.0, "D": 4.0})
+    assert res == {"42": 2.0, "44": 4.0}
+
+
 def test_get_font_widths_no_usable_cmap_returns_empty(tmp_path, monkeypatch):
     from pdftl.fonts.font_binary_utils import get_font_widths_from_file
 

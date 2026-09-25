@@ -139,7 +139,7 @@ def _decode_ccitt_via_tiff_header(
     if compression == 3:
         t4_opt = 1 if k_val > 0 else 0
         tags.append((292, 4, 1, t4_opt))
-    elif compression == 4:
+    else:
         tags.append((293, 4, 1, 0))
 
     tags.sort(key=lambda x: x[0])
@@ -234,16 +234,19 @@ def _decode_native_pdf_image(
     else:
         stream_dict.Filter = pikepdf.Name(filt)
 
-    errors_to_catch = (pikepdf.PdfError, ValueError, TypeError, KeyError, OSError)
-    if hasattr(pikepdf, "_core") and hasattr(pikepdf._core, "DataDecodingError"):
-        errors_to_catch += (pikepdf._core.DataDecodingError,)
-
     try:
         stream = pdf.make_stream(data)
         stream.stream_dict.update(stream_dict)
         decoded_data = stream.read_bytes()
         return decoded_data, _clean_filter_meta(normalized_meta)
-    except errors_to_catch as e:
+    except (
+        pikepdf.PdfError,
+        pikepdf.DataDecodingError,
+        ValueError,
+        TypeError,
+        KeyError,
+        OSError,
+    ) as e:
         # Explanatory comment: Zlib or LZW decoding will fail if the stored bitstream
         # is truncated or syntactically invalid. We cleanly revert to the raw bytes.
         logger.warning("pikepdf native decompression failed, falling back to raw: %s", e)

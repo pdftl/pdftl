@@ -545,6 +545,37 @@ def test_copy_item_preserves_formatting_and_state_integration():
         assert list(out_child.obj.C) == pytest.approx([0.0, 0.0, 1.0])
 
 
+def test_rebuild_outlines_keeps_actionless_parent_of_linked_child():
+    from pdftl.pages.add_pages import add_pages
+    from pdftl.utils.page_specs.spec_types import PageTransform
+
+    src = Pdf.new()
+    src.add_blank_page()
+    src.add_blank_page()
+    with src.open_outline() as outline:
+        parent = OutlineItem("Section")
+        parent.children.append(OutlineItem("Leaf", destination=1))
+        outline.root.append(parent)
+
+    out = Pdf.new()
+    add_pages(
+        out,
+        [src],
+        [
+            PageTransform(pdf=src, index=0, rotation=(0, False), scale=1.0),
+            PageTransform(pdf=src, index=1, rotation=(0, False), scale=1.0),
+        ],
+    )
+
+    parent_obj = out.Root.Outlines.First
+    assert str(parent_obj.Title) == "Section"
+    assert Name.Dest not in parent_obj
+    assert Name.A not in parent_obj
+    leaf_obj = parent_obj.First
+    assert str(leaf_obj.Title) == "Leaf"
+    assert leaf_obj.Dest[0].objgen == out.pages[1].obj.objgen
+
+
 def test_copy_item_preserves_open_closed_state(mock_remapper):
     """
     Tests that the is_closed state is faithfully copied from the cached item.

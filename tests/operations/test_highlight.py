@@ -337,3 +337,26 @@ def test_highlight_pdf_valid(mock_apply, mock_ensure, mock_pdf):
         assert result.pdf == mock_pdf
         mock_pdf.save.assert_called_once()
         assert mock_apply.call_count == 2
+
+
+def test_find_options_part_trailing_paren_without_opener():
+    assert _find_options_part("/a)") == ("", "/a)")
+
+
+def test_parse_highlight_spec_close_paren_delimiter():
+    assert _parse_highlight_spec("2)foo)") == ("2", "foo", {})
+
+
+def test_parse_options_without_opacity():
+    assert _parse_options("(author=Jane, print=yes)") == {"author": "Jane", "print": True}
+
+
+@patch("pdftl.operations.highlight._generate_annotations_for_text", return_value=[])
+def test_process_highlight_page_no_matches_leaves_annots_absent(_mock_generate, mock_pdfium_doc):
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    mock_pdfium_doc.get_page.return_value.get_textpage.return_value.get_text_range.return_value = (
+        "hello"
+    )
+    _process_highlight_page(pdf, mock_pdfium_doc, 0, re.compile("zzz"), {})
+    assert "/Annots" not in pdf.pages[0]

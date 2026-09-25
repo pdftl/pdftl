@@ -48,9 +48,8 @@ def _normalize_inputs(
         else:
             final_opened = user_opened.copy()
     if not user_inputs and final_opened:
-        if final_opened:
-            max_idx = max(final_opened.keys())
-            final_inputs = [f"<obj-{i}>" for i in range(max_idx + 1)]
+        max_idx = max(final_opened.keys())
+        final_inputs = [f"<obj-{i}>" for i in range(max_idx + 1)]
         return (final_inputs, final_opened)
     if not user_inputs:
         return ([], final_opened)

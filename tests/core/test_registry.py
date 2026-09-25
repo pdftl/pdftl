@@ -205,3 +205,16 @@ def test_registry_getitem_error():
     reg = Registry()
     with pytest.raises(KeyError, match="Unknown registry key"):
         _ = reg["invalid_key"]
+
+
+def test_filter_skips_entries_lacking_the_key():
+    r = Registry()
+    r.operations.update(
+        {
+            "has_key": {"category": "A"},
+            "dict_without_key": {"other": "A"},
+            "not_a_dict": "A",
+        }
+    )
+
+    assert r.filter("operations", "category", lambda x: True) == {"has_key"}

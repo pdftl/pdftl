@@ -81,9 +81,8 @@ class CliStageProfiler:
         return self.stage_name in targets
 
     def _process_breach(self, elapsed: float) -> None:
-        """Handles diagnostic dumps when a stage breaches thresholds or is profiled."""
-        if self.profiler:
-            self.profiler.disable()
+        """Writes diagnostic dumps for a profiled stage; only called with an active profiler."""
+        self.profiler.disable()
 
         base_filename = self._prepare_output_dir()
         self._generate_reports(base_filename, elapsed)
@@ -111,9 +110,7 @@ class CliStageProfiler:
         with open(f"{base_filename}.txt", "w", encoding="utf-8") as f:
             self._write_report_header(f, elapsed, shlex)
             self._write_fingerprints(f, fingerprints)
-
-            if self.profiler:
-                self._write_profile_stats(f, base_filename)
+            self._write_profile_stats(f, base_filename)
 
     def _write_report_header(self, f, elapsed: float, shlex_mod) -> None:
         """Writes the basic CLI context to the open report file."""

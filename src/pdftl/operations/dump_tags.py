@@ -308,7 +308,7 @@ def dump_tags_cli_hook(result, stage, _pipeline) -> None:
             _write_tree_output(f, result.data, json_output)
         elif mode == "reading_order":
             _write_reading_order_output(f, result.data)
-        elif mode == "issues":
+        else:
             _write_issues_output(f, result.data, json_output)
 
 

@@ -108,7 +108,9 @@ def _get_params(params_str: str) -> dict:
 def _get_attachment_size(attachment) -> int:
     """Attempts to read size from metadata first to save memory, falls back to bytes."""
     with suppress(AttributeError, ValueError, KeyError):
-        size = int(attachment.obj.get("/EF", {}).get("/F", {}).get("/Length", -1))
+        # /Length is the encoded stream length; /Params /Size is the file size
+        params = attachment.obj.get("/EF", {}).get("/F", {}).get("/Params", {})
+        size = int(params.get("/Size", -1))
         if size > -1:
             return size
 
@@ -215,13 +217,9 @@ def _map_attachment_annotations(pdf) -> dict:
     return annot_map
 
 
-def _delete_from_nametree(pdf, filenames_to_delete: set) -> set:
-    deleted_objgens = set()
+def _delete_from_nametree(pdf, filenames_to_delete: set) -> None:
     for fname in filenames_to_delete:
-        if fname in pdf.attachments:
-            deleted_objgens.add(pdf.attachments[fname].obj.objgen)
-            del pdf.attachments[fname]
-    return deleted_objgens
+        del pdf.attachments[fname]
 
 
 def _should_keep_annot(annot, deleted_objgens: set) -> bool:
@@ -289,8 +287,10 @@ def delete_attachments(pdf, specs) -> OpResult:
         return OpResult(success=True, pdf=pdf)
 
     # 3. Perform Deletions
-    deleted_objgens = _delete_from_nametree(pdf, filenames_to_delete)
+    # Scrub first: deleting from the name tree frees the filespec objects
+    deleted_objgens = {pdf.attachments[fname].obj.objgen for fname in filenames_to_delete}
     _scrub_page_annotations(pdf, deleted_objgens)
+    _delete_from_nametree(pdf, filenames_to_delete)
 
     logger.info("Permanently deleted %d attachment(s).", len(filenames_to_delete))
     return OpResult(success=True, pdf=pdf)

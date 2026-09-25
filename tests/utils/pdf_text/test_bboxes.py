@@ -98,3 +98,7 @@ def test_merge_bounding_boxes():
     assert merged[0] == [10, 10, 40, 20]
     assert merged[1] == [10, 50, 20, 60]
     assert merged[2] == [100, 50, 110, 60]
+
+
+def test_is_contained_rejects_distant_zero_area_box():
+    assert _is_contained([0, 0, 100, 100], [200, 200, 200, 210]) is False

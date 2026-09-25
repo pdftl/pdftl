@@ -112,6 +112,19 @@ def test_external_ops_execution_flow():
 # --- 3. Tests for registry_init._discover_modules ---
 
 
+def test_external_ops_dir_already_on_sys_path_is_not_added_again(tmp_path):
+    op_dir = tmp_path / "pdftl" / "operations"
+    op_dir.mkdir(parents=True)
+    (op_dir / "cov_plugin_op.py").write_text("LOADED = True\n")
+    sys.path.insert(0, str(op_dir))
+
+    with patch.object(registry_init, "_get_config_base", return_value=str(tmp_path)):
+        registry_init._discover_external_operations()
+
+    assert sys.path.count(str(op_dir)) == 1
+    assert sys.modules["pdftl.external.cov_plugin_op"].LOADED is True
+
+
 def test_internal_discovery_edge_cases():
     """Covers Lines 89-102: Missing path, invalid identifiers, security violation."""
 

@@ -74,6 +74,20 @@ def test_scan_pdf_pages(mock_zxing):
         assert 0 in results
 
 
+def test_scan_pdf_pages_omits_pages_without_barcodes(mock_zxing):
+    blank, coded = Image.new("RGB", (10, 10)), Image.new("RGB", (10, 10))
+    hit = MagicMock(text="only_on_page_1")
+    hit.position.top_left.x = hit.position.top_left.y = 0
+    hit.position.bottom_right.x = hit.position.bottom_right.y = 5
+    mock_zxing.read_barcodes.side_effect = [[], [hit]]
+
+    with patch("pdftl.utils.page_images.iter_pages_as_pil", return_value=[(0, blank), (1, coded)]):
+        results = scan_pdf_pages(MagicMock())
+
+    assert list(results) == [1]
+    assert results[1][0]["text"] == "only_on_page_1"
+
+
 def test_generate_barcode_success(mock_zxing):
     mock_barcode = MagicMock()
     mock_barcode.to_image.return_value = np.zeros((50, 50, 3), dtype=np.uint8)

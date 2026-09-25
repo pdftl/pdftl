@@ -289,6 +289,19 @@ def test_remap_goto_action_explicit(remapper_setup):
     assert list(new_action.D)[2:] == [1600.0, 0.0, 1]
 
 
+def test_remap_goto_action_returns_no_action_when_copy_fails(remapper_setup, mocker):
+    remapper = remapper_setup["remapper"]
+    mocker.patch.object(
+        remapper.pdf, "copy_foreign", side_effect=ForeignObjectError("mocked copy error")
+    )
+    action = Dictionary(S=Name.GoTo, D=remapper_setup["source_dest_array"])
+
+    new_action, new_named_dest = remapper.remap_goto_action(action)
+
+    assert new_action is None
+    assert new_named_dest is None
+
+
 def test_copy_self_contained_action(remapper_setup):
     """Tests that a URI action is copied correctly."""
     remapper = remapper_setup["remapper"]

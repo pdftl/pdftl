@@ -568,6 +568,26 @@ def test_rename_font_objects_handles_malformed_composite_descendant():
     assert desc["/FontName"] == pikepdf.Name("/SubstitutedFont")
 
 
+def test_rename_font_objects_without_descriptor_renames_type0_and_descendant():
+    descendant = pikepdf.Dictionary(
+        {"/Subtype": pikepdf.Name("/CIDFontType2"), "/BaseFont": pikepdf.Name("/Old")}
+    )
+    font = pikepdf.Dictionary(
+        {
+            "/Subtype": pikepdf.Name("/Type0"),
+            "/BaseFont": pikepdf.Name("/Old"),
+            "/DescendantFonts": pikepdf.Array([descendant]),
+        }
+    )
+
+    _rename_font_objects(font, None, "New", pikepdf)
+
+    assert font["/BaseFont"] == pikepdf.Name("/New")
+    assert font.DescendantFonts[0]["/BaseFont"] == pikepdf.Name("/New")
+    assert "/FontDescriptor" not in font
+    assert "/FontDescriptor" not in font.DescendantFonts[0]
+
+
 def test_embed_fonts_unrecognized_located_extension_graceful_fallback(tmp_path):
     """Ensures file paths containing atypical extension formats are treated with a standard
     OpenType fallback layout block during injection."""

@@ -100,11 +100,10 @@ def _write_stanza_text_output(data: dict, file_obj) -> None:
         for key, val in encryption_details.items():
             writer(f"{key}: {val}")
 
-    if "Permissions" in data:
-        writer("PermissionBegin")
-        for perm_name, is_allowed in data["Permissions"].items():
-            val_str = "true" if is_allowed else "false"
-            writer(f"Permission{perm_name}: {val_str}")
+    writer("PermissionBegin")
+    for perm_name, is_allowed in data["Permissions"].items():
+        val_str = "true" if is_allowed else "false"
+        writer(f"Permission{perm_name}: {val_str}")
 
 
 def dump_encryption_cli_hook(result: OpResult, stage, _pipeline):

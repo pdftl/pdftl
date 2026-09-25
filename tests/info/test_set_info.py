@@ -553,7 +553,49 @@ def test_info_page_label_validation(minimal_pdf, caplog):
         start=0,
         num_style="DecimalArabicNumerals",  # VALID style
     )
-    _make_page_label(minimal_pdf, bad_start)
+    idx, label = _make_page_label(minimal_pdf, bad_start)
 
-    # Now this assertion should pass because the style check passed
+    assert (idx, label) == (None, None)
     assert "Skipping PageLabel with invalid PageLabelStart" in caplog.text
+
+
+def test_make_page_label_without_start_omits_st(minimal_pdf, caplog):
+    caplog.set_level(logging.WARNING)
+    idx, label = _make_page_label(minimal_pdf, PageLabelEntry(new_index=2, start=None, prefix="X"))
+    assert idx == 1
+    assert dict(label) == {"/P": "X"}
+    assert caplog.text == ""
+
+
+def test_set_page_labels_skips_invalid_entries(minimal_pdf):
+    from pdftl.info.set_info import _set_page_labels
+
+    _set_page_labels(
+        minimal_pdf,
+        [
+            PageLabelEntry(new_index=1, num_style="NoSuchStyle"),
+            PageLabelEntry(new_index=1, prefix="ok-"),
+        ],
+    )
+    nums = list(minimal_pdf.Root.PageLabels.Nums)
+    assert len(nums) == 2
+    assert nums[0] == 0
+    assert dict(nums[1]) == {"/P": "ok-"}
+
+
+def test_set_ids_on_pdf_without_trailer_id_creates_it(minimal_pdf, tmp_path):
+    assert "/ID" not in minimal_pdf.trailer
+    _set_ids(minimal_pdf, ["68656c6c6f"])
+    out = tmp_path / "out.pdf"
+    minimal_pdf.save(out)
+    with pikepdf.open(out) as reopened:
+        assert bytes(reopened.trailer.ID[0]) == b"hello"
+
+
+def test_reset_ids_with_empty_trailer_is_noop(caplog):
+    pdf = MagicMock(spec=pikepdf.Pdf)
+    pdf.trailer = pikepdf.Dictionary()
+    with caplog.at_level("INFO"):
+        _set_ids(pdf, ["RESET"])
+    assert "/ID" not in pdf.trailer
+    assert "PdfID0: RESET" not in caplog.text

@@ -97,6 +97,14 @@ def test_create_signature_exception_fallback():
             assert sig.return_annotation is inspect.Signature.empty
 
 
+def test_create_signature_without_function_has_empty_return_annotation():
+    op_name = "test_sig_no_function"
+    with patch("pdftl.core.executor.registry.operations", {op_name: {}}):
+        sig = api._create_signature(op_name)
+    assert sig.return_annotation is inspect.Signature.empty
+    assert c.INPUTS in sig.parameters
+
+
 # --- merged from test_api_logic_coverage.py ---
 
 

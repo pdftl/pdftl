@@ -355,6 +355,38 @@ class TestCidKeyedCffEndToEnd:
             is None
         )
 
+    @pytest.fixture
+    def broken_cid2_cff_path(self, cid_keyed_cff_path, tmp_path) -> Path:
+        """CID 2's charstring calls a local subroutine the font doesn't have."""
+        from io import BytesIO
+
+        from pdftl.fonts.cff_binary_utils import _decompile_bare_cff, _MinimalOTFontStub
+
+        font_set, topdict = _decompile_bare_cff(cid_keyed_cff_path.read_bytes())
+        topdict.CharStrings["cid00002"].setProgram([5, "callsubr", "endchar"])
+        buf = BytesIO()
+        font_set.compile(buf, otFont=_MinimalOTFontStub())
+        path = tmp_path / "broken_cid2.cff"
+        path.write_bytes(buf.getvalue())
+        return path
+
+    def test_uninterpretable_cid_charstring_omitted_from_widths(self, broken_cid2_cff_path):
+        widths = get_widths_from_cff(broken_cid2_cff_path, cid_to_gid_map="cff_native")
+        assert widths == {"0001": 500.0}
+
+    def test_uninterpretable_cid_charstring_left_unpatched(self, broken_cid2_cff_path, tmp_path):
+        assert (
+            patch_cff_widths(broken_cid2_cff_path, {"0002": 999.0}, cid_to_gid_map="cff_native")
+            is None
+        )
+
+        patched_bytes = patch_cff_widths(
+            broken_cid2_cff_path, {"0002": 999.0, "0001": 650.0}, cid_to_gid_map="cff_native"
+        )
+        patched_path = tmp_path / "patched.cff"
+        patched_path.write_bytes(patched_bytes)
+        assert get_widths_from_cff(patched_path, cid_to_gid_map="cff_native") == {"0001": 650.0}
+
     def test_name_keyed_read_ignores_cid_native_mode(self, cid_keyed_cff_path):
         """Without cid_to_gid_map='cff_native', a CID-keyed program is read
         as if it were name-keyed -- returning its synthetic charset names,

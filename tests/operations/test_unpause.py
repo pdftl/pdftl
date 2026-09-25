@@ -34,6 +34,14 @@ class TestUnpauseParams:
         dpi, ink, survival = _parse_unpause_args(["ink=auto"])
         assert ink == "auto"
 
+    @pytest.mark.parametrize("token", ["bogus", "dip=300", "1-5"])
+    def test_parse_unpause_args_rejects_unrecognised_tokens(self, token):
+        with pytest.raises(InvalidArgumentError, match=f"'unpause': unknown argument '{token}'"):
+            _parse_unpause_args([token, "dpi=100"])
+
+    def test_otsu_threshold_empty_array_uses_default(self):
+        assert _otsu_threshold(np.array([], dtype=np.uint8)) == 128
+
     def test_parse_unpause_args_invalid_dpi(self):
         with pytest.raises(InvalidArgumentError, match="'unpause': invalid dpi"):
             _parse_unpause_args(["dpi=potato"])

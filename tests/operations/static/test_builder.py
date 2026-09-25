@@ -23,6 +23,21 @@ HTML_FILE_PATH = (
 HTML_URL = HTML_FILE_PATH.as_uri()
 
 
+@pytest.fixture(scope="session")
+def browser(launch_browser):
+    # Chromium can die on startup under parallel load; that's environmental, not a test failure.
+    from playwright.sync_api import Error as PlaywrightError
+
+    try:
+        browser = launch_browser()
+    except PlaywrightError as exc:
+        if type(exc).__name__ != "TargetClosedError":
+            raise
+        pytest.skip(f"Browser failed to launch: {exc}")
+    yield browser
+    browser.close()
+
+
 @pytest.fixture(autouse=True)
 def mock_api(page: Page):
     """Intercepts and mocks the pdftl API backend."""

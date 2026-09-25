@@ -194,14 +194,12 @@ def _calculate_transformation_matrix(page, operations):
 
 
 def _step_matrix(op, v_x0, v_y0, v_w, v_h, pikepdf_matrix):
-    step_matrix = pikepdf_matrix()
-
     if op.name == "shift":
         dx = _eval_dim(op.params["dx"], v_w)
         dy = _eval_dim(op.params["dy"], v_h)
         step_matrix = pikepdf_matrix().translated(dx, dy)
 
-    elif op.name in ("scale", "spin"):
+    else:  # scale or spin
         if op.params.get("anchor_type") == "coord":
             offset_x = _eval_dim(op.params["anchor_x"], v_w)
             offset_y = _eval_dim(op.params["anchor_y"], v_h)

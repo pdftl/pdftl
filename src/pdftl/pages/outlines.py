@@ -167,14 +167,13 @@ def _get_source_action(source_item):
 
 
 def _apply_formatting_and_state(item):
-    """Post-processing layout step executed after outline tree closes."""
+    """Runs after the outline is saved, so every item has its .obj."""
     from pikepdf import Name
 
-    if hasattr(item, "obj") and item.obj is not None:
-        if hasattr(item, "_cached_color"):
-            item.obj[Name.C] = item._cached_color
-        if hasattr(item, "_cached_flags"):
-            item.obj[Name.F] = item._cached_flags
+    if hasattr(item, "_cached_color"):
+        item.obj[Name.C] = item._cached_color
+    if hasattr(item, "_cached_flags"):
+        item.obj[Name.F] = item._cached_flags
 
     for child in item.children:
         _apply_formatting_and_state(child)

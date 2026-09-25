@@ -268,10 +268,7 @@ def add_text_pdf(pdf: "Pdf", specs: list[str]) -> OpResult:
 
     drawer = TextDrawer(page_box=Rectangle(0, 0, 1, 1))
     overlay_page_indices = _build_overlay_index(pdf, page_rules, static_context, drawer)
-    overlay_bytes = drawer.save()
-
-    if overlay_bytes:
-        _apply_overlays(pdf, overlay_bytes, overlay_page_indices)
+    _apply_overlays(pdf, drawer.save(), overlay_page_indices)
 
     return OpResult(success=True, pdf=pdf)
 

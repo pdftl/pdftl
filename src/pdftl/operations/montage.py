@@ -125,7 +125,13 @@ def _parse_montage_config(specs: list[str], out_page_specs: list[str]) -> dict[s
         "gutter": 0.0,
         "canvas_size": parse_paper_spec("a4"),  # Default A4 Portrait
     }
-    pairs = parse_keyval_list(specs, bare_tokens=out_page_specs, lowercase_values=True)
+    pairs = parse_keyval_list(
+        specs,
+        bare_tokens=out_page_specs,
+        allowed_keys=["grid", "canvas", "margin", "gutter", "cols", "rows"],
+        lowercase_values=True,
+        context="montage",
+    )
     for k, v in pairs.items():
         config = _update_config_from_keyval(k, v, config)
     return config
@@ -156,7 +162,7 @@ def _update_config_from_keyval(key, val, config):
         config["margin"] = dim_str_to_pts(val)
     elif key == "gutter":
         config["gutter"] = dim_str_to_pts(val)
-    elif key in ("cols", "rows"):
+    else:
         try:
             config[key] = int(val)
         except ValueError as e:

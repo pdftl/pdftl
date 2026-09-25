@@ -180,6 +180,31 @@ class TestDumpFiles:
         # stored_size comes from attachment_metadata
         assert "stored_size" in rec
 
+    def test_pages_ignore_non_file_and_fs_less_annotations(self):
+        pdf = pikepdf.new()
+        pdf.add_blank_page()
+        pdf.add_blank_page()
+        pdf.attachments["pinned.txt"] = b"data"
+        filespec = pdf.attachments["pinned.txt"].obj
+        rect = [0, 0, 10, 10]
+        pdf.pages[0].Annots = pdf.make_indirect(
+            pikepdf.Array(
+                [
+                    pikepdf.Dictionary(Subtype=pikepdf.Name.Link, Rect=rect, FS=filespec),
+                    pikepdf.Dictionary(Subtype=pikepdf.Name.FileAttachment, Rect=rect),
+                ]
+            )
+        )
+        pdf.pages[1].Annots = pdf.make_indirect(
+            pikepdf.Array(
+                [pikepdf.Dictionary(Subtype=pikepdf.Name.FileAttachment, Rect=rect, FS=filespec)]
+            )
+        )
+
+        result = dump_files("f.pdf", pdf)
+
+        assert [(r["filename"], r["pages"]) for r in result.data] == [("pinned.txt", [2])]
+
 
 # ---------------------------------------------------------------------------
 # dump_files_cli_hook

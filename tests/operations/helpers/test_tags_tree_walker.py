@@ -867,3 +867,92 @@ def test_reading_order_lines_xobj_annotation_success(
     # The annotated line content (not the bare unannotated text) should
     # appear in the displayed stream lines.
     assert "% annotated comment" in out
+
+
+def _objr(pdf, page):
+    annot = pdf.make_indirect(pikepdf.Dictionary({"/Type": pikepdf.Name("/Annot")}))
+    return pikepdf.Dictionary({"/Type": pikepdf.Name("/OBJR"), "/Obj": annot, "/Pg": page.obj})
+
+
+def test_tree_node_skips_object_reference_children() -> None:
+    pdf = pikepdf.Pdf.new()
+    p1 = pdf.add_blank_page()
+    link = pikepdf.Dictionary(
+        {
+            "/S": pikepdf.Name("/Link"),
+            "/K": pikepdf.Array(
+                [_objr(pdf, p1), 3, pikepdf.Dictionary({"/S": pikepdf.Name("/Span")})]
+            ),
+        }
+    )
+    node = _tree_node(link, _build_page_objgen_index(pdf))
+    assert node["children"] == [{"mcid": 3}, {"tag": "Span"}]
+
+
+def test_reading_order_lines_skips_object_reference_children() -> None:
+    pdf = pikepdf.Pdf.new()
+    p1 = pdf.add_blank_page()
+    link = pikepdf.Dictionary(
+        {
+            "/S": pikepdf.Name("/Link"),
+            "/Pg": p1.obj,
+            "/K": pikepdf.Array(
+                [_objr(pdf, p1), pikepdf.Dictionary({"/S": pikepdf.Name("/Span")})]
+            ),
+        }
+    )
+    pdf.Root.StructTreeRoot = pikepdf.Dictionary({"/K": link})
+    lines = _reading_order_lines(pdf, {1}, annotate=False, show_streams=False)
+    assert lines == ["[Link] page=1 (1 children)", "  [Span] page=1"]
+
+
+def test_reading_order_lines_out_of_scope_parent_ignores_its_mcids() -> None:
+    pdf = pikepdf.Pdf.new()
+    p1 = pdf.add_blank_page()
+    p2 = pdf.add_blank_page()
+    h1 = pikepdf.Dictionary({"/S": pikepdf.Name("/H1"), "/Pg": p1.obj})
+    doc = pikepdf.Dictionary(
+        {"/S": pikepdf.Name("/Document"), "/Pg": p2.obj, "/K": pikepdf.Array([7, h1])}
+    )
+    pdf.Root.StructTreeRoot = pikepdf.Dictionary({"/K": doc})
+    lines = _reading_order_lines(pdf, {1}, annotate=False, show_streams=False)
+    assert lines == ["[H1] page=1"]
+
+
+def _xobj_tagged_pdf(stream_bytes, mcids):
+    pdf = pikepdf.Pdf.new()
+    p1 = pdf.add_blank_page()
+    stm = pdf.make_stream(stream_bytes)
+    stm["/Type"] = pikepdf.Name("/XObject")
+    stm["/Subtype"] = pikepdf.Name("/Form")
+    stm["/BBox"] = pikepdf.Array([0, 0, 10, 10])
+    kids = [pikepdf.Dictionary({"/MCID": m, "/Stm": stm}) for m in mcids]
+    div = pikepdf.Dictionary(
+        {"/S": pikepdf.Name("/Div"), "/Pg": p1.obj, "/K": pikepdf.Array(kids)}
+    )
+    pdf.Root.StructTreeRoot = pikepdf.Dictionary({"/K": div})
+    return pdf, stm
+
+
+def test_reading_order_lines_parses_shared_xobject_once() -> None:
+    import pdftl.operations.helpers.tags_tree_walker as tw
+
+    pdf, stm = _xobj_tagged_pdf(b"/P <</MCID 1>> BDC\nEMC\n/P <</MCID 2>> BDC\nEMC\n", [1, 2])
+    with patch.object(tw, "_parse_and_build_xobj_map", wraps=tw._parse_and_build_xobj_map) as spy:
+        lines = _reading_order_lines(pdf, {1}, annotate=False, show_streams=True)
+    obj_id = f"{stm.objgen[0]}:{stm.objgen[1]}"
+    out = "\n".join(lines)
+    assert f"[MCID 1 in XObject {obj_id}]  stream_lines=1-2" in out
+    assert f"[MCID 2 in XObject {obj_id}]  stream_lines=3-4" in out
+    assert spy.call_count == 1
+
+
+@patch("pdftl.operations.helpers.stream_annotator.annotate_stream")
+def test_reading_order_lines_xobj_annotation_line_mismatch_keeps_raw_lines(mock_annotate) -> None:
+    pdf, _stm = _xobj_tagged_pdf(b"/P <</MCID 1>> BDC\nEMC\n", [1])
+    mock_annotate.return_value = b"% extra\n/P <</MCID 1>> BDC % note\nEMC\n"
+    lines = _reading_order_lines(pdf, {1}, annotate=True, show_streams=True)
+    out = "\n".join(lines)
+    assert "% note" not in out
+    assert "% extra" not in out
+    assert "    /P << /MCID 1 >> BDC\n    EMC" in out

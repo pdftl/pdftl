@@ -62,6 +62,11 @@ def test_parse_montage_config_invalid_grid():
         _parse_montage_config(["grid=NOTGRID"], [])
 
 
+def test_parse_montage_config_rejects_unknown_key():
+    with pytest.raises(InvalidArgumentError, match="montage: unknown parameter 'colour'"):
+        _parse_montage_config(["colour=red"], [])
+
+
 def test_parse_montage_config_page_specs_passthrough():
     """Non key=value tokens should be collected as page specs."""
     page_specs = []

@@ -53,6 +53,21 @@ def test_pager_windows_fallback(mock_platform):
         mock_stdout_write.assert_called_once_with("line 1\nline 2\nline 3\n")
 
 
+@patch("platform.system", return_value="Windows")
+def test_close_after_fallback_does_not_repeat_output(mock_platform):
+    stream = ThresholdPagerStream(threshold=2)
+
+    with patch("sys.stdout.write") as mock_stdout_write:
+        stream.write("line 1\nline 2\n")
+        stream.write("line 3\n")
+        stream.close()
+
+    assert [c.args[0] for c in mock_stdout_write.call_args_list] == [
+        "line 1\nline 2\n",
+        "line 3\n",
+    ]
+
+
 @patch("platform.system", return_value="Linux")
 @patch("subprocess.Popen")
 def test_pager_broken_pipe(mock_popen, mock_platform):

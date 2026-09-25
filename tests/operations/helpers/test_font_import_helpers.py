@@ -1754,3 +1754,96 @@ def test_import_widths_preserve_mode_returns_false(tmp_path):
     res = import_widths(font_obj, font_entry, tmp_path, mappings, pikepdf)
     assert res is False
     assert "/Widths" not in font_obj
+
+
+@pytest.mark.parametrize("bbox", [[0, 0, 1000], "0 0 1000 1000"])
+def test_import_bbox_ignores_wrong_shape(bbox):
+    from pdftl.operations.helpers.font_import_helpers import _import_bbox
+
+    descriptor = pikepdf.Dictionary({"/FontBBox": pikepdf.Array([1, 2, 3, 4])})
+    assert _import_bbox(descriptor, {"FontBBox": bbox}, pikepdf) is False
+    assert descriptor["/FontBBox"] == [1, 2, 3, 4]
+
+
+def test_import_style_ignores_non_dict_value():
+    from pdftl.operations.helpers.font_import_helpers import _import_style
+
+    style = pikepdf.Dictionary({"/Panose": pikepdf.String(b"\x01")})
+    descriptor = pikepdf.Dictionary({"/Style": style})
+    assert _import_style(descriptor, {"Style": "0102"}, pikepdf) is False
+    assert bytes(descriptor["/Style"]["/Panose"]) == b"\x01"
+
+
+def test_import_type3_font_skips_unknown_and_non_stream_glyphs(tmp_path):
+    bar = "=" * 72
+    blocks = [f"{bar}\n=== Font 1_0_T / CharProcs /{g}\n{bar}\n{g} body\n" for g in "ABC"]
+    (tmp_path / "t.charprocs").write_text("".join(blocks))
+    pdf = pikepdf.new()
+    charprocs = pikepdf.Dictionary({"/A": pdf.make_stream(b"old"), "/B": pikepdf.Name("/Bad")})
+    font_obj = pikepdf.Dictionary({"/CharProcs": charprocs})
+
+    import_type3_font(font_obj, {"charprocs_file": "t.charprocs"}, tmp_path)
+
+    assert charprocs["/A"].read_bytes().strip() == b"A body"
+    assert charprocs["/B"] == pikepdf.Name("/Bad")
+    assert "/C" not in charprocs
+
+
+def _widths_sync_setup(tmp_path, monkeypatch, sync_mode, subtype):
+    import pdftl.operations.helpers.font_import_helpers as fih
+
+    (tmp_path / "test.ttf").write_bytes(b"dummy")
+    (tmp_path / "sidecar.json").write_text(json.dumps({"width_sync_mode": sync_mode}))
+    font_entry = {
+        "embedded_file": "test.ttf",
+        "descriptor_key": "FontFile2",
+        "base_font": "F",
+        "sidecar_json_file": "sidecar.json",
+        "cid_to_gid_map": "explicit",
+        "cid_to_gid_map_file": "missing.json",
+    }
+    font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name(subtype)})
+    written = []
+    monkeypatch.setattr(fih, "update_font_widths", lambda f, w, p: written.append(dict(w)))
+    return fih, font_obj, font_entry, written
+
+
+@pytest.mark.parametrize("sync_mode", ["patch_font_metrics", "squash_font_vectors"])
+def test_import_widths_type0_unresolved_without_pdf_widths_writes_nothing(
+    tmp_path, monkeypatch, sync_mode
+):
+    _fih, font_obj, font_entry, written = _widths_sync_setup(
+        tmp_path, monkeypatch, sync_mode, "/Type0"
+    )
+    mappings = {"0001": {"unicode": "A"}, "0002": {"width": {"font": 500.0}}}
+    assert import_widths(font_obj, font_entry, tmp_path, mappings, pikepdf) is False
+    assert written == []
+
+
+def test_import_widths_squash_miss_without_pdf_widths_writes_nothing(tmp_path, monkeypatch):
+    fih, font_obj, font_entry, written = _widths_sync_setup(
+        tmp_path, monkeypatch, "squash_font_vectors", "/TrueType"
+    )
+    monkeypatch.setattr(fih, "squash_font_file_vectors", lambda *a, **k: None)
+    assert import_widths(font_obj, font_entry, tmp_path, {}, pikepdf) is False
+    assert written == []
+
+
+@pytest.mark.parametrize(
+    "sync_mode, func",
+    [
+        ("patch_font_metrics", "patch_font_file_metrics"),
+        ("squash_font_vectors", "squash_font_file_vectors"),
+    ],
+)
+def test_import_widths_failed_injection_still_updates_pdf_widths(
+    tmp_path, monkeypatch, sync_mode, func
+):
+    fih, font_obj, font_entry, written = _widths_sync_setup(
+        tmp_path, monkeypatch, sync_mode, "/TrueType"
+    )
+    monkeypatch.setattr(fih, func, lambda *a, **k: b"modified")
+    monkeypatch.setattr(fih, "_inject_font_bytes", lambda *a: False)
+    mappings = {"41": {"width": {"pdf": 600.0}}}
+    assert import_widths(font_obj, font_entry, tmp_path, mappings, pikepdf) is True
+    assert written == [{"41": 600.0}]

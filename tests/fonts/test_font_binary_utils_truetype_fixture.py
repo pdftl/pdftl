@@ -117,3 +117,19 @@ class TestPatchAndSquashRealTrueTypeViaDifferences:
 
     def test_squash_font_file_vectors_no_match_returns_none(self, simple_ttf_path):
         assert squash_font_file_vectors(simple_ttf_path, {"FF": 1.0}) is None
+
+    def test_squash_outline_less_glyph_updates_advance_only(self, tmp_path):
+        from fontTools.ttLib import TTFont
+
+        path = tmp_path / "space.ttf"
+        path.write_bytes(build_truetype_bytes({"space": (250, [])}))
+
+        squashed = squash_font_file_vectors(path, {"20": 500.0}, differences=[0x20, "/space"])
+        assert squashed is not None
+
+        squashed_path = tmp_path / "squashed.ttf"
+        squashed_path.write_bytes(squashed)
+        tt = TTFont(squashed_path)
+        raw_width, _ = tt["hmtx"]["space"]
+        assert raw_width * 1000.0 / tt["head"].unitsPerEm == pytest.approx(500.0)
+        assert tt["glyf"]["space"].numberOfContours == 0

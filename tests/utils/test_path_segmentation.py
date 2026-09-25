@@ -212,6 +212,19 @@ class TestSegmentRect:
         assert (5.0, 5.0) in pts
         assert (1.0, 5.0) in pts
 
+    def test_re_subpath_is_closed(self):
+        instrs = [_op("re", 1.0, 2.0, 4.0, 3.0), _op("S")]
+        path = _paths_from(segment(instrs, _default_config()))[0]
+        assert path.subpaths[0].closed is True
+
+    def test_re_stroke_survives_simplification_with_all_four_sides(self):
+        from pdftl.utils.path_geometry import simplify_path
+
+        config = _default_config(min_points=2)
+        path = _paths_from(segment([_op("re", 1.0, 2.0, 4.0, 3.0), _op("S")], config))[0]
+        ops = [str(op) for _, op in serialize([(path, simplify_path(path, config))])]
+        assert ops in (["re", "S"], ["m", "l", "l", "l", "h", "S"])
+
 
 # ---------------------------------------------------------------------------
 # segment() — clipping paths
@@ -532,6 +545,68 @@ class TestSegmentCoalesceStrokes:
         paths = _paths_from(result)
         assert len(paths) == 1
         assert len(paths[0].subpaths) == 2
+
+    def test_stroke_does_not_merge_into_following_rectangle(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 10.0, 10.0),
+            _op("S"),
+            _op("re", 10.0, 10.0, 5.0, 5.0),
+            _op("S"),
+        ]
+        paths = _paths_from(segment(instrs, _default_config(coalesce_strokes=True)))
+        assert len(paths) == 2
+
+    def test_stroke_does_not_merge_into_following_closed_subpath(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 10.0, 10.0),
+            _op("S"),
+            _op("m", 10.0, 10.0),
+            _op("l", 15.0, 10.0),
+            _op("l", 15.0, 15.0),
+            _op("h"),
+            _op("S"),
+        ]
+        paths = _paths_from(segment(instrs, _default_config(coalesce_strokes=True)))
+        assert len(paths) == 2
+
+    def test_closed_subpath_does_not_absorb_stroke_from_its_last_vertex(self):
+        # After 'h' the current point is back at (0, 0), not at (10, 10).
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 10.0, 0.0),
+            _op("l", 10.0, 10.0),
+            _op("h"),
+            _op("S"),
+            _op("m", 10.0, 10.0),
+            _op("l", 20.0, 20.0),
+            _op("S"),
+        ]
+        paths = _paths_from(segment(instrs, _default_config(coalesce_strokes=True)))
+        assert len(paths) == 2
+
+    def test_coalesce_keeps_leading_non_moveto_ops_of_later_path(self):
+        instrs = [
+            _op("m", 0.0, 0.0),
+            _op("l", 1.0, 0.0),
+            _op("S"),
+            _op("re", 5.0, 5.0, 0.0, 10.0),  # degenerate, contributes no points
+            _op("m", 1.0, 0.0),
+            _op("l", 2.0, 0.0),
+            _op("S"),
+        ]
+        paths = _paths_from(segment(instrs, _default_config(coalesce_strokes=True)))
+        assert len(paths) == 1
+        assert paths[0].subpaths[0].points == [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)]
+        assert [str(op) for _, op in paths[0].original_instructions] == [
+            "m",
+            "l",
+            "re",
+            "m",
+            "l",
+            "S",
+        ]
 
     def test_final_w_exception_handling(self):
         """Ensures exception boundaries are protected when floating conversion fails on comparison checks."""

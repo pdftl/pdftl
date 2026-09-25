@@ -48,9 +48,77 @@ def test_get_params_invalid_size(mock_parse):
 
 def test_get_attachment_size_from_metadata():
     mock_att = MagicMock()
-    # Mock deeply nested metadata dictionary: obj.get("/EF").get("/F").get("/Length")
-    mock_att.obj.get.return_value.get.return_value.get.return_value = 1048
+    # obj.get("/EF").get("/F").get("/Params").get("/Size")
+    mock_att.obj.get.return_value.get.return_value.get.return_value.get.return_value = 1048
     assert _get_attachment_size(mock_att) == 1048
+
+
+def _reopened(pdf):
+    import io
+
+    import pikepdf
+
+    buf = io.BytesIO()
+    pdf.save(buf, compress_streams=True)
+    return pikepdf.open(buf)
+
+
+def test_attachment_size_is_file_size_not_compressed_length():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.attachments["big.txt"] = b"x" * 2000
+    pdf = _reopened(pdf)
+    assert int(pdf.attachments["big.txt"].obj.EF.F.Length) < 1000
+
+    delete_attachments(pdf, ["(minbytes=1k)"])
+
+    assert "big.txt" not in pdf.attachments
+
+
+def test_attachment_size_falls_back_to_contents_without_size_param():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.attachments["small.txt"] = b"y" * 300
+    pdf.attachments["large.txt"] = b"z" * 3000
+    for name in ("small.txt", "large.txt"):
+        del pdf.attachments[name].obj.EF.F["/Params"]
+    pdf = _reopened(pdf)
+
+    delete_attachments(pdf, ["(minbytes=1k)"])
+
+    assert list(pdf.attachments) == ["small.txt"]
+
+
+def test_filters_keep_non_matching_attachments_and_ignore_other_annots():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.attachments["data.csv"] = b"a,b"
+    pdf.attachments["notes.txt"] = b"notes"
+    rect = [0, 0, 10, 10]
+    pdf.pages[0].Annots = pdf.make_indirect(
+        pikepdf.Array(
+            [
+                pikepdf.Dictionary(Subtype=pikepdf.Name.Text, Rect=rect),
+                pikepdf.Dictionary(Subtype=pikepdf.Name.FileAttachment, Rect=rect),
+                pikepdf.Dictionary(
+                    Subtype=pikepdf.Name.FileAttachment,
+                    Rect=rect,
+                    FS=pdf.attachments["data.csv"].obj,
+                ),
+            ]
+        )
+    )
+
+    delete_attachments(pdf, ["1(ext=csv)"])
+
+    assert list(pdf.attachments) == ["notes.txt"]
+    assert [str(a.Subtype) for a in pdf.pages[0].Annots] == ["/Text", "/FileAttachment"]
 
 
 def test_get_attachment_size_fallback():
@@ -263,3 +331,27 @@ def test_delete_attachments_no_annots_on_page():
     # Assert successful deletion and that the missing /Annots dict was handled
     assert result.success is True
     assert "dummy.txt" not in pdf.attachments
+
+
+def test_deleting_page_attachment_removes_its_annotation():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.attachments["pinned.txt"] = b"data"
+    pdf.pages[0].Annots = pdf.make_indirect(
+        pikepdf.Array(
+            [
+                pikepdf.Dictionary(
+                    Subtype=pikepdf.Name.FileAttachment,
+                    Rect=[0, 0, 10, 10],
+                    FS=pdf.attachments["pinned.txt"].obj,
+                )
+            ]
+        )
+    )
+
+    delete_attachments(pdf, [])
+
+    assert not pdf.attachments
+    assert "/Annots" not in pdf.pages[0]

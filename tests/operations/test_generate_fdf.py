@@ -122,7 +122,7 @@ def test_generate_fdf_binary_string(fdf_source_pdf, tmp_path):
             raise ValueError("Binary data")
 
         def unparse(self):
-            return "<BINARY>"
+            return b"<BINARY>"
 
     # 1. Patch 'String' in the module so `isinstance(val, String)` returns True
     # 2. Patch 'Form' to return our FailingString object as a field value
@@ -383,7 +383,7 @@ def test_unparseable_value_fallback():
 
         def unparse(self):
             # Return the fallback value
-            return "<FEFF0041>"
+            return b"<FEFF0041>"
 
     # 2. Patch 'pikepdf.String' with our FakeString class.
     # When the function under test does 'from pikepdf import String',

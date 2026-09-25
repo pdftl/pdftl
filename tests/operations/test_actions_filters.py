@@ -374,3 +374,110 @@ def test_document_actions_edge_cases():
     res = dump_actions(pdf)
     assert res.success
     assert len(res.data) == 0
+
+
+def _js_action(pdf, code):
+    return pdf.make_indirect(
+        pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String(code))
+    )
+
+
+def test_action_without_s_has_no_subtype_and_is_not_type_selected():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    annot = pikepdf.Dictionary(
+        Type=pikepdf.Name.Annot,
+        Subtype=pikepdf.Name.Link,
+        Rect=[0, 0, 10, 10],
+        A=pikepdf.Dictionary(URI=pikepdf.String("http://example.com")),
+    )
+    page.Annots = pdf.make_indirect(pikepdf.Array([pdf.make_indirect(annot)]))
+
+    res = dump_actions(pdf)
+    assert len(res.data) == 1
+    props = res.data[0]["Properties"]
+    assert "/Subtype" not in props
+    assert "/S" not in props
+
+    delete_actions(pdf, specs=["/URI"])
+    assert "/A" in pdf.pages[0].Annots[0]
+
+    delete_actions(pdf, specs=None)
+    assert "/A" not in pdf.pages[0].Annots[0]
+
+
+def test_non_action_next_entries_are_not_chain_links():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    open_action = _js_action(pdf, "open")
+    open_action.Next = 5
+    pdf.Root.OpenAction = open_action
+    wc = _js_action(pdf, "wc")
+    wc.Next = pikepdf.Array([_js_action(pdf, "link"), 7])
+    pdf.Root.AA = pikepdf.Dictionary(WC=wc)
+
+    locations = [e["Location"] for e in dump_actions(pdf).data]
+
+    assert locations == [
+        "Document OpenAction",
+        "Document Additional Action (/WC)",
+        "Document Additional Action (/WC) -> Chain Link 1",
+    ]
+
+
+def test_non_dictionary_form_kids_are_skipped():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    kid = pdf.make_indirect(
+        pikepdf.Dictionary(T=pikepdf.String("kid"), AA=pikepdf.Dictionary(K=_js_action(pdf, "k")))
+    )
+    parent = pdf.make_indirect(
+        pikepdf.Dictionary(T=pikepdf.String("parent"), Kids=pikepdf.Array([7, kid]))
+    )
+    pdf.Root.AcroForm = pikepdf.Dictionary(Fields=pikepdf.Array([parent]))
+
+    locations = [e["Location"] for e in dump_actions(pdf).data]
+    assert locations == ["Form Field 'kid' Trigger (/K)"]
+
+    delete_actions(pdf, specs=None)
+    assert "/AA" not in kid
+    assert list(parent.Kids)[0] == 7
+
+
+def test_delete_actions_on_merged_field_widget_deletes_shared_trigger_once():
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    widget = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot,
+            Subtype=pikepdf.Name.Widget,
+            FT=pikepdf.Name.Tx,
+            T=pikepdf.String("name"),
+            Rect=[0, 0, 10, 10],
+            AA=pikepdf.Dictionary(K=_js_action(pdf, "k")),
+        )
+    )
+    page.Annots = pdf.make_indirect(pikepdf.Array([widget]))
+    pdf.Root.AcroForm = pikepdf.Dictionary(Fields=pikepdf.Array([widget]))
+
+    assert len(dump_actions(pdf).data) == 2
+
+    res = delete_actions(pdf, specs=None)
+
+    assert res.success
+    assert "/AA" not in widget
+    assert dump_actions(pdf).data == []
+
+
+def test_delete_actions_keeps_names_dict_without_javascript():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    dests = pikepdf.NameTree.new(pdf)
+    dests["here"] = pikepdf.Array([pdf.pages[0].obj, pikepdf.Name.Fit])
+    pdf.Root.Names = pdf.make_indirect(pikepdf.Dictionary(Dests=dests.obj))
+    pdf.Root.OpenAction = _js_action(pdf, "open")
+
+    delete_actions(pdf, specs=None)
+
+    assert "/OpenAction" not in pdf.Root
+    assert "here" in pikepdf.NameTree(pdf.Root.Names.Dests)

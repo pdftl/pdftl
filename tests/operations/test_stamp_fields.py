@@ -335,3 +335,13 @@ def test_get_field_widgets_cycle():
     widgets = _get_field_widgets(node1_obj, pikepdf)
 
     assert widgets == []
+
+
+def test_get_field_widgets_collects_every_direct_kid():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    kids = [pikepdf.Dictionary(Rect=pikepdf.Array([0, 0, i + 1, 1])) for i in range(2)]
+    parent = pdf.make_indirect(pikepdf.Dictionary(Kids=pikepdf.Array(kids)))
+    widgets = _get_field_widgets(parent, pikepdf)
+    assert [list(w.Rect) for w in widgets] == [[0, 0, 1, 1], [0, 0, 2, 1]]

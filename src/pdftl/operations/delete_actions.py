@@ -148,13 +148,11 @@ def _execute_deletions(pdf, to_delete):
         t = item["type"]
         if t == "document_open":
             del pdf.Root["/OpenAction"]
-        elif t in ("document_aa", "page_aa", "annot_aa", "form_field_aa"):
+        elif t in ("document_aa", "page_aa", "annot_aa", "form_field_aa", "js_name"):
             _delete_dict_key(item["parent"], item["key"])
         elif t in ("annot_a", "outline"):
             _delete_dict_key(item["parent"], "/A")
-        elif t == "js_name":
-            _delete_js_name(pdf, item["key"])
-        elif t == "next_chain":
+        else:
             _delete_chain_link(item)
 
     _clean_empty_parents(pdf)
@@ -163,15 +161,6 @@ def _execute_deletions(pdf, to_delete):
 def _delete_dict_key(parent, key):
     if key in parent:
         del parent[key]
-
-
-def _delete_js_name(pdf, key):
-    if "/Names" in pdf.Root and "/JavaScript" in pdf.Root["/Names"]:
-        from pikepdf import NameTree
-
-        js_tree = NameTree(pdf.Root["/Names"]["/JavaScript"])
-        if key in js_tree:
-            del js_tree[key]
 
 
 def _delete_chain_link(item):

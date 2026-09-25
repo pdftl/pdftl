@@ -102,6 +102,60 @@ def test_dump_fields_checkbox_options():
         assert field["FieldValue"] == "Yes"
 
 
+def test_dump_fields_checkbox_options_deduplicated_across_appearances():
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+
+        def states():
+            return pikepdf.Dictionary(
+                {"/Yes": pikepdf.Stream(pdf, b""), "/Off": pikepdf.Stream(pdf, b"")}
+            )
+
+        field_dict = pdf.make_indirect(
+            pikepdf.Dictionary(
+                {
+                    "/Type": pikepdf.Name("/Annot"),
+                    "/Subtype": pikepdf.Name("/Widget"),
+                    "/FT": pikepdf.Name("/Btn"),
+                    "/T": "Box",
+                    "/Rect": [0, 0, 10, 10],
+                    "/AP": pikepdf.Dictionary({"/N": states(), "/D": states()}),
+                    "/P": pdf.pages[0].obj,
+                }
+            )
+        )
+        pdf.Root.AcroForm = pikepdf.Dictionary({"/Fields": pikepdf.Array([field_dict])})
+        pdf.pages[0].Annots = pikepdf.Array([field_dict])
+
+        result = dump_data_fields(pdf)
+
+        assert result.data[0]["FieldStateOption"] == ["Off", "Yes"]
+
+
+def test_dump_fields_skips_childless_non_field_nodes():
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        stray = pdf.make_indirect(pikepdf.Dictionary({"/T": pikepdf.String("stray")}))
+        text = pdf.make_indirect(
+            pikepdf.Dictionary(
+                {
+                    "/Type": pikepdf.Name("/Annot"),
+                    "/Subtype": pikepdf.Name("/Widget"),
+                    "/FT": pikepdf.Name("/Tx"),
+                    "/T": pikepdf.String("text"),
+                    "/V": pikepdf.String("hello"),
+                    "/Rect": [0, 0, 10, 10],
+                }
+            )
+        )
+        pdf.pages[0].Annots = pdf.make_indirect(pikepdf.Array([text]))
+        pdf.Root.AcroForm = pikepdf.Dictionary({"/Fields": pikepdf.Array([stray, text])})
+
+        result = dump_data_fields(pdf)
+
+        assert [(f["FieldName"], f["FieldValue"]) for f in result.data] == [("text", "hello")]
+
+
 def test_dump_fields_radio_group_kids():
     """
     Covers lines 256-257.

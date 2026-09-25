@@ -2,7 +2,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pdftl.utils.page_images import iter_pages_as_pil, render_page_to_pil
+from pdftl.utils.page_images import (
+    iter_pages_as_pil,
+    render_page_region_to_pil,
+    render_page_to_pil,
+)
 
 
 @pytest.fixture
@@ -107,3 +111,19 @@ def test_iter_pages_as_pil_cleanup_on_error(mock_deps, mock_pypdfium2):
         next(generator)
 
     assert not mock_doc.close.called
+
+
+@pytest.mark.parametrize(
+    "render",
+    [
+        lambda pdf: render_page_to_pil(pdf, 0, 72.0),
+        lambda pdf: render_page_region_to_pil(pdf, 0, 72.0, (0, 0, 0, 0)),
+    ],
+    ids=["full_page", "region"],
+)
+def test_render_zero_page_pdf_raises_pdfium_error(render):
+    pdfium = pytest.importorskip("pypdfium2")
+    import pikepdf
+
+    with pikepdf.new() as pdf, pytest.raises(pdfium.PdfiumError):
+        render(pdf)
