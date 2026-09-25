@@ -142,6 +142,8 @@ class SimplifyConfig:
         min_points:       Minimum subpath length before simplification is tried.
         max_error_scale:  Reparameterization abandonment threshold multiplier.
         coalesce_strokes: Whether to merge visually contiguous ink strokes.
+        max_stream_size:  Content streams larger than this (decoded bytes) are skipped;
+                          memory grows by roughly 45 bytes per content byte.
     """
 
     tolerance: float = 0.15
@@ -151,3 +153,4 @@ class SimplifyConfig:
     min_points: int = 4
     max_error_scale: float = 4.0
     coalesce_strokes: bool = True
+    max_stream_size: int = 16 * 1024 * 1024

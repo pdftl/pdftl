@@ -23,7 +23,10 @@ from pdftl.operations.parsers.modify_images_parser import parse_modify_images_ar
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.images.finders import extract_pdf_images
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
-from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
+from pdftl.utils.pikepdf_compatibility_utils import (
+    as_pil_image_compat,
+    image_extraction_errors,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +310,7 @@ def _build_callbacks(
             pdf_img = PdfImage(xobj)
             pil_img = as_pil_image_compat(pdf_img)
             ensure_thread_safe(pil_img)
-        except (pikepdf.PdfError, ValueError) as err:
+        except (pikepdf.PdfError, ValueError, *image_extraction_errors()) as err:
             logger.warning(
                 "Page %s: Skipped unextractable asset '%s': %s",
                 img_item["page_num"],

@@ -450,6 +450,9 @@ def _build_save_options(options, input_context):
         "compress_streams": not use_uncompress,
         "object_stream_mode": obj_mode,
     }
+    if use_uncompress:
+        # Without a decode level, already-Flate streams would be copied still compressed.
+        ret["stream_decode_level"] = pikepdf.StreamDecodeLevel.generalized
     if use_fast:
         # generating object streams seems cheap, so we don't change it. maybe revisit
         ret["stream_decode_level"] = pikepdf.StreamDecodeLevel.none

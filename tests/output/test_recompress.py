@@ -67,3 +67,11 @@ def test_recompress_ignored_with_conflicting_option(conflict, caplog):
 
 def test_recompress_sets_pikepdf_flag():
     assert _build_save_options({"recompress": True}, MagicMock())["recompress_flate"] is True
+
+
+def test_recompress_option_is_registered():
+    from pdftl.core.registry import registry
+    from pdftl.output.save import _recompress_option
+
+    _recompress_option()
+    assert "recompress" in registry.options

@@ -99,11 +99,11 @@ def test_lossless_merges_duplicates_and_recompresses(tmp_path):
 
 
 def test_explicit_output_options_override_shrink_hints(tmp_path):
-    # An explicit `uncompress` beats shrink's recompress hint: the level-1 bytes survive.
+    # An explicit `uncompress` beats shrink's recompress hint.
     pdf = _pdf_with_duplicate_images()
     shrink(pdf, [], str(tmp_path / "out.pdf"))
     with _save(pdf, tmp_path / "out.pdf", {"uncompress": True}) as out:
-        assert out.pages[0].Contents.read_raw_bytes() == zlib.compress(CONTENT, 1)
+        assert out.pages[0].Contents.read_raw_bytes() == CONTENT
 
 
 def test_level_hints_left_for_save():
@@ -243,8 +243,11 @@ def test_content_streams_cover_arrays_forms_and_tiling_patterns():
 
     pdf = pikepdf.new()
     pdf.add_blank_page()
+    pdf.add_blank_page()
     parts = [pdf.make_stream(b"0 0 m"), pdf.make_stream(b"1 1 l S")]
     pdf.pages[0].Contents = pikepdf.Array(parts)
+    if "/Contents" in pdf.pages[1].obj:
+        del pdf.pages[1].obj["/Contents"]  # a page with no content at all
     form = _form(pdf, b"f")
     pattern = pdf.make_stream(b"0 0 1 1 re f")
     pattern.PatternType = 1

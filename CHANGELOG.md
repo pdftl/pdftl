@@ -29,6 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `simplify_vectors` no longer makes a content stream bigger (it keeps the original when the
+  simplified one would not compress smaller), uses less memory, and skips content streams over
+  the new `max_stream_size` (default 16MB) instead of exhausting memory on them
+
+- `subset_fonts` no longer changes how small text renders: it keeps the font's original
+  font-wide bounding box (a recomputed, tighter one altered Poppler's rendering below about
+  150 dpi) and its embedded bitmap strikes
+
+- `uncompress` now really stores streams uncompressed: streams that were already
+  Flate-compressed in the input used to be copied still compressed
+
+- Images decoded through the low-level fallback (used when pikepdf cannot extract an image,
+  for example by `recolor_images` and `export_images`) now have their `/Decode` array applied,
+  like every other image, instead of coming out inverted; encoded image data that happened to
+  be longer than the raw pixel size is no longer misread as raw pixels
+
+- `resample_images` and `modify_images` skip images Pillow cannot represent (such as 5-ink
+  DeviceN "hi-fi" images) instead of aborting the whole operation
+
 - Embedded Type 1 fonts with no eexec trailer (`/Length3 0`, as TeX-produced PDFs commonly
   have) now get their widths read and patched, rather than silently skipped
 

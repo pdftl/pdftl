@@ -30,6 +30,7 @@ from pdftl.core.registry import register_operation
 from pdftl.core.core_types import OpResult
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
+from pdftl.utils.arg_helpers import parse_size_to_bytes
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.path_geometry import simplify_path
 from pdftl.utils.path_types import Path, SimplifiedPath, SimplifyConfig
@@ -48,6 +49,7 @@ _ALLOWED_KEYS = {
     "max_error_scale",
     "pages",
     "coalesce_strokes",
+    "max_stream_size",
 }
 
 
@@ -61,6 +63,8 @@ class SimplifyStats:
     """Metrics collected across a full document pass."""
 
     streams_processed: int = 0
+    streams_kept: int = 0  # simplified result was not smaller, original kept
+    streams_skipped: int = 0  # over max_stream_size
     paths_total: int = 0
     paths_optimised: int = 0
     paths_fallback: int = 0
@@ -157,12 +161,18 @@ cannot be performed safely, the original path is preserved unchanged.
 * Error multiplier used by curve-fitting heuristics when attempting iterative refinement before
   subdivision.
 
+**`max_stream_size`** (size, default: `16MB`)
+
+* Skip content streams larger than this (decoded). Memory use grows by roughly 45 bytes per
+  byte of content, so a single 80 MB page would need several gigabytes.
+
 ## Notes
 
 - Tolerances are specified in device-space points, not PDF user-space units.
 - Graphics-state transforms (`cm`, `q`, `Q`) are tracked automatically.
 - Form XObjects and Tiling Patterns are processed recursively.
-- When simplification is not beneficial, the original path is emitted unchanged.
+- When simplification is not beneficial, the original path is emitted unchanged, and a stream
+  whose simplified form would not be smaller once compressed is left as it was.
 """
 
 
@@ -257,6 +267,11 @@ def _build_config(kw: dict[str, str]) -> SimplifyConfig:
         min_points=_int("min_points", 4),
         max_error_scale=_float("max_error_scale", 4.0),
         coalesce_strokes=_bool("coalesce_strokes", True),
+        max_stream_size=(
+            parse_size_to_bytes(kw["max_stream_size"], context="max_stream_size")
+            if "max_stream_size" in kw
+            else SimplifyConfig.max_stream_size
+        ),
     )
 
 
@@ -326,6 +341,17 @@ class _StreamProcessor:
 
     def _process_stream(self, stream_obj: Any) -> None:
         """Run all four pipeline stages on one content stream."""
+        size = len(stream_obj.read_bytes())
+        if size > self._config.max_stream_size:
+            logger.warning(
+                "simplify_vectors: skipping %d-byte content stream %s (over max_stream_size=%d).",
+                size,
+                stream_obj.objgen,
+                self._config.max_stream_size,
+            )
+            self._stats.streams_skipped += 1
+            return
+
         # Stage 1: parse
         try:
             instructions = self._pk.parse_content_stream(stream_obj)
@@ -334,31 +360,44 @@ class _StreamProcessor:
             return
 
         self._stats.streams_processed += 1
-        self._stats.operators_before += len(instructions)
+        operators_before = len(instructions)
+        self._stats.operators_before += operators_before
 
-        # Stage 2: segment
+        # Stage 2: segment. Paths keep their own references, so the parse can go.
         mixed = segment(instructions, self._config)
+        del instructions
 
-        # Stage 3: simplify each Path
-        results: list[Any] = []
-        for item in mixed:
+        # Stages 3-4: simplify and serialize item by item, releasing each as we go;
+        # peak memory otherwise holds several copies of a large page at once.
+        new_instructions: list[Any] = []
+        for i, item in enumerate(mixed):
+            mixed[i] = None
             if isinstance(item, Path):
-                self._stats.paths_total += 1
-                self._tally_subpaths(item)
-                sp = simplify_path(item, self._config)
-                self._tally_result(item, sp)
-                results.append((item, sp))
+                new_instructions.extend(serialize([(item, self._simplify(item))]))
             else:
-                results.append(item)
-
-        # Stage 4: serialize
-        new_instructions = serialize(results)
-        self._stats.operators_after += len(new_instructions)
+                new_instructions.append(item)
+        del mixed
 
         try:
-            stream_obj.write(self._pk.unparse_content_stream(new_instructions))
+            new_bytes = self._pk.unparse_content_stream(new_instructions)
         except self._pikepdf.PdfError as exc:
             logger.warning("Failed to write simplified stream: %s", exc)
+            return
+        operator_count = len(new_instructions)
+        del new_instructions
+        if not _compresses_smaller(new_bytes, stream_obj.read_bytes()):
+            self._stats.streams_kept += 1
+            self._stats.operators_after += operators_before
+            return
+        self._stats.operators_after += operator_count
+        stream_obj.write(new_bytes)
+
+    def _simplify(self, path: Path) -> SimplifiedPath:
+        self._stats.paths_total += 1
+        self._tally_subpaths(path)
+        sp = simplify_path(path, self._config)
+        self._tally_result(path, sp)
+        return sp
 
     # -- stats helpers --
 
@@ -394,6 +433,13 @@ class _StreamProcessor:
 # ---------------------------------------------------------------------------
 
 
+def _compresses_smaller(new: bytes, old: bytes) -> bool:
+    """Whether new would be stored smaller than old once Flate-compressed."""
+    import zlib
+
+    return len(zlib.compress(new, 6)) < len(zlib.compress(old, 6))
+
+
 def _log_stats(stats: SimplifyStats) -> None:
     if stats.streams_processed == 0:
         logger.info("simplify_vectors: no streams processed.")
@@ -410,6 +456,7 @@ def _log_stats(stats: SimplifyStats) -> None:
         "                VECTOR SIMPLIFICATION SUMMARY                   \n"
         "=================================================================\n"
         " Streams Processed:          %d\n"
+        "   Kept (not smaller):       %d\n"
         "-----------------------------------------------------------------\n"
         " Paths Total:                %d\n"
         "   Optimised:                %d\n"
@@ -432,6 +479,7 @@ def _log_stats(stats: SimplifyStats) -> None:
         "   Reduction:                %d (%.1f%%)\n"
         "=================================================================",
         stats.streams_processed,
+        stats.streams_kept,
         stats.paths_total,
         stats.paths_optimised,
         stats.paths_fallback,

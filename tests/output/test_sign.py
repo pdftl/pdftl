@@ -7,8 +7,6 @@ import pytest
 from pdftl.exceptions import UserCommandLineError
 from pdftl.output.sign import parse_sign_options, save_and_sign
 
-from pathlib import Path
-
 from cryptography.x509.oid import NameOID
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign.validation import validate_pdf_signature
@@ -62,9 +60,9 @@ def test_pki(tmp_path):
     return key_path, cert_path
 
 
-def test_sign_pipeline_integrity(tmp_path, test_pki):
+def test_sign_pipeline_integrity(tmp_path, test_pki, two_page_pdf):
     key_path, cert_path = test_pki
-    input_pdf = Path("tests/assets/2_page.pdf")
+    input_pdf = two_page_pdf
     output_pdf = tmp_path / "signed.pdf"
 
     # NOTE: this test used to reload pdftl.cli.parser, pdftl.cli.main, and

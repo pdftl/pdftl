@@ -66,6 +66,37 @@ jobs:
           name: coverage
           path: coverage.xml
 
+  # 1b. pikepdf versions: the supported floor (pyproject's pikepdf>=) and each version
+  # pikepdf_compatibility_utils switches behaviour on. The matrix above uses the latest.
+  pikepdf-versions:
+    name: Tests (pikepdf ${{ matrix.pikepdf }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        pikepdf: ["10.9.0", "10.10.0", "10.11.0"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0 # Needed for setuptools_scm
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e .[dev-all] "pikepdf==${{ matrix.pikepdf }}"
+
+      - name: Show pikepdf version
+        run: python -c "import pikepdf; print(pikepdf.__version__)"
+
+      - name: Run tests
+        run: python -X utf8 -m pytest -n auto --dist loadfile --max-worker-restart=0
+
   # 2. Linux Distribution Ecosystem Matrix (Containerized Runners, uses system python)
   distro-tests:
     name: Tests (${{ matrix.distro }} / ${{ matrix.arch }})

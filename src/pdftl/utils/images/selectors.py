@@ -2,7 +2,7 @@ import io
 import logging
 from typing import TYPE_CHECKING
 
-from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
+from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat, image_extraction_errors
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -11,9 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 def extract_to_pil(xobj) -> "Image.Image | None":
-    """Decodes and extracts standard pixel channels out of an XObject stream."""
+    """Decodes an image XObject to visual pixels (/Decode applied), or None."""
     import pikepdf
-    from PIL import Image
 
     width = int(xobj["/Width"])
     height = int(xobj["/Height"])
@@ -29,28 +28,14 @@ def extract_to_pil(xobj) -> "Image.Image | None":
         ValueError,
         TypeError,
         AttributeError,
+        RuntimeError,  # unmapped errors from pikepdf's C++ layer
+        *image_extraction_errors(),
     ) as e:
-        logger.debug("High-level native extraction failed (%s). Trying low-level recovery.", e)
-    except Exception as e:
-        exc_name = type(e).__name__
-
-        # Safe isolation layer exclusively for unmapped binary-compiled C++ runtime failures
-        if "HifiPrintImage" in exc_name or "RuntimeError" in exc_name:
-            logger.debug(
-                (
-                    "Binding or HiFi print profile error encountered (%s: %s). "
-                    "Cascading to low-level."
-                ),
-                exc_name,
-                e,
-            )
-        else:
-            logger.error(
-                "Unexpected system exception trapped in image extractor (%s: %s). Re-raising.",
-                exc_name,
-                e,
-            )
-            raise
+        logger.debug(
+            "High-level extraction failed (%s: %s). Trying low-level recovery.",
+            type(e).__name__,
+            e,
+        )
 
     # Block B: Direct stream byte extraction fallback
     try:
@@ -59,12 +44,44 @@ def extract_to_pil(xobj) -> "Image.Image | None":
         logger.warning("Stream data is unfilterable (%s); recovery aborted.", e)
         return None
 
-    # Block C: Canvas assembly fallback
+    return _assemble_fallback(xobj, width, height, raw_bytes)
+
+
+def _assemble_fallback(xobj, width, height, raw_bytes) -> "Image.Image | None":
+    """Block C: raw 8-bit RGB samples, or a self-describing encoded image."""
+    from PIL import Image
+
+    decode = xobj.get("/Decode")
     try:
-        return Image.frombytes("RGB", (width, height), raw_bytes)
+        # frombytes accepts surplus data, which would misread encoded image bytes.
+        if len(raw_bytes) != width * height * 3:
+            raise ValueError("not raw 8-bit RGB")
+        img = Image.frombytes("RGB", (width, height), raw_bytes)
     except ValueError:
+        if decode is not None:
+            logger.debug("Low-level recovery cannot honour /Decode for this image.")
+            return None
         try:
             return Image.open(io.BytesIO(raw_bytes))
         except (OSError, ValueError, TypeError) as e:
             logger.debug("Low-level canvas assembly failed (%s).", e)
             return None
+    return img if decode is None else _apply_decode(img, decode)
+
+
+def _apply_decode(img: "Image.Image", decode) -> "Image.Image | None":
+    """Map each band's samples through its /Decode range (ISO 32000-2 8.9.5.2)."""
+    try:
+        ranges = [float(v) for v in decode]
+    except (TypeError, ValueError):
+        return None
+    bands = len(img.getbands())
+    if len(ranges) != 2 * bands:
+        logger.debug("Ignoring image: /Decode has %d entries for %d bands.", len(ranges), bands)
+        return None
+    table = []
+    for band in range(bands):
+        dmin, dmax = ranges[2 * band], ranges[2 * band + 1]
+        for v in range(256):
+            table.append(min(255, max(0, round(255 * (dmin + v / 255 * (dmax - dmin))))))
+    return img.point(table)

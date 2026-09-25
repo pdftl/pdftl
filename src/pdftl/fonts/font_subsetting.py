@@ -31,6 +31,7 @@ subsetted font program.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import struct
 from io import BytesIO
@@ -205,7 +206,26 @@ def _build_subsetter_options(keep_names: bool = False, retain_gids: bool = False
     # regardless of these options.
     options.legacy_cmap = True
     options.symbol_cmap = True
+    # Keep embedded bitmap strikes: renderers use them at small pixel sizes.
+    options.drop_tables = [t for t in options.drop_tables if t not in _BITMAP_TABLES]
     return options
+
+
+_BITMAP_TABLES = ("EBDT", "EBLC", "EBSC")
+_HEAD_BBOX = ("xMin", "yMin", "xMax", "yMax")
+
+
+@contextlib.contextmanager
+def _original_head_bbox(tt: Any):
+    """Keep the font-wide bbox: it still bounds every kept glyph, and a
+    recomputed, tighter one changes how renderers draw small text."""
+    head = tt["head"] if "head" in tt else None
+    saved = {k: getattr(head, k) for k in _HEAD_BBOX} if head is not None else None
+    yield
+    if saved is not None and "head" in tt:
+        for k, v in saved.items():
+            setattr(tt["head"], k, v)
+        tt.recalcBBoxes = False
 
 
 def run_subsetter(
@@ -259,7 +279,8 @@ def run_subsetter(
         tt["cmap"] = empty_cmap
 
     try:
-        subsetter.subset(tt)
+        with _original_head_bbox(tt):
+            subsetter.subset(tt)
     except (KeyError, ValueError, TypeError, struct.error, IndexError) as e:
         # A malformed or unusually-structured font program (e.g. broken
         # layout tables, an inconsistent glyph order) can make the

@@ -19,7 +19,6 @@ from pdftl.operations.helpers.image_processor import (
     _handle_flate_fallback,
 )
 
-
 # --- 1. Thread Safety & Extraction Tests ---
 
 
@@ -342,6 +341,18 @@ def test_handle_jpx_encode():
 
     assert ctx.xobj.data == b"jpx_data"
     assert ctx.xobj.filter == pikepdf.Name("/JPXDecode")
+    assert "/DecodeParms" not in ctx.xobj
+
+
+def test_handle_jpx_encode_without_decode_parms():
+    ctx = MagicMock()
+    ctx.xobj = MockXObjDict()
+    pil_img = MagicMock()
+    pil_img.save.side_effect = lambda io_obj, **kwargs: io_obj.write(b"jpx_data")
+
+    _handle_jpx_encode(ctx, pil_img)
+
+    assert ctx.xobj.data == b"jpx_data"
     assert "/DecodeParms" not in ctx.xobj
 
 

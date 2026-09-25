@@ -80,3 +80,76 @@ def test_selectors_unexpected_exception_reraise(empty_pdf, monkeypatch):
     # The unexpected exception block should trap it, error-log it, and re-raise it
     with pytest.raises(KeyError):
         extract_to_pil(img_xobj)
+
+
+# --- Fallback path returns visual pixels, like the main path ---
+
+
+def _force_fallback(monkeypatch):
+    def unextractable(*args, **kwargs):
+        raise pikepdf.HifiPrintImageNotTranscodableError()
+
+    monkeypatch.setattr(pikepdf, "PdfImage", unextractable)
+
+
+def _rgb_stream(pdf, samples, decode=None):
+    stream = pdf.make_stream(bytes(samples))
+    stream["/Width"], stream["/Height"] = 2, 1
+    if decode is not None:
+        stream["/Decode"] = pikepdf.Array(decode)
+    return stream
+
+
+def test_fallback_without_decode_returns_samples(empty_pdf, monkeypatch):
+    _force_fallback(monkeypatch)
+    img = extract_to_pil(_rgb_stream(empty_pdf, [10, 20, 30, 200, 210, 220]))
+    assert list(img.tobytes()) == [10, 20, 30, 200, 210, 220]
+
+
+def test_fallback_applies_inverting_decode(empty_pdf, monkeypatch):
+    _force_fallback(monkeypatch)
+    samples = [10, 20, 30, 200, 210, 220]
+    img = extract_to_pil(_rgb_stream(empty_pdf, samples, [1, 0, 1, 0, 1, 0]))
+    assert list(img.tobytes()) == [255 - v for v in samples]
+
+
+def test_fallback_applies_partial_range_decode(empty_pdf, monkeypatch):
+    _force_fallback(monkeypatch)
+    img = extract_to_pil(_rgb_stream(empty_pdf, [0, 255, 0, 255, 0, 255], [0, 0.5, 0, 1, 0.5, 1]))
+    assert list(img.tobytes()) == [0, 255, 128, 128, 0, 255]
+
+
+@pytest.mark.parametrize(
+    "samples,decode",
+    [([1, 2, 3], [1, 0, 1, 0, 1, 0]), ([10, 20, 30, 40, 50, 60], [1, 0])],
+)
+def test_fallback_gives_up_when_decode_cannot_be_honoured(empty_pdf, monkeypatch, samples, decode):
+    _force_fallback(monkeypatch)
+    assert extract_to_pil(_rgb_stream(empty_pdf, samples, decode)) is None
+
+
+def test_fallback_gives_up_on_non_numeric_decode(empty_pdf, monkeypatch):
+    _force_fallback(monkeypatch)
+    decode = [pikepdf.Name("/A")] * 6
+    assert extract_to_pil(_rgb_stream(empty_pdf, [0] * 6, decode)) is None
+
+
+def test_fallback_opens_self_describing_image_bytes(empty_pdf, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    _force_fallback(monkeypatch)
+    buf = io.BytesIO()
+    Image.new("L", (3, 2), 77).save(buf, format="PNG")
+    stream = empty_pdf.make_stream(buf.getvalue())
+    stream["/Width"], stream["/Height"] = 3, 2
+    img = extract_to_pil(stream)
+    assert img.size == (3, 2) and img.getpixel((0, 0)) == 77
+
+
+def test_fallback_returns_none_for_unrecognised_bytes(empty_pdf, monkeypatch):
+    _force_fallback(monkeypatch)
+    stream = empty_pdf.make_stream(b"not an image")
+    stream["/Width"], stream["/Height"] = 3, 2
+    assert extract_to_pil(stream) is None

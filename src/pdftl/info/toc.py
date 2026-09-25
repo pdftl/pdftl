@@ -311,7 +311,9 @@ def _extract_goto_remote(action_obj) -> "dict | None":
             return None
         result["page"] = int(page_arg) + 1
         dest_type = str(dest[1]).lstrip("/") if len(dest) > 1 else "Fit"
-        view_list = _view_list_from_args(dest_type, dest[2:])
+        view_list = _view_list_from_args(
+            dest_type, list(dest)[2:]
+        )  # no Array slicing before pikepdf 10.10
         if view_list != ["Fit"]:
             result["view"] = view_list
     else:

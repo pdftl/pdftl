@@ -71,6 +71,34 @@ def as_pil_image_compat(image):
     return image.as_pil_image()
 
 
+_IMAGE_ERROR_NAMES = (
+    "HifiPrintImageNotTranscodableError",
+    "ImageDecompressionError",
+    "InvalidPdfImageError",
+    "NotExtractableError",
+    "UnsupportedImageTypeError",
+)
+
+
+def image_extraction_errors() -> tuple[type[Exception], ...]:
+    """Exceptions PdfImage/as_pil_image raise for an image Pillow can't represent.
+
+    They derive from plain Exception before pikepdf 10.13, and some live only
+    in a private module added in 10.11, so collect whichever this version has.
+    """
+    import pikepdf
+
+    modules = [pikepdf]
+    try:
+        from pikepdf.models import _image_exceptions
+
+        modules.append(_image_exceptions)
+    except ImportError:
+        pass
+    found = {getattr(m, name) for m in modules for name in _IMAGE_ERROR_NAMES if hasattr(m, name)}
+    return tuple(found)
+
+
 def is_indexed_image(xobj) -> bool:
     import pikepdf
 

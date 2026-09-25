@@ -31,6 +31,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.pikepdf_compatibility_utils import (
     as_pil_image_compat,
     drop_stale_decode_array,
+    image_extraction_errors,
     is_indexed_image,
 )
 
@@ -324,7 +325,14 @@ def _prepare_image_for_worker(
 
         return payload, ctx
 
-    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as e:
+    except (
+        pikepdf.PdfError,
+        ValueError,
+        TypeError,
+        OSError,
+        RuntimeError,
+        *image_extraction_errors(),
+    ) as e:
         logger.debug(
             "Page %s: Failed to extract image %s for resample: %s",
             page_num,
