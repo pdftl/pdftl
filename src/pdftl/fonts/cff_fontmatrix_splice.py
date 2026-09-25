@@ -337,7 +337,8 @@ if __name__ == "__main__":  # pragma: no cover -- CLI smoke-test entry point, no
     import sys
 
     path = sys.argv[1] if len(sys.argv) > 1 else "font-0012.cid"
-    data = open(path, "rb").read()
+    with open(path, "rb") as f:
+        data = f.read()
     patched = splice_top_font_matrix(data, (0.001, 0, 0, 0.001, 0, 0))
     out_path = path + ".patched"
     with open(out_path, "wb") as f:

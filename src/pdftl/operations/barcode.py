@@ -188,7 +188,7 @@ def _process_single_rule(
     import pikepdf
     from PIL import Image
 
-    x0, y0, w_phys, h_phys = raw_dims
+    x0, y0, w_phys, h_phys = raw_dims  # codeql[py/mismatched-multiple-assignment]
 
     # 1. Update transient sequence counters
     page_context["count"] = rule.get("count", rule.get("n", 1))

@@ -585,8 +585,6 @@ def test_pipeline_final_step_burst_returns_zip(server) -> None:
         assert response.headers["Content-Type"] == "application/zip"
         zip_bytes = response.read()
 
-    import zipfile
-
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         assert len(zf.namelist()) == 3
 
@@ -626,7 +624,6 @@ def test_subprocess_worker_entrypoint_forwards_traceback():
     pickling changes, since metadata crosses as json.dumps'd bytes, not
     pickle, exactly like error_class/message already do."""
     import multiprocessing
-    import json
     from pdftl.server.subprocess_workers import _subprocess_worker_entrypoint
 
     ctx = multiprocessing.get_context("spawn")

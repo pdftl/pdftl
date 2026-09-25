@@ -133,6 +133,7 @@ def test_embedded_stream_key_and_format_helpers():
     assert _embedded_format_for(desc_unknown, "/FontFile3") is None
 
 
+# codeql[py/commented-out-code]
 # def test_codes_to_unicodes():
 #     pdf = pikepdf.new()
 

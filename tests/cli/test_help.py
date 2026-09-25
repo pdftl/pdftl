@@ -182,7 +182,6 @@ def test_print_version_to_console(monkeypatch, patch_environment):
         "pikepdf",
         type("FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"})(),
     )
-    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
 
     with patch.object(helpvermod, "get_console") as mock_get_console:
         # Run the command
@@ -218,7 +217,6 @@ def test_print_version_to_file(monkeypatch, patch_environment):
         "pikepdf",
         type("FakePikePDF", (), {"__version__": "10.0", "__libqpdf_version__": "11.0"})(),
     )
-    monkeypatch.setattr(helpvermod, "get_project_version", lambda: "1.0.0")
 
     buf = io.StringIO()
     helpvermod.print_version(dest=buf)
@@ -579,9 +577,6 @@ class TestHelpRichRendering(unittest.TestCase):
         self.assertNotIn("┏", buffer.getvalue())
 
 
-import pdftl.cli.help as help_module
-
-
 def test_print_help_recursion_depth(monkeypatch, mock_tty):
     """
     Covers the 'else' block in print_help where _HELP_RECURSION_DEPTH > 0.
@@ -591,22 +586,18 @@ def test_print_help_recursion_depth(monkeypatch, mock_tty):
     monkeypatch.setattr("pdftl.cli.help_render.get_console", lambda: mock_console)
 
     # Artificially simulate that we are already inside a print_help call
-    help_module._HELP_RECURSION_DEPTH = 1
+    monkeypatch.setattr(helpmod, "_HELP_RECURSION_DEPTH", 1)
 
-    try:
-        # dest=None, raw=False, mock_tty ensures paging *would* be evaluated
-        help_module.print_help("help", dest=None, raw=False)
+    # dest=None, raw=False, mock_tty ensures paging *would* be evaluated
+    helpmod.print_help("help", dest=None, raw=False)
 
-        # Verify it incremented and decremented correctly without crashing
-        assert help_module._HELP_RECURSION_DEPTH == 1
-    finally:
-        # Clean up global state for other tests
-        help_module._HELP_RECURSION_DEPTH = 0
+    # Verify it incremented and decremented correctly without crashing
+    assert helpmod._HELP_RECURSION_DEPTH == 1
 
 
 def test_help_help_topic_execution():
     """Verifies the help docstring function executes without error."""
-    help_module._help_help_topic()
+    helpmod._help_help_topic()
 
 
 def test_args_help_topic_execution():

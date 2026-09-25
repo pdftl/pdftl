@@ -117,7 +117,6 @@ class TestSerializeOperationResultGeneratorDetection:
     def test_non_generator_data_is_unaffected(self):
         """Regression guard: ordinary dict/list data must not be
         accidentally routed through the new generator branch."""
-        result = OpResult(success=True, data={"pages": 3}, meta={"json_output": True})
 
         class FakeData:
             def to_dict(self):

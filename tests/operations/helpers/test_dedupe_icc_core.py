@@ -309,7 +309,7 @@ def test_output_intent_profile_never_merged_even_if_bytewise_identical(pdf):
     # just candidate discovery: an output intent profile that happens
     # to share bytes with an image's ICC profile must be left alone.
     data = b"shared bytes between image and output intent " * 5
-    image, image_icc = _make_image_with_icc(pdf, data)
+    image, image_icc = _make_image_with_icc(pdf, data)  # codeql[py/unused-local-variable]
     oi_profile = pdf.make_indirect(pikepdf.Stream(pdf, data, N=3))
     pdf.Root.OutputIntents = Array(
         [Dictionary(Type=Name("/OutputIntent"), DestOutputProfile=oi_profile)]

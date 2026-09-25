@@ -370,7 +370,7 @@ def test_calculate_new_box_falls_back_to_zero_rotation_on_error():
 
     # get_visible_page_dimensions needs to succeed for execution to reach
     # the rotation lookup, so patch it to return simple, valid dims.
-    import pdftl.operations.rebox as rebox_module
+    import pdftl.operations.rebox as rebox_module  # codeql[py/import-and-import-from]
 
     original_get_dims = rebox_module.get_visible_page_dimensions
     rebox_module.get_visible_page_dimensions = lambda p, apply_rotate: (0, 0, 100, 100)

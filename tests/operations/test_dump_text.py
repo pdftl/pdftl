@@ -7,7 +7,7 @@ import pikepdf
 import pytest
 import io
 
-import pdftl.operations.dump_text
+import pdftl.operations.dump_text  # codeql[py/import-and-import-from]
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.operations.dump_text import dump_text
 

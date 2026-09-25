@@ -589,7 +589,7 @@ class TestExportSkipsInlineImagesViaRealFinder:
         assert len(result.data["image_streams"]) == 1
 
 
-import pdftl.operations.export_import_images as eii_mod
+import pdftl.operations.export_import_images as eii_mod  # codeql[py/import-and-import-from]
 
 
 class TestExportSingleInlineImage:

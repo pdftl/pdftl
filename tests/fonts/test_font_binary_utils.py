@@ -1442,7 +1442,7 @@ def test_resolve_cid_glyph_name_bounds():
 def test_patch_font_file_metrics_sfnt_dispatch(monkeypatch):
     """Verify that patch_font_file_metrics with sfnt format dispatches correctly (covers line 240)."""
     from pdftl.fonts.font_binary_utils import patch_font_file_metrics
-    import pdftl.fonts.font_binary_utils as fbu
+    import pdftl.fonts.font_binary_utils as fbu  # codeql[py/import-and-import-from]
 
     called = []
 
@@ -1583,7 +1583,7 @@ def test_rekey_name_widths_to_hex_codes_skips_unmapped_glyph():
 
 
 def test_rekey_name_widths_to_hex_codes_drops_unparseable_table_codes(monkeypatch):
-    import pdftl.fonts.font_binary_utils as fbu
+    import pdftl.fonts.font_binary_utils as fbu  # codeql[py/import-and-import-from]
 
     differences_map = {"ZZ": "A", "42": "B"}
     base_encoding_map = {None: "C", 0x44: "D"}

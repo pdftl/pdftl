@@ -432,7 +432,7 @@ def _push_children(
         elif kind == "array":
             for item in obj:
                 push((item, category, page, edge_key, child_sticky))
-    except (AttributeError, PdfError):
+    except (AttributeError, PdfError):  # codeql[py/empty-except]
         pass
 
 

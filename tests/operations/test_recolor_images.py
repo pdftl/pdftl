@@ -3,7 +3,7 @@
 import pytest
 from types import SimpleNamespace
 
-import pdftl.operations.recolor_images as mod
+import pdftl.operations.recolor_images as mod  # codeql[py/import-and-import-from]
 from pdftl.core.core_types import OpResult
 from pdftl.exceptions import InvalidArgumentError
 

@@ -108,7 +108,7 @@ from typing import Any
 # docstring's "Module split" section above for where each now actually
 # lives. (Referencing them here also means `ruff`/linters see them as used
 # via `__all__`-style re-export rather than flagging unused imports.)
-from pdftl.fonts.font_binary_sfnt import (  # noqa: F401
+from pdftl.fonts.font_binary_sfnt import (  # noqa: F401  # codeql[py/unused-import]
     _get_cid_widths,
     _get_initial_data,
     _patch_cid_metrics,
@@ -125,7 +125,7 @@ from pdftl.fonts.font_binary_sfnt import (  # noqa: F401
     patch_font_file_metrics_via_ttfont as _patch_font_file_metrics_via_ttfont,
     squash_font_file_vectors_via_ttfont as _squash_font_file_vectors_via_ttfont,
 )
-from pdftl.fonts.font_encoding_tables import (  # noqa: F401
+from pdftl.fonts.font_encoding_tables import (  # noqa: F401  # codeql[py/unused-import]
     _BASE_ENCODING_BUILDERS,
     _build_macroman_encoding_table,
     _build_standard_encoding_table,

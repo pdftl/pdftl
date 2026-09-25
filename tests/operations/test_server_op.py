@@ -191,6 +191,7 @@ def test_server_multi_file_concatenation(server) -> None:
             assert len(pdf.pages) == 2
 
 
+# codeql[py/commented-out-code]
 # def test_server_metadata_serialization_modes(server) -> None:
 #     """Verifies that PDF info extraction returns text stanzas and structured JSON correctly."""
 #     ms = server()
@@ -314,7 +315,7 @@ def test_server_replace_port_handling(server) -> None:
     def run_server_b() -> None:
         try:
             run_server_op([f"port={server_port}", f"host={server_host}", "replace"])
-        except Exception:
+        except Exception:  # codeql[py/empty-except]
             pass
 
     server_thread_b = threading.Thread(target=run_server_b, daemon=True)
@@ -891,7 +892,7 @@ def test_sweep_stale_pipeline_temp_files_oserror(monkeypatch, tmp_path) -> None:
         # Defensive cleanup in case the file wasn't deleted
         try:
             os.unlink(path)
-        except OSError:
+        except OSError:  # codeql[py/empty-except]
             pass
 
 
@@ -1146,7 +1147,6 @@ def test_run_pipeline_in_subprocess_swallows_close_failure(tmp_path):
 
 def test_subprocess_worker_entrypoint_success_and_error():
     import multiprocessing
-    import json
     from pdftl.server import _subprocess_worker_entrypoint
 
     ctx = multiprocessing.get_context("spawn")

@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 # Bounded chunk size for streaming the request body off the socket.
 _STREAM_CHUNK_SIZE = 256 * 1024
-_SPOOL_MAX_MEMORY_BYTES = 4 * 1024 * 1024
 
 
 def extract_boundary(content_type: str) -> bytes:

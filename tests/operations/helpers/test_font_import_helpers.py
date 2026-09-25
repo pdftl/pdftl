@@ -310,7 +310,7 @@ def test_import_encoding_cmap_no_mode():
 
 
 def test_import_encoding_cmap_invalid_mode(monkeypatch):
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     monkeypatch.setattr(fih, "_PREDEFINED_IDENTITY_CMAPS", ["Identity-H", "Identity-V"])
 
@@ -322,7 +322,7 @@ def test_import_encoding_cmap_invalid_mode(monkeypatch):
 
 
 def test_import_encoding_cmap_valid_mode(monkeypatch):
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     monkeypatch.setattr(fih, "_PREDEFINED_IDENTITY_CMAPS", ["Identity-H", "Identity-V"])
 
@@ -438,7 +438,7 @@ def test_import_widths_patch_mode_success(tmp_path, monkeypatch):
 
     mappings = {"01": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     monkeypatch.setattr(fih, "_inject_font_bytes", lambda *a: True)
 
@@ -479,7 +479,7 @@ def test_import_widths_squash_mode_success(tmp_path, monkeypatch):
 
     mappings = {"01": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     monkeypatch.setattr(fih, "_inject_font_bytes", lambda *a: True)
 
@@ -572,7 +572,7 @@ def test_import_widths_patch_mode_passes_differences_through(tmp_path, monkeypat
 
     mappings = {"01": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -611,7 +611,7 @@ def test_import_widths_patch_mode_no_differences_passes_none(tmp_path, monkeypat
 
     mappings = {"01": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -654,7 +654,7 @@ def test_import_widths_squash_mode_passes_differences_through(tmp_path, monkeypa
 
     mappings = {"03": {"width": {"pdf": 900.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -699,7 +699,7 @@ def test_import_widths_patch_mode_passes_base_encoding_through(tmp_path, monkeyp
 
     mappings = {"92": {"width": {"pdf": 400.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -738,7 +738,7 @@ def test_import_widths_patch_mode_no_base_encoding_passes_none(tmp_path, monkeyp
 
     mappings = {"01": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -781,7 +781,7 @@ def test_import_widths_squash_mode_passes_base_encoding_through(tmp_path, monkey
 
     mappings = {"41": {"width": {"pdf": 900.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -1185,7 +1185,7 @@ def test_resolve_cid_to_gid_for_sync_success(tmp_path):
 def test_auto_sync_widths_type0_identity_passes_through(tmp_path, monkeypatch):
     """A Type0 font with an Identity CIDToGIDMap resolves to 'Identity' and
     passes it through to get_font_widths_from_file."""
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0")})
     font_entry = {
@@ -1218,7 +1218,7 @@ def test_auto_sync_widths_type0_identity_passes_through(tmp_path, monkeypatch):
 def test_auto_sync_widths_type0_resolution_failure_skips_sync(tmp_path, monkeypatch):
     """When the CID->GID mapping can't be resolved (missing sidecar),
     automatic width sync is skipped entirely rather than guessing."""
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0")})
     font_entry = {
@@ -1294,7 +1294,7 @@ def test_import_widths_patch_mode_type0_passes_cid_to_gid_map_through(tmp_path, 
 
     mappings = {"0001": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -1363,7 +1363,7 @@ def test_import_widths_squash_mode_type0_passes_cid_to_gid_map_through(tmp_path,
 
     mappings = {"0001": {"width": {"pdf": 999.0}}}
 
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     captured = {}
 
@@ -1457,7 +1457,7 @@ def test_import_type3_font_reconstruction_success(tmp_path):
 
 def test_inject_font_bytes_fontfile_type1(tmp_path, monkeypatch):
     from pdftl.operations.helpers.font_import_helpers import _inject_font_bytes
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
     import pikepdf
 
     called = {}
@@ -1492,7 +1492,7 @@ def test_import_single_font_binary_hash_match(tmp_path):
 
 def test_import_single_font_binary_success(tmp_path, monkeypatch):
     from pdftl.operations.helpers.font_import_helpers import import_single_font_binary
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     f = tmp_path / "font.ttf"
     f.write_bytes(b"new_data")
@@ -1551,7 +1551,7 @@ def test_import_tounicode_ps_success(tmp_path):
 
 def test_import_tounicode_and_get_mappings_dispatch(tmp_path, monkeypatch):
     from pdftl.operations.helpers.font_import_helpers import import_tounicode_and_get_mappings
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
     import pikepdf
 
     font_entry = {"sidecar_json_file": "a.json"}
@@ -1613,7 +1613,7 @@ def test_auto_sync_widths_from_font_hash_match(tmp_path):
 
 def test_execute_widths_sync_manual_mode(tmp_path, monkeypatch):
     from pdftl.operations.helpers.font_import_helpers import _execute_widths_sync
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
     import pikepdf
 
     called = {}
@@ -1723,7 +1723,7 @@ def test_auto_sync_widths_bare_cff_rekey_empties_returns_false(tmp_path, monkeyp
     """837: a bare-CFF font whose name-keyed widths rekey to nothing (no
     /Differences or /BaseEncoding to translate any glyph name) -> False."""
     from pdftl.operations.helpers.font_import_helpers import _auto_sync_widths_from_font
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
     import pikepdf
 
     font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type1")})
@@ -1790,7 +1790,7 @@ def test_import_type3_font_skips_unknown_and_non_stream_glyphs(tmp_path):
 
 
 def _widths_sync_setup(tmp_path, monkeypatch, sync_mode, subtype):
-    import pdftl.operations.helpers.font_import_helpers as fih
+    import pdftl.operations.helpers.font_import_helpers as fih  # codeql[py/import-and-import-from]
 
     (tmp_path / "test.ttf").write_bytes(b"dummy")
     (tmp_path / "sidecar.json").write_text(json.dumps({"width_sync_mode": sync_mode}))

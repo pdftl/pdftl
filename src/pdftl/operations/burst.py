@@ -301,7 +301,7 @@ def _generate_burst_chunks(opened_pdfs, specs, output_pattern, max_bytes=None):
 
 
 def get_effective_specs(source_pdf, specs):
-    effective_specs = specs
+    effective_specs = list(specs)
     for i, spec in enumerate(effective_specs):
         if spec.lower().startswith("level"):
             spec = spec[len("level") :]

@@ -10,7 +10,7 @@ def _get_obj_id(obj) -> int:
         objgen = getattr(obj, "objgen", None)
         if objgen and objgen[0] != 0:
             return int(objgen[0])
-    except (AttributeError, TypeError, IndexError):
+    except (AttributeError, TypeError, IndexError):  # codeql[py/empty-except]
         pass
     return 0
 

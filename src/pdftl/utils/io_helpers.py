@@ -34,13 +34,13 @@ def smart_pikepdf_open(filename: str | None, password: str | None = None) -> "pi
 @overload
 def smart_open_maybe_dash(
     filename: str | None, mode: Literal["w", "a"] = "w", encoding: str = "utf-8"
-) -> ContextManager[IO[str]]: ...
+) -> ContextManager[IO[str]]: ...  # codeql[py/ineffectual-statement]
 
 
 @overload
 def smart_open_maybe_dash(
     filename: str | None, mode: Literal["wb", "ab"], encoding: str | None = None
-) -> ContextManager[IO[bytes]]: ...
+) -> ContextManager[IO[bytes]]: ...  # codeql[py/ineffectual-statement]
 
 
 def smart_open_maybe_dash(
@@ -53,14 +53,14 @@ def smart_open_maybe_dash(
 @overload
 def smart_open(
     filename: str | None, mode: Literal["r", "w", "a"] = "w", encoding: str = "utf-8"
-) -> ContextManager[IO[str]]: ...
+) -> ContextManager[IO[str]]: ...  # codeql[py/ineffectual-statement]
 
 
 # Overload for Binary Mode ("wb" or "ab")
 @overload
 def smart_open(
     filename: str | None, mode: Literal["rb", "wb", "ab"], encoding: str | None = None
-) -> ContextManager[IO[bytes]]: ...
+) -> ContextManager[IO[bytes]]: ...  # codeql[py/ineffectual-statement]
 
 
 def smart_open(

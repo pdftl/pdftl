@@ -733,38 +733,26 @@ class TestRedactCapturingGroupsEndToEnd:
 
 class TestMatchTargetSpans:
     def test_no_groups_targets_whole_match(self):
-        import re
-
         m = re.match(r"\d+", "12345")
         assert _match_target_spans(m) == [m.span()]
 
     def test_non_capturing_group_only_targets_whole_match(self):
-        import re
-
         m = re.match(r"(?:foo|bar)baz", "foobaz")
         assert _match_target_spans(m) == [m.span()]
 
     def test_plain_numbered_group_no_longer_narrows_targets_whole_match(self):
-        import re
-
         m = re.match(r"Patient: (\w+ \w+)", "Patient: John Smith")
         assert _match_target_spans(m) == [m.span()]
 
     def test_multiple_plain_numbered_groups_still_target_whole_match(self):
-        import re
-
         m = re.match(r"(\w+)-(\w+)", "foo-bar")
         assert _match_target_spans(m) == [m.span()]
 
     def test_named_redact_group_wins_over_plain_groups(self):
-        import re
-
         m = re.match(r"(?P<context>Patient): (?P<redact>\w+ \w+)", "Patient: John Smith")
         assert _match_target_spans(m) == [m.span("redact")]
 
     def test_multiple_named_redact_groups_both_targeted(self):
-        import re
-
         m = re.match(r"(?P<redact_first>\w+) (?P<redact_last>\w+)", "John Smith")
         assert set(_match_target_spans(m)) == {
             m.span("redact_first"),
@@ -772,8 +760,6 @@ class TestMatchTargetSpans:
         }
 
     def test_non_participating_group_from_alternation_skipped(self):
-        import re
-
         m = re.match(r"(?P<redact>foo)|(?P<redact2>bar)", "bar")
         assert _match_target_spans(m) == [m.span("redact2")]
 

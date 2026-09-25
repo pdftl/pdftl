@@ -316,9 +316,7 @@ def test_registry_primitive_annotation():
     dummy_primitive.__annotations__ = {"val": int}
 
     # Register the dummy function
-    register_image_modifier("dummy_primitive", "Dummy Primitive", "Desc", lambda x: int(x))(
-        dummy_primitive
-    )
+    register_image_modifier("dummy_primitive", "Dummy Primitive", "Desc", int)(dummy_primitive)
 
     # Assert it was parsed correctly via line 47
     plugin = registry.image_modifiers["dummy_primitive"]

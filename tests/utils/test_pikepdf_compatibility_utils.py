@@ -133,7 +133,7 @@ def test_set_outline_item_style_compat_old_pikepdf_color_and_bold(mock_version_a
     """pikepdf < 10.11.0: falls back to raw obj.C / obj.F mutation."""
     mock_version_at_least.return_value = False
     mock_pikepdf = MagicMock()
-    mock_pikepdf.Array = lambda x: list(x)
+    mock_pikepdf.Array = list
     item = MagicMock()
 
     with patch.dict(sys.modules, {"pikepdf": mock_pikepdf}):

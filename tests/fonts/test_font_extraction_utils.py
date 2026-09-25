@@ -916,6 +916,8 @@ def test_crawl_fonts_recurses_into_font_with_own_resources():
     assert "F1" in found_names
     assert "FN1" in found_names
 
+
+class TestFontExtractionRemainingBranches:
     def test_crawl_fonts_with_list_font_obj(self):
         """Font_obj lacks .get(), causing _process_and_store_font to return early."""
 
@@ -964,7 +966,7 @@ def test_crawl_fonts_recurses_into_font_with_own_resources():
         parent_obj = pikepdf.Dictionary()
 
         # Unwrap to an unsupported type to verify the defensive fallback pathway
-        import pdftl.fonts.font_extraction_utils as feu
+        import pdftl.fonts.font_extraction_utils as feu  # codeql[py/import-and-import-from]
 
         monkeypatch.setattr(
             feu, "_unwrap_physical_font", lambda obj: pikepdf.Name("/InvalidPhysicalObjType")
@@ -973,8 +975,6 @@ def test_crawl_fonts_recurses_into_font_with_own_resources():
         result = process_single_font("F1", parent_obj)
         assert result is None
 
-
-class TestFontExtractionRemainingBranches:
     def test_dict_encoding_no_base_encoding_attr_or_key(self):
         """Neither a .BaseEncoding attribute nor a '/BaseEncoding' key is
         present -- falls all the way through to the Custom default."""

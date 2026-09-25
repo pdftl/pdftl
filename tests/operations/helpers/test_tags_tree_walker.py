@@ -935,7 +935,7 @@ def _xobj_tagged_pdf(stream_bytes, mcids):
 
 
 def test_reading_order_lines_parses_shared_xobject_once() -> None:
-    import pdftl.operations.helpers.tags_tree_walker as tw
+    import pdftl.operations.helpers.tags_tree_walker as tw  # codeql[py/import-and-import-from]
 
     pdf, stm = _xobj_tagged_pdf(b"/P <</MCID 1>> BDC\nEMC\n/P <</MCID 2>> BDC\nEMC\n", [1, 2])
     with patch.object(tw, "_parse_and_build_xobj_map", wraps=tw._parse_and_build_xobj_map) as spy:

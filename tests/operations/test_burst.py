@@ -694,3 +694,25 @@ def test_make_chunk_pdf_directly_preserves_labels(book_with_chapters):
 def test_invalid_argument_error_raised_on_misparse(two_page_pdf):
     with pytest.raises(InvalidArgumentError, match="[Ii]nvalid size"):
         burst_pdf([two_page_pdf], ["sizenot_a_number"])
+
+
+def _pdf_with_top_level_bookmarks(num_pages, bookmark_pages):
+    pdf = pikepdf.new()
+    for _ in range(num_pages):
+        pdf.add_blank_page()
+    with pdf.open_outline() as outline:
+        for p in bookmark_pages:
+            outline.root.append(pikepdf.OutlineItem(f"p{p}", p - 1))
+    return pdf
+
+
+def test_burst_level_spec_resolved_per_input_pdf():
+    pdf_a = _pdf_with_top_level_bookmarks(4, [1, 3])
+    pdf_b = _pdf_with_top_level_bookmarks(4, [1, 2])
+    operation_args = ["level1"]
+
+    result = burst_pdf([pdf_a, pdf_b], operation_args)
+    chunk_sizes = [len(chunk.pages) for _, chunk in result.data]
+
+    assert chunk_sizes == [2, 2, 1, 3]
+    assert operation_args == ["level1"]

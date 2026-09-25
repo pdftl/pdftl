@@ -117,7 +117,7 @@ class TestGetFontWidthsFromFileDispatch:
         `font_binary_utils`'s own bound reference that both call sites here
         actually use.
         """
-        import pdftl.fonts.font_binary_utils as fbu
+        import pdftl.fonts.font_binary_utils as fbu  # codeql[py/import-and-import-from]
 
         calls = []
 
@@ -228,7 +228,7 @@ class TestSquashFontFileVectorsDispatch:
         the exact same function object exactly once each, rather than one
         of them being an unreachable/duplicated code path.
         """
-        import pdftl.fonts.font_binary_utils as fbu
+        import pdftl.fonts.font_binary_utils as fbu  # codeql[py/import-and-import-from]
 
         calls = []
 

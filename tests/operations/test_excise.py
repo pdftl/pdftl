@@ -2,11 +2,11 @@
 
 import pikepdf
 import pytest
-import pdftl.operations.excise as excise_module
+import pdftl.operations.excise as excise_module  # codeql[py/import-and-import-from]
 
 from pdftl.exceptions import InvalidArgumentError
 from pdftl.utils.path_types import Path, Subpath
-from pdftl.operations.helpers.excise_stream import (
+from pdftl.operations.helpers.excise_stream import (  # codeql[py/unused-import]
     resolve_resources as _resolve_resources,
     process_stream as _process_stream,
     handle_form_do as _handle_form_do,

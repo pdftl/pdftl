@@ -407,7 +407,7 @@ class TestSimplifyRdpErrorBranch:
         Patch rdp_simplify to raise ZeroDivisionError and confirm the path
         falls back rather than propagating the exception.
         """
-        import pdftl.utils.path_geometry as pg
+        import pdftl.utils.path_geometry as pg  # codeql[py/import-and-import-from]
 
         def _bad_rdp(points, tolerance):
             raise ZeroDivisionError("synthetic error")

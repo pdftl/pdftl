@@ -1040,7 +1040,7 @@ def test_push_children_getitem_exceptions_lines_341_342():
         def keys(self):
             return [pikepdf.Name.Key2]
 
-        def __getitem__(self, key):
+        def __getitem__(self, key):  # codeql[py/unexpected-raise-in-special-method]
             raise AttributeError("item error")
 
     class PdfErrorDict(pikepdf.Dictionary):
@@ -1117,7 +1117,7 @@ def test_push_children_getitem_exceptions():
         def keys(self):
             return ["key2"]
 
-        def __getitem__(self, key):
+        def __getitem__(self, key):  # codeql[py/unexpected-raise-in-special-method]
             raise AttributeError("attr error")
 
     class PdfErrorDict:

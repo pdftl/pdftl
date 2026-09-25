@@ -203,7 +203,7 @@ def test_find_candidates_both_disabled_returns_empty():
 
 
 def test_find_candidates_url_stripped_to_empty_is_skipped():
-    import pdftl.operations.link_urls as mod
+    import pdftl.operations.link_urls as mod  # codeql[py/import-and-import-from]
 
     fake_match = MagicMock()
     fake_match.group.return_value = "..."

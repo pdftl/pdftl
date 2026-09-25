@@ -16,7 +16,7 @@ def _in_fresh_thread(func):
     def target():
         try:
             outcome["result"] = func()
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:  # noqa: BLE001  # codeql[py/catch-base-exception]
             outcome["error"] = exc
 
     thread = threading.Thread(target=target)

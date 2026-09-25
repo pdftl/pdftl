@@ -40,7 +40,6 @@ from pdftl.core.core_types import OpResult
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.pdf_resources import walk_content_streams
-from pdftl.utils.path_types import SimplifyConfig
 from pdftl.operations.helpers.excise_types import ExciseRect, ExciseStats
 from pdftl.operations.helpers.excise_geometry import (
     overlap_means_delete as _overlap_means_delete,
@@ -58,22 +57,6 @@ from pdftl.operations.helpers.excise_stream import (
 from pdftl.utils.pdf_resources import get_resources
 
 logger = logging.getLogger(__name__)
-
-# excise's own SimplifyConfig for driving segment(): coalesce_strokes MUST
-# stay False here (locked decision, see roadmap) -- the shattered-stroke
-# merge feature changes what "one atomic subpath" means in a way excise must
-# not inherit, since it changes deletion granularity underneath us.
-_TRIM_SEGMENT_CONFIG = SimplifyConfig(coalesce_strokes=False)
-
-# Text-state operators that mutate GraphicsState's text fields but don't
-# themselves paint anything -- tracked via GraphicsState.apply_text_op so
-# subsequent Tj/TJ/'/" calls see correct font/position/spacing state.
-_TEXT_STATE_OPS = frozenset(
-    {"BT", "ET", "Tm", "Td", "TD", "T*", "Tf", "Tc", "Tw", "Tz", "TL", "Ts"}
-)
-
-# Text-SHOWING operators -- these are where glyph-level deletion happens.
-_TEXT_SHOW_OPS = frozenset({"Tj", "TJ", "'", '"'})
 
 
 # ---------------------------------------------------------------------------

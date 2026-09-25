@@ -207,7 +207,6 @@ def _write_page_media_info(writer, info):
     for entry in info.page_media or {}:
         rot = entry.rotation or 0
         writer(f"PageMediaBegin\nPageMediaNumber: {entry.page_number}\nPageMediaRotation: {rot}")
-        # breakpoint()
         if entry.media_rect is not None:
             writer(f"PageMediaRect: {pdf_rect_to_string(entry.media_rect)}")
         if entry.dimensions is not None:

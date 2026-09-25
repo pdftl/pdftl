@@ -171,7 +171,7 @@ def _quote_prefix(op_str: str, operands: list[Any], gs: Any) -> tuple[list[Any],
             gs.char_spacing = ac
             prefix.append(([aw], "Tw"))
             prefix.append(([ac], "Tc"))
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
         show_operands = operands[2:]
 

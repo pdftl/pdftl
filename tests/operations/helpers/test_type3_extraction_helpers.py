@@ -358,6 +358,7 @@ def test_process_inline_images_on_export_inner_match_skip(tmp_path):
 
 
 def test_decode_ccitt_image_decode_parms_without_k_uses_group4(monkeypatch):
+    # codeql[py/import-and-import-from]
     import pdftl.operations.helpers.type3_extraction_helpers as t3
 
     calls = []

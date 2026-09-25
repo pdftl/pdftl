@@ -141,7 +141,7 @@ class PdftlServerRequestHandlerMixIn:
         threading.Thread(target=self.server.shutdown).start()
         return
 
-    def do_POST(self) -> None:
+    def do_POST(self) -> None:  # codeql[py/mixed-returns]
         if self.path == "/v1/shutdown":
             return self.do_shutdown()
 

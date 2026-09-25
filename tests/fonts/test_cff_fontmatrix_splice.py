@@ -267,7 +267,6 @@ class TestSpliceErrorPaths:
         dict_bytes = _encode_dict(entries)
 
         header = bytes([1, 0, 4, 4])
-        name_index = _build_index([b"F"]) if False else None
         from pdftl.fonts.cff_fontmatrix_splice import _build_index as bi
 
         name_index = bi([b"F"])
@@ -365,7 +364,7 @@ class TestSpliceNonConvergence:
         than silently return an inconsistent result. Simulated by
         monkeypatching _build_index to grow by one byte every call, so
         new_delta never equals the previous delta."""
-        import pdftl.fonts.cff_fontmatrix_splice as splice_mod
+        import pdftl.fonts.cff_fontmatrix_splice as splice_mod  # codeql[py/import-and-import-from]
 
         call_count = {"n": 0}
         real_build_index = splice_mod._build_index

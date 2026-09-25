@@ -198,6 +198,7 @@ def test_generate_fdf_choice_field_null_value():
         mock_field.obj.get.return_value = None
 
         mock_form_instance.items.return_value = [("MyDropdown", mock_field)]
+        # codeql[py/unused-local-variable]
         _result = generate_fdf(mock_pdf, lambda x: "y", "out.fdf")
 
 

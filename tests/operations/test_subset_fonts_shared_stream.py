@@ -102,7 +102,6 @@ def _make_shared_type1_pdf() -> pikepdf.Pdf:
         {"/Font": pikepdf.Dictionary({"/F1": font_f1, "/F2": font_f2})}
     )
     # /F1 paints code 10 (-> glyph A), /F2 paints code 20 (-> glyph B)
-    content = bytes([10]) + b" ignored"  # placeholder, real content built below
     content = b"/F1 12 Tf <0A> Tj /F2 12 Tf <14> Tj"
     page["/Contents"] = pikepdf.Stream(pdf, content)
     return pdf

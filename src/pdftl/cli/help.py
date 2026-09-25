@@ -330,19 +330,20 @@ def print_help(command=None, dest=None, raw=False):
 
     # Wrap only the outer-most call invocation inside the capture layout, if paging is allowed
     if use_rich_console and _HELP_RECURSION_DEPTH == 0 and should_page:
-        _HELP_RECURSION_DEPTH += 1
+        _HELP_RECURSION_DEPTH += 1  # codeql[py/unused-global-variable]
         try:
             from pdftl.cli.help_render import page_captured_output
 
             with page_captured_output():
                 _print_help_core(command, dest, raw)
         finally:
-            _HELP_RECURSION_DEPTH = 0
+            _HELP_RECURSION_DEPTH = 0  # codeql[py/unused-global-variable]
     else:
         _HELP_RECURSION_DEPTH += 1
         try:
             _print_help_core(command, dest, raw)
         finally:
+            # codeql[py/unused-global-variable]
             _HELP_RECURSION_DEPTH = max(0, _HELP_RECURSION_DEPTH - 1)
 
 

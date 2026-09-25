@@ -93,7 +93,7 @@ def image_extraction_errors() -> tuple[type[Exception], ...]:
         from pikepdf.models import _image_exceptions
 
         modules.append(_image_exceptions)
-    except ImportError:
+    except ImportError:  # codeql[py/empty-except]
         pass
     found = {getattr(m, name) for m in modules for name in _IMAGE_ERROR_NAMES if hasattr(m, name)}
     return tuple(found)

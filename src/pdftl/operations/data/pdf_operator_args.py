@@ -41,7 +41,7 @@ _TEXT_RENDERING_MODE = {
     "7": "Clip",
 }
 
-_BLEND_MODES = {
+_BLEND_MODES = {  # codeql[py/unused-global-variable]
     "/Normal": "Normal",
     "/Multiply": "Multiply",
     "/Screen": "Screen",
@@ -163,13 +163,13 @@ PDF_OPERATOR_ARGS: dict[str, callable] = {
     "d": _fmt_dash_pattern,
     "i": lambda t: f"flatness={t[-2]}",
     # Color — stroking
-    "G": lambda t: _fmt_color_gray(t),
+    "G": _fmt_color_gray,
     "RG": lambda t: _fmt_color_rgb(t, "stroke"),
-    "K": lambda t: _fmt_color_cmyk(t),
+    "K": _fmt_color_cmyk,
     # Color — nonstroking
-    "g": lambda t: _fmt_color_gray(t),
+    "g": _fmt_color_gray,
     "rg": lambda t: _fmt_color_rgb(t, "fill"),
-    "k": lambda t: _fmt_color_cmyk(t),
+    "k": _fmt_color_cmyk,
     # Text state
     "Tc": lambda t: f"spacing={t[-2]}",
     "Tw": lambda t: f"spacing={t[-2]}",

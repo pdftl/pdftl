@@ -376,7 +376,7 @@ from unittest.mock import patch
 
 
 # noqa py:missing-equals
-class MockXObjDict(dict):
+class MockXObjDict(dict):  # codeql[py/missing-equals]
     """Dict that also records .write() calls and supports DecodeParms assignment,
     mirroring the pikepdf Stream object's dual dict-like/attribute-like interface
     used elsewhere in this test suite.

@@ -251,7 +251,7 @@ def test_export_single_font_binary_missing_details(tmp_path):
 
 def test_resolve_font_widths_cid_to_gid_map_type0(monkeypatch):
     """Tests the Type0 branch of _resolve_font_widths_cid_to_gid_map to cover line 178."""
-    import pdftl.operations.helpers.font_export_helpers as feh
+    import pdftl.operations.helpers.font_export_helpers as feh  # codeql[py/import-and-import-from]
 
     font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type0")})
 
@@ -266,7 +266,7 @@ def test_resolve_font_widths_cid_to_gid_map_type0(monkeypatch):
 
 def test_assemble_unified_mappings_valid_state(tmp_path, monkeypatch):
     """Guarantees coverage for widths sync mapping and inner list populating blocks."""
-    import pdftl.operations.helpers.font_export_helpers as feh
+    import pdftl.operations.helpers.font_export_helpers as feh  # codeql[py/import-and-import-from]
 
     # UPDATE: Add **kwargs to the lambda so it swallows the new cid_to_gid_map parameter safely
     monkeypatch.setattr(
@@ -339,7 +339,7 @@ def test_save_ps_sidecar_oserror(tmp_path, monkeypatch):
 
 def test_save_cid_to_gid_sidecar_oserror(tmp_path, monkeypatch):
     """Targets precise exception handling logic for CIDToGIDMap sidecar saves."""
-    import pdftl.operations.helpers.font_export_helpers as feh
+    import pdftl.operations.helpers.font_export_helpers as feh  # codeql[py/import-and-import-from]
 
     def mock_open(*args, **kwargs):
         raise OSError("disk full")
@@ -700,7 +700,7 @@ def test_save_cid_to_gid_sidecar_writes_explicit_map(tmp_path):
 
 def test_make_font_entry_explicit_cid_to_gid(tmp_path, monkeypatch):
     from pdftl.operations.helpers.font_export_helpers import _make_font_entry
-    import pdftl.operations.helpers.font_export_helpers as feh
+    import pdftl.operations.helpers.font_export_helpers as feh  # codeql[py/import-and-import-from]
     import pikepdf
 
     monkeypatch.setattr(feh, "extract_cid_to_gid_map", lambda obj: {0: 5})

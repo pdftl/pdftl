@@ -187,7 +187,7 @@ class TestGetDependenciesStatus:
         # Mock _get_status to just return a dummy tuple so we can verify what was passed to it
         mock_get_status.side_effect = lambda pkgs: [(p, "dummy") for p in pkgs]
 
-        req_status, opt_status = get_dependencies_status()
+        req_status, opt_status = get_dependencies_status()  # codeql[py/unused-local-variable]
 
         # Check that _get_status was called twice (once for required, once for optional)
         assert mock_get_status.call_count == 2
@@ -222,7 +222,7 @@ class TestGetStatus:
 
 
 def test_parse_changelog_version_climbs_past_changelog_without_version(tmp_path, monkeypatch):
-    import pdftl.core.metadata as metadata_mod
+    import pdftl.core.metadata as metadata_mod  # codeql[py/import-and-import-from]
 
     inner = tmp_path / "outer" / "inner"
     inner.mkdir(parents=True)

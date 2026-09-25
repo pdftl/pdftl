@@ -33,21 +33,21 @@ from typing import Any
 
 from pdftl.exceptions import UserCommandLineError
 from pdftl.fonts.cmap_utils import _PREDEFINED_IDENTITY_CMAPS
-from pdftl.fonts.font_binary_utils import (  # noqa: F401
+from pdftl.fonts.font_binary_utils import (  # noqa: F401  # codeql[py/unused-import]
     classify_binary_format,
     get_font_widths_from_file,
     patch_font_file_metrics,
     rekey_name_widths_to_hex_codes,
     squash_font_file_vectors,
 )
-from pdftl.fonts.widths_utils import update_font_widths  # noqa: F401
+from pdftl.fonts.widths_utils import update_font_widths  # noqa: F401  # codeql[py/unused-import]
 from pdftl.operations.helpers.font_ops_shared import file_hash, encode_font_flags
 
 # Re-exported for backward compatibility: existing call sites (and the
 # existing test suite's monkeypatches -- see module docstring above)
 # reference these as pdftl.operations.helpers.font_import_helpers.<name>.
 # See font_widths_sync.py's own docstring for where each now actually lives.
-from pdftl.operations.helpers.font_widths_sync import (  # noqa: F401
+from pdftl.operations.helpers.font_widths_sync import (  # noqa: F401  # codeql[py/unused-import]
     _apply_in_memory_patch,
     _apply_in_memory_squash,
     _auto_sync_widths_from_font,

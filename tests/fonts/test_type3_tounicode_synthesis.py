@@ -173,7 +173,7 @@ def test_resolve_via_encoding_code_present_in_neither_map_is_skipped():
     given how `codes` is built, but the `gname is None: continue` guard
     exists). Exercised by forcing _get_maps to return a base_encoding_map
     entry that maps to None for one of its own keys."""
-    import pdftl.fonts.type3_tounicode_synthesis as mod
+    import pdftl.fonts.type3_tounicode_synthesis as mod  # codeql[py/import-and-import-from]
 
     font_obj = pikepdf.Dictionary(
         Subtype=pikepdf.Name("/Type1"), Encoding=pikepdf.Name("/WinAnsiEncoding")
@@ -411,7 +411,7 @@ def test_patch_missing_to_unicode_leaves_unresolvable_font_alone():
     page = pdf.add_blank_page()
     font = _add_font_to_page(pdf, page, {"Subtype": pikepdf.Name("/Type3")})
 
-    import pdftl.fonts.type3_tounicode_synthesis as mod
+    import pdftl.fonts.type3_tounicode_synthesis as mod  # codeql[py/import-and-import-from]
 
     original = mod.build_synthetic_to_unicode_map
     mod.build_synthetic_to_unicode_map = lambda font_obj: {}
@@ -459,7 +459,7 @@ def test_patch_missing_to_unicode_empty_cmap_bytes_short_circuits():
     page = pdf.add_blank_page()
     font = _add_font_to_page(pdf, page, {"Subtype": pikepdf.Name("/Type3")})
 
-    import pdftl.fonts.type3_tounicode_synthesis as mod
+    import pdftl.fonts.type3_tounicode_synthesis as mod  # codeql[py/import-and-import-from]
 
     original_build = mod.build_synthetic_to_unicode_map
     original_compile = mod.compile_to_unicode_cmap
@@ -521,7 +521,7 @@ def test_resolve_via_encoding_dynamic_agl_names():
 def test_patch_missing_to_unicode_out_of_bounds_code():
     """Tests that a character code > 255 formats properly without crashing
     the CMap compiler."""
-    import pdftl.fonts.type3_tounicode_synthesis as mod
+    import pdftl.fonts.type3_tounicode_synthesis as mod  # codeql[py/import-and-import-from]
 
     pdf = _blank_pdf()
     page = pdf.add_blank_page()

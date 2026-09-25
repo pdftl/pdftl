@@ -284,7 +284,7 @@ META_JSON_OUTPUT = "json_output"
 PDFTL_SOURCE_INFO_KEY = "PdftlSourceInfo"
 
 # Pdf attribute holding output options an operation asks the final save to apply
-PDFTL_SAVE_HINTS_ATTR = "_pdftl_save_hints"
+PDFTL_SAVE_HINTS_ATTR = "_pdftl_save_hints"  # codeql[py/unused-global-variable]
 
 ##################################################
 # __all__

@@ -182,7 +182,7 @@ def update_readme_table(readme_path: Path, op_name: str, readme_desc: str):
     return True
 
 
-def update_changelog(changelog_path: Path, changelog_entry: str):
+def update_changelog(changelog_path: Path, changelog_entry: str):  # codeql[py/mixed-returns]
     """Appends the changelog entry cleanly inside the Unreleased section header block."""
     if not changelog_path.exists():
         print(f"❌ Error: {changelog_path} not found.")

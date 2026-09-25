@@ -241,7 +241,7 @@ class TestPrivateHelpers:
         ]
 
         with pytest.raises(InvalidArgumentError, match="Unknown argument.*attach_files"):
-            _specs, _options = parse_options_and_specs(args)
+            _specs, _options = parse_options_and_specs(args)  # codeql[py/unused-local-variable]
 
     def testparse_options_and_specs(self, mock_constants):
         """Integration test for the main options parser."""
@@ -560,7 +560,7 @@ def test_duplicate_argument_raises_error():
     ]
 
     with pytest.raises(DuplicateArgumentError) as excinfo:
-        _specs, _options = parse_options_and_specs(args)
+        _specs, _options = parse_options_and_specs(args)  # codeql[py/unused-local-variable]
 
     # Verify the error message mentions the correct keyword
     assert "Duplicate keyword: owner_pw" in str(excinfo.value)

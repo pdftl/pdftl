@@ -59,6 +59,7 @@ def test_resolve_detects_json_file():
     with patch("builtins.open", mock_open(read_data=file_content)) as mock_file:
         with patch("pathlib.Path.exists", return_value=True):
             args = ["@config.json"]
+            # codeql[py/unused-local-variable]
             _result = resolve_operation_spec(args, mock_manual_parser, MockSpec)
 
             f_args, f_kwargs = mock_file.call_args

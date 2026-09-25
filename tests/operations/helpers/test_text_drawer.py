@@ -85,6 +85,7 @@ def test_get_base_coordinates(rule, expected, page_box):
 
 # --- TextDrawer tests ---
 
+# codeql[py/import-and-import-from]
 import pdftl.operations.helpers.text_drawer as td  # need this for fast test apparently
 import pdftl.fonts.file_locator as fl  # and this
 

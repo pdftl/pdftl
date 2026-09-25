@@ -309,7 +309,7 @@ class GraphicsState:
     def _tc(self, operands, _glyph_width_fn) -> None:
         try:
             self.char_spacing = float(operands[0])
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
 
     def decode_text_codes(self, raw: bytes, two_byte: bool) -> list:
@@ -326,25 +326,25 @@ class GraphicsState:
     def _tw(self, operands, _glyph_width_fn) -> None:
         try:
             self.word_spacing = float(operands[0])
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
 
     def _tz(self, operands, _glyph_width_fn) -> None:
         try:
             self.horizontal_scale = float(operands[0]) / 100.0
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
 
     def _tl(self, operands, _glyph_width_fn) -> None:
         try:
             self.leading = float(operands[0])
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
 
     def _ts(self, operands, _glyph_width_fn) -> None:
         try:
             self.text_rise = float(operands[0])
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
 
     def _advance_by_width_1000(self, width_1000: float) -> None:
@@ -487,7 +487,7 @@ class GraphicsState:
         try:
             self.word_spacing = float(operands[0])
             self.char_spacing = float(operands[1])
-        except (IndexError, TypeError, ValueError):
+        except (IndexError, TypeError, ValueError):  # codeql[py/empty-except]
             pass
         self._t_star(None, None)
         self._tj(operands[2:], glyph_width_fn, is_composite_font_fn, glyph_callback)

@@ -3,7 +3,7 @@ from pdftl.cli.pipeline import InlineSubPipeline
 import pytest
 from unittest.mock import MagicMock, patch
 from pdftl.cli.pipeline import EachSubPipeline
-import pdftl.cli.pipeline as pipeline_mod
+import pdftl.cli.pipeline as pipeline_mod  # codeql[py/import-and-import-from]
 
 
 from pdftl.cli.pipeline import PipelineManager

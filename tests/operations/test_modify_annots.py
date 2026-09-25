@@ -58,6 +58,7 @@ def mock_pdf():
     # --- Create Pages and Add to Document ---
     page1 = pdf.add_blank_page()
     page2 = pdf.add_blank_page()
+    # codeql[py/unused-local-variable]
     _page3 = pdf.add_blank_page()  # This page remains blank (no annots)
 
     # --- Attach Annotations (Correct API Usage, Guideline 3) ---

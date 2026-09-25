@@ -483,7 +483,7 @@ class TestCidPatchErrorPaths:
         _resolve_cff_cid_to_gid to return an out-of-bounds GID directly,
         since constructing a real font program that hits this exact
         mismatch is not otherwise reachable through the public API."""
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         monkeypatch.setattr(cbu, "_resolve_cff_cid_to_gid", lambda topdict, cid: 999)
         assert (
@@ -496,7 +496,7 @@ class TestCidPatchErrorPaths:
         successful in-memory patch (e.g. a fontTools internal error), the
         whole patch attempt reports failure via None rather than returning
         corrupt or partial bytes."""
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         class _BoomCFFFontSet:
             def compile(self, buf, otFont):
@@ -515,7 +515,7 @@ class TestCidPatchErrorPaths:
         """If an individual charstring's own .compile() call fails after
         its width operand has already been rewritten, that single glyph is
         skipped (logged at debug) rather than aborting the whole patch."""
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         def _boom_charstring_compile(topdict, glyph_name, new_width):
             charstring = topdict.CharStrings[glyph_name]
@@ -556,7 +556,7 @@ class TestCidPatchErrorPaths:
         """_patch_single_cff_width bails out before touching the charstring
         at all if _measure_charstring_width can't establish a baseline
         width for it."""
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         monkeypatch.setattr(cbu, "_measure_charstring_width", lambda charstring: None)
         assert patch_cff_widths(simple_cff_path, {"A": 999.0}) is None
@@ -746,7 +746,7 @@ class TestPatchCidMetricsCffNativeGuards:
 
     def test_non_hex_cid_key_skipped(self, monkeypatch):
         from pdftl.fonts.font_binary_sfnt import _patch_cid_metrics
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         topdict = type("TD", (), {})()
         cff = type("CFF", (), {"fontNames": ["F"], "__getitem__": lambda s, k: topdict})()
@@ -767,7 +767,7 @@ class TestPatchCidMetricsCffNativeGuards:
 
     def test_gid_none_skipped(self, monkeypatch):
         from pdftl.fonts.font_binary_sfnt import _patch_cid_metrics
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         topdict = type("TD", (), {})()
         cff = type("CFF", (), {"fontNames": ["F"], "__getitem__": lambda s, k: topdict})()
@@ -788,7 +788,7 @@ class TestPatchCidMetricsCffNativeGuards:
 
     def test_gname_none_skipped(self, monkeypatch):
         from pdftl.fonts.font_binary_sfnt import _patch_cid_metrics
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         topdict = type("TD", (), {})()
         cff = type("CFF", (), {"fontNames": ["F"], "__getitem__": lambda s, k: topdict})()
@@ -809,7 +809,7 @@ class TestPatchCidMetricsCffNativeGuards:
 
     def test_glyph_missing_from_hmtx_skipped(self, monkeypatch):
         from pdftl.fonts.font_binary_sfnt import _patch_cid_metrics
-        import pdftl.fonts.cff_binary_utils as cbu
+        import pdftl.fonts.cff_binary_utils as cbu  # codeql[py/import-and-import-from]
 
         topdict = type("TD", (), {})()
         cff = type("CFF", (), {"fontNames": ["F"], "__getitem__": lambda s, k: topdict})()

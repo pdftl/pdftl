@@ -267,6 +267,7 @@ class TestEmbeddedFormatThreadingAcrossNonSfntFormats:
     def test_patch_font_metrics_passes_embedded_format(
         self, tmp_path, monkeypatch, embedded_format
     ):
+        # codeql[py/import-and-import-from]
         import pdftl.operations.helpers.font_import_helpers as fih
 
         font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type1")})
@@ -313,6 +314,7 @@ class TestEmbeddedFormatThreadingAcrossNonSfntFormats:
     def test_squash_font_vectors_passes_embedded_format(
         self, tmp_path, monkeypatch, embedded_format
     ):
+        # codeql[py/import-and-import-from]
         import pdftl.operations.helpers.font_import_helpers as fih
 
         font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type1")})
@@ -376,6 +378,7 @@ class TestAutoModeEmbeddedFormatThreading:
         test_font_fidelity_gaps.py) will always silently fail regardless
         of what fix lands for patch/squash mode.
         """
+        # codeql[py/import-and-import-from]
         import pdftl.operations.helpers.font_import_helpers as fih
 
         font_obj = pikepdf.Dictionary({"/Subtype": pikepdf.Name("/Type1")})

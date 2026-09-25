@@ -260,7 +260,7 @@ def _update_descendant_font(font_obj: Any, new_name: str | None, pikepdf_mod: An
     try:
         descendant = font_obj.DescendantFonts[0]
         descendant["/BaseFont"] = pikepdf_mod.Name(f"/{new_name}")
-    except (AttributeError, IndexError, TypeError):
+    except (AttributeError, IndexError, TypeError):  # codeql[py/empty-except]
         pass
 
 
