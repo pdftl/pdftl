@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `shrink` operation: makes a PDF smaller in one step, at `lossless` (default), `balanced` or
+  `max` level, by running font subsetting, deduplication, image resampling and optimisation,
+  and vector simplification in a benchmarked order, then saving with `prune_resources` and
+  `recompress`
+
+- `recompress` output option: recompresses every Flate stream at maximum zlib level (lossless,
+  typically a few percent smaller; existing Flate streams are otherwise copied as they are)
+
 ### Security
 
 - Parsing an embedded Type 1 font program is now bounded in steps, operand stack and memory, so

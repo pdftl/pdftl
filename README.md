@@ -85,7 +85,7 @@ Some features also require system software such as `java`.
 
 * **Information:** [`dump_images`](https://pdftl.readthedocs.io/en/latest/operations/dump_images.html) and [`dump_colorspaces`](https://pdftl.readthedocs.io/en/latest/operations/dump_colorspaces.html).
 * **Conversion:** [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html) pages as images.
-* **Optimization:** [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
+* **Optimization:** [`shrink`](https://pdftl.readthedocs.io/en/latest/operations/shrink.html) (all of the below in one step), [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html), [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html), [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html).
 * **Editing:** [`recolor_images`](https://pdftl.readthedocs.io/en/latest/operations/recolor_images.html), [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html), [`add_images`](https://pdftl.readthedocs.io/en/latest/operations/add_images.html), or [`export_images`](https://pdftl.readthedocs.io/en/latest/operations/export_images.html), edit externally and then [`import_images`](https://pdftl.readthedocs.io/en/latest/operations/import_images.html).
 * **Vectors:** [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html) and [`recolor_vectors`](https://pdftl.readthedocs.io/en/latest/operations/recolor_vectors.html).
 * **Barcodes:** Generate and place on pages with [`barcode`](https://pdftl.readthedocs.io/en/latest/operations/barcode.html).
@@ -286,6 +286,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
 | [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.html)                               | Start the pdftl API server                                      |
 | [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html)                                     | Set document properties, viewer preferences, and page labels    |
+| [`shrink`](https://pdftl.readthedocs.io/en/latest/operations/shrink.html)                               | Make a PDF smaller, losslessly or at a chosen quality level     |
 | [`shuffle`](https://pdftl.readthedocs.io/en/latest/operations/shuffle.html)                             | Interleave pages from multiple input PDFs                       |
 | [`simplify_vectors`](https://pdftl.readthedocs.io/en/latest/operations/simplify_vectors.html)           | Reduce vector path complexity                                   |
 | [`stamp`](https://pdftl.readthedocs.io/en/latest/operations/stamp.html)                                 | Stamp a 1-page PDF onto each page of an input PDF               |

@@ -586,6 +586,14 @@ def set(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def shrink(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    output: Optional[str] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def shuffle(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     inputs: Optional[List[str]] = ...,

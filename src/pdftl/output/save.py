@@ -6,6 +6,7 @@
 
 """Methods for saving PDF files (and other files), with options registered for CLI."""
 
+import contextlib
 import io
 import logging
 import sys
@@ -196,6 +197,23 @@ are decompressed and recompressed when saving. This allows the underlying
 library to recalculate stream lengths and often results in smaller files,
 but it can add significant CPU overhead. The `fast` option disables this step,
 copying streams as raw binary data to reduce save times."""
+
+
+@register_option(
+    "recompress",
+    desc="Recompress all Flate streams at maximum compression",
+    long_desc=(
+        "By default, streams that are already Flate-compressed are copied "
+        "as they are. With `recompress`, every Flate stream is decoded and "
+        "compressed again at zlib's maximum level. Lossless, often a few "
+        "percent smaller, and slower to save. Ignored with `fast` or "
+        "`uncompress`."
+    ),
+    type="flag",
+    tags=["compression", "optimization"],
+)
+def _recompress_option():
+    pass
 
 
 @register_option(
@@ -436,7 +454,31 @@ def _build_save_options(options, input_context):
         # generating object streams seems cheap, so we don't change it. maybe revisit
         ret["stream_decode_level"] = pikepdf.StreamDecodeLevel.none
         ret["compress_streams"] = False
+    if options.get("recompress"):
+        if use_fast or use_uncompress:
+            logger.warning("Ignoring 'recompress': it conflicts with 'fast' and 'uncompress'.")
+        else:
+            ret["recompress_flate"] = True
     return ret
+
+
+_MAX_FLATE_LEVEL = 9
+_DEFAULT_FLATE_LEVEL = -1  # zlib's default, pikepdf's initial setting
+
+
+@contextlib.contextmanager
+def _flate_level_for(save_opts):
+    """Raise the process-wide Flate level only for a recompressing save."""
+    if not save_opts.get("recompress_flate"):
+        yield
+        return
+    import pikepdf
+
+    pikepdf.settings.set_flate_compression_level(_MAX_FLATE_LEVEL)
+    try:
+        yield
+    finally:
+        pikepdf.settings.set_flate_compression_level(_DEFAULT_FLATE_LEVEL)
 
 
 def _remove_source_info(pdf):
@@ -632,6 +674,10 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     """
     if options is None:
         options = {}
+    # Explicit output options win over hints left by operations such as shrink.
+    hints = getattr(pdf, c.PDFTL_SAVE_HINTS_ATTR, None)
+    if isinstance(hints, dict):
+        options = {**hints, **options}
     if not output_filename:
         raise MissingArgumentError("An output file must be specified with the 'output' keyword.")
 
@@ -663,7 +709,8 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     logger.debug("Save options for pikepdf: %s", save_opts)
 
     _warn_if_live_signatures_will_be_invalidated(pdf, is_signing)
-    _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing)
+    with _flate_level_for(save_opts):
+        _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing)
 
 
 def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
