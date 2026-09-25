@@ -39,7 +39,7 @@ def test_validate_int():
 
 def test_parse_args():
     # Defaults
-    dpi, q, threads, upscale, grow, force, specs = _parse_args([])
+    dpi, q, threads, upscale, grow, force, specs, mono, threshold = _parse_args([])
     assert (
         dpi == 150
         and q == 75
@@ -51,7 +51,7 @@ def test_parse_args():
     assert threads > 0  # Should be set to os.cpu_count() or 4
 
     # Custom args (all explicit)
-    dpi, q, threads, upscale, grow, force, specs = _parse_args(
+    dpi, q, threads, upscale, grow, force, specs, mono, threshold = _parse_args(
         [
             "dpi=72",
             "quality=50",
@@ -73,7 +73,9 @@ def test_parse_args():
     )
 
     # Test the fallback logic: allow_growth should inherit True if allow_upscale is True
-    dpi, q, threads, upscale, grow, force, specs = _parse_args(["allow_upscale=yes"])
+    dpi, q, threads, upscale, grow, force, specs, mono, threshold = _parse_args(
+        ["allow_upscale=yes"]
+    )
     assert upscale is True and grow is True
 
 
@@ -611,3 +613,127 @@ def test_apply_metadata_updates_unrecognized_mode_no_colorspace_set(real_pdf):
     stream = real_pdf.make_stream(b"")
     _apply_metadata_updates(stream, "RGBA", is_bitonal=False, force=True)
     assert "/ColorSpace" not in stream
+
+
+##################################################
+# 1-bit images
+##################################################
+# mono_dpi: bitonal (1-bit) images get their own resampling target. Every
+# image here is 600 px drawn one inch wide, i.e. 600 dpi, so the expected
+# widths follow from the geometry alone.
+
+
+import pytest
+from pikepdf import Name
+
+
+PX = 600
+
+
+def _image(pdf, bpc, raw):
+    img = pdf.make_stream(zlib.compress(raw))
+    img.Type, img.Subtype = Name.XObject, Name.Image
+    img.Width = img.Height = PX
+    img.BitsPerComponent, img.ColorSpace, img.Filter = bpc, Name.DeviceGray, Name.FlateDecode
+    return img
+
+
+def _pdf_with_gray_and_bitonal():
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(144, 72))
+    stripes = bytes([0b10101010] * (PX // 8)) * PX  # 1-bit: PX/8 bytes per row
+    gray = bytes(range(256)) * (PX * PX // 256) + bytes(PX * PX % 256)
+    page = pdf.pages[0]
+    page.Resources = pikepdf.Dictionary(
+        XObject=pikepdf.Dictionary(Gr=_image(pdf, 8, gray), Bw=_image(pdf, 1, stripes))
+    )
+    page.Contents = pdf.make_stream(b"q 72 0 0 72 0 0 cm /Gr Do Q q 72 0 0 72 72 0 cm /Bw Do Q")
+    return pdf
+
+
+def _widths(pdf):
+    xobjects = pdf.pages[0].Resources.XObject
+    return int(xobjects.Gr.Width), int(xobjects.Bw.Width)
+
+
+def test_mono_dpi_defaults_to_dpi():
+    assert _parse_args(["dpi=120"])[7] == 120
+
+
+def test_mono_dpi_parsed():
+    assert _parse_args(["dpi=120", "mono_dpi=300"])[7] == 300
+
+
+def test_mono_dpi_rejects_zero():
+    with pytest.raises(InvalidArgumentError):
+        _parse_args(["mono_dpi=0"])
+
+
+def test_bitonal_images_use_mono_dpi():
+    pdf = _pdf_with_gray_and_bitonal()
+    resample_images(pdf, ["dpi=150", "mono_dpi=300", "allow_growth=yes"])
+    assert _widths(pdf) == (150, 300)
+
+
+def test_without_mono_dpi_bitonal_images_follow_dpi():
+    pdf = _pdf_with_gray_and_bitonal()
+    resample_images(pdf, ["dpi=150", "allow_growth=yes"])
+    assert _widths(pdf) == (150, 150)
+
+
+def test_inline_bitonal_image_uses_mono_dpi():
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(72, 72))
+    data = bytes([0b11110000] * (PX // 8)) * PX
+    pdf.pages[0].Contents = pdf.make_stream(
+        b"q 72 0 0 72 0 0 cm BI /W %d /H %d /BPC 1 /CS /G ID " % (PX, PX) + data + b" EI Q"
+    )
+    resample_images(pdf, ["dpi=150", "mono_dpi=300", "allow_growth=yes"])
+    (inline,) = [
+        operands[0]
+        for operands, op in pikepdf.parse_content_stream(pdf.pages[0])
+        if str(op) == "INLINE IMAGE"
+    ]
+    assert int(inline.width) == 300
+
+
+def test_malformed_bits_per_component_is_not_treated_as_bitonal():
+    from pdftl.operations.resample_images import _is_bitonal_xobj
+
+    pdf = pikepdf.new()
+    stream = pdf.make_stream(b"")
+    stream.BitsPerComponent = Name("/Bogus")
+    assert _is_bitonal_xobj(stream) is False
+
+
+# --- threshold: downsample only well above the target ---
+
+
+def test_threshold_defaults_to_one_and_parses():
+    assert _parse_args([])[8] == 1.0
+    assert _parse_args(["threshold=1.5"])[8] == 1.5
+
+
+@pytest.mark.parametrize("bad", ["0.9", "0", "x"])
+def test_threshold_rejects_values_below_one(bad):
+    with pytest.raises(InvalidArgumentError):
+        _parse_args([f"threshold={bad}"])
+
+
+@pytest.mark.parametrize(
+    "args,expected",
+    [
+        # 600 dpi images: within 1.5x of 450 dpi, so both are left alone
+        (["dpi=450", "threshold=1.5"], (PX, PX)),
+        # more than 1.5x above 350 dpi, so the gray image is resampled
+        (["dpi=350", "threshold=1.5"], (350, 350)),
+        # bitonal judged against mono_dpi: 600 > 1.5 * 300, gray 600 < 1.5 * 450
+        (["dpi=450", "mono_dpi=300", "threshold=1.5"], (PX, 300)),
+        # without a threshold, any excess is resampled
+        (["dpi=450"], (450, 450)),
+    ],
+)
+def test_threshold_skips_slight_downsamples(args, expected):
+    pdf = _pdf_with_gray_and_bitonal()
+    resample_images(pdf, [*args, "allow_growth=yes"])
+    assert _widths(pdf) == expected

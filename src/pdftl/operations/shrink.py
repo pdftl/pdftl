@@ -26,19 +26,64 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 LEVELS = ("lossless", "balanced", "max")
-_LEVEL_IMAGE_DEFAULTS = {"balanced": (200, 85), "max": (150, 75)}
-_LEVEL_SAVE_HINTS = {
-    "lossless": {"prune_resources": True, "recompress": True},
-    "balanced": {"prune_resources": True, "recompress": True, "drop_xmp_streams": True},
-    "max": {
-        "prune_resources": True,
-        "recompress": True,
-        "drop_meta": True,
-        "drop_vendor_extensions": True,
+
+# Processing passes, in the order they run, then save-time passes.
+STEP_PASSES = (
+    "resample_images",
+    "optimize_images",
+    "simplify_vectors",
+    "subset_fonts",
+    "deduplicate_fonts",
+    "deduplicate_images",
+    "deduplicate_icc_profiles",
+)
+SAVE_PASSES = (
+    "prune_resources",
+    "recompress",
+    "drop_xmp_streams",
+    "drop_meta",
+    "drop_vendor_extensions",
+)
+PASSES = STEP_PASSES + SAVE_PASSES
+
+_LOSSLESS = {
+    "subset_fonts",
+    "deduplicate_fonts",
+    "deduplicate_images",
+    "deduplicate_icc_profiles",
+    "prune_resources",
+    "recompress",
+}
+LEVEL_PASSES = {
+    "lossless": _LOSSLESS,
+    "balanced": _LOSSLESS | {"resample_images", "optimize_images", "drop_xmp_streams"},
+    "max": _LOSSLESS
+    | {
+        "resample_images",
+        "optimize_images",
+        "simplify_vectors",
+        "drop_meta",
+        "drop_vendor_extensions",
     },
 }
-# simplify_vectors' memory grows steeply with page content; an 82 MB page needed over 3 GB.
-_DEFAULT_VECTOR_PAGE_LIMIT = 8 * 1024 * 1024
+
+# (dpi, JPEG quality, optimize_images strength); other levels use balanced's.
+_IMAGE_DEFAULTS = {"max": (150, 75, "medium")}
+_BALANCED_IMAGE_DEFAULTS = (200, 85, "low")
+# Bitonal text loses legibility below ~300 dpi (OCR word agreement fell 3-9% at 200).
+_DEFAULT_MONO_DPI = 300
+# Below ~1.5x the target, lowering JPEG quality beats downsampling at equal size.
+_DEFAULT_THRESHOLD = 1.5
+
+# Parameter -> passes, any one of which must run for it to have an effect.
+_PARAM_PASSES = {
+    "dpi": ("resample_images",),
+    "mono_dpi": ("resample_images",),
+    "threshold": ("resample_images",),
+    "quality": ("resample_images", "optimize_images"),
+    "tolerance": ("simplify_vectors",),
+    "max_stream_size": ("simplify_vectors",),
+}
 
 _SHRINK_LONG_DESC = """
 The `shrink` operation makes a PDF smaller by running pdftl's size-reduction
@@ -51,28 +96,61 @@ worse than running the passes by hand.
 
 * `lossless` (default) -- nothing visible changes. Subsets and deduplicates
   fonts, deduplicates images and ICC profiles, removes unused resources, and
-  saves with maximum Flate compression (as the `recompress` and
-  `prune_resources` output options would).
-* `balanced` -- also downsamples images drawn above 200 dpi (JPEG quality
-  85), re-encodes bitonal images losslessly (CCITT/JBIG2 generic, needs the
-  `optimize-images` extra), and drops XMP metadata streams.
-* `max` -- downsamples to 150 dpi (JPEG quality 75), allows lossy image
-  optimisation, simplifies vector paths (handwriting and plots shrink most;
-  needs the `simplify-vectors` extra), and drops all metadata and private
-  vendor data from the catalog.
+  saves with maximum Flate compression.
+* `balanced` -- also downsamples images to 200 dpi (JPEG quality 85;
+  bitonal images to 300 dpi), re-encodes bitonal images losslessly
+  (CCITT/JBIG2 generic, needs the `optimize-images` extra), and drops XMP
+  metadata streams.
+* `max` -- downsamples to 150 dpi (JPEG quality 75; bitonal images to
+  300 dpi), allows lossy image optimisation, simplifies vector paths
+  (handwriting and plots shrink most; needs the `simplify-vectors` extra),
+  and drops all metadata and private vendor data from the catalog.
+
+Images are downsampled only when drawn at more than 1.5 times the target,
+as a slight downsample blurs more than it saves.
 
 Tagged structure, forms, annotations, links and bookmarks are never removed.
 Signatures are invalidated by any rewrite; pdftl warns when saving.
 
+### Passes
+
+Each level is a set of named passes, which `skip=` and `include=` adjust:
+
+| pass | lossless | balanced | max |
+|---|---|---|---|
+| `resample_images` | | yes | yes |
+| `optimize_images` | | yes (lossless) | yes (lossy) |
+| `simplify_vectors` | | | yes |
+| `subset_fonts`, `deduplicate_fonts` | yes | yes | yes |
+| `deduplicate_images`, `deduplicate_icc_profiles` | yes | yes | yes |
+| `prune_resources`, `recompress` | yes | yes | yes |
+| `drop_xmp_streams` | | yes | |
+| `drop_meta`, `drop_vendor_extensions` | | | yes |
+
+The last five act when saving, as the output options of the same names do.
+
 ### Parameters
 
-* `dpi=<n>`, `quality=<n>` -- override the level's image target.
-* `vector_page_limit=<size>` (default 8MB) -- `max` skips vector
-  simplification on pages whose content exceeds this, as it needs a lot of
-  memory on very large pages.
+* `skip=<pass>[,<pass>...]` -- leave out passes the level runs, for example
+  `max skip=simplify_vectors` or `max skip=drop_meta,drop_vendor_extensions`.
+* `include=<pass>[,<pass>...]` -- add passes the level does not run, for
+  example `balanced include=simplify_vectors`. Image passes added to
+  `lossless` use `balanced`'s settings.
+* `dpi=<n>`, `quality=<n>` -- the image target: downsample images drawn at
+  more than 1.5 times `dpi` to `dpi`, and re-encode JPEGs at `quality`.
+* `mono_dpi=<n>` (default 300) -- the target for bitonal (1-bit) images,
+  whose thin strokes break up at lower resolutions.
+* `threshold=<x>` (default 1.5) -- downsample only images drawn at more than
+  `x` times the target; `1` downsamples any excess.
+* `tolerance=<pt>`, `max_stream_size=<size>` -- passed to `simplify_vectors`:
+  its maximum path deviation (default 0.15) and the content stream size above
+  which it skips a stream (default 16MB, as its memory use grows with size).
 
-Explicit output options win over the level's choices, for example
-`output out.pdf uncompress`.
+A parameter is an error unless a pass that uses it runs, and so is naming a
+pass the level already runs (`include=`) or does not run (`skip=`).
+
+Output options given with `output` still apply, and `uncompress` or `fast`
+override `recompress`.
 """
 
 _SHRINK_EXAMPLES = [
@@ -82,17 +160,30 @@ _SHRINK_EXAMPLES = [
         desc="Shrink as far as possible, targeting 120 dpi images.",
         cmd="in.pdf shrink max dpi=120 output out.pdf",
     ),
+    HelpExample(
+        desc="Shrink as far as possible but keep the document's metadata.",
+        cmd="in.pdf shrink max skip=drop_meta,drop_vendor_extensions output out.pdf",
+    ),
+    HelpExample(
+        desc="Shrink handwritten notes without touching their images.",
+        cmd="in.pdf shrink include=simplify_vectors tolerance=0.3 output out.pdf",
+    ),
 ]
 
 
 @dataclass
 class ShrinkPlan:
     level: str = "lossless"
+    passes: set[str] = field(default_factory=set)
     dpi: int | None = None
+    mono_dpi: int | None = None
+    threshold: float | None = None
     quality: int | None = None
-    vector_page_limit: int = _DEFAULT_VECTOR_PAGE_LIMIT
+    optimize_strength: str | None = None
+    tolerance: str | None = None  # passed to simplify_vectors as given
+    max_stream_size: str | None = None  # passed to simplify_vectors as given
     ran: list[str] = field(default_factory=list)
-    skipped: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)
 
 
 def _parse_int(raw: str, key: str, lo: int, hi: int) -> int:
@@ -105,139 +196,139 @@ def _parse_int(raw: str, key: str, lo: int, hi: int) -> int:
     return value
 
 
+def _parse_float(raw: str, key: str, lo: float, *, strict: bool = False) -> float:
+    try:
+        value = float(raw)
+    except ValueError:
+        value = float("nan")
+    if not (value > lo if strict else value >= lo):
+        bound = "above" if strict else "of at least"
+        raise InvalidArgumentError(f"shrink: '{key}' must be a number {bound} {lo:g}")
+    return value
+
+
+def _pass_list(raw: str | None, key: str) -> set[str]:
+    if raw is None:
+        return set()
+    names = {n.strip() for n in raw.split(",") if n.strip()}
+    unknown = sorted(names - set(PASSES))
+    if unknown or not names:
+        raise InvalidArgumentError(
+            f"shrink: {key}= takes pass names out of {', '.join(PASSES)}"
+            + (f"; unknown: {', '.join(unknown)}" if unknown else "")
+        )
+    return names
+
+
+def _resolve_passes(level: str, kv: dict) -> set[str]:
+    base = LEVEL_PASSES[level]
+    skip, include = _pass_list(kv.get("skip"), "skip"), _pass_list(kv.get("include"), "include")
+    for name in sorted(skip & include):
+        raise InvalidArgumentError(f"shrink: '{name}' is in both skip= and include=")
+    for name in sorted(skip - base):
+        raise InvalidArgumentError(f"shrink: skip={name} has no effect: '{level}' does not run it")
+    for name in sorted(include & base):
+        raise InvalidArgumentError(f"shrink: include={name} has no effect: '{level}' runs it")
+    return (base - skip) | include
+
+
+def _reject_unused_params(passes: set[str], kv: dict) -> None:
+    for key, users in _PARAM_PASSES.items():
+        if key in kv and not passes.intersection(users):
+            raise InvalidArgumentError(
+                f"shrink: '{key}' has no effect without {' or '.join(users)}"
+            )
+
+
 def _parse_args(args: list[str]) -> ShrinkPlan:
     bare: list[str] = []
     kv = parse_keyval_list(
         args,
         bare_tokens=bare,
-        allowed_keys=["dpi", "quality", "vector_page_limit"],
+        allowed_keys=["skip", "include", *_PARAM_PASSES],
         context="shrink",
     )
     if len(bare) > 1 or (bare and bare[0] not in LEVELS):
         raise InvalidArgumentError(f"shrink: expected one level out of {', '.join(LEVELS)}")
-    plan = ShrinkPlan(level=bare[0] if bare else "lossless")
-    default_dpi, default_quality = _LEVEL_IMAGE_DEFAULTS.get(plan.level, (None, None))
-    plan.dpi = _parse_int(kv["dpi"], "dpi", 1, 10000) if "dpi" in kv else default_dpi
-    plan.quality = (
-        _parse_int(kv["quality"], "quality", 1, 100) if "quality" in kv else default_quality
-    )
-    if "vector_page_limit" in kv:
-        plan.vector_page_limit = parse_size_to_bytes(
-            kv["vector_page_limit"], context="vector_page_limit"
-        )
+    level = bare[0] if bare else "lossless"
+    plan = ShrinkPlan(level=level, passes=_resolve_passes(level, kv))
+    _reject_unused_params(plan.passes, kv)
+    _parse_image_settings(plan, kv)
+    if "tolerance" in kv:
+        _parse_float(kv["tolerance"], "tolerance", 0.0, strict=True)
+        plan.tolerance = kv["tolerance"]
+    if "max_stream_size" in kv:
+        parse_size_to_bytes(kv["max_stream_size"], context="max_stream_size")  # validate early
+        plan.max_stream_size = kv["max_stream_size"]
     return plan
 
 
-def _page_content_bytes(page) -> int:
-    import pikepdf
-
-    contents = page.obj.get("/Contents")
-    if contents is None:
-        streams = []
-    elif isinstance(contents, pikepdf.Array):
-        streams = list(contents)
-    else:
-        streams = [contents]
-    total = sum(len(s.read_bytes()) for s in streams)
-    for xobj in (page.Resources.get("/XObject") or {}).values():
-        if xobj.get("/Subtype") == "/Form":
-            total += len(xobj.read_bytes())
-    return total
-
-
-def _page_ranges(pages: list[int]) -> list[str]:
-    ranges, start = [], None
-    for prev, cur in zip([None, *pages], [*pages, None]):
-        if start is None:
-            start = cur
-        elif cur is None or cur != prev + 1:
-            ranges.append(str(start) if start == prev else f"{start}-{prev}")
-            start = cur
-    return ranges
+def _parse_image_settings(plan: ShrinkPlan, kv: dict) -> None:
+    if not plan.passes & {"resample_images", "optimize_images"}:
+        return
+    dpi, quality, strength = _IMAGE_DEFAULTS.get(plan.level, _BALANCED_IMAGE_DEFAULTS)
+    plan.dpi = _parse_int(kv["dpi"], "dpi", 1, 10000) if "dpi" in kv else dpi
+    plan.mono_dpi = (
+        _parse_int(kv["mono_dpi"], "mono_dpi", 1, 10000) if "mono_dpi" in kv else _DEFAULT_MONO_DPI
+    )
+    plan.threshold = (
+        _parse_float(kv["threshold"], "threshold", 1.0)
+        if "threshold" in kv
+        else _DEFAULT_THRESHOLD
+    )
+    plan.quality = _parse_int(kv["quality"], "quality", 1, 100) if "quality" in kv else quality
+    plan.optimize_strength = strength
 
 
-def _simplifiable_page_specs(pdf: Pdf, limit: int) -> list[str]:
-    small = [i for i, page in enumerate(pdf.pages, 1) if _page_content_bytes(page) <= limit]
-    if len(small) < len(pdf.pages):
-        logger.info(
-            "shrink: skipping vector simplification on %d page(s) over %d bytes of content.",
-            len(pdf.pages) - len(small),
-            limit,
-        )
-    return _page_ranges(small)
-
-
-def _content_streams(pdf: Pdf):
-    import pikepdf
-
-    for page in pdf.pages:
-        contents = page.obj.get("/Contents")
-        if isinstance(contents, pikepdf.Array):
-            yield from contents
-        elif contents is not None:
-            yield contents
-    for obj in pdf.objects:
-        if isinstance(obj, pikepdf.Stream) and (
-            obj.get("/Subtype") == "/Form" or obj.get("/PatternType") == 1
-        ):
-            yield obj
-
-
-def _keeping_smaller_content(pdf: Pdf, transform: Callable[[Pdf], object]) -> None:
-    """Run transform, then restore any content stream it did not make smaller."""
-    import zlib
-
-    before = {}
-    for stream in _content_streams(pdf):
-        if stream.objgen not in before:
-            before[stream.objgen] = (stream, stream.read_bytes())
-    transform(pdf)
-    for stream, old in before.values():
-        new = stream.read_bytes()
-        if new != old and len(zlib.compress(new, 9)) >= len(zlib.compress(old, 9)):
-            stream.write(old)
-
-
-def _steps(plan: ShrinkPlan, output_filename: str) -> list[tuple[str, Callable[[Pdf], object]]]:
+def _step_functions(plan: ShrinkPlan, output_filename: str) -> dict[str, Callable[[Pdf], object]]:
     from pdftl.operations.deduplicate_fonts import deduplicate_fonts
     from pdftl.operations.deduplicate_icc_profiles import deduplicate_icc_profiles
     from pdftl.operations.deduplicate_images import deduplicate_images
     from pdftl.operations.subset_fonts import subset_fonts
 
-    steps: list[tuple[str, Callable[[Pdf], object]]] = []
-    if plan.level != "lossless":
-        from pdftl.operations.optimize_images import optimize_images_pdf
+    funcs: dict[str, Callable[[Pdf], object]] = {
+        "subset_fonts": lambda pdf: subset_fonts(pdf, []),
+        "deduplicate_fonts": lambda pdf: deduplicate_fonts(pdf, []),
+        "deduplicate_images": lambda pdf: deduplicate_images(pdf, []),
+        "deduplicate_icc_profiles": lambda pdf: deduplicate_icc_profiles(pdf, []),
+    }
+    if "resample_images" in plan.passes:
         from pdftl.operations.resample_images import resample_images
 
-        image_args = [f"dpi={plan.dpi}", f"quality={plan.quality}"]
-        opt_level = "low" if plan.level == "balanced" else "medium"
-        steps += [
-            ("resample_images", lambda pdf: resample_images(pdf, image_args)),
-            (
-                "optimize_images",
-                lambda pdf: optimize_images_pdf(
-                    pdf, [opt_level, f"jpeg_quality={plan.quality}"], output_filename
-                ),
-            ),
+        image_args = [
+            f"dpi={plan.dpi}",
+            f"mono_dpi={plan.mono_dpi}",
+            f"threshold={plan.threshold}",
+            f"quality={plan.quality}",
         ]
-    if plan.level == "max":
+        funcs["resample_images"] = lambda pdf: resample_images(pdf, image_args)
+    if "optimize_images" in plan.passes:
+        from pdftl.operations.optimize_images import optimize_images_pdf
+
+        opt_args = [plan.optimize_strength, f"jpeg_quality={plan.quality}"]
+        funcs["optimize_images"] = lambda pdf: optimize_images_pdf(pdf, opt_args, output_filename)
+    if "simplify_vectors" in plan.passes:
         from pdftl.operations.simplify_vectors import simplify_vectors_in_content_streams
 
-        def _simplify(pdf):
-            specs = _simplifiable_page_specs(pdf, plan.vector_page_limit)
-            if specs:
-                _keeping_smaller_content(
-                    pdf, lambda p: simplify_vectors_in_content_streams(p, specs)
-                )
+        settings = [
+            f"{key}={value}"
+            for key, value in (
+                ("tolerance", plan.tolerance),
+                ("max_stream_size", plan.max_stream_size),
+            )
+            if value
+        ]
+        # simplify_vectors bounds its own memory and never grows a stream.
+        vector_args = [f"({','.join(settings)})"] if settings else []
+        funcs["simplify_vectors"] = lambda pdf: simplify_vectors_in_content_streams(
+            pdf, vector_args
+        )
+    return funcs
 
-        steps.append(("simplify_vectors", _simplify))
-    steps += [
-        ("subset_fonts", lambda pdf: subset_fonts(pdf, [])),
-        ("deduplicate_fonts", lambda pdf: deduplicate_fonts(pdf, [])),
-        ("deduplicate_images", lambda pdf: deduplicate_images(pdf, [])),
-        ("deduplicate_icc_profiles", lambda pdf: deduplicate_icc_profiles(pdf, [])),
-    ]
-    return steps
+
+def _steps(plan: ShrinkPlan, output_filename: str) -> list[tuple[str, Callable[[Pdf], object]]]:
+    funcs = _step_functions(plan, output_filename)
+    return [(name, funcs[name]) for name in STEP_PASSES if name in plan.passes]
 
 
 def _run_step(plan: ShrinkPlan, name: str, func: Callable, pdf: Pdf) -> None:
@@ -245,8 +336,8 @@ def _run_step(plan: ShrinkPlan, name: str, func: Callable, pdf: Pdf) -> None:
         func(pdf)
     except Exception as exc:  # noqa: BLE001 - one failing pass must not lose the others' savings
         first_line = next(iter(str(exc).splitlines()), "")
-        logger.warning("shrink: skipped %s: %s %s", name, type(exc).__name__, first_line)
-        plan.skipped.append(name)
+        logger.warning("shrink: %s failed: %s %s", name, type(exc).__name__, first_line)
+        plan.failed.append(name)
     else:
         plan.ran.append(name)
 
@@ -257,22 +348,26 @@ def _run_step(plan: ShrinkPlan, name: str, func: Callable, pdf: Pdf) -> None:
     type="single input operation",
     desc="Make a PDF smaller, losslessly or at a chosen quality level",
     long_desc=_SHRINK_LONG_DESC,
-    usage="<input> shrink [lossless|balanced|max] [dpi=<n>] [quality=<n>] output <output>",
+    usage=(
+        "<input> shrink [lossless|balanced|max] [skip=<passes>] [include=<passes>]"
+        " [dpi=<n>] [mono_dpi=<n>] [threshold=<x>] [quality=<n>] [tolerance=<pt>]"
+        " [max_stream_size=<size>] output <output>"
+    ),
     examples=_SHRINK_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS, c.OUTPUT], {}),
 )
 def shrink(pdf: Pdf, args: list[str], output_filename: str | None = None) -> OpResult:
-    """Run the level's passes in order, then ask the save to prune and recompress."""
+    """Run the plan's passes in order, then ask the save to apply its save-time passes."""
     plan = _parse_args(args or [])
     for name, func in _steps(plan, output_filename or ""):
         _run_step(plan, name, func, pdf)
 
     hints = dict(getattr(pdf, c.PDFTL_SAVE_HINTS_ATTR, None) or {})
-    hints.update(_LEVEL_SAVE_HINTS[plan.level])
+    hints.update({name: True for name in SAVE_PASSES if name in plan.passes})
     setattr(pdf, c.PDFTL_SAVE_HINTS_ATTR, hints)
 
     summary = f"shrink {plan.level}: ran {', '.join(plan.ran) or 'nothing'}"
-    if plan.skipped:
-        summary += f"; skipped {', '.join(plan.skipped)}"
+    if plan.failed:
+        summary += f"; failed {', '.join(plan.failed)}"
     logger.info(summary)
     return OpResult(success=True, pdf=pdf, summary=summary)

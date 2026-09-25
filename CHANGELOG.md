@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `resample_images` now takes `mono_dpi=<n>` and `threshold=<x>`
+
 - `shrink` operation: makes a PDF smaller in one step, at `lossless` (default), `balanced` or
   `max` level, by running font subsetting, deduplication, image resampling and optimisation,
   and vector simplification in a benchmarked order, then saving with `prune_resources` and

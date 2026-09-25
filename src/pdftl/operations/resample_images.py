@@ -50,6 +50,14 @@ Arguments:
 
   * `dpi=<n>`: The target DPI. By default, images above this are resampled. (Default: 150)
 
+  * `mono_dpi=<n>`: The target DPI for bitonal (1-bit) images, whose thin strokes and
+    serifs break up when downsampled much below 300 DPI. (Default: same as `dpi`)
+
+  * `threshold=<x>`: Only downsample images whose resolution exceeds `x` times the target
+    (`dpi` or `mono_dpi`). A slight downsample blurs more than it saves: at the same file
+    size, lowering the JPEG quality usually looks better. `1.5` matches Ghostscript's
+    default. (Default: 1, any image above the target)
+
   * `quality=<q>`: The JPEG compression quality (1-100) used when writing back lossy
     images. (Default: 75)
 
@@ -200,17 +208,41 @@ def _validate_int(val_str: str, name: str, min_val: int, max_val: int | None = N
         ) from exc
 
 
-def _parse_args(args: list) -> tuple[int, int, int, bool, bool, bool, list]:
+def _validate_threshold(raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if not value >= 1.0:
+        raise InvalidArgumentError(
+            f"resample_images: Invalid value for threshold: '{raw}'. "
+            "Must be a number of at least 1."
+        )
+    return value
+
+
+def _parse_args(args: list) -> tuple[int, int, int, bool, bool, bool, list, int, float]:
     """Parses incoming arguments via the shared keyval_parser."""
     page_specs = []
     kv = parse_keyval_list(
         args or [],
         bare_tokens=page_specs,
-        allowed_keys=["dpi", "quality", "allow_growth", "allow_upscale", "force", "threads"],
+        allowed_keys=[
+            "dpi",
+            "mono_dpi",
+            "threshold",
+            "quality",
+            "allow_growth",
+            "allow_upscale",
+            "force",
+            "threads",
+        ],
         context="resample_images",
     )
 
     dpi = _validate_int(kv["dpi"], "dpi", 1) if "dpi" in kv else 150
+    mono_dpi = _validate_int(kv["mono_dpi"], "mono_dpi", 1) if "mono_dpi" in kv else dpi
+    threshold = _validate_threshold(kv["threshold"]) if "threshold" in kv else 1.0
     quality = _validate_int(kv["quality"], "quality", 1, 100) if "quality" in kv else 75
 
     default_threads = os.cpu_count() or 4
@@ -224,14 +256,37 @@ def _parse_args(args: list) -> tuple[int, int, int, bool, bool, bool, list]:
     )
     force = kv.get("force", "").lower() in ("true", "1", "yes")
 
-    return dpi, quality, threads, allow_upscale, allow_growth, force, page_specs
+    return (
+        dpi,
+        quality,
+        threads,
+        allow_upscale,
+        allow_growth,
+        force,
+        page_specs,
+        mono_dpi,
+        threshold,
+    )
+
+
+def _is_bitonal_xobj(xobj) -> bool:
+    try:
+        return bool(xobj.get("/ImageMask") or int(xobj.get("/BitsPerComponent", 8)) == 1)
+    except (TypeError, ValueError):
+        return False
 
 
 # --- Extraction (Main Thread) ---
 
 
-def _get_resample_dims(img: dict, dpi: int, allow_upscale: bool) -> tuple[int, int] | None:
-    """Calculates target dimensions, or returns None if the image does not qualify."""
+def _get_resample_dims(
+    img: dict, dpi: int, allow_upscale: bool, threshold: float = 1.0
+) -> tuple[int, int] | None:
+    """Calculates target dimensions, or returns None if the image does not qualify.
+
+    With threshold > 1, an image is downsampled only if its effective resolution
+    exceeds threshold * dpi: a slight downsample costs more quality than it saves.
+    """
     bbox = img["bbox"]
     new_width = int(round(((bbox[2] - bbox[0]) / 72.0) * dpi))
     new_height = int(round(((bbox[3] - bbox[1]) / 72.0) * dpi))
@@ -240,7 +295,14 @@ def _get_resample_dims(img: dict, dpi: int, allow_upscale: bool) -> tuple[int, i
         return None
     if new_width == img["width_px"] and new_height == img["height_px"]:
         return None
-    if not allow_upscale and (new_width > img["width_px"] or new_height > img["height_px"]):
+    upscaling = new_width > img["width_px"] or new_height > img["height_px"]
+    if upscaling and not allow_upscale:
+        return None
+    if (
+        not upscaling
+        and img["width_px"] <= threshold * new_width
+        and img["height_px"] <= threshold * new_height
+    ):
         return None
 
     return new_width, new_height
@@ -254,6 +316,8 @@ def _prepare_image_for_worker(
     allow_growth: bool,
     force: bool,
     seen_objgens: set,
+    mono_dpi: int | None = None,
+    threshold: float = 1.0,
 ) -> tuple[ExtractionPayload, ImageContext] | None:
     """Extracts PIL data and metadata from pikepdf objects safely on the main thread."""
     import pikepdf
@@ -266,12 +330,14 @@ def _prepare_image_for_worker(
         )
         return None
 
-    dims = _get_resample_dims(img, dpi, allow_upscale)
+    xobj = img["xobj"]
+    is_bitonal = _is_bitonal_xobj(xobj)
+    target_dpi = mono_dpi if is_bitonal and mono_dpi else dpi
+    dims = _get_resample_dims(img, target_dpi, allow_upscale, threshold)
     if not dims:
         return None
     new_width, new_height = dims
 
-    xobj = img["xobj"]
     if xobj.objgen in seen_objgens:
         return None
     seen_objgens.add(xobj.objgen)
@@ -279,7 +345,6 @@ def _prepare_image_for_worker(
     page_num = img.get("page", "?")
 
     try:
-        is_bitonal = bool(xobj.get("/ImageMask") or int(xobj.get("/BitsPerComponent", 8)) == 1)
         pdf_img = PdfImage(xobj)
         pil_img = as_pil_image_compat(pdf_img)
         ensure_thread_safe(pil_img)
@@ -468,7 +533,14 @@ def _commit_resampled_data(
 
 
 def _build_inline_replacement(
-    pdf, ref: dict, dpi: int, quality: int, allow_upscale: bool, force: bool
+    pdf,
+    ref: dict,
+    dpi: int,
+    quality: int,
+    allow_upscale: bool,
+    force: bool,
+    mono_dpi: int | None = None,
+    threshold: float = 1.0,
 ):
     """Decodes, resizes, and re-encodes one inline image ref, returning the
     raw BI...EI bytes to splice back in, or None if the ref does not
@@ -477,7 +549,9 @@ def _build_inline_replacement(
     from PIL import Image
     from pdftl.utils.images.inline_images import decode_inline_pil, encode_inline_replacement
 
-    dims = _get_resample_dims(ref, dpi, allow_upscale)
+    is_bitonal = int(ref.get("bits", 8)) == 1
+    target_dpi = mono_dpi if is_bitonal and mono_dpi else dpi
+    dims = _get_resample_dims(ref, target_dpi, allow_upscale, threshold)
     if not dims:
         return None
     new_width, new_height = dims
@@ -486,7 +560,6 @@ def _build_inline_replacement(
     if pil_img is None:
         return None
 
-    is_bitonal = int(ref.get("bits", 8)) == 1
     if pil_img.mode not in _SAFE_PIL_MODES and not force:
         logger.debug(
             "Skipping inline resample: PIL decoded to mode '%s' on page %s. "
@@ -521,6 +594,8 @@ def _resample_inline_images(
     quality: int,
     allow_upscale: bool,
     force: bool,
+    mono_dpi: int | None = None,
+    threshold: float = 1.0,
 ) -> int:
     """Synchronously resamples eligible inline images in place.
 
@@ -543,7 +618,9 @@ def _resample_inline_images(
     replacement_bytes: dict[int, bytes] = {}  # id(ref) -> raw BI...EI bytes
 
     for ref in inline_refs:
-        raw = _build_inline_replacement(pdf, ref, dpi, quality, allow_upscale, force)
+        raw = _build_inline_replacement(
+            pdf, ref, dpi, quality, allow_upscale, force, mono_dpi=mono_dpi, threshold=threshold
+        )
         if raw is None:
             continue
         eligible_refs.append(ref)
@@ -568,8 +645,8 @@ def resample_images(pdf, operation_args: list) -> OpResult:
     """Resample images exceeding the dpi threshold using a ThreadPoolExecutor."""
     import pikepdf
 
-    dpi, quality, threads, allow_upscale, allow_growth, force, page_specs = _parse_args(
-        operation_args
+    dpi, quality, threads, allow_upscale, allow_growth, force, page_specs, mono_dpi, threshold = (
+        _parse_args(operation_args)
     )
     num_pages = len(pdf.pages)
 
@@ -586,7 +663,15 @@ def resample_images(pdf, operation_args: list) -> OpResult:
         img_dict: dict, seen_set: set
     ) -> tuple[ExtractionPayload, ImageContext] | None:
         return _prepare_image_for_worker(
-            img_dict, dpi, quality, allow_upscale, allow_growth, force, seen_set
+            img_dict,
+            dpi,
+            quality,
+            allow_upscale,
+            allow_growth,
+            force,
+            seen_set,
+            mono_dpi=mono_dpi,
+            threshold=threshold,
         )
 
     def commit_wrapper(
@@ -612,7 +697,14 @@ def resample_images(pdf, operation_args: list) -> OpResult:
 
     try:
         resample_count += _resample_inline_images(
-            pdf, inline_images, dpi, quality, allow_upscale, force
+            pdf,
+            inline_images,
+            dpi,
+            quality,
+            allow_upscale,
+            force,
+            mono_dpi=mono_dpi,
+            threshold=threshold,
         )
     except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
         logger.warning("Skipped resampling inline image(s) due to an error: %s", exc)
