@@ -28,7 +28,11 @@ from pdftl.operations.helpers.image_processor import (
 from pdftl.utils.images import extract_pdf_images
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
-from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat
+from pdftl.utils.pikepdf_compatibility_utils import (
+    as_pil_image_compat,
+    drop_stale_decode_array,
+    is_indexed_image,
+)
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -427,17 +431,20 @@ def _commit_resampled_data(
         )
         return False
 
+    source_was_indexed = is_indexed_image(ctx.xobj)
     ctx.xobj.write(result.new_bytes, filter=pikepdf.Name(result.filter_name))
     ctx.xobj.Width = payload.new_width
     ctx.xobj.Height = payload.new_height
 
     _apply_metadata_updates(ctx.xobj, result.mode, payload.is_bitonal, force=payload.force)
+    drop_stale_decode_array(ctx.xobj, source_was_indexed=source_was_indexed)
 
     if ctx.smask_xobj and result.smask_bytes:
         ctx.smask_xobj.write(result.smask_bytes, filter=pikepdf.Name("/FlateDecode"))
         ctx.smask_xobj.Width = payload.new_width
         ctx.smask_xobj.Height = payload.new_height
         _apply_metadata_updates(ctx.smask_xobj, "L", False)
+        drop_stale_decode_array(ctx.smask_xobj, source_was_indexed=False)
         ctx.smask_xobj.BitsPerComponent = 8
 
     logger.info(

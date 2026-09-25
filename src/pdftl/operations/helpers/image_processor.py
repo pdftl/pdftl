@@ -109,11 +109,17 @@ def encode_and_update_pdf_image(
     """
     from PIL import Image
     from pdftl.utils.images.pil_to_pdf import get_colorspace_dict
+    from pdftl.utils.pikepdf_compatibility_utils import (
+        drop_stale_decode_array,
+        is_indexed_image,
+    )
 
     # 1a. Quantize BEFORE colorspace/bpc are derived, so ColorSpace correctly
     # reflects the resulting Indexed palette rather than the pre-quantization mode.
     if forced_codec == "png8" and pil_img.mode != "1":
         pil_img = pil_img.convert("P", palette=Image.ADAPTIVE)
+
+    source_was_indexed = is_indexed_image(ctx.xobj)
 
     # 1. Update basic structural dimensions
     ctx.xobj.Width = pil_img.width
@@ -126,10 +132,10 @@ def encode_and_update_pdf_image(
 
     # 3. Try an explicit override first; otherwise fall through to the
     # original mode/filter-based heuristic.
-    if _try_forced_codec(ctx, pil_img, quality, forced_codec):
-        return
+    if not _try_forced_codec(ctx, pil_img, quality, forced_codec):
+        _encode_via_heuristic(ctx, pil_img, quality)
 
-    _encode_via_heuristic(ctx, pil_img, quality)
+    drop_stale_decode_array(ctx.xobj, source_was_indexed=source_was_indexed)
 
 
 def _try_forced_codec(ctx: Any, pil_img: Any, quality: int, forced_codec: str | None) -> bool:

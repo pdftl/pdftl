@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   get their widths read and patched; patching such a font, or a CID-keyed one missing its
   charset, no longer crashes
 
+- `resample_images`, `modify_images`, `import_images` and `recolor_images` no longer invert images
+  with a non-default `/Decode` array (such as `[1 0]` bitonal scans, which came out as negatives)
+
 ## [0.29.0] - 2026-09-23
 
 ### Added

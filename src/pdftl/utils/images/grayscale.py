@@ -145,7 +145,7 @@ def commit_recolored_stream(
                 smask.ColorSpace = pikepdf.Name("/DeviceGray")
 
         # Clean PDF layout tables using strict pikepdf.Name references
-        for key_str in ("ColorSpace", "Intent", "DecodeParms"):
+        for key_str in ("ColorSpace", "Intent", "DecodeParms", "Decode"):
             name_key = pikepdf.Name(f"/{key_str}")
             if name_key in xobj:
                 del xobj[name_key]

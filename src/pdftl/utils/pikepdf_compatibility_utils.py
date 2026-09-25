@@ -69,3 +69,25 @@ def as_pil_image_compat(image):
     if pikepdf_version_at_least([10, 10, 0]):
         return image.as_pil_image(apply_mask=False)
     return image.as_pil_image()
+
+
+def is_indexed_image(xobj) -> bool:
+    import pikepdf
+
+    cs = xobj.get("/ColorSpace")
+    return isinstance(cs, pikepdf.Array) and len(cs) > 0 and cs[0] == "/Indexed"
+
+
+def drop_stale_decode_array(xobj, *, source_was_indexed: bool) -> None:
+    """Remove /Decode from an image whose samples were just replaced by
+    pixels from as_pil_image (or an external file).
+
+    Since pikepdf 10.9.0, as_pil_image applies /Decode for every colour
+    space except /Indexed, where it returns raw palette indices. Keeping
+    /Decode would apply it twice: a bitonal /Decode [1 0] scan comes out
+    as a negative. Indexed-to-Indexed keeps it, as the indices are still raw.
+    """
+    if source_was_indexed and is_indexed_image(xobj):
+        return
+    if "/Decode" in xobj:
+        del xobj["/Decode"]
