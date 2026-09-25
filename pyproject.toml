@@ -200,6 +200,7 @@ include = '\.pyi?$'
 
 [tool.coverage.run]
 source = ["pdftl"]
+branch = true
 omit = [
     "*/.config/pdftl/operations/*",
     "*/AppData/Roaming/pdftl/operations/*",
