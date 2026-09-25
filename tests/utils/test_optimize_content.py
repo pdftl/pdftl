@@ -1202,13 +1202,17 @@ class TestDropDeadStateStores:
         out = _drop_dead_state_stores(instructions)
         assert _ops(out) == ["Q", "f"]
 
-    def test_scn_and_scn_pattern_name_tracked_as_nonstroke_color(self):
-        """scn (which can take a pattern-name operand) participates in
-        the same family as g/rg/k -- this pass never inspects operand
-        VALUES for this family, only operator identity."""
+    def test_scn_sets_value_only_so_preceding_space_setter_stays(self):
+        """scn sets a value in the current color space; the g that chose
+        that space is still used by the fill (ISO 32000-2 8.6.8)."""
         instructions = [([0.0], "g"), (["/P1"], "scn"), ([], "f")]
         out = _drop_dead_state_stores(instructions)
-        assert _ops(out) == ["scn", "f"]
+        assert _ops(out) == ["g", "scn", "f"]
+
+    def test_space_setter_superseded_by_cs_is_dropped(self):
+        instructions = [([0.0], "g"), (["/Pattern"], "cs"), (["/P1"], "scn"), ([], "f")]
+        out = _drop_dead_state_stores(instructions)
+        assert _ops(out) == ["cs", "scn", "f"]
 
     def test_empty_instructions_list(self):
         assert _drop_dead_state_stores([]) == []

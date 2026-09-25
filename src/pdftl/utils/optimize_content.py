@@ -88,12 +88,11 @@ gets appended to the output; only comparisons go through str().
    REPEATED identical value is redundant regardless of what q/Q did in
    between, since if the value coming out of a q/Q block matches what
    was already current before it, the net color op is provably a
-   no-op). Tracks g/G (gray, 1 operand), rg/RG (RGB, 3 operands), and
-   k/K (CMYK, 4 operands) independently -- a `g` doesn't invalidate a
-   tracked `rg` value or vice versa, since they're different color
-   spaces; setting one doesn't tell you what the other would currently
-   paint as. Drops an operator whose value matches the last-seen value
-   in ITS OWN family. No spec default is assumed (unlike Tz's 100.0) --
+   no-op). Tracks one current color per slot, nonstroking and stroking,
+   as an (operator, values) pair: g, rg, k, cs, sc and scn all set the
+   same nonstroking color, so a `g` after an `rg` is redundant only if
+   the slot still holds that same `g` value. cs/sc/scn (and CS/SC/SCN)
+   reset their slot to unknown. No spec default is assumed (unlike Tz's 100.0) --
    the first occurrence of any color op is always kept. Unlike Tz,
    color state genuinely IS saved/restored by q/Q (it's real graphics
    state per spec), so this pass tracks it with an explicit q/Q stack,
@@ -113,11 +112,12 @@ gets appended to the output; only comparisons go through str().
 
 7. _drop_dead_state_stores -- generalizes _drop_dead_tf's reverse
    dead-store elimination to several independent graphics-state
-   "families" at once: nonstroke color (g/rg/k/sc/scn), stroke color
-   (G/RG/K/SC/SCN), line width (w), line cap (J), line join (j), dash
-   pattern (d), and miter limit (M). Within a family, a setter is dead
-   if superseded by another setter in the SAME family with no paint op
-   in between -- unlike _eliminate_redundant_color, this drops even
+   "families" at once: fill and stroke color, each split into space
+   (g/rg/k/cs) and value (those plus sc/scn), line width (w), line cap
+   (J), line join (j), dash pattern (d), and miter limit (M). A setter
+   is dead once every family it wrote is superseded with no paint op
+   in between (sc after k supersedes only the value, so k stays), and
+   unlike _eliminate_redundant_color, this drops even
    when the two values DIFFER, since a fully-overwritten-before-use
    setter is dead regardless of what its old value was (the common
    "1 G" immediately followed by "0 G" shape). Paint (_PAINT_OPS)
@@ -126,7 +126,9 @@ gets appended to the output; only comparisons go through str().
    pending families as one frame (same shape as
    _eliminate_redundant_color's q_stack) -- a store made INSIDE a
    q...Q block that's never painted under is dead once Q reverts it,
-   symmetric with _drop_dead_tf's q..Q handling for Tf.
+   symmetric with _drop_dead_tf's q..Q handling for Tf. A paint inside
+   a block also confirms the enclosing frames' stores, which the block
+   inherited.
 
    Implemented via tombstoning (mark dead entries None, filter at the
    end) rather than del-by-index -- unlike _drop_dead_tf's single
@@ -164,33 +166,40 @@ from typing import Any
 
 _TEXT_SHOW_OPS = frozenset({"Tj", "TJ", "'", '"'})
 # Always-barrier ops for Tf, regardless of aggressive_tf: a show op
-# confirms liveness. q/Q is handled separately in _drop_dead_tf via an
-# explicit push/pop stack rather than being an unconditional barrier --
-# see that function's docstring.
-_BARRIER_OPS = frozenset({"Tj", "TJ", "'", '"'})
+# confirms liveness, and so does Do, since a Form XObject inherits the
+# font. q/Q is handled separately in _drop_dead_tf via an explicit
+# push/pop stack rather than being an unconditional barrier -- see that
+# function's docstring.
+_BARRIER_OPS = frozenset({"Tj", "TJ", "'", '"', "Do"})
 # BT/ET are barriers ONLY in conservative (default) mode -- see
 # optimize_positioning_ops' aggressive_tf docstring.
 _TEXT_OBJECT_BOUNDARY_OPS = frozenset({"BT", "ET"})
 _POSITION_OPS = frozenset({"Td", "TD", "Tm"})
 
 _COLOR_OP_ARITY = {"g": 1, "G": 1, "rg": 3, "RG": 3, "k": 4, "K": 4}
+_COLOR_SLOT = {
+    **{op: "nonstroke" for op in ("g", "rg", "k", "cs", "sc", "scn")},
+    **{op: "stroke" for op in ("G", "RG", "K", "CS", "SC", "SCN")},
+}
+# pikepdf reports a whole BI...ID...EI inline image as one "INLINE IMAGE" op.
 _PAINT_OPS = frozenset(
-    {"f", "F", "f*", "S", "s", "B", "B*", "b", "b*", "n", "Do", "sh", "BI", "Tj", "TJ", "'", '"'}
+    {"f", "F", "f*", "S", "s", "B", "B*", "b", "b*", "n", "Do", "sh", "BI", "INLINE IMAGE"}
+    | {"Tj", "TJ", "'", '"'}
 )
 
-# Family membership for _drop_dead_state_stores -- op_str -> family name.
-# sc/scn/SC/SCN are included even though this pass ignores their operand
-# VALUES entirely (unlike _COLOR_OP_ARITY) -- dead-store elimination only
-# needs to know "another same-family setter happened", never what either
-# one's value was.
+# State components each setter writes, for _drop_dead_state_stores.
+# g/rg/k/cs set a color space and a value; sc/scn set only the value, so
+# they never supersede the space an earlier g/rg/k/cs chose.
 _STATE_STORE_FAMILIES = {
-    **{op: "nonstroke_color" for op in ("g", "rg", "k", "sc", "scn")},
-    **{op: "stroke_color" for op in ("G", "RG", "K", "SC", "SCN")},
-    "w": "line_width",
-    "J": "line_cap",
-    "j": "line_join",
-    "d": "dash",
-    "M": "miter_limit",
+    **{op: ("fill_space", "fill_value") for op in ("g", "rg", "k", "cs")},
+    **{op: ("fill_value",) for op in ("sc", "scn")},
+    **{op: ("stroke_space", "stroke_value") for op in ("G", "RG", "K", "CS")},
+    **{op: ("stroke_value",) for op in ("SC", "SCN")},
+    "w": ("line_width",),
+    "J": ("line_cap",),
+    "j": ("line_join",),
+    "d": ("dash",),
+    "M": ("miter_limit",),
 }
 
 _TZ_TOL = 0.001
@@ -274,7 +283,9 @@ class _TfDeadStoreTracker:
         self.out.append((operands, op))
 
     def handle_barrier(self, operands: list[Any], op: str) -> None:
-        self.pending_tf_index = None  # confirmed alive -- can't prove dead
+        # Confirmed alive, including a Tf from an enclosing q frame, which this inherits.
+        self.pending_tf_index = None
+        self.q_stack = [None] * len(self.q_stack)
         self.out.append((operands, op))
 
     def handle_passthrough(self, operands: list[Any], op: str) -> None:
@@ -404,6 +415,15 @@ class _StateStoreTracker:
         self.out: list[Instruction | None] = []
         self.pending: dict[str, int] = {}  # family -> index into out
         self.q_stack: list[dict[str, int]] = []
+        # index -> families it wrote that are not yet superseded
+        self.unsuperseded: dict[int, set[str]] = {}
+        self.live: set[int] = set()
+
+    def _supersede(self, idx: int, family: str) -> None:
+        remaining = self.unsuperseded[idx]
+        remaining.discard(family)
+        if not remaining and idx not in self.live:
+            self.out[idx] = None  # dead: every component it wrote went unused
 
     def handle_q(self, operands: list[Any], op: str) -> None:
         self.q_stack.append(dict(self.pending))
@@ -411,27 +431,36 @@ class _StateStoreTracker:
         self.out.append((operands, op))
 
     def handle_q_close(self, operands: list[Any], op: str) -> None:
-        for idx in self.pending.values():
-            self.out[idx] = None  # dead: block closed, Q reverts it unused
+        for family, idx in self.pending.items():
+            self._supersede(idx, family)  # Q reverts it unused
         self.pending = self.q_stack.pop() if self.q_stack else {}
         self.out.append((operands, op))
 
-    def handle_family(self, operands: list[Any], op: str, family: str) -> None:
-        if family in self.pending:
-            self.out[self.pending[family]] = None  # dead: never reached a paint
+    def handle_family(self, operands: list[Any], op: str, families: tuple[str, ...]) -> None:
+        for family in families:
+            if family in self.pending:
+                self._supersede(self.pending[family], family)
         self.out.append((operands, op))
-        self.pending[family] = len(self.out) - 1
+        idx = len(self.out) - 1
+        self.unsuperseded[idx] = set(families)
+        for family in families:
+            self.pending[family] = idx
 
     def handle_paint(self, operands: list[Any], op: str) -> None:
-        self.pending = {}  # confirmed alive -- can't prove dead
+        # Confirmed alive, including enclosing q frames' stores, which this inherits.
+        self.live.update(self.pending.values())
+        for frame in self.q_stack:
+            self.live.update(frame.values())
+            frame.clear()
+        self.pending = {}
         self.out.append((operands, op))
 
     def handle_passthrough(self, operands: list[Any], op: str) -> None:
         self.out.append((operands, op))
 
     def finish(self) -> list[Instruction]:
-        for idx in self.pending.values():
-            self.out[idx] = None  # trailing dead stores, nothing follows them
+        for family, idx in self.pending.items():
+            self._supersede(idx, family)  # trailing stores, nothing follows them
         return [instr for instr in self.out if instr is not None]
 
 
@@ -448,9 +477,9 @@ def _drop_dead_state_stores(instructions: list[Instruction]) -> list[Instruction
         if op_str == "Q":
             tracker.handle_q_close(operands, op)
             continue
-        family = _STATE_STORE_FAMILIES.get(op_str)
-        if family is not None:
-            tracker.handle_family(operands, op, family)
+        families = _STATE_STORE_FAMILIES.get(op_str)
+        if families is not None:
+            tracker.handle_family(operands, op, families)
             continue
         if op_str in _PAINT_OPS:
             tracker.handle_paint(operands, op)
@@ -492,8 +521,8 @@ class _ColorTracker:
 
     def __init__(self) -> None:
         self.out: list[Instruction] = []
-        self.current: dict[str, tuple[float, ...]] = {}
-        self.q_stack: list[dict[str, tuple[float, ...]]] = []
+        self.current: dict[str, tuple[str, tuple[float, ...]] | None] = {}
+        self.q_stack: list[dict[str, tuple[str, tuple[float, ...]] | None]] = []
 
     def handle_q(self, operands: list[Any], op: str) -> None:
         self.q_stack.append(dict(self.current))
@@ -504,17 +533,27 @@ class _ColorTracker:
         self.out.append((operands, op))
 
     def handle_color(self, operands: list[Any], op: str, op_str: str, arity: int) -> None:
+        slot = _COLOR_SLOT[op_str]
         try:
             values = tuple(float(x) for x in operands[:arity])
             if len(values) != arity:
                 raise ValueError
         except (TypeError, ValueError, IndexError):
+            self.current[slot] = None
             self.out.append((operands, op))
             return
-        prev = self.current.get(op_str)
-        if prev is not None and all(abs(a - b) < _TZ_TOL for a, b in zip(prev, values)):
+        prev = self.current.get(slot)
+        if (
+            prev is not None
+            and prev[0] == op_str
+            and all(abs(a - b) < _TZ_TOL for a, b in zip(prev[1], values))
+        ):
             return  # redundant -- doesn't change anything
-        self.current[op_str] = values
+        self.current[slot] = (op_str, values)
+        self.out.append((operands, op))
+
+    def handle_unknown_color(self, operands: list[Any], op: str, op_str: str) -> None:
+        self.current[_COLOR_SLOT[op_str]] = None
         self.out.append((operands, op))
 
     def handle_passthrough(self, operands: list[Any], op: str) -> None:
@@ -522,9 +561,9 @@ class _ColorTracker:
 
 
 def _eliminate_redundant_color(instructions: list[Instruction]) -> list[Instruction]:
-    """Drops a g/G/rg/RG/k/K operator whose operands match the last-seen
-    value already tracked for that SAME operator -- see module docstring
-    (item 4) for why families are tracked independently. q/Q push/pop a
+    """Drops a g/G/rg/RG/k/K operator that re-sets the color its slot
+    (nonstroking or stroking) already holds -- see module docstring
+    (item 4). q/Q push/pop a
     snapshot of the whole tracked-color dict, mirroring _drop_dead_tf's
     q_stack -- color really is graphics state restored by Q, so tracking
     it flatly (ignoring q/Q) would wrongly treat a value set INSIDE a
@@ -541,6 +580,9 @@ def _eliminate_redundant_color(instructions: list[Instruction]) -> list[Instruct
         arity = _COLOR_OP_ARITY.get(op_str)
         if arity is not None:
             tracker.handle_color(operands, op, op_str, arity)
+            continue
+        if op_str in _COLOR_SLOT:
+            tracker.handle_unknown_color(operands, op, op_str)
             continue
         tracker.handle_passthrough(operands, op)
     return tracker.out
