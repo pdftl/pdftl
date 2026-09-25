@@ -68,9 +68,15 @@ gets appended to the output; only comparisons go through str().
    buffered Td sums into it; TD is buffered but never arithmetically
    merged (it also sets /TL -- folding that in correctly isn't worth
    the risk here). The buffer flushes (in original relative order)
-   immediately before the next show op, or is silently dropped at ET
-   if no show op ever consumed it -- dead position state, since Tm/Tlm
-   reset at the next BT regardless.
+   immediately before the next show op, or is dropped at ET if no show
+   op ever consumed it -- dead position state, since Tm/Tlm reset at
+   the next BT regardless.
+
+   TD's leading is not position state: it persists, so a dropped TD
+   leaves an equivalent TL behind. The buffer flushes before T*, which
+   reads both position and leading, and, while it holds a TD, before
+   any op that writes, saves, restores or inherits the leading (TL, q,
+   Q, Do).
 
    The buffer-then-flush shape is what makes this pass also subsume
    plain adjacent-Td merging AND let a Td hop over an intervening Tf/
@@ -80,8 +86,9 @@ gets appended to the output; only comparisons go through str().
 
 3. _eliminate_redundant_tz -- forward pass, global (Tz persists across
    BT/ET so this is not scoped to a text object): drops a Tz whose
-   value doesn't change the running current_tz (starts at spec default
-   100.0).
+   value doesn't change the running value. q/Q save and restore it.
+   The starting value is unknown, not 100: a Form XObject inherits
+   its caller's.
 
 4. _eliminate_redundant_color -- forward pass, global (color state
    persists across BT/ET like Tz, and is saved/restored by q/Q, but a
@@ -92,10 +99,9 @@ gets appended to the output; only comparisons go through str().
    as an (operator, values) pair: g, rg, k, cs, sc and scn all set the
    same nonstroking color, so a `g` after an `rg` is redundant only if
    the slot still holds that same `g` value. cs/sc/scn (and CS/SC/SCN)
-   reset their slot to unknown. No spec default is assumed (unlike Tz's 100.0) --
-   the first occurrence of any color op is always kept. Unlike Tz,
-   color state genuinely IS saved/restored by q/Q (it's real graphics
-   state per spec), so this pass tracks it with an explicit q/Q stack,
+   reset their slot to unknown. No spec default is assumed --
+   the first occurrence of any color op is always kept. Like Tz,
+   color state is saved/restored by q/Q, so this pass tracks it with an explicit q/Q stack,
    the same shape as _drop_dead_tf's -- a color value set inside a
    q...Q block must not "leak" into what's compared after the matching
    Q, since Q reverts exactly to whatever was current at q.
@@ -175,6 +181,16 @@ _BARRIER_OPS = frozenset({"Tj", "TJ", "'", '"', "Do"})
 # optimize_positioning_ops' aggressive_tf docstring.
 _TEXT_OBJECT_BOUNDARY_OPS = frozenset({"BT", "ET"})
 _POSITION_OPS = frozenset({"Td", "TD", "Tm"})
+# Ops that write, save, restore or inherit the leading a buffered TD sets.
+_LEADING_BARRIER_OPS = frozenset({"TL", "q", "Q", "Do"})
+# Operators a dropped q...Q span must not separate from their partners.
+_BALANCE_OPS = {
+    "BT": ("text", 1),
+    "ET": ("text", -1),
+    "BMC": ("marked", 1),
+    "BDC": ("marked", 1),
+    "EMC": ("marked", -1),
+}
 
 _COLOR_OP_ARITY = {"g": 1, "G": 1, "rg": 3, "RG": 3, "k": 4, "K": 4}
 _COLOR_SLOT = {
@@ -203,7 +219,6 @@ _STATE_STORE_FAMILIES = {
 }
 
 _TZ_TOL = 0.001
-_TZ_DEFAULT = 100.0
 
 Instruction = tuple[list[Any], str]
 
@@ -351,16 +366,11 @@ def _drop_dead_tf(
 
 
 def _merge_into_pending(pending: list[Instruction], operands: list[Any], op: str) -> None:
-    """Adds one Td/TD/Tm to `pending` per _collapse_text_positioning's
+    """Adds one Td/TD to `pending` per _collapse_text_positioning's
     buffering rules. Mutates `pending` in place."""
     op_str = _s(op)
-    if op_str == "Tm":
-        pending.clear()
-        pending.append((list(operands), op))
-        return
-
-    # op is Td or TD. Only a Td landing directly on top of a buffered
-    # Td (nothing else buffered since) gets arithmetically summed.
+    # Only a Td landing directly on top of a buffered Td (nothing else
+    # buffered since) gets arithmetically summed.
     if op_str == "Td" and pending and _s(pending[-1][1]) == "Td":
         prev_operands, _ = pending[-1]
         try:
@@ -375,6 +385,33 @@ def _merge_into_pending(pending: list[Instruction], operands: list[Any], op: str
     pending.append((list(operands), op))
 
 
+def _negated(value: Any) -> Any:
+    try:
+        float(value)
+        return -value
+    except (TypeError, ValueError):
+        return None
+
+
+def _drop_pending(out: list[Instruction], pending: list[Instruction]) -> None:
+    """Discards buffered moves nothing showed under, keeping the leading a TD set."""
+    tds = [operands for operands, op in pending if _s(op) == "TD"]
+    if tds:
+        leading = _negated(tds[-1][1]) if len(tds[-1]) == 2 else None
+        if leading is None:
+            out.extend(pending)  # malformed TD: keep everything as it was
+        else:
+            out.append(([leading], "TL"))
+    pending.clear()
+
+
+def _must_flush(op_str: str, pending: list[Instruction]) -> bool:
+    """Shows and T* read the text position; the rest only the leading a TD sets."""
+    if op_str in _TEXT_SHOW_OPS or op_str == "T*":
+        return True
+    return op_str in _LEADING_BARRIER_OPS and any(_s(op) == "TD" for _, op in pending)
+
+
 def _collapse_text_positioning(instructions: list[Instruction]) -> list[Instruction]:
     out: list[Instruction] = []
     pending: list[Instruction] = []
@@ -382,17 +419,16 @@ def _collapse_text_positioning(instructions: list[Instruction]) -> list[Instruct
 
     for operands, op in instructions:
         op_str = _s(op)
-        if op_str == "BT":
-            pending.clear()  # nothing carries in -- Tm/Tlm reset here anyway
-            in_text_object = True
+        if op_str in ("BT", "ET"):
+            _drop_pending(out, pending)  # Tm/Tlm reset at the next BT
+            in_text_object = op_str == "BT"
             out.append((operands, op))
-        elif op_str == "ET":
-            pending.clear()  # never reached a show -> dead, drop silently
-            in_text_object = False
-            out.append((operands, op))
+        elif in_text_object and op_str == "Tm":
+            _drop_pending(out, pending)  # Tm is absolute
+            pending.append((list(operands), op))
         elif in_text_object and op_str in _POSITION_OPS:
             _merge_into_pending(pending, operands, op)
-        elif op_str in _TEXT_SHOW_OPS:
+        elif _must_flush(op_str, pending):
             out.extend(pending)
             pending.clear()
             out.append((operands, op))
@@ -498,20 +534,32 @@ def _drop_paintless_stream(instructions: list[Instruction]) -> list[Instruction]
 
 def _eliminate_redundant_tz(instructions: list[Instruction]) -> list[Instruction]:
     out: list[Instruction] = []
-    current_tz = _TZ_DEFAULT
+    current_tz: float | None = None  # unknown: a Form inherits its caller's
+    q_stack: list[float | None] = []
     for operands, op in instructions:
         op_str = _s(op)
-        if op_str == "Tz":
-            try:
-                new_tz = float(operands[0])
-            except (IndexError, TypeError, ValueError):
-                out.append((operands, op))
-                continue
-            if abs(new_tz - current_tz) < _TZ_TOL:
+        if op_str == "q":
+            q_stack.append(current_tz)
+        elif op_str == "Q":
+            current_tz = q_stack.pop() if q_stack else None
+        elif op_str == "Tz":
+            new_tz = _tz_value(operands)
+            if (
+                new_tz is not None
+                and current_tz is not None
+                and abs(new_tz - current_tz) < _TZ_TOL
+            ):
                 continue  # redundant -- doesn't change anything
             current_tz = new_tz
         out.append((operands, op))
     return out
+
+
+def _tz_value(operands: list[Any]) -> float | None:
+    try:
+        return float(operands[0])
+    except (IndexError, TypeError, ValueError):
+        return None
 
 
 class _ColorTracker:
@@ -603,30 +651,43 @@ def _drop_dead_q_blocks(instructions: list[Instruction]) -> list[Instruction]:
     encountered for the unmatched operators -- no guessing.
     """
     out: list[Instruction] = []
-    # Each entry: [output_index_at_open, saw_paint_inside]
-    stack: list[list[int | bool]] = []
+    stack: list[_QSpan] = []
 
     for operands, op in instructions:
         op_str = _s(op)
         if op_str == "q":
-            stack.append([len(out), False])
-            out.append((operands, op))
-            continue
-        if op_str == "Q":
-            if not stack:
-                out.append((operands, op))  # unmatched Q -- pass through
+            stack.append(_QSpan(len(out)))
+        elif op_str == "Q" and stack:
+            span = stack.pop()
+            if not span.keep():
+                del out[span.open_index :]  # drop q, its whole contents, and this Q
                 continue
-            open_index, saw_paint = stack.pop()
-            if saw_paint:
-                out.append((operands, op))
-            else:
-                del out[open_index:]  # drop q, its whole contents, and this Q
-            continue
-        if op_str in _PAINT_OPS:
-            for frame in stack:
-                frame[1] = True
+        else:
+            for span in stack:
+                span.observe(op_str)
         out.append((operands, op))
     return out
+
+
+class _QSpan:
+    """An open q in _drop_dead_q_blocks."""
+
+    def __init__(self, open_index: int) -> None:
+        self.open_index = open_index
+        self.saw_paint = False
+        self.depth = {"text": 0, "marked": 0}
+        self.unbalanced = False
+
+    def observe(self, op_str: str) -> None:
+        if op_str in _PAINT_OPS:
+            self.saw_paint = True
+        elif op_str in _BALANCE_OPS:
+            kind, step = _BALANCE_OPS[op_str]
+            self.depth[kind] += step
+            self.unbalanced = self.unbalanced or self.depth[kind] < 0
+
+    def keep(self) -> bool:
+        return self.saw_paint or self.unbalanced or any(self.depth.values())
 
 
 def _drop_empty_bt_et(instructions: list[Instruction]) -> list[Instruction]:

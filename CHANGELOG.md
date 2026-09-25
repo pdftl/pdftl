@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `excise` and `redact` no longer move surviving text: tidying the rewritten content stream
+  dropped the line spacing a removed line's `TD` had set, moved `T*` ahead of a `Tm`, and treated
+  a `Tz` restored by `Q` (or inherited by a Form XObject) as redundant
+
 - `simplify_vectors` no longer makes a content stream bigger (it keeps the original when the
   simplified one would not compress smaller), uses less memory, and skips content streams over
   the new `max_stream_size` (default 16MB) instead of exhausting memory on them

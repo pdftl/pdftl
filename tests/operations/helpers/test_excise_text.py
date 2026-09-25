@@ -765,3 +765,78 @@ class TestExciseContentPeepholeOptimizationAggressiveTf:
         instructions = pikepdf.parse_content_stream(pdf.pages[0].Contents)
         tf_operands = next(operands for operands, op in instructions if str(op) == "Tf")
         assert str(tf_operands[0]) == "/F1"
+
+
+##################################################
+# Excising some text must leave every other glyph where it was. MuPDF
+# measures the positions, before and after.
+
+import io
+
+import pymupdf
+
+
+def _pdf(content: bytes) -> pikepdf.Pdf:
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(300, 300))
+    page = pdf.pages[0]
+    font = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Font,
+            Subtype=pikepdf.Name.Type1,
+            BaseFont=pikepdf.Name.Helvetica,
+            Encoding=pikepdf.Name.WinAnsiEncoding,
+        )
+    )
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page.Contents = pdf.make_stream(content)
+    return pdf
+
+
+def _words(pdf: pikepdf.Pdf) -> dict[str, tuple[float, float, float]]:
+    """word -> (x0, baseline y, x1), in points from the top-left."""
+    buf = io.BytesIO()
+    pdf.save(buf)
+    page = pymupdf.open(stream=buf.getvalue(), filetype="pdf")[0]
+    return {w[4]: (w[0], w[3], w[2]) for w in page.get_text("words")}
+
+
+# Each case: a content stream, and an excise box (PDF user space) holding one word.
+CASES = {
+    "TD sets the leading a later T* uses": (
+        b"BT /F1 20 Tf 14 TL 1 0 0 1 20 170 Tm (LineOne) Tj 0 -40 TD (LineTwo) Tj"
+        b" T* (LineThree) Tj ET",
+        "1(abs,0pt,125pt,300pt,145pt)",
+        "LineTwo",
+    ),
+    "TD before a Tm": (
+        b"BT /F1 20 Tf 1 0 0 1 20 250 Tm (Top) Tj 0 -40 TD (Gone) Tj"
+        b" 1 0 0 1 20 120 Tm (Kept) Tj T* (Below) Tj ET",
+        "1(abs,0pt,200pt,300pt,220pt)",
+        "Gone",
+    ),
+    "quote uses the leading": (
+        b"BT /F1 20 Tf 1 0 0 1 20 250 Tm 0 -30 TD (Gone) Tj (Next) ' (Last) ' ET",
+        "1(abs,0pt,212pt,300pt,232pt)",
+        "Gone",
+    ),
+    "Tz restored by Q": (
+        b"q BT /F1 20 Tf 50 Tz 20 250 Td (Squeezed) Tj ET Q"
+        b" BT /F1 20 Tf 20 200 Td (Gone) Tj 50 Tz 0 -40 Td (Narrow) Tj ET",
+        "1(abs,0pt,195pt,300pt,215pt)",
+        "Gone",
+    ),
+}
+
+
+@pytest.mark.parametrize("content,spec,removed", list(CASES.values()), ids=list(CASES))
+def test_excise_leaves_other_text_in_place(content, spec, removed):
+    before = _words(_pdf(content))
+    pdf = _pdf(content)
+    excise_content(pdf, [spec])
+    after = _words(pdf)
+    assert removed not in after
+    expected = {w: pos for w, pos in before.items() if w != removed}
+    assert set(after) == set(expected)
+    for word, pos in expected.items():
+        assert max(abs(a - b) for a, b in zip(after[word], pos)) <= 0.2, (word, after[word], pos)

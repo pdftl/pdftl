@@ -176,11 +176,6 @@ class TestCollapseTextPositioning:
 
 class TestEliminateRedundantTz:
     def test_redundant_tz_dropped(self):
-        # Non-default starting value -- a leading Tz(100.0) would
-        # itself be redundant against the spec default (see
-        # test_first_tz_matching_default_is_dropped) and confound
-        # this test's intent, which is to confirm a REPEATED value
-        # is dropped, not the leading one.
         instructions = [([90.0], "Tz"), ([90.0], "Tz"), ([[]], "TJ")]
         out = _eliminate_redundant_tz(instructions)
         assert _ops(out) == ["Tz", "TJ"]
@@ -190,12 +185,31 @@ class TestEliminateRedundantTz:
         out = _eliminate_redundant_tz(instructions)
         assert _ops(out) == ["Tz", "Tz"]
 
-    def test_first_tz_matching_default_is_dropped(self):
-        """Tz starts at spec default 100.0 -- an initial Tz([100.0])
-        with nothing prior is itself redundant."""
+    def test_first_tz_is_kept_even_at_the_page_default(self):
+        """A Form XObject inherits its caller's Tz, so 100 may change it."""
         instructions = [([100.0], "Tz")]
         out = _eliminate_redundant_tz(instructions)
-        assert out == []
+        assert _ops(out) == ["Tz"]
+
+    def test_tz_set_inside_q_is_restored_by_q_close(self):
+        instructions = [
+            ([], "q"),
+            ([50.0], "Tz"),
+            ([], "Q"),
+            ([50.0], "Tz"),  # Q restored the earlier value, so this changes it
+        ]
+        out = _eliminate_redundant_tz(instructions)
+        assert _ops(out) == ["q", "Tz", "Q", "Tz"]
+
+    def test_unmatched_q_close_makes_tz_unknown(self):
+        instructions = [([50.0], "Tz"), ([], "Q"), ([50.0], "Tz")]
+        out = _eliminate_redundant_tz(instructions)
+        assert _ops(out) == ["Tz", "Q", "Tz"]
+
+    def test_malformed_tz_makes_the_value_unknown(self):
+        instructions = [([50.0], "Tz"), (["x"], "Tz"), ([50.0], "Tz")]
+        out = _eliminate_redundant_tz(instructions)
+        assert _ops(out) == ["Tz", "Tz", "Tz"]
 
     def test_malformed_tz_operand_kept_defensively(self):
         instructions = [([None], "Tz")]
@@ -380,10 +394,8 @@ class TestCollapseTextPositioningAdditional:
 
 class TestEliminateRedundantTzNotBarrierScoped:
     def test_tz_redundancy_persists_across_bt_et_and_q_q(self):
-        """Unlike Tf, Tz is not reset/scoped by BT/ET or saved/restored
-        by q/Q for the purposes of this pass -- confirms the running
-        value tracked by _eliminate_redundant_tz survives across all of
-        them."""
+        """BT/ET leave Tz alone, and a q...Q that never sets it
+        restores the same value."""
         instructions = [
             ([90.0], "Tz"),
             ([], "BT"),
@@ -1333,3 +1345,112 @@ class TestOptimizePositioningOpsPaintlessShortCircuit:
         ]
         out = optimize_positioning_ops(instructions)
         assert _ops(out) == ["cm", "g", "re", "f"]
+
+
+class TestCollapseTextPositioningKeepsLeading:
+    """TD sets the leading as well as the position; the leading persists."""
+
+    def test_td_dropped_at_et_leaves_its_leading(self):
+        instructions = [([], "BT"), ([0, -14], "TD"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert out == [([], "BT"), ([14], "TL"), ([], "ET")]
+
+    def test_td_dropped_before_tm_leaves_its_leading(self):
+        instructions = [
+            ([], "BT"),
+            ([0, -14], "TD"),
+            ([1, 0, 0, 1, 50, 150], "Tm"),
+            (["a"], "Tj"),
+            ([], "ET"),
+        ]
+        out = _collapse_text_positioning(instructions)
+        assert _ops(out) == ["BT", "TL", "Tm", "Tj", "ET"]
+        assert out[1][0] == [14]
+
+    def test_last_of_several_dropped_tds_sets_the_leading(self):
+        instructions = [([], "BT"), ([0, -14], "TD"), ([3, -9], "TD"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert out[1] == ([9], "TL")
+
+    def test_decimal_leading_keeps_its_type(self):
+        from decimal import Decimal
+
+        instructions = [([], "BT"), ([0, Decimal("-12.5")], "TD"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert out[1] == ([Decimal("12.5")], "TL")
+
+    @pytest.mark.parametrize("operands", [[0, "x"], [0], [0, None]])
+    def test_malformed_td_is_kept_rather_than_guessed(self, operands):
+        instructions = [([], "BT"), (operands, "TD"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert out == instructions
+
+    def test_bt_with_moves_still_buffered_keeps_the_leading(self):
+        # An unterminated text object: the next BT ends it.
+        instructions = [([], "BT"), ([0, -14], "TD"), ([], "BT"), (["a"], "Tj"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert _ops(out) == ["BT", "TL", "BT", "Tj", "ET"]
+
+    def test_td_without_td_buffered_drops_silently(self):
+        instructions = [([], "BT"), ([5, 5], "Td"), ([1, 0, 0, 1, 0, 0], "Tm"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert _ops(out) == ["BT", "ET"]
+
+
+class TestCollapseTextPositioningFlushes:
+    def test_t_star_flushes_a_buffered_tm(self):
+        instructions = [
+            ([], "BT"),
+            ([1, 0, 0, 1, 50, 150], "Tm"),
+            ([], "T*"),
+            (["a"], "Tj"),
+            ([], "ET"),
+        ]
+        out = _collapse_text_positioning(instructions)
+        assert _ops(out) == ["BT", "Tm", "T*", "Tj", "ET"]
+
+    @pytest.mark.parametrize("barrier", [([10], "TL"), ([], "q"), ([], "Q"), (["/X0"], "Do")])
+    def test_leading_ops_flush_a_buffered_td(self, barrier):
+        instructions = [([], "BT"), ([0, -14], "TD"), barrier, (["a"], "Tj"), ([], "ET")]
+        out = _collapse_text_positioning(instructions)
+        assert _ops(out) == ["BT", "TD", barrier[1], "Tj", "ET"]
+
+    @pytest.mark.parametrize("barrier", [([10], "TL"), ([], "q"), (["/X0"], "Do")])
+    def test_leading_ops_let_a_plain_td_through(self, barrier):
+        # Td touches only the text matrix, which none of these reads or saves.
+        instructions = [
+            ([], "BT"),
+            ([5, 5], "Td"),
+            barrier,
+            ([1, 1], "Td"),
+            (["a"], "Tj"),
+            ([], "ET"),
+        ]
+        out = _collapse_text_positioning(instructions)
+        assert _ops(out) == ["BT", barrier[1], "Td", "Tj", "ET"]
+        assert out[2][0] == pytest.approx([6, 6])
+
+
+class TestDropDeadQBlocksKeepsOperatorPairs:
+    @pytest.mark.parametrize(
+        "inside",
+        [
+            [([], "BT")],
+            [([], "ET")],
+            [(["/Span"], "BMC")],
+            [(["/P", "dict"], "BDC")],
+            [([], "EMC")],
+            [([], "EMC"), (["/Span"], "BMC")],  # nets to zero but opens with a close
+        ],
+    )
+    def test_span_that_would_orphan_a_partner_is_kept(self, inside):
+        instructions = [([], "q"), *inside, ([], "Q")]
+        assert _drop_dead_q_blocks(instructions) == instructions
+
+    def test_balanced_marked_content_without_paint_is_dropped(self):
+        instructions = [([], "q"), (["/Span"], "BMC"), ([], "EMC"), ([], "Q")]
+        assert _drop_dead_q_blocks(instructions) == []
+
+    def test_imbalance_in_an_inner_span_keeps_the_outer(self):
+        instructions = [([], "q"), ([], "q"), ([], "BT"), ([], "Q"), ([], "Q")]
+        assert _drop_dead_q_blocks(instructions) == instructions
