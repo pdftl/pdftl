@@ -171,3 +171,17 @@ def test_apply_replacements_skips_non_object_indirect_entries(pdf):
     apply_replacements(pdf, {old.objgen: new})  # must not raise
 
     assert holder.Ref.objgen == new.objgen
+
+
+def test_build_replacement_map_depth_bounds_the_comparison(pdf):
+    def nested(levels):
+        value = Array([1])
+        for _ in range(levels):
+            value = Array([value])
+        return value
+
+    s1 = pdf.make_indirect(pikepdf.Stream(pdf, b"same", Deep=nested(15)))
+    s2 = pdf.make_indirect(pikepdf.Stream(pdf, b"same", Deep=nested(15)))
+    assert build_replacement_map([s1, s2], threshold=0) == ({}, 0)
+    replacements, saved = build_replacement_map([s1, s2], threshold=0, depth=32)
+    assert replacements == {s2.objgen: s1} and saved == 4

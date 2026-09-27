@@ -54,6 +54,7 @@ flatten = ["pypdfium2"]
 highlight = ["pypdfium2"]
 import-fonts = ["fonttools>=4.0,<5.0"]
 modify-images = ["numpy"]
+mrc-compress = ["numpy", "numba"]
 optimize-images = ["ocrmypdf"]
 replacement-font = ["fonttools>=4.0,<5.0"]
 shell-completion = ["lark", "cloudpickle"]
@@ -62,6 +63,7 @@ simplify-vectors = ["numpy", "numba"]
 subset-fonts = ["fonttools>=4.0,<5.0"]
 tag = ["opendataloader_pdf"]
 yaml-bookmarks = ["pyyaml"]
+zopfli = ["zopfli"]
 
 # All optional CLI dependencies
 extras = [
@@ -77,6 +79,7 @@ extras = [
     "pdftl[highlight]",
     "pdftl[import-fonts]",
     "pdftl[modify-images]",
+    "pdftl[mrc-compress]",
     "pdftl[optimize-images]",
     "pdftl[replacement-font]",
     "pdftl[shell-completion]",
@@ -85,6 +88,7 @@ extras = [
     "pdftl[subset-fonts]",
     "pdftl[tag]",
     "pdftl[yaml-bookmarks]",
+    "pdftl[zopfli]",
 ]
 
 # User-facing "Batteries Included" install

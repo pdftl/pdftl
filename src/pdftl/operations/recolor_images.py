@@ -23,6 +23,7 @@ from pdftl.utils.images.grayscale import (
     recolor_inline_images,
 )
 from pdftl.utils.keyval_parser import parse_keyval_list
+from pdftl.utils.system_memory import IMAGE_MEMORY_HELP
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,8 @@ Arguments:
   * `threads=<n>`: Number of parallel worker threads to use for image processing. (Default:
     system CPU count)
 
- """
+{memory}
+"""
 
 _RECOLOR_IMAGES_EXAMPLES = [
     {
@@ -91,7 +93,7 @@ def _parse_args(args: list) -> tuple[int, int | None, list]:
     tags=["in_place", "images", "color"],
     type="single input operation",
     desc="Convert images to grayscale",
-    long_desc=_RECOLOR_IMAGES_LONG_DESC,
+    long_desc=_RECOLOR_IMAGES_LONG_DESC.replace("{memory}", IMAGE_MEMORY_HELP),
     usage="<input> recolor_images [<spec>...] [quality=val] [threads=val] output <output>",
     examples=_RECOLOR_IMAGES_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),

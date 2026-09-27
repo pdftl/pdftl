@@ -1,7 +1,11 @@
 # tests/fonts/test_font_subsetting_keeps_font_data.py
 #
-# Subsetting keeps font-level data that renderers use at small pixel sizes:
-# embedded bitmap strikes (EBLC/EBDT) and the head table's font-wide bbox.
+# Subsetting keeps font-level data that renderers use at small pixel sizes
+# (the head table's font-wide bbox), and drops what no PDF renderer reads:
+# embedded bitmap strikes and Windows device metrics (hdmx, VDMX) -- Poppler,
+# pdfium and MuPDF render office__21/22/26 and browser_mac__29 pixel-
+# identically with and without them at 50-150 dpi -- and OpenType layout
+# tables (PDF text arrives already shaped, as glyph IDs).
 
 import io
 
@@ -99,14 +103,53 @@ def test_fixture_has_the_strike():
     assert _strike_bitmaps(_font_with_strike()) == BITMAPS
 
 
-def test_subset_keeps_bitmap_strike_for_kept_glyphs():
-    font = _font_with_strike()
-    assert run_subsetter(font, unicodes={"A"}, gids=set())
+def _saved(font):
     buf = io.BytesIO()
     font.save(buf)
-    subset = TTFont(io.BytesIO(buf.getvalue()))
-    assert {"EBLC", "EBDT"} <= set(subset.keys())
-    assert _strike_bitmaps(subset) == {"A": BITMAPS["A"]}
+    return TTFont(io.BytesIO(buf.getvalue()))
+
+
+def test_subset_drops_bitmap_strikes():
+    font = _font_with_strike()
+    assert run_subsetter(font, unicodes={"A"}, gids=set())
+    assert not {"EBLC", "EBDT", "EBSC"} & set(_saved(font).keys())
+
+
+def _font_with_ligature():
+    order = [".notdef", "A", "B", "A_B"]
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder(order)
+    fb.setupCharacterMap({ord("A"): "A", ord("B"): "B"})
+    fb.setupGlyf({n: _box(0, 0, 500, 500) for n in order})
+    fb.setupHorizontalMetrics({n: (600, 0) for n in order})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "LigatureTest", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+    fb.addOpenTypeFeatures("feature liga { sub A B by A_B; } liga;")
+    return _saved(fb.font)
+
+
+def test_subset_does_not_follow_or_keep_layout_tables():
+    font = _font_with_ligature()
+    assert "GSUB" in font and "A_B" in font.getGlyphOrder()
+    assert run_subsetter(font, unicodes={"A", "B"}, gids=set())
+    subset = _saved(font)
+    assert "A_B" not in subset.getGlyphOrder()  # the ligature is never drawn by a PDF
+    assert not {"GSUB", "GPOS", "GDEF", "kern"} & set(subset.keys())
+
+
+def test_subset_drops_device_metrics():
+    from fontTools.ttLib import newTable
+
+    font = _font_with_ligature()
+    hdmx = newTable("hdmx")
+    hdmx.hdmx = {12: {name: 7 for name in font.getGlyphOrder()}}
+    font["hdmx"] = hdmx
+    font = _saved(font)
+    assert "hdmx" in font
+    assert run_subsetter(font, unicodes={"A"}, gids=set())
+    assert "hdmx" not in _saved(font)
 
 
 def _head_bbox(font):

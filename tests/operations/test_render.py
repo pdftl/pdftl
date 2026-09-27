@@ -199,21 +199,48 @@ def test_render_pdf_default_dpi_and_bad_pattern(mock_ensure):
 
 
 def test_save_single_pdf_logic(tmp_path):
+    import pikepdf
+    import pypdfium2 as pdfium
+    from PIL import Image
+
     output_file = str(tmp_path / "test.pdf")
-    mock_img1 = MagicMock()
-    mock_img2 = MagicMock()
+    colours = [(200, 0, 0), (0, 0, 200), (0, 150, 0)]
+    pages = [(f"p{i}.png", Image.new("RGB", (300, 150), c)) for i, c in enumerate(colours)]
 
-    # 1. Success Path (Lines 65, 70-71)
-    gen = iter([("p1.png", mock_img1), ("p2.png", mock_img2)])
-    count = _save_single_pdf(gen, output_file, 150.0)
+    assert _save_single_pdf(iter(pages), output_file, 150.0) == 3
+    with pikepdf.open(output_file) as pdf:
+        # 300 x 150 px at 150 dpi is 2 x 1 inches: 144 x 72 pt
+        assert [tuple(float(v) for v in p.mediabox) for p in pdf.pages] == [(0, 0, 144, 72)] * 3
+    doc = pdfium.PdfDocument(output_file)
+    for page, colour in zip(doc, colours):
+        pixel = page.render(scale=1).to_pil().convert("RGB").getpixel((72, 36))
+        assert all(abs(a - b) <= 8 for a, b in zip(pixel, colour))
 
-    assert count == 2
-    mock_img1.save.assert_called_once_with(
-        output_file, "PDF", resolution=150.0, save_all=True, append_images=[mock_img2]
-    )
-
-    # 2. Empty Generator Path (Lines 66-67)
     assert _save_single_pdf(iter([]), output_file, 150.0) == 0
+
+
+def test_save_single_pdf_keeps_one_decoded_page_at_a_time(tmp_path):
+    from PIL import Image
+
+    held = []
+
+    def pages():
+        for i in range(5):
+            img = Image.new("RGB", (40, 40), (i * 40, 0, 0))
+            held.append(img)
+            yield f"p{i}.png", img
+            held.remove(img)  # only reached once the consumer moves on
+
+    peak = [0]
+    real = Image.Image.save
+
+    def save(self, *args, **kwargs):
+        peak[0] = max(peak[0], len(held))
+        return real(self, *args, **kwargs)
+
+    with patch.object(Image.Image, "save", save):
+        assert _save_single_pdf(pages(), str(tmp_path / "t.pdf"), 72.0) == 5
+    assert peak[0] == 1
 
 
 def test_save_single_pdf_error(tmp_path):
@@ -227,23 +254,23 @@ def test_save_single_pdf_error(tmp_path):
 
 
 def test_render_cli_hook_triggers_single_pdf(tmp_path, caplog):
-    output_pdf = str(tmp_path / "merged.pdf")
-    mock_img = MagicMock()
+    import pikepdf
+    from PIL import Image
 
-    # Create an OpResult that looks like a single-PDF render
+    output_pdf = str(tmp_path / "merged.pdf")
     result = OpResult(
         success=True,
         pdf=MagicMock(),
-        data=iter([("dummy.png", mock_img)]),
+        data=iter([("dummy.png", Image.new("RGB", (30, 30), "white"))]),
         meta={"output_pattern": output_pdf, "dpi": 300.0},
     )
 
     with caplog.at_level(logging.INFO):
         render_cli_hook(result, None, None)
 
-    # Check lines 112-113 coverage
     assert "Rendered 1 pages into a single PDF" in caplog.text
-    mock_img.save.assert_called_once()
+    with pikepdf.open(output_pdf) as pdf:
+        assert len(pdf.pages) == 1
 
 
 # --- Test render_api_serializer (server-side format= dispatch) ---
@@ -302,3 +329,65 @@ def test_render_api_serializer_png_compression_forwarded():
     _, kwargs = img.save.call_args
     assert kwargs["format"] == "PNG"
     assert kwargs["compress_level"] == 3
+
+
+# --- in a pipeline ---
+
+
+def _two_page_pdf():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    for _ in range(2):
+        page = pdf.add_blank_page(page_size=(144, 72))  # 2 x 1 inch
+        page.Contents = pdf.make_stream(b"0 0 1 rg 10 10 50 50 re f")
+    return pdf
+
+
+def _assert_image_only(pdf):
+    for page in pdf.pages:
+        resources = page.obj.get("/Resources", {})
+        assert "/Font" not in resources
+        assert all(x.get("/Subtype") == "/Image" for x in resources.XObject.values())
+
+
+def test_before_a_later_stage_render_hands_on_an_image_only_pdf(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = render_pdf(_two_page_pdf(), ["dpi=50"], None, is_last_stage=False)
+    assert result.data is None
+    assert len(result.pdf.pages) == 2
+    _assert_image_only(result.pdf)
+    (image,) = result.pdf.pages[0].Resources.XObject.values()
+    assert (int(image.Width), int(image.Height)) == (100, 50)  # 2 x 1 inch at 50 dpi
+    assert list(tmp_path.iterdir()) == []  # no output given: nothing written
+
+
+def test_before_a_later_stage_render_also_writes_an_explicit_image_output(tmp_path):
+    pattern = str(tmp_path / "p%d.png")
+    result = render_pdf(_two_page_pdf(), ["2", "dpi=20"], pattern, is_last_stage=False)
+    assert len(result.pdf.pages) == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["p1.png"]
+
+
+def test_before_a_later_stage_render_also_writes_an_explicit_pdf_output(tmp_path):
+    import pikepdf
+
+    out = tmp_path / "r.pdf"
+    result = render_pdf(_two_page_pdf(), ["dpi=20"], str(out), is_last_stage=False)
+    with pikepdf.open(out) as written:
+        assert len(written.pages) == len(result.pdf.pages) == 2
+        _assert_image_only(written)
+
+
+def test_pipeline_render_failure_is_reported(monkeypatch):
+    def boom(images, dest, dpi):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("pdftl.operations.render._images_to_pdf", boom)
+    with pytest.raises(InvalidArgumentError, match="disk full"):
+        render_pdf(_two_page_pdf(), ["dpi=20"], None, is_last_stage=False)
+
+
+def test_last_stage_without_output_uses_the_documented_default():
+    result = render_pdf(_two_page_pdf(), ["dpi=20"], None)
+    assert [name for name, _ in result.data] == ["page_1.png", "page_2.png"]

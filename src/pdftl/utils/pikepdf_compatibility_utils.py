@@ -99,6 +99,24 @@ def image_extraction_errors() -> tuple[type[Exception], ...]:
     return tuple(found)
 
 
+def image_decode_errors() -> tuple[type[Exception], ...]:
+    """What pikepdf and Pillow raise on image data they cannot decode."""
+    import pikepdf
+    from PIL import Image
+
+    return (
+        pikepdf.PdfError,
+        pikepdf.DataDecodingError,
+        Image.DecompressionBombError,
+        *image_extraction_errors(),
+        NotImplementedError,
+        OSError,
+        ValueError,
+        TypeError,
+        IndexError,
+    )
+
+
 def is_indexed_image(xobj) -> bool:
     import pikepdf
 

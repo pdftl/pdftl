@@ -197,21 +197,41 @@ def _build_subsetter_options(keep_names: bool = False, retain_gids: bool = False
     options.recalc_bounds = True
     options.recalc_timestamp = False
     options.glyph_names = keep_names
-    options.layout_features = ["*"]
+    # PDF text arrives shaped, as glyph IDs: layout tables are never consulted,
+    # and their closure would keep every alternate and ligature glyph.
+    options.layout_features = []
+    options.layout_closure = False
     options.name_IDs = ["*"]
-    options.legacy_kern = True
+    options.legacy_kern = False
 
     # handles legacy/symbol subtables in general; format-0 subtables specifically need
     # _promote_legacy_format0_cmap_subtables below, since fontTools drops format1 0 unconditionally
     # regardless of these options.
     options.legacy_cmap = True
     options.symbol_cmap = True
-    # Keep embedded bitmap strikes: renderers use them at small pixel sizes.
-    options.drop_tables = [t for t in options.drop_tables if t not in _BITMAP_TABLES]
+    # PDF renderers rasterize outlines with bitmaps disabled and never read
+    # layout or Windows device-metrics (hdmx, VDMX) tables.
+    options.drop_tables += [t for t in _UNREAD_TABLES if t not in options.drop_tables]
     return options
 
 
-_BITMAP_TABLES = ("EBDT", "EBLC", "EBSC")
+_UNREAD_TABLES = (
+    "EBDT",
+    "EBLC",
+    "EBSC",
+    "hdmx",
+    "VDMX",
+    "GSUB",
+    "GPOS",
+    "GDEF",
+    "kern",
+    "JSTF",
+    "BASE",
+    "MATH",
+    "morx",
+    "mort",
+    "kerx",
+)
 _HEAD_BBOX = ("xMin", "yMin", "xMax", "yMax")
 
 

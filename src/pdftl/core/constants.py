@@ -271,6 +271,7 @@ OVERLAY_PDF = "overlay_pdf"
 ON_TOP = "on_top"
 MULTI = "multi"
 OUTPUT_PATTERN = "output_pattern"
+IS_LAST_STAGE = "is_last_stage"  # False when a later pipeline stage takes the result
 GET_INPUT = "get_input"
 
 # Metadata kys for OpResult
@@ -315,6 +316,7 @@ __all__ = [
     "ON_TOP",
     "MULTI",
     "OUTPUT_PATTERN",
+    "IS_LAST_STAGE",
     "GET_INPUT",
     "META_EXTRA_INFO",
     "META_ESCAPE_XML",

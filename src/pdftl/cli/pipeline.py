@@ -108,6 +108,21 @@ class PipelineResult:
     results: list[OpResult] = field(default_factory=list)
 
 
+def _carry_save_hints(previous: Any, current: Any) -> None:
+    """Keep what earlier stages left for saving (e.g. shrink's recompress) when a
+    stage returns a new document; the new document's own hints win."""
+    hints = getattr(previous, c.PDFTL_SAVE_HINTS_ATTR, None)
+    if not isinstance(hints, dict) or not hints or current is None or current is previous:
+        return
+    try:
+        own = getattr(current, c.PDFTL_SAVE_HINTS_ATTR, None)
+        setattr(
+            current, c.PDFTL_SAVE_HINTS_ATTR, {**hints, **(own if isinstance(own, dict) else {})}
+        )
+    except AttributeError:
+        pass  # not a document (e.g. a generator of pages)
+
+
 # pylint: disable=too-few-public-methods
 class PipelineManager:
     """Orchestrates the execution of a multi-stage PDF processing pipeline."""
@@ -162,7 +177,8 @@ class PipelineManager:
                 skip_pipeline_save = op_entry.get("skip_pipeline_save", False)
                 if stage_output and self.pipeline_pdf and not skip_pipeline_save:
                     logger.info("Persisting stage output path -> %s", stage_output)
-                    self.save_pdf_file(self.pipeline_pdf, stage_output, stage)
+                    with CliStageProfiler("save", [str(stage_output)]):
+                        self.save_pdf_file(self.pipeline_pdf, stage_output, stage)
                     logger.info("Success: Output written to %s", stage_output)
                 else:
                     logger.debug(
@@ -268,17 +284,19 @@ class PipelineManager:
             return
         self._validate_stage_args(stage, is_first, is_last)
         self._output_info(i, stage, is_first)
-        self._execute_stage(stage, is_first)
+        self._execute_stage(stage, is_first, is_last)
         self._output_stage_finished(i)
 
-    def _execute_stage(self, stage, is_first):
+    def _execute_stage(self, stage, is_first, is_last=True):
         logger.debug("_execute_stage")
         opened_pdfs, effective_inputs, adjusted_handles = self._open_input_pdfs(stage, is_first)
 
         if self.pipeline_pdf and self.pipeline_pdf not in opened_pdfs:
             self.pipeline_pdf.close()
 
-        result = self._run_operation(stage, opened_pdfs, effective_inputs, adjusted_handles)
+        result = self._run_operation(
+            stage, opened_pdfs, effective_inputs, adjusted_handles, is_last=is_last
+        )
         self._process_result(result, stage, opened_pdfs)
 
     def _unpack_result_value_and_run_hooks(self, result, stage, opened_pdfs):
@@ -330,6 +348,7 @@ class PipelineManager:
         import pikepdf
 
         result_val = self._unpack_result_value_and_run_hooks(result, stage, opened_pdfs)
+        _carry_save_hints(self.pipeline_pdf, result_val)
 
         # Update the Pipeline State Variable
         self.pipeline_pdf = result_val
@@ -407,7 +426,9 @@ class PipelineManager:
                 f"but received {effective_inputs} effective input(s)."
             )
 
-    def _run_operation(self, stage, opened_pdfs, effective_inputs=None, adjusted_handles=None):
+    def _run_operation(
+        self, stage, opened_pdfs, effective_inputs=None, adjusted_handles=None, is_last=True
+    ):
         """Dispatches to the correct command function based on the operation."""
         operation = stage.operation
         op_data = registry.operations.get(operation)
@@ -439,6 +460,7 @@ class PipelineManager:
             c.OVERLAY_PDF: _first_or_none(stage.operation_args),
             c.OUTPUT: stage.options.get(c.OUTPUT, None),
             c.OUTPUT_PATTERN: output_pattern,
+            c.IS_LAST_STAGE: is_last,
             c.GET_INPUT: self.input_context.get_input,
         }
 

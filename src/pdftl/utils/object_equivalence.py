@@ -38,6 +38,19 @@ def check_object_equivalence(obj1, obj2, depth: int = 10) -> bool:
         return False
 
 
+def _same_indirect_object(obj1, obj2) -> bool:
+    import pikepdf
+
+    return (
+        isinstance(obj1, pikepdf.Object)
+        and isinstance(obj2, pikepdf.Object)
+        and obj1.is_indirect
+        and obj2.is_indirect
+        and obj1.objgen == obj2.objgen
+        and obj1.same_owner_as(obj2)
+    )
+
+
 def _both_bool(obj1, obj2) -> bool:
     return isinstance(obj1, bool) and isinstance(obj2, bool) and obj1 == obj2
 
@@ -142,6 +155,9 @@ def _check_object_equivalence(obj1, obj2, depth: int) -> bool:
     the bool/numeric/name/string checks, which are cheap enough to fold
     their own applicability test into a single bool return).
     """
+    if _same_indirect_object(obj1, obj2):
+        return True
+
     if depth < 0:
         return False
 

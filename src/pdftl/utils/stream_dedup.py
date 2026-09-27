@@ -69,7 +69,9 @@ def rewrite_references(node: pikepdf.Object, replacements: dict) -> None:
             rewrite_indirect_ref_or_recurse(node, idx, node[idx], replacements)
 
 
-def find_duplicates_of(master, master_len, remaining_candidates, replacements) -> int:
+def find_duplicates_of(
+    master, master_len, remaining_candidates, replacements, depth: int = 10
+) -> int:
     """Scan `remaining_candidates` (already sorted ascending by length,
     all with index greater than master's) for streams equivalent to
     `master`, recording each as a replacement. Returns bytes reclaimed."""
@@ -81,7 +83,7 @@ def find_duplicates_of(master, master_len, remaining_candidates, replacements) -
         cand_og = candidate.objgen
         if cand_og in replacements:
             continue
-        if check_object_equivalence(candidate, master):
+        if check_object_equivalence(candidate, master, depth):
             replacements[cand_og] = master
             # cand_len == master_len here (guaranteed by the sorted
             # same-length scan above), so either would do.
@@ -89,7 +91,7 @@ def find_duplicates_of(master, master_len, remaining_candidates, replacements) -
     return bytes_saved
 
 
-def build_replacement_map(candidates: list, threshold: int) -> tuple[dict, int]:
+def build_replacement_map(candidates: list, threshold: int, depth: int = 10) -> tuple[dict, int]:
     """Walk the length-sorted candidate list once, grouping equivalent
     streams and choosing the first (smallest, or tied-smallest) of each
     group as the surviving master. Returns (replacements, bytes_saved)."""
@@ -101,7 +103,9 @@ def build_replacement_map(candidates: list, threshold: int) -> tuple[dict, int]:
             continue
         if master.objgen in replacements:
             continue  # already folded into an earlier master itself
-        bytes_saved += find_duplicates_of(master, master_len, candidates[i + 1 :], replacements)
+        bytes_saved += find_duplicates_of(
+            master, master_len, candidates[i + 1 :], replacements, depth
+        )
     return replacements, bytes_saved
 
 

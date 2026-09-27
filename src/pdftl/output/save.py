@@ -8,6 +8,7 @@
 
 import contextlib
 import io
+import os
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -204,15 +205,35 @@ copying streams as raw binary data to reduce save times."""
     desc="Recompress all Flate streams at maximum compression",
     long_desc=(
         "By default, streams that are already Flate-compressed are copied "
-        "as they are. With `recompress`, every Flate stream is decoded and "
-        "compressed again at zlib's maximum level. Lossless, often a few "
-        "percent smaller, and slower to save. Ignored with `fast` or "
+        "as they are. With `recompress`, every Flate stream is compressed "
+        "again at zlib's maximum level (or also with zopfli: see `deflate`), keeping any "
+        "PNG predictor, and 8-bit images also try PNG row filters (and "
+        "`oxipng`, if installed). A stream is rewritten only if that makes "
+        "it smaller. The saved file's object streams are then merged into "
+        "one, which compresses better, unless `linearize`, encryption or "
+        "signing is used. Lossless, and slower to save. Ignored with `fast` or "
         "`uncompress`."
     ),
     type="flag",
     tags=["compression", "optimization"],
 )
 def _recompress_option():
+    pass
+
+
+@register_option(
+    "deflate <encoder>",
+    desc="Deflate encoder for recompress: zlib (default) or zopfli",
+    long_desc=(
+        "With `deflate zopfli`, `recompress` also tries zopfli on each stream "
+        "up to 8MB and keeps whichever of it and zlib is smaller: typically "
+        "5-9% smaller streams, at many times the save time. Needs the "
+        "`zopfli` extra; without it the save fails. Implies `recompress`."
+    ),
+    type="one mandatory argument",
+    tags=["compression", "optimization"],
+)
+def _deflate_option():
     pass
 
 
@@ -236,7 +257,32 @@ def _linearize_option():
 @register_option("drop_info", desc="Discard document-level info metadata", type="flag")
 @register_option("drop_xmp", desc="Discard document-level XMP metadata", type="flag")
 @register_option("drop_xmp_streams", desc="Discard all XMP metadata streams", type="flag")
+@register_option(
+    "drop_thumbnails",
+    desc="Discard embedded page thumbnails",
+    long_desc=(
+        "Removes the thumbnail images some producers embed in each page "
+        "(`/Thumb`). Viewers draw their own page previews; the pages "
+        "themselves are unchanged."
+    ),
+    type="flag",
+)
 @register_option("drop_xfa", desc="Discard form XFA data if present", type="flag")
+@register_option(
+    "compress_xmp",
+    desc="Compress the document-level XMP metadata stream",
+    long_desc=(
+        "qpdf compresses every other metadata stream but writes the "
+        "document's own XMP uncompressed, so that tools which scan files "
+        "for XMP packets without parsing the PDF can find it. `compress_xmp` "
+        "compresses it too. PDF readers are unaffected. PDF/A-1 forbids "
+        "this, so a PDF/A-1 document (or one whose PDF/A part cannot be "
+        "read) is left alone; later PDF/A parts allow it. Ignored with "
+        "`uncompress`, `fast`, `linearize`, encryption and signing."
+    ),
+    type="flag",
+    tags=["metadata", "compression", "optimization"],
+)
 @register_option(
     "drop_vendor_extensions",
     desc="Discard private vendor/application data hung directly off the document catalog",
@@ -457,12 +503,34 @@ def _build_save_options(options, input_context):
         # generating object streams seems cheap, so we don't change it. maybe revisit
         ret["stream_decode_level"] = pikepdf.StreamDecodeLevel.none
         ret["compress_streams"] = False
-    if options.get("recompress"):
+    use_zopfli = _deflate_encoder(options) == "zopfli"
+    if options.get("recompress") or use_zopfli:
         if use_fast or use_uncompress:
             logger.warning("Ignoring 'recompress': it conflicts with 'fast' and 'uncompress'.")
         else:
-            ret["recompress_flate"] = True
+            # Done by pdftl before saving, not by qpdf's recompress_flate, which
+            # drops PNG predictors; popped before the options reach pikepdf.
+            ret[_RECOMPRESS] = True
+            ret[_ZOPFLI] = use_zopfli
     return ret
+
+
+_RECOMPRESS = "_pdftl_recompress"
+_ZOPFLI = "_pdftl_zopfli"
+DEFLATE_ENCODERS = ("zlib", "zopfli")
+
+
+def _deflate_encoder(options) -> str:
+    encoder = options.get("deflate") or "zlib"
+    if encoder not in DEFLATE_ENCODERS:
+        raise InvalidArgumentError(
+            f"deflate takes one of {', '.join(DEFLATE_ENCODERS)}, got '{encoder}'"
+        )
+    if encoder == "zopfli":
+        from pdftl.output.recompress import require_zopfli
+
+        require_zopfli()
+    return encoder
 
 
 _MAX_FLATE_LEVEL = 9
@@ -470,9 +538,9 @@ _DEFAULT_FLATE_LEVEL = -1  # zlib's default, pikepdf's initial setting
 
 
 @contextlib.contextmanager
-def _flate_level_for(save_opts):
+def _flate_level_for(recompress: bool):
     """Raise the process-wide Flate level only for a recompressing save."""
-    if not save_opts.get("recompress_flate"):
+    if not recompress:
         yield
         return
     import pikepdf
@@ -559,19 +627,45 @@ def _action_drop_flags(pdf, options):
         _drop_object_keys(pdf, all_meta_keys)
     elif options.get("drop_xmp_streams"):
         _drop_object_keys(pdf, ["/Metadata"])
+    if options.get("drop_thumbnails") and not drop_meta:
+        _drop_object_keys(pdf, ["/Thumb"])
 
     if options.get("drop_xmp"):
         if "/Metadata" in pdf.Root:
             del pdf.Root.Metadata
 
     if options.get("drop_xfa"):
-        if "/AcroForm" in pdf.Root:
-            acro_form = pdf.Root["/AcroForm"]
-            if "/XFA" in acro_form:
-                del acro_form["/XFA"]
+        _drop_xfa(pdf, hybrid_only=options["drop_xfa"] == "hybrid")
 
     if options.get("drop_vendor_extensions"):
         _drop_vendor_extension_keys(pdf)
+
+
+def _drop_xfa(pdf, hybrid_only: bool) -> None:
+    import pikepdf
+
+    acro_form = pdf.Root.get("/AcroForm")
+    if not isinstance(acro_form, pikepdf.Dictionary) or "/XFA" not in acro_form:
+        return
+    if hybrid_only and not has_acroform_widgets(pdf):
+        logger.info("Keeping XFA form data: the form has no ordinary fields to fall back on.")
+        return
+    del acro_form["/XFA"]
+
+
+def has_acroform_widgets(pdf) -> bool:
+    """True for a hybrid form, whose pages carry widgets viewers without XFA draw."""
+    import pikepdf
+
+    if pdf.Root.get("/NeedsRendering"):  # dynamic XFA: the pages come from the XFA
+        return False
+    for page in pdf.pages:
+        annots = page.obj.get("/Annots")
+        if isinstance(annots, pikepdf.Array) and any(
+            isinstance(a, pikepdf.Dictionary) and a.get("/Subtype") == "/Widget" for a in annots
+        ):
+            return True
+    return False
 
 
 def _drop_vendor_extension_keys(pdf):
@@ -649,7 +743,55 @@ def _apply_prune_resources(pdf, options, is_signing):
     pdf.remove_unreferenced_resources()
 
 
-def _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing):
+def _post_save_conflict(options, save_opts, is_signing) -> str | None:
+    """The first option that rules out patching the saved file, if any."""
+    for name, active in (
+        ("uncompress", options.get("uncompress")),
+        ("fast", options.get("fast")),
+        ("linearize", save_opts["linearize"]),
+        ("encryption", save_opts["encryption"]),
+        ("signing", is_signing),
+    ):
+        if active:
+            return name
+    return None
+
+
+def _should_compress_xmp(pdf, options, save_opts, is_signing) -> bool:
+    if not options.get("compress_xmp"):
+        return False
+    conflict = _post_save_conflict(options, save_opts, is_signing)
+    if conflict:
+        logger.info("Ignoring 'compress_xmp': it conflicts with %s.", conflict)
+        return False
+    from pdftl.output.compress_xmp import may_compress_xmp
+
+    return may_compress_xmp(pdf)
+
+
+def _patch_saved(target, on_file, on_bytes) -> None:
+    """Apply a saved-file patch to a path, or to an in-memory buffer such as usage's."""
+    if isinstance(target, (str, os.PathLike)):
+        on_file(os.fspath(target))
+        return
+    data = target.getvalue()
+    patched = on_bytes(data)
+    if patched is not data:
+        target.seek(0)
+        target.truncate()
+        target.write(patched)
+
+
+def _dispatch_save(
+    pdf,
+    output_filename,
+    input_context,
+    options,
+    save_opts,
+    is_signing,
+    compress_xmp=False,
+    repack=False,
+):
     """Performs the actual write: signing, stdout, or a normal file save.
     Wraps pikepdf's 'cannot overwrite input file' ValueError in a
     friendlier PdftlOutputError; re-raises any other ValueError as-is."""
@@ -660,9 +802,17 @@ def _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_s
             sign_cfg = parse_sign_options(options, input_context)
             save_and_sign(pdf, sign_cfg, save_opts, output_filename)
         elif output_filename == "-":
-            save_to_stdout(pdf, save_opts)
+            save_to_stdout(pdf, save_opts, compress_xmp, repack)
         else:
             pdf.save(output_filename, **save_opts)
+            if compress_xmp:
+                from pdftl.output.compress_xmp import compress_saved_bytes, compress_saved_file
+
+                _patch_saved(output_filename, compress_saved_file, compress_saved_bytes)
+            if repack:
+                from pdftl.output.repack import repack_bytes, repack_file
+
+                _patch_saved(output_filename, repack_file, repack_bytes)
     except ValueError as exc:
         if "Cannot overwrite input file" in str(exc):
             raise PdftlOutputError(
@@ -683,6 +833,7 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
         options = {**hints, **options}
     if not output_filename:
         raise MissingArgumentError("An output file must be specified with the 'output' keyword.")
+    _deflate_encoder(options)  # before any work is done
 
     logger.debug("Preparing to save to '%s' with options %s", output_filename, options)
 
@@ -712,11 +863,32 @@ def save_pdf(pdf, output_filename, input_context, options=None, set_pdf_id=None)
     logger.debug("Save options for pikepdf: %s", save_opts)
 
     _warn_if_live_signatures_will_be_invalidated(pdf, is_signing)
-    with _flate_level_for(save_opts):
-        _dispatch_save(pdf, output_filename, input_context, options, save_opts, is_signing)
+    compress_xmp = _should_compress_xmp(pdf, options, save_opts, is_signing)
+    recompress = save_opts.pop(_RECOMPRESS, False)
+    from pdftl.output.recompress import zopfli_deflate
+
+    with zopfli_deflate(save_opts.pop(_ZOPFLI, False)), _flate_level_for(recompress):
+        if recompress:
+            from pdftl.output.recompress import recompress_streams
+
+            recompress_streams(pdf)
+        # qpdf writes 100 objects per object stream; one large stream compresses better.
+        repack = recompress and _post_save_conflict(options, save_opts, is_signing) is None
+        _dispatch_save(
+            pdf,
+            output_filename,
+            input_context,
+            options,
+            save_opts,
+            is_signing,
+            compress_xmp,
+            repack,
+        )
 
 
-def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
+def save_to_stdout(
+    pdf: "pikepdf.Pdf", save_opts: dict, compress_xmp: bool = False, repack: bool = False
+):
     # 1. Create an in-memory bytes buffer
     with io.BytesIO() as buffer:
         # 2. Save the pikepdf object into the buffer
@@ -724,6 +896,14 @@ def save_to_stdout(pdf: "pikepdf.Pdf", save_opts: dict):
 
         # 3. Get the raw bytes content
         pdf_bytes = buffer.getvalue()
+        if compress_xmp:
+            from pdftl.output.compress_xmp import compress_saved_bytes
+
+            pdf_bytes = compress_saved_bytes(pdf_bytes)
+        if repack:
+            from pdftl.output.repack import repack_bytes
+
+            pdf_bytes = repack_bytes(pdf_bytes)
 
         # 4. Write raw bytes to the stdout buffer
         # 'sys.stdout' expects text (str), but 'sys.stdout.buffer' expects bytes.

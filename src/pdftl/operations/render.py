@@ -22,6 +22,7 @@ from pdftl.utils.keyval_parser import parse_keyval_list
 logger = logging.getLogger(__name__)
 
 _VALID_API_FORMATS = {"png", "jpg", "jpeg", "pdf"}
+_DEFAULT_PATTERN = "page_%d.png"
 
 _RENDER_LONG_DESC = """
 The `render` operation converts PDF pages into raster images or a single PDF.
@@ -50,11 +51,16 @@ ignored by `output`-based CLI rendering) on the CLI too, for consistency.
 **Single PDF Output:**
 If the output template ends with `.pdf` and contains no `%` directive
 (e.g., `output out.pdf`), all rendered pages will be combined into a
-single PDF file. Note: This keeps all page images in memory until saved.
+single PDF file, one page in memory at a time.
 
 **Image Output:**
 If rendering to images, the output format is guessed from the `<template>`
 extension (e.g., `.png`, `.jpg`). If no extension is given, PNG is used.
+
+**In a pipeline:**
+When a later stage follows (`render dpi=100 --- shrink target=5MB output
+out.pdf`), `render` hands it the rendered pages as an image-only PDF, and
+writes files only if `output <template>` is given.
 """
 
 _RENDER_EXAMPLES = [
@@ -69,51 +75,102 @@ _RENDER_EXAMPLES = [
         desc="Render odd pages into a single PDF document at 150 dpi",
         cmd="in.pdf render odd output rasterized.pdf",
     ),
+    HelpExample(
+        desc="Rasterise at 100 dpi, then shrink the result to at most 2 MB",
+        cmd="in.pdf render dpi=100 --- shrink target=2MB output out.pdf",
+    ),
 ]
 
 
-def _save_single_pdf(image_generator, filename: str, dpi: float) -> int:
-    """Helper to save all generated images into a single PDF in memory."""
-    images = [img for _, img in image_generator]
-    if not images:
-        return 0
+def _images_to_pdf(images, dest, dpi: float) -> int:
+    """Write rendered pages to one PDF at `dest` (a path or binary file); return the count.
 
+    Each page is encoded on its own and only its compressed form is kept, so
+    memory stays at one decoded page however many there are.
+    """
+    import io
+
+    import pikepdf
+
+    out = pikepdf.new()
+    sources = []  # page streams are copied lazily from these until the save
+    for image in images:
+        buf = io.BytesIO()
+        image.save(buf, "PDF", resolution=dpi)
+        sources.append(pikepdf.open(buf))
+        out.pages.extend(sources[-1].pages)
+    if sources:
+        out.save(dest)
+    return len(sources)
+
+
+def _save_single_pdf(image_generator, filename: str, dpi: float) -> int:
+    """Save all generated images into a single PDF."""
     try:
-        images[0].save(filename, "PDF", resolution=dpi, save_all=True, append_images=images[1:])
-        return len(images)
+        return _images_to_pdf((img for _, img in image_generator), filename, dpi)
     except (OSError, ValueError) as exc:
         raise InvalidArgumentError(f"Failed to render single PDF. Details: {exc}") from exc
 
 
-def _save_multiple_images(image_generator, png_compression=9) -> int:
-    """Helper to save generated images to individual files."""
+def _save_image(filename: str, image, png_compression: int) -> None:
     from PIL import Image
 
-    logger.debug("png_compression=%s", png_compression)
     Image.init()
+    _, extension = os.path.splitext(filename)
+    fmt = "PNG" if not extension else extension.lstrip(".").upper()
+    if fmt == "JPG":
+        fmt = "JPEG"
+
+    save_kw_args = {"format": fmt}
+    if fmt == "PNG":
+        save_kw_args.update({"compress_level": png_compression})
+
+    try:
+        if fmt not in Image.SAVE:
+            raise ValueError(
+                f"Unsupported image format: {fmt}. Choose from {list(Image.SAVE.keys())}"
+            )
+        image.save(filename, **save_kw_args)
+    except ValueError as exc:
+        raise InvalidArgumentError(f"Invalid render output template. Details:\n  {exc}") from exc
+
+
+def _save_multiple_images(image_generator, png_compression=9) -> int:
+    """Helper to save generated images to individual files."""
+    logger.debug("png_compression=%s", png_compression)
     count = 0
     for filename, image in image_generator:
-        _, extension = os.path.splitext(filename)
-        fmt = "PNG" if not extension else extension.lstrip(".").upper()
-        if fmt == "JPG":
-            fmt = "JPEG"
-
-        save_kw_args = {"format": fmt}
-        if fmt == "PNG":
-            save_kw_args.update({"compress_level": png_compression})
-
-        try:
-            if fmt not in Image.SAVE:
-                raise ValueError(
-                    f"Unsupported image format: {fmt}. Choose from {list(Image.SAVE.keys())}"
-                )
-            image.save(filename, **save_kw_args)
-        except ValueError as exc:
-            raise InvalidArgumentError(
-                f"Invalid render output template. Details:\n  {exc}"
-            ) from exc
+        _save_image(filename, image, png_compression)
         count += 1
     return count
+
+
+def _is_single_pdf(pattern: str) -> bool:
+    return pattern.lower().endswith(".pdf") and "%" not in pattern
+
+
+def _pipeline_pdf(image_generator, pattern: str | None, dpi: float, png_compression: int):
+    """The rendered pages as one PDF for the next stage, also written to `pattern` if given."""
+    import io
+
+    import pikepdf
+
+    def images():
+        for filename, image in image_generator:
+            if pattern and not _is_single_pdf(pattern):
+                _save_image(filename, image, png_compression)
+            yield image
+
+    buf = io.BytesIO()
+    try:
+        _images_to_pdf(images(), buf, dpi)
+    except (OSError, ValueError) as exc:
+        raise InvalidArgumentError(f"Failed to render single PDF. Details: {exc}") from exc
+    if pattern and _is_single_pdf(pattern):
+        with open(pattern, "wb") as f:
+            f.write(buf.getvalue())
+    buf.seek(0)
+    return pikepdf.open(buf)
 
 
 def render_cli_hook(result: OpResult, stage, _pipeline):
@@ -132,9 +189,7 @@ def render_cli_hook(result: OpResult, stage, _pipeline):
     dpi = meta.get("dpi", 150.0)
     png_compression = meta.get("png_compression", 9)
 
-    is_single_pdf = output_pattern.lower().endswith(".pdf") and "%" not in output_pattern
-
-    if is_single_pdf:
+    if _is_single_pdf(output_pattern):
         count = _save_single_pdf(image_generator, output_pattern, dpi)
         logger.info("Rendered %s pages into a single PDF: %s", count, output_pattern)
     else:
@@ -213,11 +268,9 @@ def render_api_serializer(data, meta):
     png_compression = meta.get("png_compression", 9)
 
     if fmt == "pdf":
-        images = [img for _, img in data]
-        if not images:
-            return b"", {"kind": "empty"}
         buf = _io.BytesIO()
-        images[0].save(buf, "PDF", resolution=dpi, save_all=True, append_images=images[1:])
+        if not _images_to_pdf((img for _, img in data), buf, dpi):
+            return b"", {"kind": "empty"}
         return buf.getvalue(), {"kind": "pdf"}
 
     pil_format, ext = _pil_format_and_ext(fmt)
@@ -249,13 +302,16 @@ def render_api_serializer(data, meta):
     args=(
         [c.INPUT_PDF, c.OPERATION_ARGS],
         {
-            "output_pattern": c.OUTPUT_PATTERN,
+            "output_pattern": c.OUTPUT,
+            "is_last_stage": c.IS_LAST_STAGE,
         },
     ),
     skip_pipeline_save=True,
 )
-def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
+def render_pdf(input_pdf, args, output_pattern=None, is_last_stage=True) -> OpResult:
     dpi, page_specs, png_compression, fmt = _parse_render_args(args)
+    explicit_pattern = output_pattern
+    output_pattern = output_pattern or _DEFAULT_PATTERN
 
     ensure_dependencies("render", ["pypdfium2", "PIL"], "render")
 
@@ -278,6 +334,12 @@ def render_pdf(input_pdf, args, output_pattern="page_%d.png") -> OpResult:
                 filename = output_pattern
 
             yield filename, image
+
+    if not is_last_stage:
+        rendered = _pipeline_pdf(_render_generator(), explicit_pattern, dpi, png_compression)
+        return OpResult(
+            success=True, pdf=rendered, summary=f"rendered {len(rendered.pages)} pages"
+        )
 
     return OpResult(
         success=True,

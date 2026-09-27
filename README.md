@@ -73,7 +73,7 @@ Some features also require system software such as `java`.
 * **Forms:** [`fill_form`](https://pdftl.readthedocs.io/en/latest/operations/fill_form.html), [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html), [`dump_data_fields`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_fields.html) and [`stamp_fields`](https://pdftl.readthedocs.io/en/latest/operations/stamp_fields.html).
 * **Annotations:** [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html), [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html), [`dump_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_annots.html), [`dump_data_annots`](https://pdftl.readthedocs.io/en/latest/operations/dump_data_annots.html), and [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html).
 * **Actions and scripts:** [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html) and [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html).
-* **Accessibility and structure:** [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html) for auto-tagging, and [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html) to inspect the structure tree.
+* **Accessibility and structure:** [`tag`](https://pdftl.readthedocs.io/en/latest/operations/tag.html) for auto-tagging, [`dump_tags`](https://pdftl.readthedocs.io/en/latest/operations/dump_tags.html) to inspect the structure tree, and [`delete_tags`](https://pdftl.readthedocs.io/en/latest/operations/delete_tags.html) to remove it.
 
 ### Security
 
@@ -217,11 +217,13 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`cat`](https://pdftl.readthedocs.io/en/latest/operations/cat.html)                                     | Concatenate pages from input PDFs into a new PDF                |
 | [`chop`](https://pdftl.readthedocs.io/en/latest/operations/chop.html)                                   | Chop pages into multiple smaller pieces                         |
 | [`clip`](https://pdftl.readthedocs.io/en/latest/operations/clip.html)                                   | Clip page content to a rectangle                                |
+| [`compact_content`](https://pdftl.readthedocs.io/en/latest/operations/compact_content.html)             | Rewrite content streams in their shortest equivalent form       |
 | [`create`](https://pdftl.readthedocs.io/en/latest/operations/create.html)                               | Create a new PDF                                                |
 | [`crop`](https://pdftl.readthedocs.io/en/latest/operations/crop.html)                                   | Crop pages to a rectangle                                       |
 | [`deduplicate_fonts`](https://pdftl.readthedocs.io/en/latest/operations/deduplicate_fonts.html)         | Merge duplicate fonts into a single shared copy                 |
 | [`deduplicate_icc_profiles`](https://pdftl.readthedocs.io/en/latest/operations/deduplicate_icc_profiles.html) | Merge duplicate embedded ICC color profiles into a single shared copy |
 | [`deduplicate_images`](https://pdftl.readthedocs.io/en/latest/operations/deduplicate_images.html)       | Merge duplicate image XObjects into a single shared copy        |
+| [`deduplicate_xobjects`](https://pdftl.readthedocs.io/en/latest/operations/deduplicate_xobjects.html)   | Merge duplicate drawn Form XObjects into a single shared copy   |
 | [`delete`](https://pdftl.readthedocs.io/en/latest/operations/delete.html)                               | Delete pages from an input PDF                                  |
 | [`delete_actions`](https://pdftl.readthedocs.io/en/latest/operations/delete_actions.html)               | Delete action info                                              |
 | [`delete_annots`](https://pdftl.readthedocs.io/en/latest/operations/delete_annots.html)                 | Delete annotation info                                          |
@@ -229,6 +231,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`delete_blank`](https://pdftl.readthedocs.io/en/latest/operations/delete_blank.html)                   | Delete blank or near-blank pages                                |
 | [`delete_bookmarks`](https://pdftl.readthedocs.io/en/latest/operations/delete_bookmarks.html)           | Delete bookmarks                                                |
 | [`delete_images`](https://pdftl.readthedocs.io/en/latest/operations/delete_images.html)                 | Delete images                                                   |
+| [`delete_tags`](https://pdftl.readthedocs.io/en/latest/operations/delete_tags.html)                     | Delete the structure tree (tags)                                |
 | [`deskew`](https://pdftl.readthedocs.io/en/latest/operations/deskew.html)                               | Automatically detect and correct document skew                  |
 | [`diff_text`](https://pdftl.readthedocs.io/en/latest/operations/diff_text.html)                         | Diff the text content of two PDFs and output bounding boxes     |
 | [`dump_actions`](https://pdftl.readthedocs.io/en/latest/operations/dump_actions.html)                   | Dump action info                                                |
@@ -266,17 +269,20 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`inject`](https://pdftl.readthedocs.io/en/latest/operations/inject.html)                               | Inject code at start or end of page content streams             |
 | [`insert`](https://pdftl.readthedocs.io/en/latest/operations/insert.html)                               | Insert blank pages                                              |
 | [`link_urls`](https://pdftl.readthedocs.io/en/latest/operations/link_urls.html)                         | Auto-create links from URLs/emails found in page text           |
+| [`merge_font_subsets`](https://pdftl.readthedocs.io/en/latest/operations/merge_font_subsets.html)       | Merge embedded subsets of the same font into one                |
 | [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |
 | [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html)                 | Apply in-place image pixel modifications and effects            |
 | [`modify_layer_configs`](https://pdftl.readthedocs.io/en/latest/operations/modify_layer_configs.html)   | Add, update, delete or promote named layer configurations       |
 | [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html)                 | Merge or strip specific layers                                  |
 | [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html)                             | Impose pages onto a grid layout                                 |
 | [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html)                                   | Move pages to a new location                                    |
+| [`mrc_compress`](https://pdftl.readthedocs.io/en/latest/operations/mrc_compress.html)                   | Separate scanned pages into MRC (text/foreground/background) layers |
 | [`multibackground`](https://pdftl.readthedocs.io/en/latest/operations/multibackground.html)             | Use multiple pages as backgrounds                               |
 | [`multistamp`](https://pdftl.readthedocs.io/en/latest/operations/multistamp.html)                       | Stamp multiple pages onto an input PDF                          |
 | [`mutate_content`](https://pdftl.readthedocs.io/en/latest/operations/mutate_content.html)               | Mutate page content streams using a user-supplied Python script |
 | [`normalize`](https://pdftl.readthedocs.io/en/latest/operations/normalize.html)                         | Reformat page content streams                                   |
 | [`optimize_images`](https://pdftl.readthedocs.io/en/latest/operations/optimize_images.html)             | Optimize images                                                 |
+| [`photos_to_jpeg`](https://pdftl.readthedocs.io/en/latest/operations/photos_to_jpeg.html)               | Re-encode losslessly stored photographs as JPEG                 |
 | [`place`](https://pdftl.readthedocs.io/en/latest/operations/place.html)                                 | Shift, scale, and spin page content                             |
 | [`redact`](https://pdftl.readthedocs.io/en/latest/operations/redact.html)                               | Find and destroy text matching a pattern, optionally boxing it out |
 | [`render`](https://pdftl.readthedocs.io/en/latest/operations/render.html)                               | Render PDF pages as images                                      |
@@ -285,6 +291,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`replace`](https://pdftl.readthedocs.io/en/latest/operations/replace.html)                             | Regex replacement on page content streams                       |
 | [`resample_images`](https://pdftl.readthedocs.io/en/latest/operations/resample_images.html)             | Resample images                                                 |
 | [`rotate`](https://pdftl.readthedocs.io/en/latest/operations/rotate.html)                               | Rotate pages in a PDF                                           |
+| [`round_text_positions`](https://pdftl.readthedocs.io/en/latest/operations/round_text_positions.html)   | Shorten text positioning numbers, moving no glyph more than a tolerance |
 | [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.html)                               | Start the pdftl API server                                      |
 | [`set`](https://pdftl.readthedocs.io/en/latest/operations/set.html)                                     | Set document properties, viewer preferences, and page labels    |
 | [`shrink`](https://pdftl.readthedocs.io/en/latest/operations/shrink.html)                               | Make a PDF smaller, losslessly or at a chosen quality level     |

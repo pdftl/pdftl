@@ -56,8 +56,9 @@ category comes first in the report order above.
 
 ### Notes
 
-If `usage` runs after earlier pipeline operations that modified the document
-in memory, it analyzes a fresh save of the modified PDF state.
+After earlier pipeline stages, `usage` analyzes the document as `output`
+would save it, including save options those stages leave (such as
+`shrink`'s `recompress`).
 """
 
 _USAGE_EXAMPLES = [
@@ -85,13 +86,17 @@ def _get_pdf_source_bytes_and_pdf(
 
     If `pdf` has been modified by earlier pipeline stages, or if there is no real
     file on disk (e.g. stdin `_`), save `pdf` to an in-memory buffer and reopen it
-    so that `pdf.get_xref_table()` offsets match `source_bytes` exactly.
+    so that `pdf.get_xref_table()` offsets match `source_bytes` exactly. The save
+    applies what earlier stages left for saving (e.g. shrink's recompress), so
+    the sizes are those of the file an `output` would write.
     """
     import pikepdf
 
+    from pdftl.output.save import save_pdf
+
     if not pdf_filename or pdf_filename == "_":
         buf = io.BytesIO()
-        pdf.save(buf)
+        save_pdf(pdf, buf, input_context=None)
         source_bytes = buf.getvalue()
         refreshed_pdf = pikepdf.open(io.BytesIO(source_bytes))
         return source_bytes, refreshed_pdf

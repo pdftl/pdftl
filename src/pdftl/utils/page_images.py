@@ -111,8 +111,12 @@ def iter_pages_as_pil(pdf, dpi: float, page_indices: list[int] | None = None):
 
         for i in iterator:
             page = ui_pdf[i]
-            bitmap = page.render(scale=scale)
-            del page
+            try:
+                bitmap = page.render(scale=scale)
+            finally:
+                # Explicit: a page is freed only by the cyclic GC, and each
+                # open page keeps its decoded images cached.
+                page.close()
             pil_img = bitmap.to_pil()
             del bitmap
             yield i, pil_img

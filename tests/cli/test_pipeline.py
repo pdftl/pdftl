@@ -329,7 +329,9 @@ def test_pipeline_run_dummy_op(monkeypatch):
     monkeypatch.setattr(
         PipelineManager,
         "_run_operation",
-        lambda self, stage, _opened_pdfs, effective_inputs=None, adjusted_handles=None: DummyPdf(),
+        lambda self, stage, _opened_pdfs, effective_inputs=None, adjusted_handles=None, **_: (
+            DummyPdf()
+        ),
     )
     with patch("pdftl.cli.pipeline.save_content") as save_mock:
         manager.run()
@@ -1438,7 +1440,9 @@ class TestGeneratorDataResultUnpacking:
 
         generator_holder = {}
 
-        def fake_run_operation(self_stage, opened, effective_inputs=None, adjusted_handles=None):
+        def fake_run_operation(
+            self_stage, opened, effective_inputs=None, adjusted_handles=None, is_last=True
+        ):
             g = gen()
             generator_holder["gen"] = g
             return OpResult(success=True, pdf=None, data=g)
@@ -1491,3 +1495,22 @@ def test_get_subpipeline_output_pdf_handle_branch_skips(monkeypatch):
         opened_pdfs=[],
     )
     assert res is not None
+
+
+@pytest.mark.parametrize("i,expected", [(0, False), (1, True)])
+def test_operations_are_told_whether_a_later_stage_takes_their_result(i, expected):
+    seen = []
+    original = dict(registry.operations["single_op"])
+    try:
+        registry.operations["single_op"]["args"] = ([], {"last": c.IS_LAST_STAGE})
+        registry.operations["single_op"]["function"] = lambda last: seen.append(last)
+        stages = [
+            CliStage(operation="single_op", inputs=["a.pdf"]),
+            CliStage(operation="single_op"),
+        ]
+        manager = PipelineManager(stages=stages, input_context=MagicMock())
+        manager._open_input_pdfs = MagicMock(return_value=([], ["a.pdf"], {}))
+        manager._validate_and_execute_numbered_stage(i, stages[i])
+    finally:
+        registry.operations["single_op"] = original
+    assert seen == [expected]

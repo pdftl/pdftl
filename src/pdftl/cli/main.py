@@ -72,6 +72,8 @@ def _setup_logging(cli_args):
         # silence fontTools noisy WARNING logging
         logging.getLogger("fontTools.ttLib").setLevel(logging.ERROR)
         logging.getLogger("fontTools.subset").setLevel(logging.ERROR)
+        # ocrmypdf's PNG write-back: it keeps only the colour data, never img2pdf's SMask.
+        logging.getLogger("img2pdf").setLevel(logging.ERROR)
 
 
 def main(argv=None):
@@ -137,6 +139,16 @@ def main(argv=None):
 
     except (UserCommandLineError, PackageError, OperationError, PdftlOutputError) as e:
         return _handle_error_from_main(e, "debug" in found_flags)
+
+    except MemoryError:
+        if "debug" in found_flags:
+            raise
+        print(
+            f"[{WHOAMI}] Error: out of memory. Try threads=1, or lower "
+            "PDFTL_IMAGE_MEMORY_MB or PDFTL_MAX_DECODED_MB (megabytes).",
+            file=sys.stderr,
+        )
+        return 1
 
 
 def _validate_inputs_exist(pipeline):

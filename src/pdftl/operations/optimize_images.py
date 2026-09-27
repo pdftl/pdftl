@@ -33,7 +33,8 @@ _JBIG2_GROUP_SIZE_ALL = object()  # sentinel
 
 _OPTIMIZE_IMAGES_LONG_DESC_MD = f"""
 
-The operation **optimize_images** optimizes images in a PDF file.
+The operation **optimize_images** optimizes images in a PDF file. An image is
+replaced only if that makes it smaller.
 
 > **Note:** This feature requires `ocrmypdf` to be installed.
 
@@ -149,9 +150,12 @@ _COMPATIBILITY_INFO = Compatibility(
     args=([c.INPUT_PDF, c.OPERATION_ARGS, c.OUTPUT], {}),
     compatibility=_COMPATIBILITY_INFO,
 )
-def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpResult:
+def optimize_images_pdf(
+    pdf, operation_args: list, output_filename: str, keep_faithful: bool = False
+) -> OpResult:
     """
-    Optimize images in the given PDF.
+    Optimize images in the given PDF; with `keep_faithful`, undo any image
+    re-encoding whose pixels are not faithful to the original's.
     """
     # pylint: disable=import-outside-toplevel
 
@@ -160,19 +164,7 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
         logging.getLogger("ocrmypdf.optimize").setLevel(logging.DEBUG)
 
     try:
-        from ocrmypdf.optimize import DEFAULT_EXECUTOR  # FLATE_JPEG_THRESHOLD,
-        from ocrmypdf.optimize import (
-            DEFAULT_JPEG_QUALITY,
-            DEFAULT_PNG_QUALITY,
-            convert_to_jbig2,
-            deflate_jpegs,
-            extract_images_generic,
-            extract_images_jbig2,
-            png_name,
-            transcode_jpegs,
-            transcode_pngs,
-        )
-        from ocrmypdf.exceptions import MissingDependencyError, SubprocessOutputError
+        from ocrmypdf.optimize import DEFAULT_JPEG_QUALITY, DEFAULT_PNG_QUALITY, png_name
     except ImportError as exc:
         raise PackageError(
             "Loading OCRmyPDF failed.\n pip install pdftl.[optimize-images] to fix this."
@@ -226,16 +218,57 @@ def optimize_images_pdf(pdf, operation_args: list, output_filename: str) -> OpRe
         jb2lossy=jbig2_lossy,
         jbig2_group_size=jbig2_group_size,
     )
+
+    from pdftl.operations.helpers.image_guard import (
+        normalize_inverted_bitonal,
+        restore_unless_smaller,
+        snapshot_images,
+    )
+
+    snapshot = snapshot_images(pdf)
+    normalize_inverted_bitonal(pdf)
+    try:
+        _run_ocrmypdf_optimizer(pdf, options, png_name)
+    finally:
+        restore_unless_smaller(pdf, snapshot, keep_faithful)  # no image may grow
+    if keep_faithful and options.optimize >= 2:
+        # a restored image lost the lossless steps too
+        lossless = OptimizeOptions(jobs, 1, jpeg_quality, png_quality, False, jbig2_group_size)
+        snapshot = snapshot_images(pdf)
+        try:
+            _run_ocrmypdf_optimizer(pdf, lossless, png_name)
+        finally:
+            restore_unless_smaller(pdf, snapshot)
+    return OpResult(success=True, pdf=pdf)
+
+
+def _run_ocrmypdf_optimizer(pdf, options, png_name) -> None:
     from pathlib import Path
+
+    from ocrmypdf.exceptions import MissingDependencyError, SubprocessOutputError
+    from ocrmypdf.optimize import (
+        DEFAULT_EXECUTOR,
+        convert_to_jbig2,
+        deflate_jpegs,
+        extract_images_generic,
+        extract_images_jbig2,
+        transcode_jpegs,
+        transcode_pngs,
+    )
 
     with tempfile.TemporaryDirectory(prefix="pdftl_opt_img_") as tmp_dir:
         root = Path(tmp_dir)
         executor = DEFAULT_EXECUTOR
+        # At level 1 ocrmypdf still re-encodes JPEGs when Ghostscript >= 10.6 is
+        # installed, and extracts PNGs it never uses: only lossy levels transcode.
+        lossy = options.optimize >= 2
         try:
-            jpegs, pngs = extract_images_generic(pdf, root, options)
-            transcode_jpegs(pdf, jpegs, root, options, executor)
+            if lossy:
+                jpegs, pngs = extract_images_generic(pdf, root, options)
+                transcode_jpegs(pdf, jpegs, root, options, executor)
             deflate_jpegs(pdf, root, options, executor)
-            transcode_pngs(pdf, pngs, png_name, root, options, executor)
+            if lossy:
+                transcode_pngs(pdf, pngs, png_name, root, options, executor)
 
             jbig2_groups = extract_images_jbig2(pdf, root, options)
             convert_to_jbig2(pdf, jbig2_groups, root, options, executor)
@@ -254,46 +287,44 @@ def _raise_for_invalid_keyword(arg):
     raise InvalidArgumentError(f"Unrecognized keyword given for 'optimize' operation: '{arg}'")
 
 
-def _parse_args_to_options(operation_args):
-    # defaults
-    optimize = 2  # medium optimization by default
-    jpeg_quality = 0
-    png_quality = 0
-    jbig2_lossy = False
-    jobs = 0
-    jbig2_group_size = None
+_KEYWORD_OPTIONS = {
+    **dict.fromkeys(("low", "lossless", "safe"), {"optimize": 1}),
+    **dict.fromkeys(("medium", "lossy_medium"), {"optimize": 2}),
+    **dict.fromkeys(("high", "aggressive", "lossy_high"), {"optimize": 3}),
+    **dict.fromkeys(("jbig2_lossy", "jb2lossy", "jb2_lossy"), {"jbig2_lossy": True}),
+    **dict.fromkeys(("all", "full", "lossy_full"), {"jbig2_lossy": True, "optimize": 3}),
+}
+# key= name -> the options it sets (_parse_keyval_option accepts no others)
+_KEYVAL_OPTIONS = {
+    "jpeg_quality": ("jpeg_quality",),
+    "jpg_quality": ("jpeg_quality",),
+    "png_quality": ("png_quality",),
+    "quality": ("jpeg_quality", "png_quality"),
+    "jobs": ("jobs",),
+    "jbig2_group_size": ("jbig2_group_size",),
+}
 
+
+def _parse_args_to_options(operation_args):
+    opts = {
+        "optimize": 2,  # medium optimization by default
+        "jpeg_quality": 0,
+        "png_quality": 0,
+        "jbig2_lossy": False,
+        "jobs": 0,
+        "jbig2_group_size": None,
+    }
     for arg in operation_args:
         clean_arg = arg.strip().lower()
-        if clean_arg in ("low", "lossless", "safe"):
-            optimize = 1
-        elif clean_arg in ("medium", "lossy_medium"):
-            optimize = 2
-        elif clean_arg in ("high", "aggressive", "lossy_high"):
-            optimize = 3
-        elif clean_arg in ("jbig2_lossy", "jb2lossy", "jb2_lossy"):
-            jbig2_lossy = True
-        elif clean_arg in ("all", "full", "lossy_full"):
-            jbig2_lossy = True
-            optimize = 3
+        if clean_arg in _KEYWORD_OPTIONS:
+            opts.update(_KEYWORD_OPTIONS[clean_arg])
         elif "=" in clean_arg:
-            # next method raises on invalid keyval arguments
-            var, val = _parse_keyval_option(clean_arg, arg)
-            if var in ("jpeg_quality", "jpg_quality"):
-                jpeg_quality = val
-            elif var == "png_quality":
-                png_quality = val
-            elif var == "quality":
-                jpeg_quality = val
-                png_quality = val
-            elif var == "jobs":
-                jobs = val
-            else:  # jbig2_group_size (only other key _parse_keyval_option returns)
-                jbig2_group_size = val
+            var, val = _parse_keyval_option(clean_arg, arg)  # raises on invalid keys/values
+            opts.update(dict.fromkeys(_KEYVAL_OPTIONS[var], val))
         else:
             _raise_for_invalid_keyword(arg)
-
-    return optimize, jpeg_quality, png_quality, jbig2_lossy, jobs, jbig2_group_size
+    keys = ("optimize", "jpeg_quality", "png_quality", "jbig2_lossy", "jobs", "jbig2_group_size")
+    return tuple(opts[k] for k in keys)
 
 
 def _parse_keyval_option(clean_arg, original_arg):

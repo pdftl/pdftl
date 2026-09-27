@@ -16,13 +16,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `resample_images` now takes `mono_dpi=<n>` and `threshold=<x>`
 
-- `shrink` operation: makes a PDF smaller in one step, at `lossless` (default), `balanced` or
-  `max` level, by running font subsetting, deduplication, image resampling and optimisation,
-  and vector simplification in a benchmarked order, then saving with `prune_resources` and
-  `recompress`
+- `shrink` operation: makes a PDF smaller in one step, at `lossless` (default), `balanced`,
+  `strong` or `extreme`, running pdftl's size-reduction passes in a benchmarked order;
+  `target=<size>` picks the least lossy settings that fit
 
-- `recompress` output option: recompresses every Flate stream at maximum zlib level (lossless,
-  typically a few percent smaller; existing Flate streams are otherwise copied as they are)
+- `delete_tags` operation: deletes the structure tree (tags); pages look the same, but the file
+  is no longer accessible
+
+- `compact_content` operation: rewrites content streams in their shortest equivalent form
+
+- `merge_font_subsets` operation: merges the per-page subsets of one TrueType font into one font
+
+- `deduplicate_xobjects` operation: merges identical Form XObjects and link appearances
+
+- `round_text_positions` operation: writes text positions with fewer digits, moving no glyph
+  more than a tolerance
+
+- `photos_to_jpeg` operation: re-encodes losslessly stored photographs as JPEG
+
+- `mrc_compress` operation: splits scanned pages into a 1-bit text layer over low-resolution
+  colour layers (needs the `mrc-compress` extra)
+
+- `recompress`, `compress_xmp`, `drop_thumbnails` and `deflate zopfli` output options:
+  recompress streams at maximum level, compress XMP metadata, drop page thumbnails, use zopfli
+
+- `render` works in a pipeline, handing a later stage an image-only PDF
+
+- `PDFTL_PROFILE_MEMORY=<stage>|all` writes a memory profile of a CLI stage, and stages using
+  more than `PDFTL_MEMORY_THRESHOLD` MB say so
 
 ### Security
 
@@ -59,9 +80,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a merged layer become permanent, and layered content in appearance streams is
   stripped or merged like page content
 
+- `render` with no `output` writes `page_1.png`, `page_2.png`, ... as documented
+
+- `optimize_images` never makes an image bigger, also optimises inverted bitonal images, and at
+  `low` no longer re-encodes JPEGs
+
+- `resample_images`, `recolor_images`, `modify_images` and `render` bound the memory they use,
+  and running out of memory prints an error, not a traceback
+
+- `simplify_vectors` leaves alone a content stream it cannot fully parse, instead of dropping
+  the unreadable parts
+
 - `excise` and `redact` no longer move surviving text: tidying the rewritten content stream
   dropped the line spacing a removed line's `TD` had set, moved `T*` ahead of a `Tm`, and treated
   a `Tz` restored by `Q` (or inherited by a Form XObject) as redundant
+
+- `excise` and `redact` keep a colour or font set just before a `Q` with no matching `q`
 
 - `simplify_vectors` no longer makes a content stream bigger (it keeps the original when the
   simplified one would not compress smaller), uses less memory, and skips content streams over
@@ -69,7 +103,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `subset_fonts` no longer changes how small text renders: it keeps the font's original
   font-wide bounding box (a recomputed, tighter one altered Poppler's rendering below about
-  150 dpi) and its embedded bitmap strikes
+  150 dpi)
+
+- `subset_fonts` keeps only the glyphs a PDF draws, and drops font tables PDF renderers never
+  read (Office documents' fonts come out about half the size)
 
 - `uncompress` now really stores streams uncompressed: streams that were already
   Flate-compressed in the input used to be copied still compressed

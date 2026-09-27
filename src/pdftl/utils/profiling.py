@@ -6,7 +6,8 @@
 
 """
 Performance profiling utilities for pdftl CLI stages.
-Provides zero-overhead threshold monitoring and targeted cProfile execution.
+Provides near-zero-overhead time and memory monitoring, and targeted
+cProfile (time) and tracemalloc (memory) profiling.
 """
 
 import os
@@ -17,7 +18,18 @@ from pathlib import Path
 
 import logging
 
+from pdftl.utils.memory_profiling import StageMemoryWatch, is_targeted
+
 logger = logging.getLogger(__name__)
+
+
+def report_base(stage_name: str, suffix: str = "") -> Path:
+    """Base path (no extension) for a stage's report, creating pdftl_profiles/."""
+    profile_dir = Path("pdftl_profiles")
+    profile_dir.mkdir(exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H%M%S")
+    tail = f"_{suffix}" if suffix else ""
+    return profile_dir / f"{stage_name}_{timestamp}{tail}"
 
 
 class CliStageProfiler:
@@ -25,8 +37,8 @@ class CliStageProfiler:
     A context manager that profiles a specific pipeline stage.
 
     Operates in two modes:
-    1. Passive Monitoring: Tracks execution time with zero overhead.
-    2. Active Profiling: Targeted via PDFTL_PROFILE_STAGES.
+    1. Passive Monitoring: execution time and peak memory, at near-zero cost.
+    2. Active Profiling: time via PDFTL_PROFILE_STAGES, memory via PDFTL_PROFILE_MEMORY.
     """
 
     def __init__(self, stage_name: str, stage_args: list[str]):
@@ -35,10 +47,12 @@ class CliStageProfiler:
         self.threshold = float(os.environ.get("PDFTL_SLOW_THRESHOLD", "0.5"))
         self.profiler = None
         self.start_time = None
+        self.memory = StageMemoryWatch(stage_name, stage_args)
 
         self._initialize_profiler(os.environ.get("PDFTL_PROFILE_STAGES", ""))
 
     def __enter__(self):
+        self.memory.__enter__()
         self.start_time = time.perf_counter()
         if self.profiler:
             logger.debug("Enabling profiler")
@@ -47,6 +61,7 @@ class CliStageProfiler:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         elapsed = time.perf_counter() - self.start_time
+        self.memory.__exit__(exc_type, exc_val, exc_tb)
         logger.debug("Profiler: elapsed=%s, threshold=%s", elapsed, self.threshold)
         # fast path exit: zero-overhead return if no breach and not profiling
         if not self.profiler and elapsed <= self.threshold:
@@ -72,13 +87,7 @@ class CliStageProfiler:
 
     def _is_targeted(self, profile_targets: str) -> bool:
         """Checks if the current stage is flagged for active profiling."""
-        if not profile_targets:
-            return False
-        if profile_targets.lower() in ("all", "1", "true"):
-            return True
-
-        targets = {t.strip() for t in profile_targets.split(",")}
-        return self.stage_name in targets
+        return is_targeted(self.stage_name, profile_targets)
 
     def _process_breach(self, elapsed: float) -> None:
         """Writes diagnostic dumps for a profiled stage; only called with an active profiler."""
@@ -96,10 +105,7 @@ class CliStageProfiler:
 
     def _prepare_output_dir(self) -> Path:
         """Creates the diagnostic output directory and returns the base filename."""
-        profile_dir = Path("pdftl_profiles")
-        profile_dir.mkdir(exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H%M%S")
-        return profile_dir / f"{self.stage_name}_{timestamp}"
+        return report_base(self.stage_name)
 
     def _generate_reports(self, base_filename: Path, elapsed: float) -> None:
         """Coordinates writing the text reports and binary profile dumps."""

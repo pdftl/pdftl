@@ -490,3 +490,23 @@ def test_images_with_different_smasks_are_not_equivalent(pdf):
 # becoming a reference wrapper after replaceObject() moves the
 # underlying object). pikepdf's object model doesn't expose this
 # reference/replace mechanism the same way, so there's no direct port.
+
+
+# --- the same indirect object is equivalent to itself at any depth ---------
+
+
+def test_same_indirect_object_is_equivalent_without_spending_depth(pdf):
+    deep = pdf.make_indirect(Dictionary(A=Array([Array([Array([1])])])))
+    assert ceq(deep, deep, depth=0)
+    assert ceq(Dictionary(X=deep), Dictionary(X=deep), depth=1)
+    copy = pdf.make_indirect(Dictionary(A=Array([Array([Array([1])])])))
+    assert not ceq(deep, copy, depth=0)  # a distinct copy is compared structurally
+    assert ceq(deep, copy, depth=5)
+
+
+def test_same_object_number_in_another_pdf_is_not_the_same_object(pdf):
+    other = pikepdf.Pdf.new()
+    mine = pdf.make_indirect(Dictionary(A=1))
+    theirs = other.make_indirect(Dictionary(A=2))
+    assert mine.objgen == theirs.objgen
+    assert not ceq(mine, theirs)

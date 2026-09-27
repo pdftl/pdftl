@@ -292,9 +292,10 @@ class _TfDeadStoreTracker:
         self.out.append((operands, op))
 
     def handle_q_close(self, operands: list[Any], op: str) -> None:
-        if self.pending_tf_index is not None:
-            del self.out[self.pending_tf_index]  # dead: block closed, Q reverts it unused
-        self.pending_tf_index = self.q_stack.pop() if self.q_stack else None
+        if self.q_stack:
+            if self.pending_tf_index is not None:
+                del self.out[self.pending_tf_index]  # dead: block closed, Q reverts it unused
+            self.pending_tf_index = self.q_stack.pop()
         self.out.append((operands, op))
 
     def handle_barrier(self, operands: list[Any], op: str) -> None:
@@ -337,8 +338,8 @@ def _drop_dead_tf(
     before the matching Q is dead too, for the same reason (Q reverts
     it before it's ever used) -- so it's dropped right at `Q`, the same
     way a trailing pending Tf is dropped at end-of-stream. A stray `Q`
-    with no matching `q` (malformed input) degrades to restoring "no
-    pending Tf" rather than raising.
+    with no matching `q` restores nothing in a renderer, so it changes
+    nothing here either.
 
     See _TfDeadStoreTracker for the per-branch state; this function is
     just the dispatch loop over it.
@@ -467,9 +468,10 @@ class _StateStoreTracker:
         self.out.append((operands, op))
 
     def handle_q_close(self, operands: list[Any], op: str) -> None:
-        for family, idx in self.pending.items():
-            self._supersede(idx, family)  # Q reverts it unused
-        self.pending = self.q_stack.pop() if self.q_stack else {}
+        if self.q_stack:  # a stray Q restores nothing
+            for family, idx in self.pending.items():
+                self._supersede(idx, family)  # Q reverts it unused
+            self.pending = self.q_stack.pop()
         self.out.append((operands, op))
 
     def handle_family(self, operands: list[Any], op: str, families: tuple[str, ...]) -> None:

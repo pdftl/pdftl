@@ -358,6 +358,11 @@ class _StreamProcessor:
         except self._pikepdf.PdfError as exc:
             logger.warning("Failed to parse content stream %s: %s", stream_obj.objgen, exc)
             return
+        from pdftl.utils.compact_content import parsed_completely
+
+        if not parsed_completely(stream_obj.read_bytes(), instructions):
+            logger.debug("Content stream %s has unparseable parts; left alone", stream_obj.objgen)
+            return
 
         self._stats.streams_processed += 1
         operators_before = len(instructions)

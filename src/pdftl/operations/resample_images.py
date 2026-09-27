@@ -27,6 +27,7 @@ from pdftl.operations.helpers.image_processor import (
 )
 from pdftl.utils.images import extract_pdf_images
 from pdftl.utils.keyval_parser import parse_keyval_list
+from pdftl.utils.system_memory import IMAGE_MEMORY_HELP
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.pikepdf_compatibility_utils import (
     as_pil_image_compat,
@@ -114,6 +115,7 @@ Arguments:
 
 **Behavior and guarantees:**
 
+  * {memory}
   * Shared image XObjects are processed only once, even if they appear on
     multiple pages. This avoids repeatedly recompressing the same PDF object.
   * Embedded ICC color profiles are preserved whenever the image colorspace
@@ -636,7 +638,7 @@ def _resample_inline_images(
     tags=["in_place", "images", "optimization"],
     type="single input operation",
     desc="Resample images",
-    long_desc=_RESAMPLE_IMAGES_LONG_DESC,
+    long_desc=_RESAMPLE_IMAGES_LONG_DESC.replace("{memory}", IMAGE_MEMORY_HELP),
     usage="<input> resample_images [<spec>...] [key=val...] output <output>",
     examples=_RESAMPLE_IMAGES_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),

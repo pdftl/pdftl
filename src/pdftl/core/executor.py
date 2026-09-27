@@ -62,6 +62,7 @@ def _resolve_arguments(arg_style, context):
         c.OVERLAY_PDF: None,
         c.OUTPUT: None,
         c.OUTPUT_PATTERN: "pg_%04d.pdf",
+        c.IS_LAST_STAGE: True,
         c.GET_INPUT: None,
         c.ON_TOP: False,
         c.MULTI: False,

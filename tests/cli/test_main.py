@@ -355,6 +355,27 @@ def test_main_operation_error_exit_code(mocker, capfd):
     assert "Something went wrong during processing" in output
 
 
+@pytest.mark.parametrize("flags", [set(), {"debug"}])
+def test_main_out_of_memory(mocker, capfd, flags):
+    mocker.patch.object(sys, "argv", ["pdftl", "input.pdf", "resample_images"])
+    mocker.patch("pdftl.cli.main.initialize_registry")
+    mocker.patch("pdftl.cli.main._handle_special_flags", return_value=None)
+    mocker.patch("pdftl.cli.main._get_flags_and_setup_logging", return_value=(flags, ["args"]))
+    mocker.patch("pdftl.cli.main._validate_inputs_exist")
+    pipeline = mocker.Mock()
+    pipeline.run.side_effect = MemoryError
+    mocker.patch("pdftl.cli.main._prepare_pipeline_from_remaining_args", return_value=pipeline)
+
+    if flags:
+        with pytest.raises(MemoryError):
+            cli_main()
+        return
+    assert cli_main() == 1
+    err = capfd.readouterr().err
+    assert "Error: out of memory" in err
+    assert "Traceback" not in err
+
+
 def test_cli_handles_completion_flag():
     # Test --completion without shell
     with patch("pdftl.cli.main.completion_setup") as mock_setup:
@@ -530,9 +551,9 @@ def test_main_logs_nested_argument_files(monkeypatch, caplog):
         mainmod,
         "expand_args",
         lambda args, expansions=None: (
-            expansions.extend(["parent.yml", "child.yml"]) if expansions is not None else None
-        )
-        or ["--help"],
+            (expansions.extend(["parent.yml", "child.yml"]) if expansions is not None else None)
+            or ["--help"]
+        ),
     )
     monkeypatch.setattr(mainmod, "_get_flags_and_setup_logging", lambda args: (set(), ["--help"]))
     monkeypatch.setattr(mainmod, "_handle_special_flags", lambda args: 0)

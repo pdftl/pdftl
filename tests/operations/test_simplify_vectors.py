@@ -503,3 +503,17 @@ def test_stream_processor_non_path_instructions_line_371():
     assert b"10 w" in updated_bytes
     assert b"Q" in updated_bytes
     assert stats.streams_processed == 1
+
+
+def test_stream_the_parser_would_truncate_is_left_alone():
+    import pikepdf
+
+    from pdftl.operations.simplify_vectors import simplify_vectors_in_content_streams
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    points = b" ".join(b"%d.%03d %d.%03d l" % (10 + i, i, 10 + i, i) for i in range(200))
+    content = b"10 10 m " + points + b" S\n1 2"  # dangling operands at the end
+    page.Contents = pdf.make_stream(content)
+    simplify_vectors_in_content_streams(pdf, [])
+    assert page.Contents.read_bytes() == content

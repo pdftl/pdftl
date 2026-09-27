@@ -380,3 +380,187 @@ def test_optimize_images_group_size_all_resolves_to_page_count(two_page_pdf, tmp
             )
 
     assert seen["jbig2_page_group_size"] == len(pdf.pages) == 2
+
+
+# --- no image may grow ---
+
+
+def test_clean_line_art_is_never_inflated_by_jbig2(tmp_path):
+    import zlib
+
+    import numpy as np
+    import pikepdf
+
+    pytest.importorskip("ocrmypdf")
+    ink = np.zeros((1200, 1600), dtype=bool)  # clean strokes: Flate beats JBIG2 here
+    for y in range(40, 1160, 30):
+        for x in range(40, 1560, 16):
+            ink[y : y + 16, x : x + 3 + (x * 7 + y) % 7] = True
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(612, 792))
+    img = pdf.make_stream(zlib.compress(np.packbits(~ink, axis=1).tobytes(), 9))
+    img.Type, img.Subtype = pikepdf.Name.XObject, pikepdf.Name.Image
+    img.Width, img.Height, img.BitsPerComponent = 1600, 1200, 1
+    img.ColorSpace, img.Filter = pikepdf.Name.DeviceGray, pikepdf.Name.FlateDecode
+    pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=img))
+    before = img.read_raw_bytes()
+
+    optimize_images_module.optimize_images_pdf(pdf, ["low"], str(tmp_path / "out.pdf"))
+
+    assert len(img.read_raw_bytes()) <= len(before)
+    assert img.read_raw_bytes() == before  # nothing smaller was found, so untouched
+
+
+def test_failing_optimizer_still_restores_images(tmp_path, monkeypatch):
+    import pikepdf
+
+    pytest.importorskip("ocrmypdf")
+    pdf = pikepdf.new()
+    img = pdf.make_stream(b"\x00" * 10, Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)
+
+    def break_it(pdf, *args):
+        img.write(b"\xff" * 50)  # grew, then the optimizer fails
+        raise RuntimeError("tool crashed")
+
+    monkeypatch.setattr(optimize_images_module, "_run_ocrmypdf_optimizer", break_it)
+    with pytest.raises(RuntimeError):
+        optimize_images_module.optimize_images_pdf(pdf, ["low"], str(tmp_path / "out.pdf"))
+    assert img.read_raw_bytes() == b"\x00" * 10
+
+
+def test_low_never_transcodes(two_page_pdf):
+    mock_lib = MagicMock()
+    mock_exceptions = types.ModuleType("exceptions")
+    mock_exceptions.MissingDependencyError = MockMissingDependencyError
+    mock_exceptions.SubprocessOutputError = MockSubprocessOutputError
+    modules = {
+        "ocrmypdf": MagicMock(),
+        "ocrmypdf.optimize": mock_lib,
+        "ocrmypdf.exceptions": mock_exceptions,
+    }
+    with patch.dict(sys.modules, modules):
+        import pikepdf
+
+        with pikepdf.open(two_page_pdf) as pdf:
+            optimize_images_module.optimize_images_pdf(pdf, ["low"], "out.pdf")
+    mock_lib.extract_images_generic.assert_not_called()
+    mock_lib.transcode_jpegs.assert_not_called()
+    mock_lib.transcode_pngs.assert_not_called()
+    mock_lib.deflate_jpegs.assert_called_once()
+    mock_lib.extract_images_jbig2.assert_called_once()
+
+
+def test_low_keeps_jpeg_data_even_with_new_ghostscript(tmp_path, monkeypatch):
+    # ocrmypdf re-encodes JPEGs at level 1 when it sees Ghostscript >= 10.6.
+    import io
+    import zlib
+
+    import numpy as np
+    import pikepdf
+    from PIL import Image
+
+    pytest.importorskip("ocrmypdf")
+    from ocrmypdf._exec import ghostscript
+    from packaging.version import Version
+
+    monkeypatch.setattr(ghostscript, "version", lambda: Version("10.6.0"))
+    rng = np.random.default_rng(0)
+    buf = io.BytesIO()
+    pixels = rng.integers(0, 256, (300, 400, 3), dtype=np.uint8)
+    Image.fromarray(pixels).save(buf, "JPEG", quality=95)
+    jpeg = buf.getvalue()
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    img = pdf.make_stream(jpeg, Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)
+    img.Width, img.Height, img.BitsPerComponent = 400, 300, 8
+    img.ColorSpace, img.Filter = pikepdf.Name.DeviceRGB, pikepdf.Name.DCTDecode
+    pdf.pages[0].Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Im0=img))
+    pdf.save(tmp_path / "in.pdf")  # ocrmypdf skips streams without /Length
+    pdf = pikepdf.open(tmp_path / "in.pdf")
+    img = pdf.pages[0].Resources.XObject.Im0
+
+    optimize_images_module.optimize_images_pdf(pdf, ["low"], str(tmp_path / "out.pdf"))
+
+    raw = img.read_raw_bytes()
+    filters = img.Filter if isinstance(img.Filter, pikepdf.Array) else [img.Filter]
+    if filters[0] == pikepdf.Name.FlateDecode:
+        raw = zlib.decompress(raw)
+    assert raw == jpeg
+
+
+def _raw_photo_pdf():
+    import numpy as np
+    import pikepdf
+    from PIL import Image
+
+    rng = np.random.default_rng(5)
+    coarse = rng.integers(0, 256, (6, 8, 3), dtype=np.uint8)
+    photo = Image.fromarray(coarse).resize((160, 120), Image.BICUBIC)
+    pdf = pikepdf.new()
+    img = pdf.make_stream(
+        photo.tobytes(),
+        Type=pikepdf.Name.XObject,
+        Subtype=pikepdf.Name.Image,
+        Width=160,
+        Height=120,
+        BitsPerComponent=8,
+        ColorSpace=pikepdf.Name.DeviceRGB,
+    )
+    return pdf, img, photo
+
+
+def _fake_optimizer(img, photo, levels):
+    import io
+    import zlib
+
+    import pikepdf
+
+    def run(pdf, options, png_name):
+        levels.append(options.optimize)
+        if options.optimize >= 2:  # a lossy re-encode that wrecks the image
+            buf = io.BytesIO()
+            photo.save(buf, format="JPEG", quality=1)
+            img.write(buf.getvalue(), filter=pikepdf.Name.DCTDecode)
+        else:  # a lossless one
+            img.write(zlib.compress(photo.tobytes(), 9), filter=pikepdf.Name.FlateDecode)
+
+    return run
+
+
+@pytest.mark.parametrize("keep_faithful", [True, False])
+def test_keep_faithful_undoes_damage_and_still_applies_lossless_gains(
+    tmp_path, monkeypatch, keep_faithful
+):
+    import pikepdf
+    from PIL import Image
+
+    pytest.importorskip("ocrmypdf")
+    pdf, img, photo = _raw_photo_pdf()
+    levels = []
+    monkeypatch.setattr(
+        optimize_images_module, "_run_ocrmypdf_optimizer", _fake_optimizer(img, photo, levels)
+    )
+    optimize_images_module.optimize_images_pdf(
+        pdf, ["medium"], str(tmp_path / "out.pdf"), keep_faithful=keep_faithful
+    )
+    if keep_faithful:
+        assert levels[0] >= 2 and levels[1:] == [1]
+        assert img.Filter == pikepdf.Name.FlateDecode
+        assert pikepdf.PdfImage(img).as_pil_image().tobytes() == photo.tobytes()
+    else:
+        assert len(levels) == 1
+        assert img.Filter == pikepdf.Name.DCTDecode
+        assert isinstance(pikepdf.PdfImage(img).as_pil_image(), Image.Image)
+
+
+def test_keep_faithful_at_low_runs_once(tmp_path, monkeypatch):
+    pytest.importorskip("ocrmypdf")
+    pdf, img, photo = _raw_photo_pdf()
+    levels = []
+    monkeypatch.setattr(
+        optimize_images_module, "_run_ocrmypdf_optimizer", _fake_optimizer(img, photo, levels)
+    )
+    optimize_images_module.optimize_images_pdf(
+        pdf, ["low"], str(tmp_path / "out.pdf"), keep_faithful=True
+    )
+    assert levels == [1]

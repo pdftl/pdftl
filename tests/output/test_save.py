@@ -511,6 +511,7 @@ def test_save_pdf_no_output_file(mock_pdf, mock_input_context):
 @patch("pdftl.output.save._build_save_options")
 def test_save_pdf_set_pdf_id(mock_build_save, mock_attach, mock_pdf, mock_input_context):
     """Tests the 'set_pdf_id' option."""
+    mock_build_save.return_value = {}
     pdf_id_val = b"some_id"
     save_pdf(mock_pdf, "out.pdf", mock_input_context, set_pdf_id=pdf_id_val)
 
@@ -526,6 +527,7 @@ def test_save_pdf_need_appearances_fails(
     # Simulate the __setitem__ call raising an AttributeError.
     # This is what the 'try...except' block is designed to catch.
     mock_pdf.Root.AcroForm.__setitem__.side_effect = AttributeError("Test error")
+    mock_build_save.return_value = {}
 
     options = {"need_appearances": True}
     with caplog.at_level("WARNING"):
@@ -1454,3 +1456,17 @@ def test_drop_xmp_streams_only_drops_metadata_not_thumb_or_info():
     assert "/Metadata" not in page
     assert "/Thumb" in page
     assert str(pdf.docinfo["/Title"]) == "Keep Me"
+
+
+def test_hybrid_drop_xfa_ignores_annotations_that_are_not_widgets():
+    import pikepdf
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Annots = pdf.make_indirect(
+        pikepdf.Array([pikepdf.Dictionary(Subtype=pikepdf.Name.Link), None])
+    )
+    pdf.add_blank_page().obj.Annots = pikepdf.Dictionary()  # malformed: not an array
+    pdf.Root.AcroForm = pikepdf.Dictionary(XFA=pdf.make_stream(b"<xdp:xdp/>"))
+    _action_drop_flags(pdf, {"drop_xfa": "hybrid"})
+    assert "/XFA" in pdf.Root.AcroForm

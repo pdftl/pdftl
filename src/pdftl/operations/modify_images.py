@@ -46,6 +46,8 @@ class LazyImageModifierHelpProxy:
     """Delays help generation until the exact moment someone runs `pdftl help`."""
 
     def __str__(self) -> str:
+        from pdftl.utils.system_memory import IMAGE_MEMORY_HELP
+
         header = """Processes bitmap page image assets using an ordered sequence of parallelized
 point and kernel transformations.
 
@@ -55,6 +57,8 @@ Arguments:
                      Example: `1-5(contrast=1.3; sharpen=true)`
   * `threads=<n>`: Explicit parallel execution worker thread limit count.
   * `quality=<q>`: Output JPEG stream lossy compression value (1-100). Default: 75
+
+{memory}
 
 Output Control (not pixel modifiers - control output encoding only):
 
@@ -67,7 +71,7 @@ Output Control (not pixel modifiers - control output encoding only):
     - `jpeg` : lossy DCT compression (ignored for 1-bit images)
         Example: `1-5(posterize=2; format=png8)`
 
-Available Image Modifiers:"""
+Available Image Modifiers:""".replace("{memory}", IMAGE_MEMORY_HELP)
 
         image_modifiers_map = getattr(registry, "image_modifiers", {})
         if not image_modifiers_map:

@@ -595,3 +595,109 @@ def test_p_mode_image_writes_indexed_colorspace():
     assert ctx.xobj.Width == 10
     assert ctx.xobj.Height == 10
     assert ctx.xobj.Filter == pikepdf.Name("/FlateDecode")
+
+
+def test_run_parallel_image_job_bounds_payloads_in_memory():
+    import threading
+    import time
+
+    alive, peak, lock = [0], [0], threading.Lock()
+
+    def prepare(img, seen):
+        with lock:
+            alive[0] += 1
+            peak[0] = max(peak[0], alive[0])
+        return img, img
+
+    def worker(payload):
+        time.sleep(0.01)
+        return payload
+
+    def commit(ctx, result, payload):
+        with lock:
+            alive[0] -= 1
+        return True
+
+    images = list(range(40))
+    count = run_parallel_image_job(images, 3, prepare, worker, commit)
+    assert count == 40
+    assert alive[0] == 0
+    assert peak[0] <= 3 + 2  # threads + 2, however many images there are
+
+
+def _rgb_image(pdf, width, height):
+    img = pdf.make_stream(b"", Type=pikepdf.Name.XObject, Subtype=pikepdf.Name.Image)
+    img.Width, img.Height = width, height
+    img.ColorSpace, img.BitsPerComponent = pikepdf.Name.DeviceRGB, 8
+    return img
+
+
+def test_run_parallel_image_job_holds_decoded_bytes_within_budget(monkeypatch):
+    import threading
+    import time
+
+    monkeypatch.setenv("PDFTL_IMAGE_MEMORY_MB", "1")
+    monkeypatch.delenv("PDFTL_MAX_DECODED_MB", raising=False)
+    pdf = pikepdf.new()
+    # 200x200 RGB: 120,000 bytes decoded, twice that while being worked on.
+    images = [{"xobj": _rgb_image(pdf, 200, 200)} for _ in range(30)]
+    alive, peak, lock = [0], [0], threading.Lock()
+
+    def prepare(img, seen):
+        with lock:
+            alive[0] += 1
+            peak[0] = max(peak[0], alive[0])
+        return img, img
+
+    def worker(payload):
+        time.sleep(0.005)
+        return payload
+
+    def commit(ctx, result, payload):
+        with lock:
+            alive[0] -= 1
+        return True
+
+    assert run_parallel_image_job(images, 8, prepare, worker, commit) == 30
+    assert peak[0] == (1024 * 1024) // (2 * 200 * 200 * 3)  # 4, not threads + 2 = 10
+
+
+def test_run_parallel_image_job_admits_one_image_larger_than_the_budget(monkeypatch):
+    monkeypatch.setenv("PDFTL_IMAGE_MEMORY_MB", "0.01")
+    monkeypatch.delenv("PDFTL_MAX_DECODED_MB", raising=False)
+    pdf = pikepdf.new()
+    images = [{"xobj": _rgb_image(pdf, 300, 300)} for _ in range(3)]
+    done = []
+    count = run_parallel_image_job(
+        images,
+        4,
+        lambda img, seen: (img, img),
+        lambda p: p,
+        lambda c, r, p: done.append(r) or True,
+    )
+    assert count == 3 and len(done) == 3
+
+
+def test_run_parallel_image_job_skips_images_over_the_ceiling(monkeypatch, caplog):
+    import logging
+
+    monkeypatch.setenv("PDFTL_MAX_DECODED_MB", "1")
+    pdf = pikepdf.new()
+    big, small = _rgb_image(pdf, 1000, 1000), _rgb_image(pdf, 10, 10)  # 2.9 MB, 300 bytes
+    prepared = []
+
+    def prepare(img, seen):
+        prepared.append(img.get("xobj"))
+        return img, img
+
+    with caplog.at_level(logging.WARNING):
+        count = run_parallel_image_job(
+            [{"xobj": big}, {"xobj": small}, {"inline": True}],
+            2,
+            prepare,
+            lambda p: p,
+            lambda c, r, p: True,
+        )
+    assert count == 2
+    assert prepared == [small, None]
+    assert "skipping an image that would need 3 MB decoded" in caplog.text

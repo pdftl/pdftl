@@ -656,6 +656,12 @@ class TestOptimizePositioningOpsAggressiveTfIntegration:
 
 
 class TestEliminateRedundantColor:
+    def test_sc_makes_the_colour_unknown(self):
+        """After 1 sc the fill is 1 in some space, so a later 0 g is not redundant."""
+        instructions = [([0.0], "g"), ([1.0], "sc"), ([0.0], "g"), ([], "f")]
+        out = _eliminate_redundant_color(instructions)
+        assert out == instructions
+
     def test_redundant_g_dropped(self):
         instructions = [([0.0], "g"), ([0.0], "g"), ([], "f")]
         out = _eliminate_redundant_color(instructions)
@@ -1079,13 +1085,16 @@ class TestOptimizePositioningOpsAggressiveTfIntegrationCorrected:
 class TestDropDeadTfStrayQEmptyStack:
     def test_stray_q_with_empty_stack_and_no_pending_tf(self):
         """A Q reached with an empty q_stack (no matching q) and no
-        pending Tf at the time -- covers the `else None` side of
-        `q_stack.pop() if q_stack else None`, distinct from
-        TestDropDeadTfQBlockScoping's stray-Q test (which has a
-        pending Tf active when Q hits)."""
+        pending Tf at the time."""
         instructions = [([], "Q"), ([[]], "TJ")]
         out = _drop_dead_tf(instructions)
         assert _ops(out) == ["Q", "TJ"]
+
+    def test_stray_q_keeps_pending_tf(self):
+        """A Q with no matching q restores nothing, so the text is in /F2."""
+        instructions = [(["/F2", 12.0], "Tf"), ([], "Q"), ([["x"]], "TJ")]
+        out = _drop_dead_tf(instructions)
+        assert out == instructions
 
 
 class TestDropDeadTfQBlockScopingReapplied:
@@ -1205,14 +1214,11 @@ class TestDropDeadStateStores:
         assert _ops(out) == ["g", "q", "Q", "f"]
         assert out[0][0] == [0.0]
 
-    def test_stray_q_close_without_matching_open_degrades_gracefully(self):
-        """A stray Q (no matching q) still clears whatever's pending --
-        same defensive posture _drop_dead_tf already takes for Tf: a Q
-        is treated as reverting pending state regardless of whether
-        there's a real q_stack entry to restore."""
-        instructions = [([0.0], "g"), ([], "Q"), ([], "f")]
+    def test_stray_q_close_keeps_pending_store(self):
+        """A Q with no matching q restores nothing, so the fill is red."""
+        instructions = [([1.0, 0.0, 0.0], "rg"), ([], "Q"), ([], "f")]
         out = _drop_dead_state_stores(instructions)
-        assert _ops(out) == ["Q", "f"]
+        assert out == instructions
 
     def test_scn_sets_value_only_so_preceding_space_setter_stays(self):
         """scn sets a value in the current color space; the g that chose

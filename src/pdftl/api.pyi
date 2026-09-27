@@ -89,6 +89,13 @@ def clip(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def compact_content(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def create(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -117,6 +124,13 @@ def deduplicate_icc_profiles(
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
 def deduplicate_images(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def deduplicate_xobjects(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
     run_cli_hook: bool = False,
@@ -166,6 +180,13 @@ def delete_bookmarks(
 ) -> pikepdf.Pdf: ...
 def delete_images(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def delete_tags(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
     run_cli_hook: bool = False,
     full_result: bool = False,
     password: Optional[str] = None,
@@ -444,6 +465,13 @@ def link_urls(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def merge_font_subsets(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def modify_annots(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -488,6 +516,13 @@ def move(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def mrc_compress(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def multibackground(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -524,6 +559,13 @@ def optimize_images(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def photos_to_jpeg(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def place(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
@@ -555,6 +597,7 @@ def redact(
 def render(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
+    output: Optional[str] = ...,
     run_cli_hook: bool = False,
     full_result: bool = False,
     password: Optional[str] = None,
@@ -574,6 +617,13 @@ def resample_images(
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
 def rotate(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
+def round_text_positions(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,
     run_cli_hook: bool = False,

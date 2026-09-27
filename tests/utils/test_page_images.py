@@ -127,3 +127,26 @@ def test_render_zero_page_pdf_raises_pdfium_error(render):
 
     with pikepdf.new() as pdf, pytest.raises(pdfium.PdfiumError):
         render(pdf)
+
+
+def test_iter_pages_as_pil_closes_each_page_before_yielding_it():
+    """An open pdfium page caches its decoded images; the GC alone frees it late."""
+    import pikepdf
+    import pypdfium2
+
+    pdf = pikepdf.new()
+    for _ in range(3):
+        pdf.add_blank_page(page_size=(72, 72))
+    opened = []
+    real_getitem = pypdfium2.PdfDocument.__getitem__
+
+    def recording_getitem(doc, index):
+        page = real_getitem(doc, index)
+        opened.append(page)
+        return page
+
+    with patch.object(pypdfium2.PdfDocument, "__getitem__", recording_getitem):
+        for n, (_index, image) in enumerate(iter_pages_as_pil(pdf, dpi=72.0)):
+            assert len(opened) == n + 1
+            assert all(page.raw is None for page in opened)
+            assert image.size == (72, 72)

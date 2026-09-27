@@ -11,7 +11,7 @@ import logging
 import os
 import struct
 import zlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Any, TypeVar
 from collections.abc import Callable
@@ -61,29 +61,59 @@ def run_parallel_image_job(
     commit_func: Callable[[ImageContext, TResult, TPayload], bool],
 ) -> int:
     """Orchestrator for parallel PDF image extraction, computation, and mutation."""
+    from pdftl.utils.system_memory import image_job_budget_bytes, too_large_to_decode
 
     if not threads or threads < 1:
         threads = os.cpu_count() or 4
 
     seen_objgens: set[str] = set()
     success_count = 0
-    future_to_task = {}
+    in_flight: dict = {}
+    # Each prepared payload holds decoded images: bound their count and bytes.
+    max_in_flight = threads + 2
+    budget = image_job_budget_bytes()
+    held = 0
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         for img in images:
+            xobj = img.get("xobj") if isinstance(img, dict) else None
+            if xobj is not None and too_large_to_decode(xobj, "image job"):
+                continue
+            cost = _working_bytes(xobj)
+            while in_flight and (len(in_flight) >= max_in_flight or held + cost > budget):
+                committed, freed = _commit_finished(in_flight, commit_func)
+                success_count += committed
+                held -= freed
             task = prepare_func(img, seen_objgens)
-            if task is not None:
-                payload, ctx = task
-                future = executor.submit(worker_func, payload)
-                future_to_task[future] = (payload, ctx)
-
-        for future in as_completed(future_to_task):
-            payload, ctx = future_to_task[future]
-            result = future.result()
-            if commit_func(ctx, result, payload):
-                success_count += 1
+            if task is None:
+                continue
+            payload, ctx = task
+            in_flight[executor.submit(worker_func, payload)] = (payload, ctx, cost)
+            held += cost
+        while in_flight:
+            success_count += _commit_finished(in_flight, commit_func)[0]
 
     return success_count
+
+
+def _working_bytes(xobj: Any) -> int:
+    """Decoded source plus one working copy; 0 when the size is unknown."""
+    from pdftl.utils.system_memory import decoded_image_bytes
+
+    if xobj is None:
+        return 0
+    return 2 * (decoded_image_bytes(xobj) or 0)
+
+
+def _commit_finished(in_flight: dict, commit_func: Callable) -> tuple[int, int]:
+    """Commit (on the calling thread) every finished task: (successes, bytes freed)."""
+    done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+    committed = freed = 0
+    for future in done:
+        payload, ctx, cost = in_flight.pop(future)
+        freed += cost
+        committed += bool(commit_func(ctx, future.result(), payload))
+    return committed, freed
 
 
 # --- REUSABLE BOILERPLATE BOOTSTRAPS ---
