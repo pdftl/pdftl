@@ -11,6 +11,7 @@ from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.utils.hooks import from_result_meta
 from pdftl.utils.io_helpers import smart_open
+from pdftl.utils.ocg import dict_items, ocg_id_list, pdf_items
 from pdftl.utils.type_helpers import as_iterable
 
 _DUMP_LAYERS_LONG_DESC = """
@@ -45,6 +46,8 @@ The output JSON contains several top-level keys:
 * `default_config` (object):
     Details of the default display settings, including the `base_state`
     (usually "ON") and lists of IDs that are explicitly "OFF" or "ON".
+    When present, `locked_list_ids` lists the locked layers and `creator`
+    names the application that made the configuration.
 * `alternate_configs` (list):
     Optional secondary profiles (e.g., "Technical View") defined by the author.
 
@@ -77,9 +80,13 @@ def _parse_config(config_dict):
     config_data = {
         "name": str(config_dict.get("/Name", "Unnamed Config")),
         "base_state": _clean_val(config_dict.get("/BaseState", "/ON")),
-        "off_list_ids": [int(obj.objgen[0]) for obj in config_dict.get("/OFF", [])],
-        "on_list_ids": [int(obj.objgen[0]) for obj in config_dict.get("/ON", [])],
+        "off_list_ids": ocg_id_list(config_dict.get("/OFF")),
+        "on_list_ids": ocg_id_list(config_dict.get("/ON")),
     }
+    if "/Locked" in config_dict:
+        config_data["locked_list_ids"] = ocg_id_list(config_dict.Locked)
+    if "/Creator" in config_dict:
+        config_data["creator"] = str(config_dict.Creator)
     if "/Order" in config_dict:
         config_data["ui_hierarchy"] = _parse_order(config_dict.Order)
 
@@ -113,7 +120,7 @@ def _parse_usage(ocg, obj_id, active_usage_map):
     """Recursively convert the /Usage dictionary to a serializable dict."""
     import pikepdf
 
-    if "/Usage" not in ocg:
+    if not isinstance(ocg.get("/Usage"), pikepdf.Dictionary):
         return None
 
     usage_dict = {}
@@ -138,27 +145,15 @@ def _get_active_usage_map(d_dict):
     bound to which usage categories.
     Returns a dict mapping category names to sets of OCG object IDs.
     """
-    import pikepdf
 
     active_map = {}
-    if "/AS" not in d_dict:
-        return active_map
-
-    for as_dict in d_dict.AS:
-        if not isinstance(as_dict, pikepdf.Dictionary):
-            continue
-
+    for as_dict in dict_items(d_dict.get("/AS")):
         event_name = _clean_val(as_dict.get("/Event", ""))
 
         # Determine the target usage category (defaults to Event name if missing)
-        categories = as_dict.get("/Category")
-        if categories:
-            cat_names = [_clean_val(c) for c in categories]
-        else:
-            cat_names = [event_name]
+        cat_names = [_clean_val(c) for c in pdf_items(as_dict.get("/Category"))] or [event_name]
 
-        # Extract IDs of bound OCGs
-        bound_ids = {int(o.objgen[0]) for o in as_dict.get("/OCGs", []) if hasattr(o, "objgen")}
+        bound_ids = set(ocg_id_list(as_dict.get("/OCGs")))
 
         # Map the category to the set of IDs
         for cat in cat_names:
@@ -194,10 +189,13 @@ def dump_layers(pdf, output_file=None) -> OpResult:
     """
     Extract OCG (Layer) data and write as JSON.
     """
+    import pikepdf
+
     results = {"has_layers": False, "layers": [], "default_config": {}}
 
-    if "/OCProperties" in pdf.Root:
-        results = _extract_ocproperties(pdf.Root.OCProperties)
+    ocprops = pdf.Root.get("/OCProperties")
+    if isinstance(ocprops, pikepdf.Dictionary):
+        results = _extract_ocproperties(ocprops)
     return OpResult(success=True, data=results, meta={c.META_OUTPUT_FILE: output_file})
 
 
@@ -206,7 +204,9 @@ def _populate_default_config(results, ocprops):
     _extract_ocproperties -- extracted from that function's own body.
     Mutates `results` in place and returns the active_usage_map derived
     from /D, or {} if /D is absent."""
-    if "/D" not in ocprops:
+    import pikepdf
+
+    if not isinstance(ocprops.get("/D"), pikepdf.Dictionary):
         return {}
     results["default_config"] = _parse_config(ocprops.D)
     if "ui_hierarchy" in results["default_config"]:
@@ -223,7 +223,7 @@ def _build_layer_entry(ocg, off_ids, active_usage_map):
         "name": str(ocg.get("/Name", "Unnamed")),
         "obj_id": obj_id,
         "default_state": "OFF" if obj_id in off_ids else "ON",
-        "intent": ([_clean_val(i) for i in ocg.get("/Intent", [])] if "/Intent" in ocg else None),
+        "intent": ([_clean_val(i) for i in pdf_items(ocg.Intent)] if "/Intent" in ocg else None),
         # Pass the id and active map down
         "usage": _parse_usage(ocg, obj_id, active_usage_map),
     }
@@ -237,7 +237,7 @@ def _extract_ocproperties(ocprops):
 
     # 2. Capture Alternate Configurations
     if "/Configs" in ocprops:
-        results["alternate_configs"] = [_parse_config(c) for c in ocprops.Configs]
+        results["alternate_configs"] = [_parse_config(c) for c in dict_items(ocprops.Configs)]
 
     # 3. NOW check legacy top-level Order ONLY if D didn't provide one
     if "/Order" in ocprops and "ui_hierarchy" not in results:
@@ -247,6 +247,6 @@ def _extract_ocproperties(ocprops):
     if "/OCGs" in ocprops:
         off_ids = results["default_config"].get("off_list_ids", [])
         results["layers"] = [
-            _build_layer_entry(ocg, off_ids, active_usage_map) for ocg in ocprops.OCGs
+            _build_layer_entry(ocg, off_ids, active_usage_map) for ocg in dict_items(ocprops.OCGs)
         ]
     return results

@@ -458,6 +458,14 @@ def modify_images(
     full_result: bool = False,
     password: Optional[str] = None,
 ) -> pikepdf.Pdf: ...
+def modify_layer_configs(
+    pdf: Optional[Union[pikepdf.Pdf, str]] = None,
+    operation_args: Optional[List[str]] = ...,
+    output: Optional[str] = ...,
+    run_cli_hook: bool = False,
+    full_result: bool = False,
+    password: Optional[str] = None,
+) -> pikepdf.Pdf: ...
 def modify_layers(
     pdf: Optional[Union[pikepdf.Pdf, str]] = None,
     operation_args: Optional[List[str]] = ...,

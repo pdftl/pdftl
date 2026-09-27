@@ -10,6 +10,19 @@ from pdftl.operations.modify_layers import (
 )
 
 
+_KEEP_ALIVE = []
+
+
+def _real_ocgs(n):
+    pdf = pikepdf.new()
+    _KEEP_ALIVE.append(pdf)
+    return [pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG)) for _ in range(n)]
+
+
+def _id(ocg):
+    return ocg.objgen[0]
+
+
 # --- Mocks for Testing ---
 def create_mock_ocg(obj_id, name):
     ocg = MagicMock()
@@ -27,12 +40,13 @@ def test_process_content_stream(mock_unparse, mock_parse, mock_get_map):
     stream_dict.get.return_value = "/Page"
 
     # Setup maps
-    prop_map = {"/MC0": 10, "/MC1": 20}
-    xobj_map = {"/Fm0": {30}}
+    ocg10, ocg20, ocg30 = _real_ocgs(3)
+    prop_map = {"/MC0": ocg10, "/MC1": ocg20}
+    xobj_map = {"/Fm0": ocg30}
     mock_get_map.return_value = (prop_map, xobj_map)
 
-    # Resolved targets: ID 10 is strip, ID 20 is merge, ID 30 is merge
-    resolved = {10: "strip", 20: "merge", 30: "merge"}
+    # Resolved targets: layer 10 is strip, 20 is merge, 30 is merge
+    resolved = {_id(ocg10): "strip", _id(ocg20): "merge", _id(ocg30): "merge"}
 
     # Create an artificial stream
     mock_stream = [
@@ -238,9 +252,10 @@ def test_process_content_stream_strip_do_operator():
     stream_dict = MagicMock()
     stream_dict.get.return_value = None
 
-    # XObject /FmToStrip is mapped to layer 99, which is resolved to "strip"
-    mock_get_map = ({}, {"/FmToStrip": {99}})
-    resolved_targets = {99: "strip"}
+    # XObject /FmToStrip belongs to a layer resolved to "strip"
+    (ocg,) = _real_ocgs(1)
+    mock_get_map = ({}, {"/FmToStrip": ocg})
+    resolved_targets = {_id(ocg): "strip"}
 
     mock_stream = [
         (["/FmToStrip"], "Do"),  # This should trigger the `continue` on line 120
@@ -260,21 +275,87 @@ def test_process_content_stream_strip_do_operator():
         assert operators == [(["/KeepMe"], "Do")]
 
 
+def _named_layers_pdf(*names):
+    import pikepdf
+
+    pdf = pikepdf.new()
+    ocgs = [
+        pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name=pikepdf.String(n)))
+        for n in names
+    ]
+    pdf.Root.OCProperties = pikepdf.Dictionary(OCGs=pikepdf.Array(ocgs))
+    return pdf, [o.objgen[0] for o in ocgs]
+
+
 def test_resolve_targets():
-    pdf = MagicMock()
-    ocg1 = create_mock_ocg(10, "Layer1")
-    ocg2 = create_mock_ocg(20, "Layer2")
-    ocg3 = create_mock_ocg(30, "Layer3")
+    pdf, (id1, _, _) = _named_layers_pdf("Layer1", "Layer2", "Layer3")
 
-    pdf.Root.get.return_value = [ocg1, ocg2, ocg3]
-
-    rules_by_id = {10: {"merge"}}
+    rules_by_id = {id1: {"merge"}}
     rules_by_name = {"Layer1": {"strip"}, "Layer2": {"strip"}}
 
     targets = _resolve_targets(pdf, rules_by_id, rules_by_name, {"keep"})
 
     # The function correctly drops 'keep' and only tracks 'merge'
-    assert targets[10] == {"merge"}
+    assert targets[id1] == {"merge"}
+
+
+def test_resolve_targets_specific_overrides_all():
+    """Old code returned {'hide', 'show'} here, applied in hash-seed order."""
+    pdf, (id_a, id_b) = _named_layers_pdf("A", "B")
+
+    targets = _resolve_targets(pdf, {}, {"A": {"show"}}, {"hide"})
+
+    assert targets == {id_a: {"show"}, id_b: {"hide"}}
+
+
+def test_resolve_targets_keep_overrides_strip_all():
+    pdf, (_, id_b) = _named_layers_pdf("A", "B")
+
+    targets = _resolve_targets(pdf, {}, {"A": {"keep"}}, {"strip"})
+
+    assert targets == {id_b: {"strip"}}
+
+
+def test_resolve_targets_skips_direct_layers():
+    pdf, (id_a,) = _named_layers_pdf("A")
+    direct = pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name=pikepdf.String("B"))
+    pdf.Root.OCProperties.OCGs.append(direct)
+
+    assert _resolve_targets(pdf, {}, {}, {"strip"}) == {id_a: {"strip"}}
+
+
+def _two_layer_pdf():
+    from pdftl.utils.ocg import create_layer
+
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    return pdf, create_layer(pdf, "A"), create_layer(pdf, "B")
+
+
+def _ids(arr):
+    return {o.objgen[0] for o in arr}
+
+
+def test_hide_all_show_one_end_to_end():
+    pdf, a, b = _two_layer_pdf()
+    modify_layers(pdf, ["hide", "all", "show", "A"])
+    d = pdf.Root.OCProperties.D
+    assert _ids(d.ON) == {a.objgen[0]}
+    assert _ids(d.OFF) == {b.objgen[0]}
+
+
+def test_show_all_hide_one_end_to_end():
+    pdf, a, b = _two_layer_pdf()
+    modify_layers(pdf, ["show", "all", "hide", "A"])
+    d = pdf.Root.OCProperties.D
+    assert _ids(d.ON) == {b.objgen[0]}
+    assert _ids(d.OFF) == {a.objgen[0]}
+
+
+def test_strip_all_keep_one_end_to_end():
+    pdf, a, _b = _two_layer_pdf()
+    modify_layers(pdf, ["strip", "all", "keep", "A"])
+    assert [o.objgen for o in pdf.Root.OCProperties.OCGs] == [a.objgen]
 
 
 def test_resolve_targets_no_match():
@@ -292,8 +373,9 @@ def test_resolve_targets_no_match():
 @patch("pdftl.operations.modify_layers.parse_modify_layers_rules")
 @patch("pdftl.operations.modify_layers._resolve_targets")
 @patch("pdftl.operations.modify_layers._process_content_stream")
+@patch("pdftl.operations.modify_layers._process_annotations")
 @patch("pdftl.operations.modify_layers.clean_ocproperties")
-def test_modify_layers_merge(mock_clean, mock_process, mock_resolve, mock_parse):
+def test_modify_layers_merge(mock_clean, _mock_annots, mock_process, mock_resolve, mock_parse):
     """Hits lines 269-270: The 'merge' structural action branch."""
     pdf = MagicMock()
     pdf.pages = ["dummy_page"]
@@ -506,3 +588,233 @@ def test_ensure_auto_state_leaves_other_events_alone():
     as_array = pdf.Root.OCProperties.D.AS
     assert [str(d.Event) for d in as_array] == ["/Export", "/Print", "/View"]
     assert len(as_array[0].OCGs) == 0
+
+
+def _ocmd_pdf():
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    page = pdf.pages[0]
+    a, b = (
+        pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name=pikepdf.String(n)))
+        for n in ("A", "B")
+    )
+
+    def ocmd(**entries):
+        return pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCMD, **entries))
+
+    def form():
+        return pdf.make_stream(
+            b"0 0 1 1 re f",
+            Type=pikepdf.Name.XObject,
+            Subtype=pikepdf.Name.Form,
+            BBox=[0, 0, 1, 1],
+        )
+
+    any_on = ocmd(OCGs=pikepdf.Array([a, b]))
+    all_on = ocmd(OCGs=pikepdf.Array([a, b]), P=pikepdf.Name.AllOn)
+    fm_any, fm_not = form(), form()
+    fm_any.OC = ocmd(OCGs=pikepdf.Array([a, b]))
+    fm_not.OC = ocmd(VE=pikepdf.Array([pikepdf.Name.Not, a]))
+    page.Resources = pikepdf.Dictionary(
+        Properties=pikepdf.Dictionary(MC0=any_on, MC1=all_on),
+        XObject=pikepdf.Dictionary(FmAny=fm_any, FmNot=fm_not),
+    )
+    page.Contents = pdf.make_stream(
+        b"/OC /MC0 BDC 1 w EMC /OC /MC1 BDC 2 w EMC /FmAny Do /FmNot Do"
+    )
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        OCGs=pikepdf.Array([a, b]), D=pikepdf.Dictionary(Order=pikepdf.Array([a, b]))
+    )
+    return pdf, a, b
+
+
+def _page_ops(pdf):
+    return [
+        (str(op), [str(x) for x in operands])
+        for operands, op in pikepdf.parse_content_stream(pdf.pages[0])
+    ]
+
+
+def _member_ids(ocmd):
+    return [o.objgen[0] for o in ocmd.OCGs]
+
+
+def test_strip_folds_membership_dictionaries():
+    pdf, a, b = _ocmd_pdf()
+    modify_layers(pdf, ["strip", "A"])
+
+    # AnyOn [A B] now depends on B alone; AllOn [A B] is always hidden.
+    assert _page_ops(pdf) == [
+        ("BDC", ["/OC", "/MC0"]),
+        ("w", ["1"]),
+        ("EMC", []),
+        ("Do", ["/FmAny"]),
+        ("Do", ["/FmNot"]),
+    ]
+    resources = pdf.pages[0].Resources
+    assert _member_ids(resources.Properties.MC0) == [b.objgen[0]]
+    assert _member_ids(resources.XObject.FmAny.OC) == [b.objgen[0]]
+    # [/Not A] is always visible once A is gone.
+    assert "/OC" not in resources.XObject.FmNot
+
+
+def test_merge_folds_membership_dictionaries():
+    pdf, a, b = _ocmd_pdf()
+    modify_layers(pdf, ["merge", "A"])
+
+    # AnyOn [A B] is always visible; AllOn [A B] now depends on B alone.
+    assert _page_ops(pdf) == [
+        ("w", ["1"]),
+        ("BDC", ["/OC", "/MC1"]),
+        ("w", ["2"]),
+        ("EMC", []),
+        ("Do", ["/FmAny"]),
+    ]
+    resources = pdf.pages[0].Resources
+    assert _member_ids(resources.Properties.MC1) == [b.objgen[0]]
+    assert "/OC" not in resources.XObject.FmAny
+
+
+def _annot_pdf():
+    pdf, a, b = _ocmd_pdf()
+    page = pdf.pages[0].obj
+
+    def annot(subtype, **entries):
+        return pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name.Annot,
+                Subtype=pikepdf.Name(subtype),
+                Rect=[0, 0, 1, 1],
+                **entries,
+            )
+        )
+
+    return pdf, page, a, b, annot
+
+
+def _annot_ids(page):
+    return [x.objgen for x in page.Annots]
+
+
+def test_strip_removes_annotations_and_their_popups():
+    pdf, page, a, b, annot = _annot_pdf()
+    on_a = annot("/Square", OC=a)
+    popup = annot("/Popup", Parent=on_a)
+    on_a.Popup = popup
+    orphan_popup = annot("/Popup", Parent=on_a)
+    on_b = annot("/Square", OC=b)
+    plain = annot("/Square")
+    page.Annots = pikepdf.Array([on_a, popup, orphan_popup, on_b, plain])
+
+    modify_layers(pdf, ["strip", "A"])
+    assert _annot_ids(page) == [on_b.objgen, plain.objgen]
+
+
+def test_merge_makes_annotations_unconditional():
+    pdf, page, a, b, annot = _annot_pdf()
+    on_a = annot("/Square", OC=a)
+    on_b = annot("/Square", OC=b)
+    page.Annots = pikepdf.Array([on_a, on_b])
+
+    modify_layers(pdf, ["merge", "A"])
+    assert _annot_ids(page) == [on_a.objgen, on_b.objgen]
+    assert "/OC" not in on_a
+    assert on_b.OC.objgen == b.objgen
+
+
+def test_strip_rewrites_annotation_membership_dictionary():
+    pdf, page, a, b, annot = _annot_pdf()
+    ocmd = pdf.make_indirect(
+        pikepdf.Dictionary(Type=pikepdf.Name.OCMD, OCGs=pikepdf.Array([a, b]))
+    )
+    kept = annot("/Square", OC=ocmd)
+    page.Annots = pikepdf.Array([kept])
+
+    modify_layers(pdf, ["strip", "A"])
+    assert _annot_ids(page) == [kept.objgen]
+    assert _member_ids(kept.OC) == [b.objgen[0]]
+
+
+def test_strip_removes_form_fields_on_the_layer():
+    pdf, page, a, b, annot = _annot_pdf()
+    lone = annot("/Widget", OC=a, FT=pikepdf.Name.Tx, T=pikepdf.String("lone"))
+    parent = pdf.make_indirect(pikepdf.Dictionary(FT=pikepdf.Name.Btn, T=pikepdf.String("p")))
+    kid_a = annot("/Widget", OC=a, Parent=parent)
+    kid_b = annot("/Widget", OC=b, Parent=parent)
+    parent.Kids = pikepdf.Array([kid_a, kid_b])
+    only_parent = pdf.make_indirect(pikepdf.Dictionary(FT=pikepdf.Name.Tx, T=pikepdf.String("q")))
+    only_kid = annot("/Widget", OC=a, Parent=only_parent)
+    only_parent.Kids = pikepdf.Array([only_kid])
+    page.Annots = pikepdf.Array([lone, kid_a, kid_b, only_kid])
+    pdf.Root.AcroForm = pikepdf.Dictionary(Fields=pikepdf.Array([lone, parent, only_parent]))
+
+    modify_layers(pdf, ["strip", "A"])
+    assert _annot_ids(page) == [kid_b.objgen]
+    assert [f.objgen for f in pdf.Root.AcroForm.Fields] == [parent.objgen]
+    assert [k.objgen for k in parent.Kids] == [kid_b.objgen]
+
+
+def test_strip_processes_annotation_appearance_streams():
+    pdf, page, a, b, annot = _annot_pdf()
+    appearance = pdf.make_stream(
+        b"/OC /MC0 BDC 1 w EMC 2 w",
+        Type=pikepdf.Name.XObject,
+        Subtype=pikepdf.Name.Form,
+        BBox=[0, 0, 1, 1],
+        Resources=pikepdf.Dictionary(Properties=pikepdf.Dictionary(MC0=a)),
+    )
+    kept = annot("/Square", AP=pikepdf.Dictionary(N=appearance))
+    page.Annots = pikepdf.Array([kept])
+
+    modify_layers(pdf, ["strip", "A"])
+    ops = [
+        (str(op), [str(x) for x in args]) for args, op in pikepdf.parse_content_stream(kept.AP.N)
+    ]
+    assert ops == [("w", ["2"])]
+
+
+def test_strip_skips_malformed_and_direct_annotations():
+    pdf, page, a, b, annot = _annot_pdf()
+    direct_on_a = pikepdf.Dictionary(Subtype=pikepdf.Name.Square, OC=a)
+    direct_plain = pikepdf.Dictionary(Subtype=pikepdf.Name.Square)
+    page.Annots = pikepdf.Array([5, direct_on_a, direct_plain])
+
+    modify_layers(pdf, ["strip", "A"])
+    assert len(page.Annots) == 2
+    assert page.Annots[0] == 5
+    assert "/OC" not in page.Annots[1]
+
+
+def test_strip_removes_widgets_outside_a_field_tree():
+    pdf, page, a, b, annot = _annot_pdf()
+    direct_widget = pikepdf.Dictionary(Subtype=pikepdf.Name.Widget, OC=a)
+    orphan_widget = annot("/Widget", OC=a)
+    page.Annots = pikepdf.Array([direct_widget, orphan_widget])
+
+    modify_layers(pdf, ["strip", "A"])
+    assert len(page.Annots) == 0
+    assert "/AcroForm" not in pdf.Root
+
+
+def test_strip_processes_appearance_state_streams():
+    pdf, page, a, b, annot = _annot_pdf()
+
+    def appearance(content):
+        return pdf.make_stream(
+            content,
+            Type=pikepdf.Name.XObject,
+            Subtype=pikepdf.Name.Form,
+            BBox=[0, 0, 1, 1],
+            Resources=pikepdf.Dictionary(Properties=pikepdf.Dictionary(MC0=a)),
+        )
+
+    states = pikepdf.Dictionary(On=appearance(b"/OC /MC0 BDC 1 w EMC 2 w"), Off=5)
+    kept = annot("/Widget", AP=pikepdf.Dictionary(N=states))
+    page.Annots = pikepdf.Array([kept])
+
+    modify_layers(pdf, ["strip", "A"])
+    ops = [
+        (str(op), [str(x) for x in args])
+        for args, op in pikepdf.parse_content_stream(kept.AP.N.On)
+    ]
+    assert ops == [("w", ["2"])]

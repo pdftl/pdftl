@@ -82,6 +82,7 @@ HARDCODED_KEYWORDS = {
     "link_urls",
     "modify_annots",
     "modify_images",
+    "modify_layer_configs",
     "modify_layers",
     "montage",
     "move",

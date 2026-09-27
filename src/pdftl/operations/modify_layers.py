@@ -3,9 +3,15 @@ import logging
 import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
-from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
+from pdftl.operations.parsers.modify_layers_parser import (
+    override_actions,
+    parse_modify_layers_rules,
+)
 from pdftl.utils.ocg import (
+    array_entry,
     clean_ocproperties,
+    dict_items,
+    fold_visibility,
     get_page_layer_map,
     set_layer_state,
     set_layer_usage,
@@ -27,8 +33,14 @@ after an action, it defaults to affecting "all" layers.
 **Structural (Permanent):**
 * `merge`: The visual content of the layer is permanently baked into the
   page. The layer is removed from the PDF's layer menu.
-* `strip`: The visual content of the layer is completely deleted from the
-  document, and the layer is removed from the PDF's layer menu.
+* `strip`: The visual content of the layer, including any annotations and
+  form fields on it, is completely deleted from the document, and the layer is
+  removed from the PDF's layer menu.
+
+Content whose visibility depends on a combination of layers is treated as if
+merged layers were always on and stripped layers always off: it is deleted if
+it could no longer be shown, becomes permanent if it would always be shown,
+and otherwise stays under the control of the remaining layers.
 
 **State & Behavior (Non-destructive):**
 * `show` / `hide`: Sets the default visibility when the document is opened.
@@ -50,6 +62,11 @@ changing its base state will leave its on-screen visibility unchanged.*
 * `id=<integer>`: Strict match. Applies the action to the exact underlying PDF object.
 * `all`: Explicitly targets all layers.
 * `<string>`: If no `key=` prefix is provided, it defaults to a `name=` match.
+
+An `id=` match takes precedence over a `name=` match, and either takes
+precedence over a conflicting action for `all` (so `hide all show Draft`
+leaves Draft visible). Conflicting actions for the same target, such as
+`show Draft hide Draft`, are an error.
 
 """
 
@@ -77,23 +94,21 @@ def _ensure_auto_state(pdf):
     import pikepdf
 
     oc_props = pdf.Root.get("/OCProperties")
-    if not oc_props or "/D" not in oc_props:
+    if not isinstance(oc_props, pikepdf.Dictionary) or not isinstance(
+        oc_props.get("/D"), pikepdf.Dictionary
+    ):
         return
 
-    d_dict = oc_props.D
-    if "/AS" not in d_dict:
-        d_dict.AS = pikepdf.Array()
-
-    as_array = d_dict.AS
+    as_array = array_entry(oc_props.D, "/AS")
 
     # Grab all OCGs to ensure the event listeners cover the entire document
-    all_ocgs = oc_props.get("/OCGs", pikepdf.Array())
+    all_ocgs = array_entry(oc_props, "/OCGs")
 
     has_print = False
     has_view = False
 
     # Check if the events already exist and update their OCG arrays
-    for as_dict in as_array:
+    for as_dict in dict_items(as_array):
         event = str(as_dict.get("/Event", ""))
         if event == "/Print":
             as_dict.OCGs = all_ocgs
@@ -140,6 +155,7 @@ def _process_content_stream(pdf, stream_dict, resolved_targets, processed_xobjs=
 
     resources = stream_dict.get("/Resources")
     prop_map, xobj_map = get_page_layer_map(resources)
+    fixed = {oid: action == "merge" for oid, action in resolved_targets.items()}
 
     # Recursively process Form XObjects found in the resources
     if resources and "/XObject" in resources:
@@ -165,7 +181,7 @@ def _process_content_stream(pdf, stream_dict, resolved_targets, processed_xobjs=
             safe_ops,
             prop_map,
             xobj_map,
-            resolved_targets,
+            fixed,
             resources,
         )
 
@@ -187,14 +203,20 @@ def _process_block_end(new_stream, block_stack, operands, operator):
     return
 
 
+def _oc_action(oc, fixed) -> str:
+    """strip if `oc` is now always hidden, merge if always visible, else keep."""
+    visible = fold_visibility(oc, fixed)
+    if visible is None:
+        return "keep"
+    return "merge" if visible else "strip"
+
+
 def _process_block_start(
-    new_stream, block_stack, op_str, operator, operands, prop_map, resolved_targets, is_stripping
+    new_stream, block_stack, op_str, operator, operands, prop_map, fixed, is_stripping
 ):
     action = "keep"
     if op_str == "BDC" and len(operands) > 1 and str(operands[0]) == "/OC":
-        local_alias = str(operands[1])
-        global_id = prop_map.get(local_alias)
-        action = resolved_targets.get(global_id, "keep")
+        action = _oc_action(prop_map.get(str(operands[1])), fixed)
 
     block_stack.append(action)
     if action in ("strip", "merge") or is_stripping:
@@ -206,23 +228,19 @@ def _process_block_start(
 
 def _process_xobject_invocation(
     operands,
-    resolved_targets,
+    fixed,
     is_stripping,
     xobj_map,
     resources,
 ):
     local_alias = str(operands[0])
     if local_alias in xobj_map:
-        # Get actions for all OCGs attached to this XObject
-        ocg_ids = xobj_map[local_alias]
-        actions = [resolved_targets.get(oid, "keep") for oid in ocg_ids]
-
-        # If any layer it belongs to is stripped, drop the 'Do' command
-        if "strip" in actions or is_stripping:
+        action = _oc_action(xobj_map[local_alias], fixed)
+        if action == "strip" or is_stripping:
             return True
 
-        # If merged, delete the /OC dict so it becomes a permanent object
-        if "merge" in actions:
+        # A merged XObject becomes unconditional
+        if action == "merge":
             xobj = resources.XObject[local_alias]
             if "/OC" in xobj:
                 del xobj["/OC"]
@@ -238,7 +256,7 @@ def _process_stream_op(
     safe_ops,
     prop_map,
     xobj_map,
-    resolved_targets,
+    fixed,
     resources,
 ):
     op_str = str(operator)
@@ -258,7 +276,7 @@ def _process_stream_op(
             operator,
             operands,
             prop_map,
-            resolved_targets,
+            fixed,
             is_stripping,
         )
         return
@@ -269,7 +287,7 @@ def _process_stream_op(
         and len(operands) == 1
         and _process_xobject_invocation(
             operands,
-            resolved_targets,
+            fixed,
             is_stripping,
             xobj_map,
             resources,
@@ -331,7 +349,100 @@ def _modify_structural_targets(pdf, resolved_targets):
         processed_xobjs = set()
         for page in pdf.pages:
             _process_content_stream(pdf, page, structural_targets, processed_xobjs)
+            _process_annotations(pdf, page, structural_targets, processed_xobjs)
         clean_ocproperties(pdf, set(structural_targets.keys()))
+
+
+def _process_annotations(pdf, page, targets, processed_xobjs):
+    """Strip or merge annotations by their /OC, and process kept appearance streams."""
+    import pikepdf
+
+    annots = page.get("/Annots")
+    if not isinstance(annots, pikepdf.Array):
+        return
+    fixed = {oid: action == "merge" for oid, action in targets.items()}
+    stripped_indices, stripped_ids = set(), set()
+    for i, annot in enumerate(annots):
+        if not isinstance(annot, pikepdf.Dictionary):
+            continue
+        action = _oc_action(annot.get("/OC"), fixed)
+        if action == "strip":
+            stripped_indices.add(i)
+            _strip_annotation(pdf, annot, stripped_ids)
+            continue
+        if action == "merge":
+            del annot["/OC"]
+        for stream in _appearance_streams(annot):
+            _process_content_stream(pdf, stream, targets, processed_xobjs)
+
+    for i in range(len(annots) - 1, -1, -1):
+        if i in stripped_indices or _is_stripped_popup(annots[i], stripped_ids):
+            del annots[i]
+
+
+def _strip_annotation(pdf, annot, stripped_ids):
+    """Record an annotation and its popup as stripped; detach a widget from the form."""
+    import pikepdf
+
+    stripped_ids.add(annot.objgen)
+    popup = annot.get("/Popup")
+    if isinstance(popup, pikepdf.Dictionary):
+        stripped_ids.add(popup.objgen)
+    if annot.get("/Subtype") == "/Widget":
+        _detach_field(pdf, annot)
+
+
+def _is_stripped_popup(annot, stripped_ids) -> bool:
+    """A popup listed via its stripped parent's /Popup, or naming it as /Parent."""
+    import pikepdf
+
+    if not isinstance(annot, pikepdf.Dictionary) or not annot.is_indirect:
+        return False
+    if annot.objgen in stripped_ids:
+        return True
+    parent = annot.get("/Parent")
+    return (
+        annot.get("/Subtype") == "/Popup"
+        and isinstance(parent, pikepdf.Dictionary)
+        and parent.objgen in stripped_ids
+    )
+
+
+def _appearance_streams(annot) -> list:
+    import pikepdf
+
+    ap = annot.get("/AP")
+    if not isinstance(ap, pikepdf.Dictionary):
+        return []
+    streams = []
+    for key in ("/N", "/R", "/D"):
+        entry = ap.get(key)
+        if isinstance(entry, pikepdf.Stream):
+            streams.append(entry)
+        elif isinstance(entry, pikepdf.Dictionary):
+            streams.extend(v for v in entry.values() if isinstance(v, pikepdf.Stream))
+    return streams
+
+
+def _detach_field(pdf, node, depth=0):
+    """Remove a form field node from the field tree, pruning parents left empty."""
+    import pikepdf
+
+    if depth > 32 or not node.is_indirect:
+        return
+    parent = node.get("/Parent")
+    if isinstance(parent, pikepdf.Dictionary):
+        siblings = parent.get("/Kids")
+    else:
+        acroform = pdf.Root.get("/AcroForm")
+        siblings = acroform.get("/Fields") if isinstance(acroform, pikepdf.Dictionary) else None
+    if not isinstance(siblings, pikepdf.Array):
+        return
+    for i in range(len(siblings) - 1, -1, -1):
+        if getattr(siblings[i], "objgen", None) == node.objgen:
+            del siblings[i]
+    if isinstance(parent, pikepdf.Dictionary) and len(siblings) == 0:
+        _detach_field(pdf, parent, depth + 1)
 
 
 def _modify_state_or_usage(pdf, resolved_targets):
@@ -359,45 +470,38 @@ def _modify_state_or_usage(pdf, resolved_targets):
 
 def _resolve_targets(pdf, rules_by_id: dict, rules_by_name: dict, default_actions: set) -> dict:
     """Maps strict IDs and sloppy names to their final global action."""
-    from pikepdf import NamePath
+    import pikepdf
 
     final_targets: dict[int, set] = {}
-    ocgs = pdf.Root.get(NamePath.OCProperties.OCGs)
-
-    if not ocgs:
+    ocprops = pdf.Root.get("/OCProperties")
+    if not isinstance(ocprops, pikepdf.Dictionary):
         return final_targets
 
-    for ocg in ocgs:
+    for ocg in dict_items(ocprops.get("/OCGs")):
+        if not ocg.is_indirect:
+            continue
         _resolve_targets_for_ocg(ocg, default_actions, rules_by_id, rules_by_name, final_targets)
 
     return final_targets
 
 
 def _resolve_targets_for_ocg(ocg, default_actions: set, rules_by_id, rules_by_name, final_targets):
+    actions_for_this_ocg = resolve_ocg_actions(ocg, default_actions, rules_by_id, rules_by_name)
+    actions_for_this_ocg.discard("keep")
+    if actions_for_this_ocg:
+        final_targets[int(ocg.objgen[0])] = actions_for_this_ocg
+
+
+def resolve_ocg_actions(ocg, default_actions: set, rules_by_id, rules_by_name) -> set:
+    """Actions for one OCG: an id match, else a name match, overrides `all`."""
     obj_id = int(ocg.objgen[0])
-
-    # Initialize the set directly with our default actions
-    actions_for_this_ocg = set(default_actions)
-
-    # 1. Strict ID Match
-    if obj_id in rules_by_id:
-        actions = rules_by_id[obj_id]
-        # Assuming the parser returns a list/set of actions for the ID
-        actions_for_this_ocg.update(actions if isinstance(actions, (list, set)) else [actions])
-    else:
-        # 2. Sloppy Name Match
+    specific = rules_by_id.get(obj_id)
+    if specific is None:
         name_obj = ocg.get("/Name")
         if name_obj is not None:
             name = str(name_obj)
-            clean_name = name[1:] if name.startswith("/") else name
-
-            if clean_name in rules_by_name:
-                actions = rules_by_name[clean_name]
-                actions_for_this_ocg.update(
-                    actions if isinstance(actions, (list, set)) else [actions]
-                )
-
-    # Only track if there are actual actions to perform
-    actions_for_this_ocg.discard("keep")
-    if actions_for_this_ocg:
-        final_targets[obj_id] = actions_for_this_ocg
+            specific = rules_by_name.get(name[1:] if name.startswith("/") else name)
+    if not specific:
+        return set(default_actions)
+    specific = set(specific) if isinstance(specific, (list, set)) else {specific}
+    return override_actions(default_actions, specific)

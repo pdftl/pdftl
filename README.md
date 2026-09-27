@@ -268,6 +268,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`link_urls`](https://pdftl.readthedocs.io/en/latest/operations/link_urls.html)                         | Auto-create links from URLs/emails found in page text           |
 | [`modify_annots`](https://pdftl.readthedocs.io/en/latest/operations/modify_annots.html)                 | Modify properties of existing annotations                       |
 | [`modify_images`](https://pdftl.readthedocs.io/en/latest/operations/modify_images.html)                 | Apply in-place image pixel modifications and effects            |
+| [`modify_layer_configs`](https://pdftl.readthedocs.io/en/latest/operations/modify_layer_configs.html)   | Add, update, delete or promote named layer configurations       |
 | [`modify_layers`](https://pdftl.readthedocs.io/en/latest/operations/modify_layers.html)                 | Merge or strip specific layers                                  |
 | [`montage`](https://pdftl.readthedocs.io/en/latest/operations/montage.html)                             | Impose pages onto a grid layout                                 |
 | [`move`](https://pdftl.readthedocs.io/en/latest/operations/move.html)                                   | Move pages to a new location                                    |

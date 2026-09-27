@@ -1,7 +1,10 @@
 import pytest
 
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.operations.parsers.modify_layers_parser import parse_modify_layers_rules
+from pdftl.operations.parsers.modify_layers_parser import (
+    override_actions,
+    parse_modify_layers_rules,
+)
 
 
 def test_parse_default_all():
@@ -48,3 +51,24 @@ def test_invalid_action():
 def test_invalid_id_type():
     with pytest.raises(InvalidArgumentError, match="id must be an integer"):
         parse_modify_layers_rules(["strip", "id=abc"])
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["show", "X", "hide", "X"],
+        ["show", "hide"],
+        ["strip", "id=3", "keep", "id=3"],
+        ["lock", "all", "unlock", "all"],
+    ],
+)
+def test_conflicting_actions_same_target_rejected(args):
+    with pytest.raises(InvalidArgumentError, match="conflicting actions"):
+        parse_modify_layers_rules(args)
+
+
+def test_override_actions():
+    assert override_actions({"hide", "lock"}, {"show"}) == {"show", "lock"}
+    assert override_actions({"strip"}, {"keep"}) == {"keep"}
+    assert override_actions({"keep"}, {"merge"}) == {"merge"}
+    assert override_actions({"noprint"}, {"hide"}) == {"noprint", "hide"}

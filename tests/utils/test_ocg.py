@@ -1,57 +1,16 @@
+import pytest
 import pikepdf
 
 from pdftl.utils.ocg import (
     _remove_targets_from_array,
     clean_ocproperties,
     create_layer,
+    fold_visibility,
     get_page_layer_map,
-    get_xobject_ocg_ids,
+    ocg_id_list,
     set_layer_state,
     set_layer_usage,
 )
-
-
-def test_get_xobject_ocg_ids():
-    pdf = pikepdf.Pdf.new()
-
-    # 1. No /OC
-    xobj1 = pdf.make_stream(b"")
-    assert get_xobject_ocg_ids(xobj1) == set()
-
-    # 2. Direct OCG
-    ocg = pdf.make_indirect(pikepdf.Dictionary(Type="/OCG"))
-    xobj2 = pdf.make_stream(b"")
-    xobj2.OC = ocg
-    assert get_xobject_ocg_ids(xobj2) == {ocg.objgen[0]}
-
-    # 3. OCMD Single
-    ocmd1 = pdf.make_indirect(pikepdf.Dictionary(Type="/OCMD", OCGs=ocg))
-    xobj3 = pdf.make_stream(b"")
-    xobj3.OC = ocmd1
-    assert get_xobject_ocg_ids(xobj3) == {ocg.objgen[0]}
-
-    # 4. OCMD Array
-    ocg2 = pdf.make_indirect(pikepdf.Dictionary(Type="/OCG"))
-    ocmd2 = pdf.make_indirect(pikepdf.Dictionary(Type="/OCMD", OCGs=pikepdf.Array([ocg, ocg2])))
-    xobj4 = pdf.make_stream(b"")
-    xobj4.OC = ocmd2
-    assert get_xobject_ocg_ids(xobj4) == {ocg.objgen[0], ocg2.objgen[0]}
-
-
-def test_get_page_layer_map():
-    pdf = pikepdf.Pdf.new()
-    ocg = pdf.make_indirect(pikepdf.Dictionary(Type="/OCG"))
-
-    xobj = pdf.make_stream(b"")
-    xobj.OC = pdf.make_indirect(pikepdf.Dictionary(Type="/OCG"))
-
-    resources = pikepdf.Dictionary(
-        Properties=pikepdf.Dictionary(MC0=ocg), XObject=pikepdf.Dictionary(Fm0=xobj)
-    )
-
-    prop_map, xobj_map = get_page_layer_map(resources)
-    assert prop_map == {"/MC0": ocg.objgen[0]}
-    assert xobj_map == {"/Fm0": {xobj.OC.objgen[0]}}
 
 
 def test_remove_targets_from_array():
@@ -157,15 +116,6 @@ def test_get_page_layer_map_none():
     prop_map, xobj_map = get_page_layer_map(None)
     assert prop_map == {}
     assert xobj_map == {}
-
-
-def test_get_xobject_ocg_ids_invalid_oc():
-    """Hits line 16: oc is present but not a pikepdf.Dictionary."""
-    pdf = pikepdf.Pdf.new()
-    xobj = pdf.make_stream(b"")
-    # Assign a Name instead of a Dictionary
-    xobj.OC = pikepdf.Name("/NotADict")
-    assert get_xobject_ocg_ids(xobj) == set()
 
 
 def test_create_layer_initializes_missing_catalog():
@@ -305,24 +255,6 @@ def test_set_layer_state_no_matching_targets():
     assert True
 
 
-def test_get_xobject_ocg_ids_direct_dict():
-    """Hits line 27: /OC is a direct dictionary of Type /OCG, so it has no objgen."""
-    import pikepdf
-
-    from pdftl.utils.ocg import get_xobject_ocg_ids
-
-    # Construct a dummy XObject dictionary with a direct /OC dictionary
-    xobj = pikepdf.Dictionary(
-        Type=pikepdf.Name.XObject,
-        Subtype=pikepdf.Name.Form,
-        OC=pikepdf.Dictionary(Type=pikepdf.Name.OCG),
-    )
-
-    # Because it is a direct dict (not attached to a PDF), it has no objgen.
-    # It passes the first check but fails the objgen check, hitting line 27.
-    assert get_xobject_ocg_ids(xobj) == set()
-
-
 def test_set_layer_usage_skip_unmatched_targets():
     """Hits line 226: Safely skips OCGs that are not in the target_ids list."""
     import pikepdf
@@ -340,30 +272,10 @@ def test_set_layer_usage_skip_unmatched_targets():
     assert "/Usage" not in l1
 
 
-def test_get_xobject_ocg_ids_other_dict_type():
-    """Ensures XObjects referencing non-OCG dictionaries without indirect object IDs return an empty set."""
-    xobj = pikepdf.Dictionary(OC=pikepdf.Dictionary(Type="/OtherType"))
-    assert get_xobject_ocg_ids(xobj) == set()
-
-
-def test_ocg_ids_from_ocmd_branches():
-    """Ensures OCMD parser safely handles items or collections lacking indirect object IDs."""
-    from pdftl.utils.ocg import _ocg_ids_from_ocmd
-
-    class ItemWithoutObjgen:
-        pass
-
-    # 1. Element in array without objgen (covers branch 34->33)
-    assert _ocg_ids_from_ocmd([ItemWithoutObjgen()], list) == set()
-
-    # 2. Non-array object without objgen (covers branch 36->38)
-    assert _ocg_ids_from_ocmd(ItemWithoutObjgen(), list) == set()
-
-
 def test_get_page_layer_map_non_ocg_properties_and_empty_xobj_ocg():
     """Ensures page layer mapping skips non-OCG property entries and XObjects without OCG IDs."""
     pdf = pikepdf.Pdf.new()
-    xobj = pdf.make_stream(b"")  # No /OC, so get_xobject_ocg_ids(xobj) returns set()
+    xobj = pdf.make_stream(b"")  # No /OC
 
     resources = pikepdf.Dictionary(
         Properties=pikepdf.Dictionary(
@@ -405,12 +317,6 @@ def test_set_layer_usage_unknown_action():
     set_layer_usage(pdf, {id1}, "invalid_action")
 
 
-def test_get_xobject_ocg_ids_ignores_non_ocg_dictionary():
-    """Ensures XObjects referencing non-OCG dictionaries return an empty set."""
-    xobj = pikepdf.Dictionary(OC=pikepdf.Dictionary(Type=pikepdf.Name("/OtherType")))
-    assert get_xobject_ocg_ids(xobj) == set()
-
-
 from pdftl.utils.ocg import _get_obj_id
 
 
@@ -423,17 +329,6 @@ def test_get_obj_id_returns_zero_on_malformed_objgen():
     assert _get_obj_id(MalformedObjgen()) == 0
 
 
-def test_get_page_layer_map_ignores_direct_ocg_properties():
-    """Ensures direct (unattached) OCG dictionaries are excluded from the property map."""
-    direct_ocg = pikepdf.Dictionary(Type=pikepdf.Name.OCG)
-    resources = pikepdf.Dictionary(Properties=pikepdf.Dictionary(Layer1=direct_ocg))
-
-    prop_map, xobj_map = get_page_layer_map(resources)
-
-    assert prop_map == {}
-    assert xobj_map == {}
-
-
 def test_get_obj_id_returns_zero_on_invalid_objgen_types():
     """Ensures _get_obj_id gracefully handles objects containing non-integer objgen values."""
 
@@ -441,3 +336,177 @@ def test_get_obj_id_returns_zero_on_invalid_objgen_types():
         objgen = (None,)
 
     assert _get_obj_id(InvalidObjgen()) == 0
+
+
+def test_get_page_layer_map_returns_ocgs_and_ocmds():
+    pdf = pikepdf.Pdf.new()
+    ocg = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG))
+    ocmd = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCMD, OCGs=ocg))
+    fm0, fm1, fm2 = (pdf.make_stream(b"") for _ in range(3))
+    fm0.OC, fm1.OC = ocg, ocmd
+    pdf.Root.Res = pikepdf.Dictionary(
+        Properties=pikepdf.Dictionary(MC0=ocg, MC1=ocmd, MC2=pikepdf.Dictionary(Type="/Other")),
+        XObject=pikepdf.Dictionary(Fm0=fm0, Fm1=fm1, Fm2=fm2),
+    )
+
+    prop_map, xobj_map = get_page_layer_map(pdf.Root.Res)
+    assert {k: v.objgen for k, v in prop_map.items()} == {"/MC0": ocg.objgen, "/MC1": ocmd.objgen}
+    assert {k: v.objgen for k, v in xobj_map.items()} == {"/Fm0": ocg.objgen, "/Fm1": ocmd.objgen}
+
+
+def _layers(n):
+    pdf = pikepdf.Pdf.new()
+    ocgs = [pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG)) for _ in range(n)]
+    return pdf, ocgs
+
+
+def _visible(oc, states):
+    """Visibility by definition (ISO 32000-2 8.11.2.2), `states` mapping id -> on."""
+    if oc.Type == "/OCG":
+        return states[oc.objgen[0]]
+    if "/VE" in oc:
+        return _evaluate(oc.VE, states)
+    members = oc.OCGs if isinstance(oc.OCGs, pikepdf.Array) else [oc.OCGs]
+    values = [states[o.objgen[0]] for o in members]
+    return {
+        "/AnyOn": any(values),
+        "/AllOn": all(values),
+        "/AnyOff": not all(values),
+        "/AllOff": not any(values),
+    }[str(oc.get("/P", "/AnyOn"))]
+
+
+def _evaluate(expr, states):
+    if isinstance(expr, pikepdf.Dictionary):
+        return states[expr.objgen[0]]
+    op, *args = list(expr)
+    values = [_evaluate(a, states) for a in args]
+    return {"/And": all, "/Or": any, "/Not": lambda v: not v[0]}[str(op)](values)
+
+
+def _assignments(ids):
+    for bits in range(2 ** len(ids)):
+        yield {i: bool(bits >> k & 1) for k, i in enumerate(ids)}
+
+
+def _mentioned_ids(oc):
+    found = set()
+
+    def walk(obj, is_expression):
+        if isinstance(obj, pikepdf.Dictionary):
+            found.add(obj.objgen[0])
+        elif isinstance(obj, pikepdf.Array):
+            for item in list(obj)[1:] if is_expression else obj:
+                walk(item, is_expression)
+
+    if "/VE" in oc:
+        walk(oc.VE, True)
+    else:
+        walk(oc.OCGs, False)
+    return found
+
+
+def _check_fold(make_oc, ocgs, fixed_ocg):
+    ids = [o.objgen[0] for o in ocgs]
+    fixed_id = fixed_ocg.objgen[0]
+    for fixed_on in (False, True):
+        oc = make_oc()
+        cases = [s for s in _assignments(ids) if s[fixed_id] == fixed_on]
+        expected = [_visible(oc, s) for s in cases]
+        folded = fold_visibility(oc, {fixed_id: fixed_on})
+        got = [folded if folded is not None else _visible(oc, s) for s in cases]
+        assert got == expected, fixed_on
+        if folded is None:
+            assert fixed_id not in _mentioned_ids(oc)
+
+
+@pytest.mark.parametrize("policy", ["/AnyOn", "/AllOn", "/AnyOff", "/AllOff", None])
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_fold_visibility_policies(policy, n):
+    pdf, ocgs = _layers(n)
+
+    def make_oc():
+        oc = pikepdf.Dictionary(Type=pikepdf.Name.OCMD, OCGs=pikepdf.Array(ocgs))
+        if policy:
+            oc.P = pikepdf.Name(policy)
+        return pdf.make_indirect(oc)
+
+    _check_fold(make_oc, ocgs, ocgs[0])
+
+
+_EXPRESSIONS = [
+    lambda x, y, z: ["/Or", x],
+    lambda x, y, z: ["/Not", x],
+    lambda x, y, z: ["/And", x, ["/Or", y, z]],
+    lambda x, y, z: ["/Or", ["/Not", x], y],
+    lambda x, y, z: ["/And", ["/Not", ["/And", x, y]], z],
+    lambda x, y, z: ["/Or", ["/And", x, y], ["/And", ["/Not", x], z]],
+    lambda x, y, z: ["/And", y, z],
+]
+
+
+def _to_pdf(expr):
+    if isinstance(expr, list):
+        return pikepdf.Array([pikepdf.Name(expr[0]), *map(_to_pdf, expr[1:])])
+    return expr
+
+
+@pytest.mark.parametrize("build", _EXPRESSIONS)
+def test_fold_visibility_expressions(build):
+    pdf, (x, y, z) = _layers(3)
+    tree = build(x, y, z)
+
+    def make_oc():
+        return pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCMD, VE=_to_pdf(tree)))
+
+    _check_fold(make_oc, [x, y, z], x)
+
+
+def test_fold_visibility_plain_ocg_and_unrelated():
+    _, (x, y) = _layers(2)
+    assert fold_visibility(x, {x.objgen[0]: False}) is False
+    assert fold_visibility(x, {x.objgen[0]: True}) is True
+    assert fold_visibility(y, {x.objgen[0]: True}) is None
+    ocmd = pikepdf.Dictionary(Type=pikepdf.Name.OCMD, OCGs=pikepdf.Array([y]))
+    assert fold_visibility(ocmd, {x.objgen[0]: True}) is None
+    assert [o.objgen for o in ocmd.OCGs] == [y.objgen]
+    assert fold_visibility(pikepdf.Dictionary(Type=pikepdf.Name.Other), {}) is None
+
+
+def test_fold_visibility_keeps_non_expression_operands():
+    pdf, (x,) = _layers(1)
+    ocmd = pikepdf.Dictionary(Type=pikepdf.Name.OCMD, VE=pikepdf.Array([pikepdf.Name.Or, 5, x]))
+    assert fold_visibility(ocmd, {x.objgen[0]: True}) is True
+    assert fold_visibility(ocmd, {x.objgen[0]: False}) is None
+    assert ocmd.VE == pikepdf.Array([pikepdf.Name.Or, 5])
+
+
+def test_fold_visibility_leaves_unknown_operator():
+    pdf, (x,) = _layers(1)
+    ocmd = pikepdf.Dictionary(Type=pikepdf.Name.OCMD, VE=pikepdf.Array([pikepdf.Name.Xor, x]))
+    assert fold_visibility(ocmd, {x.objgen[0]: True}) is None
+    assert [str(ocmd.VE[0]), ocmd.VE[1].objgen] == ["/Xor", x.objgen]
+
+
+def test_clean_ocproperties_auto_state():
+    pdf = pikepdf.Pdf.new()
+    obj1 = pdf.make_indirect(pikepdf.Dictionary())
+    obj2 = pdf.make_indirect(pikepdf.Dictionary())
+    usage_app = pikepdf.Dictionary(Event=pikepdf.Name.View, OCGs=pikepdf.Array([obj1, obj2]))
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        OCGs=pikepdf.Array([obj1, obj2]),
+        D=pikepdf.Dictionary(AS=pikepdf.Array([usage_app])),
+    )
+
+    clean_ocproperties(pdf, {obj1.objgen[0]})
+    assert [o.objgen for o in pdf.Root.OCProperties.D.AS[0].OCGs] == [obj2.objgen]
+
+
+def test_ocg_id_list_keeps_indirect_ids_in_order():
+    pdf, (x, y) = _layers(2)
+    assert ocg_id_list(pikepdf.Array([y, pikepdf.Dictionary(), 5, x])) == [
+        y.objgen[0],
+        x.objgen[0],
+    ]
+    assert ocg_id_list(x) == [x.objgen[0]]
+    assert ocg_id_list(None) == []

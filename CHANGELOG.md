@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modify_layer_configs` operation: add, update, delete, rename or promote to default the named
+  layer configurations (`/OCProperties /Configs`); `dump_layers` now reports each
+  configuration's locked layers and creator
+
 - `resample_images` now takes `mono_dpi=<n>` and `threshold=<x>`
 
 - `shrink` operation: makes a PDF smaller in one step, at `lossless` (default), `balanced` or
@@ -30,6 +34,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or crashing the operation
 
 ### Fixed
+
+- `modify_layers`: a specific target now overrides a conflicting action for `all`, so
+  `hide all show X` reliably leaves X visible (it depended on Python's hash seed) and
+  `strip all keep X` keeps X; conflicting actions on the same target are an error
+
+- `dump_layers`, `modify_layers`, `modify_layer_configs` and layer creation in `overlay`,
+  `barcode` and `redact` no longer crash on malformed optional content: a lone
+  dictionary where an array belongs (e.g. `/Configs`), junk array entries, or a
+  non-dictionary `/D` or `/Usage`. `dump_layers` also accepts an `/Intent` given as a
+  single name, as the spec allows
+
+- `modify_layers strip`/`merge` now also removes the layers from `/Locked`,
+  `/RBGroups` and the `/AS` auto-state arrays
+
+- `modify_layers strip`/`merge` now handles content controlled by several layers
+  through an optional content membership dictionary (OCMD) by its `/P` policy or
+  `/VE` expression: such content was left untouched when marked, and an XObject was
+  dropped (strip) or made permanent (merge) whenever any one of its layers was
+  targeted
+
+- `modify_layers strip`/`merge` now applies to annotations: those on a stripped layer
+  are deleted with their popups (form fields are also removed from the form), those
+  on a merged layer become permanent, and layered content in appearance streams is
+  stripped or merged like page content
 
 - `excise` and `redact` no longer move surviving text: tidying the rewritten content stream
   dropped the line spacing a removed line's `TD` had set, moved `T*` ahead of a `Tm`, and treated

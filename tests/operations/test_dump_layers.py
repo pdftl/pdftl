@@ -300,3 +300,17 @@ def test_dump_layers_no_ocgs_key(tmp_path):
         res = json.load(f)
 
     assert res["layers"] == []
+
+
+def test_dump_layers_reports_locked_and_creator():
+    pdf = pikepdf.new()
+    a = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name="A"))
+    b = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.OCG, Name="B"))
+    pdf.Root.OCProperties = pikepdf.Dictionary(
+        OCGs=pikepdf.Array([a, b]),
+        D=pikepdf.Dictionary(Locked=pikepdf.Array([b]), Creator=pikepdf.String("maker")),
+    )
+
+    default = dump_layers(pdf).data["default_config"]
+    assert default["locked_list_ids"] == [b.objgen[0]]
+    assert default["creator"] == "maker"
