@@ -61,8 +61,8 @@ def test_integration_id_fresh_bake_reset(minimal_pdf, tmp_path):
 
         # Verify state in-memory before save (Should be empty bytes)
         # This confirms our safeguards prevented a crash/KeyError
-        assert pdf.trailer.ID[0] == b""
-        assert pdf.trailer.ID[1] == b""
+        assert bytes(pdf.trailer.ID[0]) == b""
+        assert bytes(pdf.trailer.ID[1]) == b""
 
         pdf.save(out_path)
 

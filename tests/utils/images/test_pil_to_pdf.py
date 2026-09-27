@@ -59,7 +59,7 @@ def test_get_colorspace_dict_palette():
     assert cs[0] == pikepdf.Name("/Indexed")
     assert cs[1] == pikepdf.Name("/DeviceRGB")
     assert cs[2] == 255
-    assert cs[3] == bytes(palette)
+    assert bytes(cs[3]) == bytes(palette)
 
 
 def test_get_colorspace_dict_palette_empty():
