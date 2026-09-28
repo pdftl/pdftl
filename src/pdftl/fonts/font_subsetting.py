@@ -52,7 +52,8 @@ def wrap_bare_cff_in_sfnt(cff_bytes: bytes) -> Any:
     """
     from fontTools.ttLib import TTFont, newTable
 
-    tt = TTFont(sfntVersion="OTTO")
+    # A recomputed, tighter FontBBox changes Poppler's glyph rasterisation.
+    tt = TTFont(sfntVersion="OTTO", recalcBBoxes=False)
     tt["CFF "] = newTable("CFF ")
     tt["CFF "].decompile(cff_bytes, tt)
     return tt

@@ -121,8 +121,11 @@ _MRC_ARGS = {
     "strong": ["bg_div=4", "bg_quality=60", "fg_quality=40"],
     "extreme": ["bg_div=4", "bg_quality=50", "fg_quality=30"],
 }
+# Converting Type 1 to CFF changes Poppler's glyph edges.
+_SUBSET_FONTS_ARGS = {"lossless": ["keep_type1"]}
 # The most a glyph may move, in points; balanced's applies to other levels.
-_TEXT_TOLERANCE = {"strong": 0.02, "extreme": 0.05}
+# Past 0.02 pt, pdftotext starts reordering dense math (sub- and superscripts).
+_TEXT_TOLERANCE = {"strong": 0.02, "extreme": 0.02}
 # Largest JPEG, as a share of the stored photo, worth the loss; balanced's is the default.
 _PHOTO_RATIO = {"strong": 0.8, "extreme": 0.8}
 _BALANCED_TEXT_TOLERANCE = 0.005
@@ -155,14 +158,15 @@ worse than running the passes by hand.
   `jbig2` encoder is installed; needs the `optimize-images` extra), removes
   unused resources, and saves with maximum Flate compression, the document's
   XMP metadata included (`compress_xmp`; PDF/A-1 files excepted, as that
-  standard forbids it).
-* `balanced` -- also separates plain scanned pages into MRC layers (a
-  full-resolution 1-bit text stencil over small colour layers; needs the
-  `mrc-compress` extra), downsamples images to 200 dpi (JPEG quality 85;
-  bitonal images to 300 dpi), re-encodes losslessly stored photographs as
-  JPEG, re-encodes bitonal images losslessly
-  (CCITT/JBIG2 generic, needs the `optimize-images` extra), and drops XMP
-  metadata streams and embedded page thumbnails.
+  standard forbids it). Classic Type 1 fonts are left as they are.
+* `balanced` -- also converts classic Type 1 fonts to CFF as it subsets them
+  (Poppler draws their glyph edges slightly differently), separates plain
+  scanned pages into MRC layers (a full-resolution 1-bit text stencil over
+  small colour layers; needs the `mrc-compress` extra), downsamples images
+  to 200 dpi (JPEG quality 85; bitonal images to 300 dpi), re-encodes
+  losslessly stored photographs as JPEG, re-encodes bitonal images
+  losslessly (CCITT/JBIG2 generic, needs the `optimize-images` extra), and
+  drops XMP metadata streams and embedded page thumbnails.
 * `strong` -- uses coarser MRC colour layers, downsamples to 150 dpi (JPEG
   quality 75; bitonal images to 300 dpi), allows lossy image optimisation
   (keeping an image's re-encoding only where it stays faithful),
@@ -175,8 +179,8 @@ worse than running the passes by hand.
   MRC layers are coarser still (JPEG quality 50/30), images downsample to
   150 dpi at JPEG quality 60, `optimize_images` allows its most aggressive
   re-encodes, and a lossy image re-encode is kept once it is smaller, with
-  no PSNR check and no quality retry search. Text positions may move up to
-  0.05 pt. A re-encode that comes out larger than the original is still
+  no PSNR check and no quality retry search. A re-encode that comes out
+  larger than the original is still
   discarded (`extreme` never grows a file), and MRC still leaves alone a
   page whose edges it would blur, or that it would corrupt or cannot decode.
   It also deletes the tagged structure (`delete_tags`): pages look the
@@ -184,8 +188,8 @@ worse than running the passes by hand.
   PDF/A level A claim (`shrink` warns when the file makes one).
 
 `balanced`, `strong` and `extreme` also write text positions with fewer
-digits, moving no glyph more than 0.005 pt (`balanced`), 0.02 pt (`strong`)
-or 0.05 pt (`extreme`); TeX output via dvips shrinks most.
+digits, moving no glyph more than 0.005 pt (`balanced`) or 0.02 pt
+(`strong`, `extreme`); TeX output via dvips shrinks most.
 
 Images are downsampled only when drawn at more than 1.5 times the target,
 as a slight downsample blurs more than it saves.
@@ -209,7 +213,8 @@ Each level is a set of named passes, which `skip=` and `include=` adjust:
 | `simplify_vectors` | | | yes | yes |
 | `round_text_positions` | | yes | yes | yes (looser tolerance) |
 | `compact_content` | yes | yes | yes | yes |
-| `subset_fonts`, `deduplicate_fonts`, `merge_font_subsets` | yes | yes | yes | yes |
+| `subset_fonts` | yes (Type 1 kept) | yes | yes | yes |
+| `deduplicate_fonts`, `merge_font_subsets` | yes | yes | yes | yes |
 | `deduplicate_images`, `deduplicate_icc_profiles` | yes | yes | yes | yes |
 | `deduplicate_xobjects` | yes | yes | yes | yes |
 | `prune_resources`, `recompress`, `compress_xmp` | yes | yes | yes | yes |
@@ -486,7 +491,7 @@ def _step_functions(plan: ShrinkPlan, output_filename: str) -> dict[str, Callabl
     funcs: dict[str, Callable[[Pdf], object]] = {
         "delete_tags": lambda pdf: delete_tags(pdf, []),
         "mrc_compress": lambda pdf: mrc_compress(pdf, mrc_args, guard_fidelity=_mrc_guard(plan)),
-        "subset_fonts": lambda pdf: subset_fonts(pdf, []),
+        "subset_fonts": lambda pdf: subset_fonts(pdf, _SUBSET_FONTS_ARGS.get(plan.level, [])),
         "deduplicate_fonts": lambda pdf: deduplicate_fonts(pdf, []),
         "deduplicate_images": lambda pdf: deduplicate_images(pdf, []),
         "deduplicate_icc_profiles": lambda pdf: deduplicate_icc_profiles(pdf, []),

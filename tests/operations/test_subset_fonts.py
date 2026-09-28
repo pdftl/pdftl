@@ -1953,3 +1953,65 @@ def test_simple_truetype_widths_stay_keyed_by_code():
     assert (int(font.FirstChar), int(font.LastChar)) == (0, 255)
     assert [int(w) for w in font.Widths] == widths
     assert np.array_equal(render(), before)
+
+
+def _type1_pdf():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent / "fonts" / "fixtures"))
+    from type1_fixture_builder import build_type1_bytes
+
+    program = build_type1_bytes(
+        {
+            ".notdef": (0, ["endchar"]),
+            "A": (500, [0, 0, "rmoveto", 500, 0, "rlineto", 0, 500, "rlineto"]),
+            "B": (300, [0, 0, "rmoveto", 300, 0, "rlineto"]),
+        }
+    )
+    pdf = pikepdf.new()
+    font_file = pdf.make_stream(program)
+    font_file.Length1 = len(program)
+    descriptor = pikepdf.Dictionary(
+        Type=pikepdf.Name.FontDescriptor,
+        FontName=pikepdf.Name.T1,
+        Flags=4,
+        FontBBox=[0, 0, 1000, 1000],
+        ItalicAngle=0,
+        Ascent=750,
+        Descent=-250,
+        CapHeight=700,
+        StemV=80,
+        FontFile=font_file,
+    )
+    font = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.Type1,
+        BaseFont=pikepdf.Name.T1,
+        FirstChar=65,
+        LastChar=65,
+        Widths=[500],
+        Encoding=pikepdf.Dictionary(Differences=[65, pikepdf.Name.A]),
+        FontDescriptor=descriptor,
+    )
+    page = pdf.add_blank_page()
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page.Contents = pdf.make_stream(b"BT /F1 12 Tf 10 10 Td (A) Tj ET")
+    return pdf, program
+
+
+def test_keep_type1_leaves_the_type1_program_untouched():
+    pdf, program = _type1_pdf()
+    assert subset_fonts(pdf, ["keep_type1"]).success
+    font = pdf.pages[0].Resources.Font.F1
+    assert "/FontFile3" not in font.FontDescriptor
+    assert font.FontDescriptor.FontFile.read_bytes() == program
+    assert font.BaseFont == pikepdf.Name.T1
+
+
+def test_type1_is_converted_to_cff_without_keep_type1():
+    pdf, _ = _type1_pdf()
+    assert subset_fonts(pdf, []).success
+    descriptor = pdf.pages[0].Resources.Font.F1.FontDescriptor
+    assert "/FontFile" not in descriptor
+    assert descriptor.FontFile3.Subtype == pikepdf.Name.Type1C

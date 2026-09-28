@@ -452,7 +452,7 @@ def test_parse_skip_all_image_passes_leaves_no_image_target():
         (["balanced"], ["tolerance=0.005"]),
         (["strong"], ["tolerance=0.02"]),
         (["strong", "text_tolerance=0.001"], ["tolerance=0.001"]),
-        (["extreme"], ["tolerance=0.05"]),
+        (["extreme"], ["tolerance=0.02"]),
         (["include=round_text_positions"], ["tolerance=0.005"]),
     ],
 )
@@ -853,3 +853,11 @@ def test_only_extreme_deletes_tags_by_default(args, deleted):
     shrink(pdf, args, "out.pdf")
     assert ("/StructTreeRoot" not in pdf.Root) is deleted
     assert (b"MCID" not in pdf.pages[0].obj.Contents.read_bytes()) is deleted
+
+
+def test_only_lossless_keeps_type1_fonts(calls):
+    shrink(_pdf_with_duplicate_images(), [], "out.pdf")
+    assert ("subset_fonts", ["keep_type1"]) in calls
+    calls.clear()
+    shrink(_pdf_with_duplicate_images(), ["balanced"], "out.pdf")
+    assert ("subset_fonts", []) in calls

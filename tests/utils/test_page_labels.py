@@ -1,5 +1,6 @@
 # tests/utils/test_page_labels.py
 
+from unittest.mock import MagicMock
 import pytest
 import pikepdf
 
@@ -51,7 +52,6 @@ class TestGetAllPageLabelDicts:
 
     def test_gap_before_first_rule_yields_none(self):
         pdf = make_pdf(3)
-        # first rule starts at page index 1, so page 0 has no coverage -> None
         set_labels(pdf, {1: pikepdf.Dictionary(St=1)})
         result = get_all_page_label_dicts(pdf)
         assert result[0] is None
@@ -96,6 +96,26 @@ class TestGetAllPageLabelDicts:
     def test_empty_pdf_no_labels(self):
         pdf = make_pdf(0)
         assert get_all_page_label_dicts(pdf) == []
+
+    def test_corrupt_page_labels_invalid_type_falls_back_to_none(self):
+        pdf = make_pdf(2)
+        # Non-dictionary object triggers TypeError/PikepdfError during NumberTree init
+        pdf.Root.PageLabels = pikepdf.String("InvalidNumberTree")
+        result = get_all_page_label_dicts(pdf)
+        assert result == [None, None]
+
+    def test_corrupt_page_labels_exception_handling_forced(self, monkeypatch):
+        """Guarantees 100% coverage on exception handling across all pikepdf releases."""
+        pdf = make_pdf(2)
+        pdf.Root.PageLabels = pikepdf.Dictionary()
+
+        err_class = getattr(pikepdf, "PikepdfError", pikepdf.PdfError)
+        monkeypatch.setattr(
+            pikepdf, "NumberTree", MagicMock(side_effect=err_class("Tree corrupt"))
+        )
+
+        result = get_all_page_label_dicts(pdf)
+        assert result == [None, None]
 
 
 # ---------------------------------------------------------------------------

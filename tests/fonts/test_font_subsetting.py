@@ -46,7 +46,7 @@ def test_wrap_bare_cff_in_sfnt(mock_ttfont_cls, mock_new_table):
     cff_bytes = b"fake_cff_bytes"
     result = wrap_bare_cff_in_sfnt(cff_bytes)
 
-    mock_ttfont_cls.assert_called_once_with(sfntVersion="OTTO")
+    mock_ttfont_cls.assert_called_once_with(sfntVersion="OTTO", recalcBBoxes=False)
     mock_new_table.assert_called_once_with("CFF ")
     mock_cff_table.decompile.assert_called_once_with(cff_bytes, mock_tt)
     assert result == mock_tt
@@ -552,8 +552,8 @@ def test_promote_legacy_format0_cmap_subtables():
 
     mock_tt_dup = MagicMock()
     mock_tt_dup.__contains__.side_effect = lambda key: key == "cmap"
-    mock_tt_dup.__getitem__.side_effect = (
-        lambda key: mock_cmap_table_dup if key == "cmap" else None
+    mock_tt_dup.__getitem__.side_effect = lambda key: (
+        mock_cmap_table_dup if key == "cmap" else None
     )
 
     _promote_legacy_format0_cmap_subtables(mock_tt_dup)
@@ -740,3 +740,37 @@ class TestResolveCodeToGidAglFallbackTail:
                 best_cmap={0x201C: "uni201C"},
             )
         assert result == 5
+
+
+def _bare_cff_with_small_and_large_glyph() -> bytes:
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.t2CharStringPen import T2CharStringPen
+
+    def box(size):
+        pen = T2CharStringPen(600, None)
+        pen.moveTo((0, 0))
+        pen.lineTo((size, 0))
+        pen.lineTo((size, size))
+        pen.closePath()
+        return pen.getCharString()
+
+    fb = FontBuilder(1000, isTTF=False)
+    fb.setupGlyphOrder([".notdef", "A", "B"])
+    fb.setupCharacterMap({65: "A", 66: "B"})
+    fb.setupCFF("T", {"FullName": "T"}, {".notdef": box(10), "A": box(100), "B": box(900)}, {})
+    fb.setupHorizontalMetrics({".notdef": (600, 0), "A": (600, 0), "B": (600, 0)})
+    return fb.font["CFF "].compile(fb.font)
+
+
+def _font_bbox(cff_bytes: bytes) -> list:
+    return list(wrap_bare_cff_in_sfnt(cff_bytes)["CFF "].cff.topDictIndex[0].FontBBox)
+
+
+def test_bare_cff_subset_keeps_the_font_wide_bbox():
+    original = _bare_cff_with_small_and_large_glyph()
+    assert _font_bbox(original) == [0, 0, 900, 900]
+    tt = wrap_bare_cff_in_sfnt(original)
+    assert run_subsetter(tt, unicodes=set(), gids={1})  # keeps .notdef and A only
+    subset = unwrap_bare_cff_from_sfnt(tt)
+    assert wrap_bare_cff_in_sfnt(subset).getGlyphOrder() == [".notdef", "A"]
+    assert _font_bbox(subset) == [0, 0, 900, 900]

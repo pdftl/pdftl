@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `resample_images` now takes `mono_dpi=<n>` and `threshold=<x>`
 
+- `subset_fonts` takes `keep_type1`, leaving Type 1 fonts unconverted (Poppler draws a font
+  converted to CFF with slightly different glyph edges)
+
 - `shrink` operation: makes a PDF smaller in one step, at `lossless` (default), `balanced`,
   `strong` or `extreme`, running pdftl's size-reduction passes in a benchmarked order;
   `target=<size>` picks the least lossy settings that fit
@@ -102,9 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   simplified one would not compress smaller), uses less memory, and skips content streams over
   the new `max_stream_size` (default 16MB) instead of exhausting memory on them
 
-- `subset_fonts` no longer changes how small text renders: it keeps the font's original
-  font-wide bounding box (a recomputed, tighter one altered Poppler's rendering below about
-  150 dpi)
+- `subset_fonts` no longer changes how text renders: it keeps a TrueType or CFF font's original
+  font-wide bounding box (a recomputed, tighter one altered Poppler's rendering)
 
 - `subset_fonts` keeps only the glyphs a PDF draws, and drops font tables PDF renderers never
   read (Office documents' fonts come out about half the size)

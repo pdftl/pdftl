@@ -89,6 +89,9 @@ stay consistent with the subsetted glyph set.
 * `[keep_names]`: If given, glyph names are preserved in the subsetted
   program (larger output, useful for further manual editing). By default
   glyph names are dropped for maximum size reduction.
+* `[keep_type1]`: If given, classic Type 1 (`/FontFile`) programs are left
+  untouched instead of being converted to CFF (see below). Poppler draws a
+  converted font's glyph edges slightly differently.
 
 ### Limitations
 
@@ -651,6 +654,7 @@ def _subset_and_resync_group(
     group_entries: list[tuple[Any, Any, set[int]]],
     keep_names: bool,
     pikepdf_mod: Any,
+    keep_type1: bool = False,
 ) -> tuple[int, _SubsetStat | None]:
     """
     Subsets ONE physical embedded font program -- shared by every
@@ -674,6 +678,8 @@ def _subset_and_resync_group(
     base_font_name = str(first_font_obj.get("/BaseFont", "")).lstrip("/") or None
     label = base_font_name or f"stream {first_descriptor[stream_key].objgen}"
 
+    if fmt == "type1" and keep_type1:
+        return 0, None
     if fmt == "type1":
         rewrote = _subset_type1_font_group_binary(group_entries)
         # Type 1 -> CFF conversion doesn't currently track before/after
@@ -796,7 +802,7 @@ def _log_subset_summary(subsetted_count: int, stats: list[_SubsetStat]) -> None:
     type="single input operation",
     desc="Shrink embedded fonts to only the glyphs actually used",
     long_desc=_SUBSET_FONTS_LONG_DESC,
-    usage="<input> subset_fonts [<page_range>] [keep_names] output <out.pdf>",
+    usage="<input> subset_fonts [<page_range>] [keep_names] [keep_type1] output <out.pdf>",
     examples=_SUBSET_FONTS_EXAMPLES,
     args=([c.INPUT_PDF, c.OPERATION_ARGS], {}),
 )
@@ -813,7 +819,8 @@ def subset_fonts(pdf: pikepdf.Pdf, specs: list[str]) -> OpResult:
     )
 
     keep_names = "keep_names" in raw_tokens
-    page_specs = [t for t in raw_tokens if t != "keep_names"]
+    keep_type1 = "keep_type1" in raw_tokens
+    page_specs = [t for t in raw_tokens if t not in ("keep_names", "keep_type1")]
 
     target_pages = get_target_pages(pdf, page_specs)
     pages = (
@@ -830,7 +837,9 @@ def subset_fonts(pdf: pikepdf.Pdf, specs: list[str]) -> OpResult:
     subsetted_count = 0
     stats: list[_SubsetStat] = []
     for group_entries in groups.values():
-        resynced, stat = _subset_and_resync_group(pdf, group_entries, keep_names, pikepdf)
+        resynced, stat = _subset_and_resync_group(
+            pdf, group_entries, keep_names, pikepdf, keep_type1
+        )
         subsetted_count += resynced
         if stat is not None:
             stats.append(stat)

@@ -26,10 +26,13 @@ def get_all_page_label_dicts(pdf: "pikepdf.Pdf") -> list[dict[str, Any] | None]:
     if "/PageLabels" not in pdf.Root:
         return [None] * total_pages
 
+    # Support base exception across pikepdf version changes
+    PikepdfError = getattr(pikepdf, "PikepdfError", pikepdf.PdfError)
+
     try:
         nt = pikepdf.NumberTree(pdf.Root.PageLabels)
         old_rules = {int(k): v for k, v in nt.items()}
-    except (pikepdf.PdfError, AttributeError, KeyError, ValueError) as e:
+    except (PikepdfError, pikepdf.PdfError, AttributeError, KeyError, TypeError, ValueError) as e:
         # Fall back to empty markers if the underlying structural lookup fails or is corrupt
         logger.debug("Failed to parse PageLabels NumberTree: %s", e)
         return [None] * total_pages
