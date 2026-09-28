@@ -518,6 +518,84 @@ class TestSizeGuard:
         assert scan_pdf.pages[0].Contents.read_bytes() == before
 
 
+def _photo_like_jpeg() -> bytes:
+    """A smooth gradient plus fine per-pixel noise: a page-covering photo,
+    not text/line-art -- most of its tones sit away from paper-white and
+    ink-black, unlike a scan's."""
+    rng = np.random.default_rng(0)
+    _y, x = np.mgrid[0:IMG_H, 0:IMG_W]
+    gradient = (x / IMG_W * 180 + 40).astype(np.float32)
+    noise = rng.normal(0, 25, size=(IMG_H, IMG_W)).astype(np.float32)
+    gray = np.clip(gradient + noise, 0, 255).astype(np.uint8)
+    img = Image.fromarray(np.stack([gray] * 3, axis=-1), "RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _paper_tone_scan_jpeg(bg_level: int, noise_sigma: float, ink_level: int) -> bytes:
+    """A text scan whose paper isn't pure white: one uniform tone plus mild
+    scanner noise, with line-art ink on top. Still paper -- just not white."""
+    rng = np.random.default_rng(0)
+    base = np.full((IMG_H, IMG_W), bg_level, dtype=np.float32)
+    base += rng.normal(0, noise_sigma, size=base.shape)
+    img = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8), "L").convert("RGB")
+    draw = ImageDraw.Draw(img)
+    for y in range(80, IMG_H - 80, 40):
+        draw.rectangle([80, y, IMG_W - 80, y + 14], fill=(ink_level,) * 3)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+class TestPhotographicPagesLeftAlone:
+    def test_smooth_gradient_with_texture_is_left_untouched(self, scan_pdf):
+        _add_image_page(scan_pdf, _photo_like_jpeg(), "/DeviceRGB", "/DCTDecode")
+        before = scan_pdf.pages[0].Contents.read_bytes()
+        result = mrc_compress(scan_pdf, [])
+        assert result.data["pages_mrc"] == 0
+        assert "continuous-tone" in result.data["pages"][0]["reason"]
+        assert scan_pdf.pages[0].Contents.read_bytes() == before
+
+    def test_colour_scan_with_dense_mid_luma_ink_still_qualifies(self, scan_pdf):
+        """Mid-luma ink (58) over a quarter of the page: only the non-ink
+        background is judged, and here it is paper-white."""
+        _add_image_page(
+            scan_pdf, _jpeg(_lines_image("RGB", (200, 20, 20))), "/DeviceRGB", "/DCTDecode"
+        )
+        result = mrc_compress(scan_pdf, [])
+        assert result.data["pages_mrc"] == 1, result.data["pages"]
+
+    def test_scan_on_yellowed_paper_still_qualifies(self, scan_pdf):
+        """Paper is judged against the page's own background tone, not white."""
+        _add_image_page(scan_pdf, _paper_tone_scan_jpeg(195, 2, 20), "/DeviceRGB", "/DCTDecode")
+        result = mrc_compress(scan_pdf, [])
+        assert result.data["pages_mrc"] == 1, result.data["pages"]
+
+    def test_scan_on_grey_paper_still_qualifies(self, scan_pdf):
+        _add_image_page(scan_pdf, _paper_tone_scan_jpeg(205, 2, 20), "/DeviceRGB", "/DCTDecode")
+        result = mrc_compress(scan_pdf, [])
+        assert result.data["pages_mrc"] == 1, result.data["pages"]
+
+    def test_forcing_mrc_on_the_photo_would_actually_lose_detail(self, scan_pdf, monkeypatch):
+        """Independent ground truth for the gate above: bypass it (and the
+        edge-loss guard) and confirm the forced MRC composite really departs
+        from the source, measured by SSIM on the rendered pages -- not by
+        this module's own non-paper-background or edge_loss numbers."""
+        import pdftl.operations.mrc_compress as mc
+        from pdftl.utils.images.similarity import ssim
+
+        _add_image_page(scan_pdf, _photo_like_jpeg(), "/DeviceRGB", "/DCTDecode")
+        original = render_page_to_pil(scan_pdf, 0, dpi=100).convert("RGB")
+
+        monkeypatch.setattr(mc, "MAX_NONPAPER_BACKGROUND", 1.1)
+        result = mrc_compress(scan_pdf, [], guard_fidelity=False)
+        assert result.data["pages"][0]["decision"] == "mrc", result.data["pages"]
+
+        forced = render_page_to_pil(scan_pdf, 0, dpi=100).convert("RGB")
+        assert ssim(original, forced) < 0.8
+
+
 class TestFallbacks:
     def test_undecodable_image_is_rasterized_instead(self, scan_pdf, monkeypatch):
         _add_scan_page(scan_pdf)

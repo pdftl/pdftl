@@ -220,13 +220,13 @@ def optimize_images_pdf(
     )
 
     from pdftl.operations.helpers.image_guard import (
-        normalize_inverted_bitonal,
+        jbig2_encode_inverted_bitonal,
         restore_unless_smaller,
         snapshot_images,
     )
 
     snapshot = snapshot_images(pdf)
-    normalize_inverted_bitonal(pdf)
+    jbig2_encode_inverted_bitonal(pdf)
     try:
         _run_ocrmypdf_optimizer(pdf, options, png_name)
     finally:

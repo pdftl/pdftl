@@ -26,6 +26,7 @@ from pdftl.operations.helpers.image_processor import (
 from pdftl.utils.images.finders import extract_pdf_images
 from pdftl.utils.images.quality_search import lowest_passing
 from pdftl.utils.images.similarity import faithful
+from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.keyval_parser import parse_keyval_list
 from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.system_memory import IMAGE_MEMORY_HELP
@@ -56,9 +57,10 @@ An image counts as a photograph when it is 8-bit gray or RGB, or a
 palette image over gray or RGB, at least 32x32, has more than 1024
 distinct colours (RGB only, not palette images; a quarter of its pixels if
 fewer), no more than 70% of neighbouring pixels equal, and JPEG keeps it
-above 30 dB PSNR (27 dB for palette images, whose dither JPEG smooths away).
-If JPEG at `quality` falls short, higher qualities up to 95 are searched,
-with and without chroma subsampling, for the smallest JPEG that does not.
+above 30 dB PSNR (27 dB for palette images, whose dither JPEG smooths away)
+and its local structure intact. If JPEG at `quality` falls short, higher
+qualities up to 95 are searched, with and without chroma subsampling, for
+the smallest JPEG that does not.
 The image is replaced only if that JPEG is at most `max_ratio` of its size.
 Masks and images with a `/Decode` array or colour-key mask are never
 changed.
@@ -180,7 +182,7 @@ def _searched_jpeg(pil_img, quality: int, palette: bool) -> bytes | None:
         except OSError:  # Pillow's buffer overflows on some optimized near-lossless encodes
             return None
         decoded = Image.open(io.BytesIO(encoded)).convert(pil_img.mode)
-        return encoded if faithful(pil_img, decoded, palette) else None
+        return encoded if faithful(pil_img, decoded, palette, structural=True) else None
 
     qualities = _retry_qualities(quality)
     chains = [[(q, 2) for q in qualities[1:]]]
@@ -219,7 +221,9 @@ def photo_jpeg(
         return None
     if not guard_fidelity:
         return encoded
-    if faithful(pil_img, Image.open(io.BytesIO(encoded)).convert(pil_img.mode), palette):
+    if faithful(
+        pil_img, Image.open(io.BytesIO(encoded)).convert(pil_img.mode), palette, structural=True
+    ):
         return encoded
     searched = _searched_jpeg(pil_img, quality, palette)
     return searched if searched is not None and len(searched) <= budget else None
@@ -336,6 +340,9 @@ def photos_to_jpeg(pdf, operation_args: list, guard_fidelity: bool = True) -> Op
     Without `guard_fidelity`, a re-encode is kept once it fits `max_ratio`,
     with no PSNR check or quality retry.
     """
+    ensure_dependencies(
+        feature_name="photos_to_jpeg", dependencies=["numpy"], extra_tag="photos-to-jpeg"
+    )
     specs: list[str] = []
     kv = parse_keyval_list(
         operation_args or [],

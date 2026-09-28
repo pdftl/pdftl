@@ -151,7 +151,7 @@ worse than running the passes by hand.
 
 ### Levels
 
-* `lossless` (default) -- nothing visible changes. Subsets, deduplicates
+* `lossless` (default) -- every page renders pixel-for-pixel as before. Subsets, deduplicates
   and merges fonts, deduplicates images, ICC profiles, drawn form XObjects and link appearances
   (never other annotation appearances), writes content streams in their shortest equivalent form,
   re-encodes images losslessly (bitonal images as JBIG2 when a
@@ -564,6 +564,7 @@ def _steps(plan: ShrinkPlan, output_filename: str) -> list[tuple[str, Callable[[
 _PASS_MODULES = {
     "optimize_images": ("ocrmypdf",),
     "mrc_compress": ("numpy", "numba"),
+    "photos_to_jpeg": ("numpy",),
     "simplify_vectors": ("numpy", "numba"),
 }
 

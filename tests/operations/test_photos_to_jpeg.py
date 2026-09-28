@@ -18,12 +18,17 @@ from pdftl.operations.photos_to_jpeg import photos_to_jpeg
 W, H = 320, 240
 
 
-def _photo(mode="RGB", seed=1) -> Image.Image:
-    """Smooth random field plus sensor noise: many colours, few equal neighbours."""
+def _photo(mode="RGB", seed=1, sigma=1.3) -> Image.Image:
+    """Smooth random field plus sensor noise: many colours, few equal neighbours.
+
+    The default noise is mild: real photographic grain, unlike the
+    independent per-pixel noise a synthetic torture image adds, keeps its
+    local structure through a JPEG re-encode.
+    """
     rng = np.random.default_rng(seed)
     coarse = rng.integers(0, 256, (6, 8, 3), dtype=np.uint8)
     smooth = np.asarray(Image.fromarray(coarse).resize((W, H), Image.BICUBIC), dtype=np.int16)
-    noisy = np.clip(smooth + rng.normal(0, 4, smooth.shape), 0, 255).astype(np.uint8)
+    noisy = np.clip(smooth + rng.normal(0, sigma, smooth.shape), 0, 255).astype(np.uint8)
     img = Image.fromarray(noisy, "RGB")
     return img.convert("L") if mode == "L" else img
 
@@ -150,6 +155,34 @@ def test_graphics_are_left_lossless():
     assert pdf.pages[0].Resources.XObject.Im0.read_raw_bytes() == before
 
 
+def _gradient_plus_noise(n=512, sigma=15, seed=0) -> Image.Image:
+    """A diagonal gradient under strong independent per-pixel noise.
+
+    JPEG's block DCT turns this noise into new, blocky structure of its own
+    at any quality up to 95; PSNR alone does not see this (it stays above
+    30 dB), which is why the structural check exists.
+    """
+    rng = np.random.default_rng(seed)
+    ramp = (np.add.outer(np.arange(n), np.arange(n)) * 255 / (2 * (n - 1))).astype(np.float64)
+    rgb = np.stack([ramp] * 3, axis=-1)
+    noisy = np.clip(rgb + rng.normal(0, sigma, rgb.shape), 0, 255).astype(np.uint8)
+    return Image.fromarray(noisy, "RGB")
+
+
+def test_gradient_plus_noise_like_image_heavy_is_not_converted():
+    photo = _gradient_plus_noise()
+    assert pj.photo_jpeg(photo, 75, 10**9, max_ratio=1) is None  # no quality passes
+    assert photos_to_jpeg(_pdf_with(photo), []).data == {"images": 0}
+
+
+def test_a_smooth_photo_still_converts():
+    # A real photograph's noise stays correlated with its own detail, unlike
+    # independent per-pixel noise, so it keeps its structure through JPEG.
+    photo = _photo()
+    assert pj.photo_jpeg(photo, 75, 10**9) is not None
+    assert photos_to_jpeg(_pdf_with(photo), []).data == {"images": 1}
+
+
 def test_few_colours_are_left_lossless():
     rng = np.random.default_rng(3)
     palette = rng.integers(0, 256, (200, 3), dtype=np.uint8)
@@ -223,10 +256,18 @@ def test_without_guard_fidelity_the_size_budget_still_applies():
 
 
 def _colour_grain() -> Image.Image:
-    """A smooth field under strong independent noise in each colour band."""
+    """A smooth field under strong noise in its colour, not its luma.
+
+    Noise placed in Cb/Cr alone (not Y) needs full-resolution chroma to
+    survive 4:2:0's quartering, while leaving luma, and so the structural
+    check (which reads luma only), untouched.
+    """
+    base = _photo().convert("YCbCr")
+    ycbcr = np.asarray(base, dtype=np.float64).copy()
     rng = np.random.default_rng(7)
-    base = np.asarray(_photo(), dtype=np.float64)
-    return Image.fromarray(np.clip(base + rng.normal(0, 12, base.shape), 0, 255).astype(np.uint8))
+    ycbcr[..., 1:] += rng.normal(0, 15, ycbcr[..., 1:].shape)
+    ycbcr = np.clip(ycbcr, 0, 255).astype(np.uint8)
+    return Image.fromarray(ycbcr, "YCbCr").convert("RGB")
 
 
 def test_colour_grain_is_kept_by_full_resolution_chroma():
@@ -326,9 +367,20 @@ def test_max_ratio_trades_a_smaller_saving_for_the_loss():
 
 def test_small_photos_qualify_with_a_scaled_colour_threshold():
     # 2304 pixels: more than 576 colours are asked for, not the full-size 1024.
-    crop = np.asarray(_photo().crop((0, 0, 48, 48)))
-    small = Image.fromarray((crop // 6 * 6).astype(np.uint8))
-    assert 576 < len(small.getcolors(2304)) <= 1024
+    # A smooth (noise-free) gradient posterized to a coarse step: many
+    # colours from the posterizing, but still few enough steps that JPEG
+    # keeps its structure, unlike a noisy source posterized the same way.
+    n = 48
+    x = np.arange(n, dtype=np.float64).reshape(1, n)
+    y = np.arange(n, dtype=np.float64).reshape(n, 1)
+    step = 12
+    r, g, b = (
+        np.broadcast_to(x * 255 / (n - 1), (n, n)),
+        np.broadcast_to(y * 255 / (n - 1), (n, n)),
+        np.broadcast_to((x + y) * 255 / (2 * (n - 1)), (n, n)),
+    )
+    small = Image.fromarray((np.stack([r, g, b], axis=-1) // step * step).astype(np.uint8), "RGB")
+    assert 576 < len(small.getcolors(n * n)) <= 1024
     assert photos_to_jpeg(_pdf_with(small), ["max_ratio=1"]).data == {"images": 1}
     assert not pj.is_candidate(_add_image(pikepdf.new(), _photo().crop((0, 0, 30, 30))))
 
@@ -357,7 +409,11 @@ def _indexed_image(pdf, pil):
 
 def test_palette_photo_becomes_an_rgb_jpeg():
     pdf = pikepdf.new()
-    pdf = _pdf_with(_indexed_image(pdf, _photo()), pdf=pdf)
+    # Stronger noise (sigma 4): after quantizing to 256 colours and
+    # dithering, mild noise leaves too many equal neighbours (dithering
+    # needs some source variation to distribute); the structural check does
+    # not apply here (palette dither is not structure to keep).
+    pdf = _pdf_with(_indexed_image(pdf, _photo(sigma=4)), pdf=pdf)
     before = _render(pdf)
     assert photos_to_jpeg(pdf, []).data == {"images": 1}
     xobj = pdf.pages[0].Resources.XObject.Im0

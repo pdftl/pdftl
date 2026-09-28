@@ -12,8 +12,10 @@ import pypdfium2 as pdfium
 import pytest
 from PIL import Image
 
+import pdftl.operations.helpers.image_guard as guard
+import pdftl.utils.mrc.codecs as codecs
 from pdftl.operations.helpers.image_guard import (
-    normalize_inverted_bitonal,
+    jbig2_encode_inverted_bitonal,
     restore_unless_smaller,
     snapshot_images,
 )
@@ -74,15 +76,58 @@ def _ccitt_inverted(img):
     img.Decode = [1, 0]
 
 
+def _fake_binary_present(monkeypatch, path="/fake/jbig2"):
+    monkeypatch.setattr(codecs, "jbig2_binary", lambda: path)
+
+
+def _fail_if_reencoded(monkeypatch):
+    monkeypatch.setattr(
+        guard, "_jbig2_reencode_one", lambda *a: pytest.fail("should not have been reencoded")
+    )
+
+
+# --- real jbig2enc round-trip: skipped in CI, where no binary is installed ---
+
+
 @pytest.mark.parametrize("setup", [_flate_inverted, _raw_inverted, _ccitt_inverted])
-def test_normalizing_an_inverted_image_leaves_the_page_unchanged(setup):
+def test_jbig2_encoding_an_inverted_image_leaves_the_page_unchanged(setup):
+    if codecs.jbig2_binary() is None:
+        pytest.skip("no jbig2enc-family binary available on this machine")
     pdf = _page(setup)
     before = _render(pdf)
-    assert normalize_inverted_bitonal(pdf) == 1
+    jbig2_encode_inverted_bitonal(pdf)
     img = pdf.pages[0].Resources.XObject.Im0
-    assert "/Decode" not in img
+    assert list(img.Decode) == [1, 0]  # kept, unlike the old normalizer
     assert np.array_equal(_render(pdf), before)
     assert before.min() == 0 and before.max() == 255  # there is ink and paper
+
+
+@pytest.mark.parametrize("setup", [_raw_inverted, _ccitt_inverted])
+def test_jbig2_encoding_shrinks_an_uncompressed_or_ccitt_image(setup):
+    if codecs.jbig2_binary() is None:
+        pytest.skip("no jbig2enc-family binary available on this machine")
+    pdf = _page(setup)
+    img = pdf.pages[0].Resources.XObject.Im0
+    before_len = len(img.read_raw_bytes())
+    assert jbig2_encode_inverted_bitonal(pdf) == 1
+    assert img.Filter == pikepdf.Name.JBIG2Decode
+    assert "/DecodeParms" not in img
+    assert len(img.read_raw_bytes()) < before_len
+
+
+def test_ccitt_with_array_decodeparms_is_left_alone(monkeypatch):
+    # Array-wrapped /DecodeParms is malformed; PdfImage can decode it without
+    # raising but produces the wrong pixels, so it must not be trusted.
+    _fake_binary_present(monkeypatch)
+    pdf = _page(_ccitt_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    img.DecodeParms = pikepdf.Array([img.DecodeParms])
+    before = (img.read_raw_bytes(), dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+# --- _is_inverted_bitonal filtering: no encoder call is even attempted ---
 
 
 @pytest.mark.parametrize(
@@ -94,32 +139,158 @@ def test_normalizing_an_inverted_image_leaves_the_page_unchanged(setup):
         lambda img: setattr(img, "Decode", [pikepdf.Name.X, 0]),
         lambda img: setattr(img, "BitsPerComponent", 8),
         lambda img: setattr(img, "ColorSpace", pikepdf.Name.DeviceRGB),
-        lambda img: setattr(img, "Filter", pikepdf.Name.DCTDecode),
-        lambda img: setattr(
-            img, "DecodeParms", pikepdf.Dictionary(Predictor=15)
-        ),  # Flate + predictor
     ],
 )
-def test_images_it_cannot_normalize_are_left_alone(change):
+def test_images_excluded_by_is_inverted_bitonal_are_left_alone(monkeypatch, change):
+    _fake_binary_present(monkeypatch)
+    _fail_if_reencoded(monkeypatch)
     pdf = _page(_flate_inverted)
     img = pdf.pages[0].Resources.XObject.Im0
     change(img)
     before = (img.read_raw_bytes(), dict(img.items()))
-    assert normalize_inverted_bitonal(pdf) == 0
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
     assert (img.read_raw_bytes(), dict(img.items())) == before
 
 
-def test_ccitt_with_array_decodeparms_is_left_alone():
-    pdf = _page(_ccitt_inverted)
-    img = pdf.pages[0].Resources.XObject.Im0
-    img.DecodeParms = pikepdf.Array([img.DecodeParms])
-    assert normalize_inverted_bitonal(pdf) == 0
-
-
-def test_bitonal_image_with_no_colour_space_is_normalized():
+def test_an_already_jbig2_image_is_left_alone(monkeypatch):
+    _fake_binary_present(monkeypatch)
+    _fail_if_reencoded(monkeypatch)
     pdf = _page(_flate_inverted)
-    del pdf.pages[0].Resources.XObject.Im0["/ColorSpace"]
-    assert normalize_inverted_bitonal(pdf) == 1
+    img = pdf.pages[0].Resources.XObject.Im0
+    img.Filter = pikepdf.Name.JBIG2Decode  # already JBIG2; re-encoding buys nothing
+    before = (img.read_raw_bytes(), dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda img: setattr(img, "Filter", pikepdf.Name.DCTDecode),
+        lambda img: setattr(img, "DecodeParms", pikepdf.Dictionary(Predictor=15)),
+    ],
+)
+def test_an_undecodable_inverted_image_is_left_alone(monkeypatch, change):
+    # _is_inverted_bitonal accepts these (it does not look at /Filter or
+    # /DecodeParms), but PdfImage cannot decode the resulting garbage.
+    _fake_binary_present(monkeypatch)
+    pdf = _page(_flate_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    change(img)
+    assert guard._is_inverted_bitonal(img)
+    before = (img.read_raw_bytes(), dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+def test_an_undecodable_inverted_image_without_jbig2dec_is_left_alone(monkeypatch):
+    # Without jbig2dec, pikepdf reports an unfilterable stream as DependencyError.
+    import pikepdf.jbig2
+
+    monkeypatch.setattr(pikepdf.jbig2.get_decoder(), "available", lambda: False)
+    _fake_binary_present(monkeypatch)
+    pdf = _page(_flate_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    img.Filter = pikepdf.Name.DCTDecode
+    before = (img.read_raw_bytes(), dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+def test_bitonal_image_with_no_colour_space_is_left_alone(monkeypatch):
+    _fake_binary_present(monkeypatch)
+    pdf = _page(_flate_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    del img["/ColorSpace"]
+    assert guard._is_inverted_bitonal(img)
+    before = (img.read_raw_bytes(), dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+# --- absent-encoder and not-smaller branches, monkeypatched ---
+
+
+def test_no_jbig2_binary_leaves_images_untouched(monkeypatch):
+    monkeypatch.setattr(codecs, "jbig2_binary", lambda: None)
+    _fail_if_reencoded(monkeypatch)
+    pdf = _page(_flate_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    before = (img.read_raw_bytes(), dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+def test_a_jbig2_stream_that_is_not_smaller_is_rejected(monkeypatch):
+    _fake_binary_present(monkeypatch)
+    pdf = _page(_flate_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    original = img.read_raw_bytes()
+    monkeypatch.setattr(guard, "_run_jbig2_generic", lambda exe, mask: b"x" * len(original))
+    before = (original, dict(img.items()))
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+def test_a_failed_encoder_invocation_is_rejected(monkeypatch):
+    _fake_binary_present(monkeypatch)
+    pdf = _page(_flate_inverted)
+    img = pdf.pages[0].Resources.XObject.Im0
+    before = (img.read_raw_bytes(), dict(img.items()))
+    monkeypatch.setattr(guard, "_run_jbig2_generic", lambda exe, mask: None)
+    assert jbig2_encode_inverted_bitonal(pdf) == 0
+    assert (img.read_raw_bytes(), dict(img.items())) == before
+
+
+@pytest.mark.parametrize("setup", [_flate_inverted, _ccitt_inverted])
+def test_a_smaller_jbig2_stream_replaces_the_image(monkeypatch, setup):
+    _fake_binary_present(monkeypatch)
+    pdf = _page(setup)
+    img = pdf.pages[0].Resources.XObject.Im0
+    monkeypatch.setattr(guard, "_run_jbig2_generic", lambda exe, mask: b"x")
+    assert jbig2_encode_inverted_bitonal(pdf) == 1
+    assert img.Filter == pikepdf.Name.JBIG2Decode
+    assert img.read_raw_bytes() == b"x"
+    assert "/DecodeParms" not in img
+    assert list(img.Decode) == [1, 0]
+
+
+# --- _run_jbig2_generic itself ---
+
+
+def test_run_jbig2_generic_returns_stdout_on_success(monkeypatch):
+    class FakeResult:
+        returncode = 0
+        stdout = b"jbig2 bytes"
+
+    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: FakeResult())
+    assert guard._run_jbig2_generic("jbig2", Image.new("1", (4, 4))) == b"jbig2 bytes"
+
+
+def test_run_jbig2_generic_returns_none_on_nonzero_exit(monkeypatch):
+    class FakeResult:
+        returncode = 1
+        stdout = b""
+
+    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: FakeResult())
+    assert guard._run_jbig2_generic("jbig2", Image.new("1", (4, 4))) is None
+
+
+def test_run_jbig2_generic_returns_none_on_empty_stdout(monkeypatch):
+    class FakeResult:
+        returncode = 0
+        stdout = b""
+
+    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: FakeResult())
+    assert guard._run_jbig2_generic("jbig2", Image.new("1", (4, 4))) is None
+
+
+def test_run_jbig2_generic_returns_none_on_subprocess_failure(monkeypatch):
+    def raise_oserror(*a, **k):
+        raise OSError("no such binary")
+
+    monkeypatch.setattr(guard.subprocess, "run", raise_oserror)
+    assert guard._run_jbig2_generic("jbig2", Image.new("1", (4, 4))) is None
 
 
 def test_restore_puts_back_an_image_that_grew_and_keeps_one_that_shrank():

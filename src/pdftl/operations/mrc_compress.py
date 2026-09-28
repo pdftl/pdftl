@@ -45,6 +45,13 @@ GRAY_SPREAD = 6  # max-min channel spread (99.9th percentile) still treated as g
 # Worst-tile edge loss above which the layers smear detail the stencil missed
 # (camera photos of pages); clean scans stay below ~0.3.
 MAX_EDGE_LOSS = 0.4
+# Gray levels a non-ink pixel may sit from the page's own paper tone (its
+# median) and still count as paper, whatever that tone is.
+PAPER_DELTA = 24
+# A scan's non-ink area sits within PAPER_DELTA of its one paper tone; a
+# photo's non-ink area spreads across itself instead. 0.25 sits between
+# real scans (<=0.16) and real photos (>=0.44).
+MAX_NONPAPER_BACKGROUND = 0.25
 
 _MRC_COMPRESS_LONG_DESC = """
 The `mrc_compress` operation separates each scanned page into Mixed Raster
@@ -57,8 +64,10 @@ Only pages that are a single upright full-page scan (invisible OCR text is
 fine) are changed, and only when the layers come out smaller than the
 original image and keep its detail: a page where text the stencil misses
 would smear into the background, as in camera photos of pages, is left
-alone. Grayscale scans get grayscale layers. A scan that would
-decode to more than `PDFTL_MAX_DECODED_MB` (default 512) is left alone.
+alone. A continuous-tone photo -- its non-ink area doesn't sit close to
+one paper tone, the way a scan's does -- is left alone too. Grayscale
+scans get grayscale layers. A scan that would decode to more than
+`PDFTL_MAX_DECODED_MB` (default 512) is left alone.
 
 Arguments:
   * `bg_div=<n>`: background downsample divisor, 1-12 (default: 3).
@@ -287,6 +296,22 @@ def _process_candidate(
     ink, pictorial, stats = segmentation.segment(gray, dpi=work_dpi, k=SAUVOLA_K)
     has_pictorial = bool(pictorial.any())
     del pictorial
+
+    bg = gray[~ink]
+    nonpaper_bg = (
+        float(np.mean(np.abs(bg.astype(np.int16) - np.median(bg)) > PAPER_DELTA))
+        if bg.size
+        else 0.0
+    )
+    if nonpaper_bg > MAX_NONPAPER_BACKGROUND:
+        return {
+            "decision": "untouched",
+            "reason": f"page is continuous-tone, not text/line-art "
+            f"(non-paper background {nonpaper_bg:.2f})",
+            "nonpaper_background": round(nonpaper_bg, 3),
+        }
+    del bg
+
     stencil = codecs.encode_stencil(segmentation.mask_image(ink))
     gray_layers = native_gray or _looks_gray(rgb)
 
@@ -367,7 +392,8 @@ def mrc_compress(pdf, operation_args: list, guard_fidelity: bool = True) -> OpRe
 
     Without `guard_fidelity`, a page is not left untouched for exceeding
     `MAX_EDGE_LOSS`; it is still left untouched when the layers are not
-    smaller than the original image.
+    smaller than the original image, or when it is continuous-tone rather
+    than text/line-art.
     """
     ensure_dependencies(
         feature_name="mrc_compress", dependencies=["numpy", "numba"], extra_tag="mrc-compress"

@@ -550,6 +550,19 @@ def test_pass_without_its_extra_is_skipped_not_failed(monkeypatch, caplog):
     assert "skipping optimize_images: needs ocrmypdf" in caplog.text
 
 
+def test_photos_to_jpeg_is_skipped_without_numpy(monkeypatch, caplog):
+    import importlib.util
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name, *a: None if name == "numpy" else real(name, *a)
+    )
+    with caplog.at_level(logging.INFO):
+        result = shrink(_pdf_with_duplicate_images(), ["balanced"], "out.pdf")
+    assert "photos_to_jpeg" in result.summary.split("not installed", 1)[1]
+    assert "skipping photos_to_jpeg: needs numpy" in caplog.text
+
+
 def _bitonal_pdf(path):
     import numpy as np
 
@@ -675,7 +688,7 @@ def _photo_image():
     rng = np.random.default_rng(11)
     coarse = rng.integers(0, 256, (6, 8, 3), dtype=np.uint8)
     smooth = np.asarray(Image.fromarray(coarse).resize((320, 240), Image.BICUBIC), dtype=np.int16)
-    noisy = np.clip(smooth + rng.normal(0, 4, smooth.shape), 0, 255).astype(np.uint8)
+    noisy = np.clip(smooth + rng.normal(0, 1.3, smooth.shape), 0, 255).astype(np.uint8)
     return Image.fromarray(noisy, "RGB")
 
 

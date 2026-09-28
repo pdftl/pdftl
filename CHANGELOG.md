@@ -36,7 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `round_text_positions` operation: writes text positions with fewer digits, moving no glyph
   more than a tolerance
 
-- `photos_to_jpeg` operation: re-encodes losslessly stored photographs as JPEG
+- `photos_to_jpeg` operation: re-encodes losslessly stored photographs as JPEG when the
+  JPEG keeps their pixels and local structure (needs the `photos-to-jpeg` extra)
 
 - `mrc_compress` operation: splits scanned pages into a 1-bit text layer over low-resolution
   colour layers (needs the `mrc-compress` extra)
@@ -86,7 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `render` with no `output` writes `page_1.png`, `page_2.png`, ... as documented
 
-- `optimize_images` never makes an image bigger, also optimises inverted bitonal images, and at
+- `optimize_images` never makes an image bigger, also optimises inverted bitonal images
+  (without changing a pixel), and at
   `low` no longer re-encodes JPEGs
 
 - `resample_images`, `recolor_images`, `modify_images` and `render` bound the memory they use,

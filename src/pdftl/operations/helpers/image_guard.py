@@ -9,16 +9,19 @@
 `snapshot_images` records every image XObject's stored bytes and dictionary;
 `restore_unless_smaller` puts back any image whose new stream is not smaller,
 or, if asked, whose new pixels are not faithful to the old.
-`normalize_inverted_bitonal` rewrites 1-bit images drawn through
-`/Decode [1 0]` to store their pixels the other way up, with no `/Decode`,
-which looks identical and lets encoders that skip inverted images (as
-ocrmypdf's JBIG2 step does) consider them.
+`jbig2_encode_inverted_bitonal` re-encodes 1-bit images drawn through
+`/Decode [1 0]` as JBIG2 generic region, keeping that `/Decode` array so the
+image's polarity and appearance are unchanged.
 """
 
 from __future__ import annotations
 
-import zlib
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import Any
+
+from PIL import Image, ImageOps
 
 Snapshot = dict[tuple[int, int], tuple[bytes, dict]]
 
@@ -109,25 +112,63 @@ def _is_inverted_bitonal(img) -> bool:
     return bits == 1 and flipped and img.get("/ColorSpace") in (None, pikepdf.Name.DeviceGray)
 
 
-def normalize_inverted_bitonal(pdf) -> int:
-    """Store inverted 1-bit images uninverted (CCITT, Flate or unfiltered); return the count."""
+def _run_jbig2_generic(exe: str, mask) -> bytes | None:
+    """Encode a Pillow mode-"1" image as a PDF-embeddable JBIG2 generic region stream."""
+    with tempfile.TemporaryDirectory(prefix="pdftl_img_guard_jbig2_") as work:
+        png = Path(work) / "mask.png"
+        mask.save(png, format="PNG")
+        try:
+            result = subprocess.run(
+                [exe, "-p", str(png)], capture_output=True, timeout=120, check=False
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+    if result.returncode != 0 or not result.stdout:
+        return None
+    return result.stdout
+
+
+def _jbig2_reencode_one(exe: str, img) -> bool:
+    """Re-encode one inverted bitonal image as JBIG2; keep it only if smaller."""
     import pikepdf
 
+    from pdftl.utils.pikepdf_compatibility_utils import as_pil_image_compat, image_decode_errors
+
+    parms = img.get("/DecodeParms")
+    if parms is not None and not isinstance(parms, pikepdf.Dictionary):
+        return False  # malformed; PdfImage may decode it wrongly without raising
+    original = img.read_raw_bytes()
+    try:
+        appearance = as_pil_image_compat(pikepdf.PdfImage(img)).convert("1")
+    except image_decode_errors():
+        return False
+    # White where the stored sample bit is 1.
+    stored = ImageOps.invert(appearance.convert("L")).convert("1", dither=Image.Dither.NONE)
+    data = _run_jbig2_generic(exe, stored)
+    if data is None or len(data) >= len(original):
+        return False
+    img.write(data, filter=pikepdf.Name.JBIG2Decode)  # clears any stale /DecodeParms
+    return True
+
+
+def jbig2_encode_inverted_bitonal(pdf) -> int:
+    """Re-encode inverted 1-bit images (CCITT, Flate or unfiltered) as JBIG2 generic
+    region, keeping their `/Decode [1 0]`; return how many were changed.
+
+    A no-op without a jbig2enc-family binary on PATH, or where the JBIG2
+    stream is not smaller than the image's current stream.
+    """
+    import pikepdf
+
+    from pdftl.utils.mrc.codecs import jbig2_binary
+
+    exe = jbig2_binary()
+    if exe is None:
+        return 0
     changed = 0
     for img in _images(pdf):
-        if not _is_inverted_bitonal(img):
+        if not _is_inverted_bitonal(img) or img.get("/Filter") == pikepdf.Name.JBIG2Decode:
             continue
-        filt = img.get("/Filter")
-        parms = img.get("/DecodeParms")
-        if filt == pikepdf.Name.CCITTFaxDecode and not isinstance(parms, pikepdf.Array):
-            parms = pikepdf.Dictionary(parms or {})
-            parms.BlackIs1 = not bool(parms.get("/BlackIs1", False))  # the decoder inverts
-            img.DecodeParms = parms
-        elif filt in (None, pikepdf.Name.FlateDecode) and parms is None:
-            inverted = bytes(b ^ 0xFF for b in img.read_bytes())
-            img.write(zlib.compress(inverted, 9), filter=pikepdf.Name.FlateDecode)
-        else:
-            continue
-        del img["/Decode"]
-        changed += 1
+        if _jbig2_reencode_one(exe, img):
+            changed += 1
     return changed

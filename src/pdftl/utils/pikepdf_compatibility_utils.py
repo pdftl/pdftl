@@ -107,6 +107,7 @@ def image_decode_errors() -> tuple[type[Exception], ...]:
     return (
         pikepdf.PdfError,
         pikepdf.DataDecodingError,
+        pikepdf.DependencyError,  # pikepdf 10.9: any unfilterable 1-bit stream without jbig2dec
         Image.DecompressionBombError,
         *image_extraction_errors(),
         NotImplementedError,

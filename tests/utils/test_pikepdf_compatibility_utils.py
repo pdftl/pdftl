@@ -169,3 +169,96 @@ def test_set_outline_item_style_compat_old_pikepdf_no_color_no_style(mock_versio
     item.obj.C.__class__  # no-op access just to ensure no exception
     assert not item.obj.C.called
     assert not item.obj.F.called
+
+
+def _image(pdf, **entries):
+    import pikepdf
+
+    img = pikepdf.Stream(pdf, b"\x00" * 16)
+    img.Type, img.Subtype = pikepdf.Name.XObject, pikepdf.Name.Image
+    img.Width, img.Height, img.BitsPerComponent = 4, 4, 8
+    for key, value in entries.items():
+        img[f"/{key}"] = value
+    return img
+
+
+def test_image_extraction_errors_are_pikepdf_image_exceptions():
+    import pikepdf
+
+    from pdftl.utils.pikepdf_compatibility_utils import image_extraction_errors
+
+    errors = image_extraction_errors()
+    assert errors
+    for cls in errors:
+        assert issubclass(cls, Exception)
+        assert cls.__module__.startswith("pikepdf")
+    if hasattr(pikepdf, "UnsupportedImageTypeError"):
+        assert pikepdf.UnsupportedImageTypeError in errors
+
+
+def test_image_extraction_errors_without_the_private_module(monkeypatch):
+    import pikepdf
+    import pikepdf.models
+
+    from pdftl.utils.pikepdf_compatibility_utils import image_extraction_errors
+
+    monkeypatch.delattr(pikepdf.models, "_image_exceptions", raising=False)
+    monkeypatch.setitem(sys.modules, "pikepdf.models._image_exceptions", None)
+    public = [getattr(pikepdf, name) for name in dir(pikepdf)]
+    assert all(cls in public for cls in image_extraction_errors())
+
+
+def test_image_decode_errors_catch_undecodable_image_data():
+    import pikepdf
+
+    from pdftl.utils.pikepdf_compatibility_utils import image_decode_errors
+
+    errors = image_decode_errors()
+    assert pikepdf.DependencyError in errors
+    pdf = pikepdf.new()
+    img = _image(pdf, ColorSpace=pikepdf.Name.DeviceRGB, Filter=pikepdf.Name.DCTDecode)
+    try:
+        pikepdf.PdfImage(img).as_pil_image()
+    except errors:
+        pass
+    else:
+        raise AssertionError("garbage DCT data decoded")
+
+
+def test_is_indexed_image():
+    import pikepdf
+
+    from pdftl.utils.pikepdf_compatibility_utils import is_indexed_image
+
+    pdf = pikepdf.new()
+    palette = pikepdf.Array([pikepdf.Name.Indexed, pikepdf.Name.DeviceRGB, 1, b"\x00" * 6])
+    assert is_indexed_image(_image(pdf, ColorSpace=palette))
+    assert not is_indexed_image(_image(pdf, ColorSpace=pikepdf.Name.DeviceGray))
+    assert not is_indexed_image(_image(pdf, ColorSpace=pikepdf.Array([])))
+    assert not is_indexed_image(_image(pdf))
+
+
+def test_drop_stale_decode_array():
+    import pikepdf
+
+    from pdftl.utils.pikepdf_compatibility_utils import drop_stale_decode_array
+
+    pdf = pikepdf.new()
+    palette = pikepdf.Array([pikepdf.Name.Indexed, pikepdf.Name.DeviceRGB, 1, b"\x00" * 6])
+    decode = pikepdf.Array([1, 0])
+
+    kept = _image(pdf, ColorSpace=palette, Decode=decode)
+    drop_stale_decode_array(kept, source_was_indexed=True)
+    assert "/Decode" in kept
+
+    for img, was_indexed in [
+        (_image(pdf, ColorSpace=pikepdf.Name.DeviceGray, Decode=decode), True),
+        (_image(pdf, ColorSpace=palette, Decode=decode), False),
+        (_image(pdf, ColorSpace=pikepdf.Name.DeviceGray, Decode=decode), False),
+    ]:
+        drop_stale_decode_array(img, source_was_indexed=was_indexed)
+        assert "/Decode" not in img
+
+    bare = _image(pdf, ColorSpace=pikepdf.Name.DeviceGray)
+    drop_stale_decode_array(bare, source_was_indexed=False)
+    assert "/Decode" not in bare
