@@ -313,17 +313,19 @@ def _oxipng_idat(samples: bytes, width: int, height: int, colors: int) -> bytes 
         + _png_chunk(b"IDAT", zlib.compress(plain, 1))
     )
     png += _png_chunk(b"IEND", b"")
-    with tempfile.NamedTemporaryFile(suffix=".png") as f:
-        f.write(png)
-        f.flush()
+    with tempfile.TemporaryDirectory(prefix="pdftl_oxipng_") as tmp:
+        path = os.path.join(tmp, "image.png")
+        with open(path, "wb") as f:
+            f.write(png)
         proc = subprocess.run(
-            [exe, "-o", "4", "--nx", "--strip", "all", "-q", f.name],
+            [exe, "-o", "4", "--nx", "--strip", "all", "-q", path],
             capture_output=True,
             check=False,
         )
         if proc.returncode:
             return None
-        return _idat_if_same_format(open(f.name, "rb").read(), header)
+        with open(path, "rb") as f:
+            return _idat_if_same_format(f.read(), header)
 
 
 def _idat_if_same_format(png: bytes, header: bytes) -> bytes | None:

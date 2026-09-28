@@ -238,6 +238,7 @@ def test_cli_stage_profiler_measures_memory(monkeypatch):
     assert profiler.memory.peak == 321 * MB
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="no peak-RSS source on Windows")
 def test_cli_monitors_the_operation_and_the_save(tmp_path):
     import os
     import subprocess

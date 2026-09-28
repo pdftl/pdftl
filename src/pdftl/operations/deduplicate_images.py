@@ -39,7 +39,8 @@ Two image XObjects are considered duplicates if they are structurally
 equivalent per PDF Annex J: their dictionaries have the same keys with
 equivalent values (recursively, so an identical `/SMask` referenced by both
 images still counts as equivalent even if it's stored as two separate
-objects), and their raw, undecoded stream bytes are identical. Only image
+objects), and their raw, undecoded stream bytes are identical. The obsolete
+`/Name` key, which readers ignore, is left out of the comparison. Only image
 XObjects are considered -- fonts, form XObjects, annotation appearances, and
 page objects are left untouched.
 

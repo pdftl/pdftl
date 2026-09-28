@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pdftl.utils.stream_dedup import apply_replacements, build_replacement_map, stream_length
+from pdftl.utils.stream_dedup import (
+    XOBJECT_IGNORED_KEYS,
+    apply_replacements,
+    build_replacement_map,
+    stream_length,
+)
 
 if TYPE_CHECKING:
     import pikepdf
@@ -63,7 +68,9 @@ def deduplicate_image_xobjects(pdf: pikepdf.Pdf, threshold: int = 0) -> dict:
     """
     candidates = _find_image_candidates(pdf)
     candidates.sort(key=stream_length)
-    replacements, bytes_saved = build_replacement_map(candidates, threshold)
+    replacements, bytes_saved = build_replacement_map(
+        candidates, threshold, ignore_keys=XOBJECT_IGNORED_KEYS
+    )
 
     if not replacements:
         return {"merged": 0, "bytes_saved": 0}

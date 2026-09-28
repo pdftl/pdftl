@@ -21,6 +21,9 @@ from pdftl.utils.object_equivalence import check_object_equivalence
 if TYPE_CHECKING:
     import pikepdf
 
+# An XObject's /Name is a PDF 1.0 leftover that no reader uses.
+XOBJECT_IGNORED_KEYS = frozenset({"/Name"})
+
 
 def stream_length(obj: pikepdf.Object) -> int:
     """The stream's declared /Length, falling back to the actual raw
@@ -70,7 +73,12 @@ def rewrite_references(node: pikepdf.Object, replacements: dict) -> None:
 
 
 def find_duplicates_of(
-    master, master_len, remaining_candidates, replacements, depth: int = 10
+    master,
+    master_len,
+    remaining_candidates,
+    replacements,
+    depth: int = 10,
+    ignore_keys: frozenset[str] = frozenset(),
 ) -> int:
     """Scan `remaining_candidates` (already sorted ascending by length,
     all with index greater than master's) for streams equivalent to
@@ -83,7 +91,7 @@ def find_duplicates_of(
         cand_og = candidate.objgen
         if cand_og in replacements:
             continue
-        if check_object_equivalence(candidate, master, depth):
+        if check_object_equivalence(candidate, master, depth, ignore_keys):
             replacements[cand_og] = master
             # cand_len == master_len here (guaranteed by the sorted
             # same-length scan above), so either would do.
@@ -91,7 +99,12 @@ def find_duplicates_of(
     return bytes_saved
 
 
-def build_replacement_map(candidates: list, threshold: int, depth: int = 10) -> tuple[dict, int]:
+def build_replacement_map(
+    candidates: list,
+    threshold: int,
+    depth: int = 10,
+    ignore_keys: frozenset[str] = frozenset(),
+) -> tuple[dict, int]:
     """Walk the length-sorted candidate list once, grouping equivalent
     streams and choosing the first (smallest, or tied-smallest) of each
     group as the surviving master. Returns (replacements, bytes_saved)."""
@@ -104,7 +117,7 @@ def build_replacement_map(candidates: list, threshold: int, depth: int = 10) -> 
         if master.objgen in replacements:
             continue  # already folded into an earlier master itself
         bytes_saved += find_duplicates_of(
-            master, master_len, candidates[i + 1 :], replacements, depth
+            master, master_len, candidates[i + 1 :], replacements, depth, ignore_keys
         )
     return replacements, bytes_saved
 

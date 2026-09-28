@@ -372,3 +372,12 @@ def test_indirect_scalars_are_skipped(pdf):
     pages = [_page(pdf, {"/Fm0": _form(pdf)}) for _ in range(2)]
     assert deduplicate_form_xobjects(pdf)["merged"] == 1
     assert _og(pages[0]) == _og(pages[1])
+
+
+def test_forms_differing_only_in_their_name_merge_and_render_the_same(pdf):
+    page1 = _page(pdf, {"/Fm0": _form(pdf, Name=Name.Fm0)})
+    page2 = _page(pdf, {"/Fm0": _form(pdf, Name=Name.Fm1)})
+    before = _renders(pdf)
+    assert deduplicate_form_xobjects(pdf)["merged"] == 1
+    assert _og(page1) == _og(page2)
+    assert _renders(pdf) == before

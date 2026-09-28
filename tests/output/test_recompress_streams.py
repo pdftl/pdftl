@@ -4,6 +4,7 @@
 # back the original samples, and sizes are compared with zlib directly.
 
 import io
+import sys
 import zlib
 from unittest.mock import MagicMock
 
@@ -132,7 +133,7 @@ def test_non_flate_and_damaged_streams_are_left_alone():
     )
     broken = pdf.make_stream(b"\x78\x9cnot zlib", Filter=pikepdf.Name.FlateDecode)
     single = pdf.make_stream(
-        zlib.compress(b"a" * 1000, 1), Filter=pikepdf.Array([pikepdf.Name.FlateDecode])
+        zlib.compress(b"a" * 1000, 0), Filter=pikepdf.Array([pikepdf.Name.FlateDecode])
     )
     before = [s.read_raw_bytes() for s in (dct, chain, broken)]
     stats = rc.recompress_streams(pdf)
@@ -169,7 +170,7 @@ def test_oxipng_absent_unsupported_or_failing(monkeypatch):
     assert rc._oxipng_idat(samples, W, H, 4) is None  # CMYK has no PNG colour type
     monkeypatch.setattr(rc.shutil, "which", lambda name: None)
     assert rc._oxipng_idat(_gradient(), W, H, 3) is None
-    monkeypatch.setattr(rc.shutil, "which", lambda name: "/bin/false")
+    monkeypatch.setattr(rc.shutil, "which", lambda name: sys.executable)  # rejects oxipng's flags
     assert rc._oxipng_idat(_gradient(), W, H, 3) is None
 
 

@@ -23,7 +23,12 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from pdftl.utils.stream_dedup import apply_replacements, build_replacement_map, stream_length
+from pdftl.utils.stream_dedup import (
+    XOBJECT_IGNORED_KEYS,
+    apply_replacements,
+    build_replacement_map,
+    stream_length,
+)
 
 if TYPE_CHECKING:
     import pikepdf
@@ -171,7 +176,7 @@ def deduplicate_form_xobjects(pdf: pikepdf.Pdf, threshold: int = 0) -> dict:
     candidates = _drawn_only(_build_graph(pdf))
     candidates.sort(key=lambda form: (stream_length(form), form.objgen))
     replacements, bytes_saved = build_replacement_map(
-        candidates, threshold, depth=_EQUIVALENCE_DEPTH
+        candidates, threshold, depth=_EQUIVALENCE_DEPTH, ignore_keys=XOBJECT_IGNORED_KEYS
     )
     if not replacements:
         return {"merged": 0, "bytes_saved": 0}

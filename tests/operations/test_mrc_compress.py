@@ -208,6 +208,7 @@ class TestArgs:
         swatch_low = (
             pikepdf.PdfImage(scan_pdf.pages[0].obj["/Resources"]["/XObject"]["/MRCFg0"])
             .as_pil_image()
+            .convert("RGB")
             .getpixel((0, 0))
         )
 
@@ -218,6 +219,7 @@ class TestArgs:
         swatch_high = (
             pikepdf.PdfImage(pdf2.pages[0].obj["/Resources"]["/XObject"]["/MRCFg0"])
             .as_pil_image()
+            .convert("RGB")
             .getpixel((0, 0))
         )
         pdf2.close()

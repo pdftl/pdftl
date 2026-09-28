@@ -8,6 +8,9 @@ round trip.
 
 from __future__ import annotations
 
+import io
+
+import pymupdf
 import pytest
 import pikepdf
 from pikepdf import Dictionary, Name
@@ -374,3 +377,40 @@ def test_merge_preserves_image_data_integrity(pdf, tmp_path):
         assert merged_img.read_bytes() == data
     finally:
         reopened.close()
+
+
+def _renders(pdf):
+    buf = io.BytesIO()
+    pdf.save(buf)
+    doc = pymupdf.open(stream=buf.getvalue(), filetype="pdf")
+    return [page.get_pixmap(dpi=36).samples for page in doc]
+
+
+def test_images_differing_only_in_their_name_merge_and_render_the_same(pdf):
+    # ImageMagick writes a distinct /Name into every copy of a repeated image.
+    data = bytes(range(100))
+    smasks = [_make_image(pdf, b"\xff" * 100, Name=Name(f"/Sm{i}")) for i in range(2)]
+    pages = []
+    for i, smask in enumerate(smasks):
+        page = pdf.add_blank_page(page_size=(100, 100))
+        page.Resources = Dictionary(
+            XObject=Dictionary(Im0=_make_image(pdf, data, Name=Name(f"/Im{i}"), SMask=smask))
+        )
+        page.Contents = pdf.make_stream(b"q 100 0 0 100 0 0 cm /Im0 Do Q")
+        pages.append(page)
+    before = _renders(pdf)
+
+    result = deduplicate_image_xobjects(pdf)
+
+    assert result["merged"] == 2  # the images and their soft masks
+    assert pages[0].Resources.XObject.Im0.objgen == pages[1].Resources.XObject.Im0.objgen
+    assert _renders(pdf) == before
+
+
+def test_images_differing_in_name_and_another_key_stay_apart(pdf):
+    data = bytes(range(100))
+    img1 = _make_image(pdf, data, Name=Name.Im0)
+    img2 = _make_image(pdf, data, Name=Name.Im1, Interpolate=True)
+    page = pdf.add_blank_page()
+    page.Resources = Dictionary(XObject=Dictionary(Im0=img1, Im1=img2))
+    assert deduplicate_image_xobjects(pdf)["merged"] == 0

@@ -34,6 +34,7 @@ PDFs often carry one copy per source page.
 
 Two XObjects are merged only if their stream dictionaries are equivalent,
 `/Resources` and `/Group` included, and their raw stream bytes are identical.
+The obsolete `/Name` key, which readers ignore, is left out of the comparison.
 
 Only form XObjects drawn with `Do` from page content or from other such
 XObjects, and link appearances, are considered. An XObject is left alone if

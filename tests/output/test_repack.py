@@ -104,7 +104,8 @@ def test_repack_file_keeps_mode(tmp_path):
     path.write_bytes(_qpdf_bytes(_many_objects()))
     os.chmod(path, 0o644)
     assert rp.repack_file(str(path))
-    assert os.stat(path).st_mode & 0o777 == 0o644
+    if os.name != "nt":  # Windows keeps only a read-only flag
+        assert os.stat(path).st_mode & 0o777 == 0o644
 
 
 def test_width():

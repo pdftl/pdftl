@@ -227,7 +227,8 @@ def test_compress_saved_file_in_place(tmp_path):
     assert cx.compress_saved_file(str(path))
     assert len(path.read_bytes()) < len(before)
     assert _raw_metadata(path.read_bytes())[0] == "/FlateDecode"
-    assert os.stat(path).st_mode & 0o777 == 0o640
+    if os.name != "nt":  # Windows keeps only a read-only flag
+        assert os.stat(path).st_mode & 0o777 == 0o640
     assert os.listdir(tmp_path) == ["out.pdf"]
 
 

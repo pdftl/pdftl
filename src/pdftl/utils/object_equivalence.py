@@ -17,7 +17,9 @@ from decimal import Decimal
 _NUMERIC = (int, Decimal)
 
 
-def check_object_equivalence(obj1, obj2, depth: int = 10) -> bool:
+def check_object_equivalence(
+    obj1, obj2, depth: int = 10, ignore_keys: frozenset[str] = frozenset()
+) -> bool:
     """Public entry point. Thin wrapper around `_check_object_equivalence`
     that also guards against `RecursionError`: unlike qpdf's C++
     implementation (which has a much larger native stack to work with),
@@ -31,9 +33,12 @@ def check_object_equivalence(obj1, obj2, depth: int = 10) -> bool:
     outermost call -- the recursive descent below calls the private
     helper directly, so the exception unwinds cleanly to exactly one
     handler regardless of how deep it went.
+
+    `ignore_keys` are left out when comparing any stream's dictionary,
+    at every level.
     """
     try:
-        return _check_object_equivalence(obj1, obj2, depth)
+        return _check_object_equivalence(obj1, obj2, depth, ignore_keys)
     except RecursionError:
         return False
 
@@ -83,7 +88,7 @@ def _strings_equivalent(obj1, obj2) -> bool:
     )
 
 
-def _arrays_equivalent(obj1, obj2, depth: int) -> bool | None:
+def _arrays_equivalent(obj1, obj2, depth: int, ignore: frozenset[str]) -> bool | None:
     """None means "not applicable" (not both arrays) -- distinct from a
     real False result -- so the caller can tell "try the next type pair"
     from "these are arrays and they don't match"."""
@@ -93,28 +98,28 @@ def _arrays_equivalent(obj1, obj2, depth: int) -> bool | None:
         return None
     if len(obj1) != len(obj2):
         return False
-    return all(_check_object_equivalence(a, b, depth - 1) for a, b in zip(obj1, obj2))
+    return all(_check_object_equivalence(a, b, depth - 1, ignore) for a, b in zip(obj1, obj2))
 
 
-def _streams_equivalent(obj1, obj2, depth: int) -> bool | None:
+def _streams_equivalent(obj1, obj2, depth: int, ignore: frozenset[str]) -> bool | None:
     import pikepdf
 
     if not (isinstance(obj1, pikepdf.Stream) and isinstance(obj2, pikepdf.Stream)):
         return None
-    if not _dict_equivalent(obj1, obj2, depth - 1):
+    if not _dict_equivalent(obj1, obj2, depth - 1, ignore, drop=ignore):
         return False
     return obj1.read_raw_bytes() == obj2.read_raw_bytes()
 
 
-def _dicts_equivalent(obj1, obj2, depth: int) -> bool | None:
+def _dicts_equivalent(obj1, obj2, depth: int, ignore: frozenset[str]) -> bool | None:
     import pikepdf
 
     if not (isinstance(obj1, pikepdf.Dictionary) and isinstance(obj2, pikepdf.Dictionary)):
         return None
-    return _dict_equivalent(obj1, obj2, depth)
+    return _dict_equivalent(obj1, obj2, depth, ignore)
 
 
-def _check_object_equivalence(obj1, obj2, depth: int) -> bool:
+def _check_object_equivalence(obj1, obj2, depth: int, ignore: frozenset[str]) -> bool:
     """True if `obj1` and `obj2` are structurally equivalent under Annex
     J's rules: numeric int/real are cross-comparable by value, dictionary
     comparison ignores key order, arrays are order-sensitive, and streams
@@ -176,15 +181,15 @@ def _check_object_equivalence(obj1, obj2, depth: int) -> bool:
     if _strings_equivalent(obj1, obj2):
         return True
 
-    result = _arrays_equivalent(obj1, obj2, depth)
+    result = _arrays_equivalent(obj1, obj2, depth, ignore)
     if result is not None:
         return result
 
-    result = _streams_equivalent(obj1, obj2, depth)
+    result = _streams_equivalent(obj1, obj2, depth, ignore)
     if result is not None:
         return result
 
-    result = _dicts_equivalent(obj1, obj2, depth)
+    result = _dicts_equivalent(obj1, obj2, depth, ignore)
     if result is not None:
         return result
 
@@ -195,14 +200,17 @@ def _check_object_equivalence(obj1, obj2, depth: int) -> bool:
     return False
 
 
-def _dict_equivalent(d1, d2, depth: int) -> bool:
+def _dict_equivalent(
+    d1, d2, depth: int, ignore: frozenset[str], drop: frozenset[str] = frozenset()
+) -> bool:
     """Two dictionaries (or a stream's dictionary portion) are
     equivalent if they have the same set of keys and each shared key's
     value is equivalent. See the null note in `check_object_equivalence`
-    for why no explicit absent-vs-null handling is needed here.
+    for why no explicit absent-vs-null handling is needed here. Keys in
+    `drop` are not compared.
     """
-    keys1 = set(d1.keys())
-    keys2 = set(d2.keys())
+    keys1 = set(d1.keys()) - drop
+    keys2 = set(d2.keys()) - drop
     if keys1 != keys2:
         return False
-    return all(_check_object_equivalence(d1[k], d2[k], depth - 1) for k in keys1)
+    return all(_check_object_equivalence(d1[k], d2[k], depth - 1, ignore) for k in keys1)

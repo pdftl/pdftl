@@ -112,6 +112,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `subset_fonts` no longer gives a simple TrueType font widths keyed by Unicode (`/LastChar 8217`),
   which made MuPDF draw each line's text on top of itself
 
+- `deduplicate_images` and `deduplicate_xobjects` now merge copies that differ only in the
+  obsolete `/Name` key, which ImageMagick sets per copy (a 36 MB photo PDF drops to 12 MB)
+
+- The `oxipng` step of save-time recompression now works on Windows, where oxipng could not
+  open the temporary file
+
 - `uncompress` now really stores streams uncompressed: streams that were already
   Flate-compressed in the input used to be copied still compressed
 

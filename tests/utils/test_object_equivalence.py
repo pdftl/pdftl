@@ -510,3 +510,31 @@ def test_same_object_number_in_another_pdf_is_not_the_same_object(pdf):
     theirs = other.make_indirect(Dictionary(A=2))
     assert mine.objgen == theirs.objgen
     assert not ceq(mine, theirs)
+
+
+# --- ignore_keys -----------------------------------------------------------
+
+_NAME = frozenset({"/Name"})
+
+
+def _stream(pdf, **keys):
+    return pdf.make_indirect(pikepdf.Stream(pdf, b"data", **keys))
+
+
+def test_ignored_key_is_left_out_of_a_stream_dictionary(pdf):
+    a, b = _stream(pdf, Name=Name.Im0, W=1), _stream(pdf, Name=Name.Im1, W=1)
+    assert not ceq(a, b)
+    assert ceq(a, b, ignore_keys=_NAME)
+    assert ceq(a, _stream(pdf, W=1), ignore_keys=_NAME)
+    assert not ceq(a, _stream(pdf, Name=Name.Im1, W=2), ignore_keys=_NAME)
+
+
+def test_ignored_key_is_left_out_of_nested_streams(pdf):
+    a = Array([_stream(pdf, Name=Name.Sm0)])
+    b = Array([_stream(pdf, Name=Name.Sm1)])
+    assert not ceq(a, b)
+    assert ceq(a, b, ignore_keys=_NAME)
+
+
+def test_ignored_key_still_counts_in_a_plain_dictionary():
+    assert not ceq(Dictionary(Name=Name.A), Dictionary(Name=Name.B), ignore_keys=_NAME)
