@@ -566,7 +566,7 @@ def _extract_widths_from_subsetted_stream(
 
 
 def _rekey_simple_cff_widths(font_obj: Any, new_widths: dict[str, float]) -> dict[str, float]:
-    """A bare-CFF Simple font's widths come back from
+    """A bare-CFF or Type 1 Simple font's widths come back from
     get_font_widths_from_file keyed by glyph name, not hex code -- rekey
     them via the /Font dict's own /Encoding, matching
     _get_simple_font_encoding's resolution priority elsewhere in this
@@ -608,7 +608,9 @@ def _resync_widths_after_subset(
     if not new_widths:
         return
 
-    if embedded_format == "cff" and not is_type0:
+    if not is_type0:
+        if classify_binary_format(embedded_format) not in ("bare_cff", "type1"):
+            return  # an sfnt's widths are keyed by Unicode, not by this font's codes
         new_widths = _rekey_simple_cff_widths(font_obj, new_widths)
 
     old_widths = extract_font_widths(font_obj)

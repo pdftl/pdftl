@@ -19,7 +19,7 @@ program holding the union of their glyphs, each stored once:
 
 Content streams are untouched. A group is merged only if its programs
 agree on everything outside the glyphs (units per em and the hinting
-programs).
+programs). Type1C subsets are merged by merge_cff_subsets.
 """
 
 from __future__ import annotations
@@ -385,7 +385,9 @@ def _merge_group(pdf, name: str, members: list[_Member]) -> int:
 
 
 def merge_font_subsets(pdf) -> MergeStats:
-    """Merge TrueType subsets of the same font in `pdf`, in place."""
+    """Merge TrueType and Type1C subsets of the same font in `pdf`, in place."""
+    from pdftl.fonts.merge_cff_subsets import merge_cff_subsets
+
     stats = MergeStats()
     for (_simple, name), members in _candidates(pdf).items():
         saved = _merge_group(pdf, name, members)
@@ -393,4 +395,5 @@ def merge_font_subsets(pdf) -> MergeStats:
             stats.groups += 1
             stats.programs_merged += len(members)
             stats.bytes_saved += saved
+    merge_cff_subsets(pdf, stats)
     return stats

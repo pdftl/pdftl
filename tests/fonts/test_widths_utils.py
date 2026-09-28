@@ -191,6 +191,12 @@ def test_update_simple_widths_all_invalid_keys():
     assert "/Widths" not in font
 
 
+def test_update_simple_widths_ignores_codes_past_one_byte():
+    font = pikepdf.Dictionary({})
+    update_font_widths(font, {"41": 500.0, "2019": 222.0}, pikepdf)
+    assert (font.FirstChar, font.LastChar, list(font.Widths)) == (65, 65, [500])
+
+
 def test_update_composite_widths_all_invalid_keys_deletes_w():
     """Every key fails int(k, 16) for a composite font -> deletes existing /W."""
     cid_font = pikepdf.Dictionary(

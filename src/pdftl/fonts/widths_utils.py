@@ -231,9 +231,11 @@ def _update_simple_widths(font_obj: Any, widths_map: dict[str, float], pikepdf) 
     normalized_map = {}
     for k, v in widths_map.items():
         try:
-            normalized_map[f"{int(k, 16):02X}"] = v
+            code = int(k, 16)
         except ValueError:
-            pass  # skip keys that aren't valid hex
+            continue  # skip keys that aren't valid hex
+        if 0 <= code <= 255:  # a simple font's codes are single bytes
+            normalized_map[f"{code:02X}"] = v
 
     if not normalized_map:
         return

@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `compact_content` operation: rewrites content streams in their shortest equivalent form
 
-- `merge_font_subsets` operation: merges the per-page subsets of one TrueType font into one font
+- `merge_font_subsets` operation: merges the per-page subsets of one TrueType or Type1C (CFF) font
+  into one font
 
 - `deduplicate_xobjects` operation: merges identical Form XObjects and link appearances
 
@@ -107,6 +108,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `subset_fonts` keeps only the glyphs a PDF draws, and drops font tables PDF renderers never
   read (Office documents' fonts come out about half the size)
+
+- `subset_fonts` no longer gives a simple TrueType font widths keyed by Unicode (`/LastChar 8217`),
+  which made MuPDF draw each line's text on top of itself
 
 - `uncompress` now really stores streams uncompressed: streams that were already
   Flate-compressed in the input used to be copied still compressed

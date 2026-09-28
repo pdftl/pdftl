@@ -683,9 +683,12 @@ def test_full_coverage_subset_fonts_edge_cases():
             return_value={"65": 500.0},
         ),
         patch("pdftl.operations.subset_fonts.extract_font_widths", return_value={"65": 500.0}),
+        patch(
+            "pdftl.operations.subset_fonts._rekey_simple_cff_widths", side_effect=lambda f, w: w
+        ),
         patch("pdftl.operations.subset_fonts.update_font_widths") as mock_update,
     ):
-        _resync_widths_after_subset(font_no_change, desc_no_change, "ttf", pikepdf)
+        _resync_widths_after_subset(font_no_change, desc_no_change, "cff", pikepdf)
         mock_update.assert_not_called()
 
     # 9. subset_fonts descriptor is None or stream identity is None
@@ -1874,3 +1877,79 @@ def test_shared_fontfile2_used_as_both_simple_and_cid_font():
     simple_base = str(resolved_simple["/BaseFont"]).lstrip("/")
     type0_base = str(resolved_type0["/BaseFont"]).lstrip("/")
     assert simple_base.split("+")[0] == type0_base.split("+")[0]
+
+
+def _quote_ttf() -> bytes:
+    """.notdef, A and quoteright, with a Unicode cmap that includes U+2019."""
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+
+    def box(x0, x1):
+        pen = TTGlyphPen(None)
+        pen.moveTo((x0, 0))
+        pen.lineTo((x0, 700))
+        pen.lineTo((x1, 700))
+        pen.lineTo((x1, 0))
+        pen.closePath()
+        return pen.glyph()
+
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder([".notdef", "A", "quoteright"])
+    fb.setupCharacterMap({0x41: "A", 0x2019: "quoteright"})
+    fb.setupGlyf(
+        {".notdef": TTGlyphPen(None).glyph(), "A": box(50, 550), "quoteright": box(80, 150)}
+    )
+    fb.setupHorizontalMetrics({".notdef": (500, 0), "A": (600, 50), "quoteright": (222, 80)})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "Quote", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+    buf = BytesIO()
+    fb.save(buf)
+    return buf.getvalue()
+
+
+def test_simple_truetype_widths_stay_keyed_by_code():
+    """The program's cmap is keyed by Unicode (U+2019); /Widths is keyed by code (0x92)."""
+    import numpy as np
+    import pymupdf
+
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(200, 100))
+    widths = [0] * 256
+    widths[0x41], widths[0x92] = 600, 222
+    font = pikepdf.Dictionary(
+        Type=pikepdf.Name.Font,
+        Subtype=pikepdf.Name.TrueType,
+        BaseFont=pikepdf.Name.Quote,
+        Encoding=pikepdf.Name.WinAnsiEncoding,
+        FirstChar=0,
+        LastChar=255,
+        Widths=widths,
+        FontDescriptor=pikepdf.Dictionary(
+            Type=pikepdf.Name.FontDescriptor,
+            FontName=pikepdf.Name.Quote,
+            Flags=32,
+            FontBBox=[0, -200, 1000, 800],
+            ItalicAngle=0,
+            Ascent=800,
+            Descent=-200,
+            CapHeight=700,
+            StemV=80,
+            FontFile2=pdf.make_stream(_quote_ttf()),
+        ),
+    )
+    page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page.Contents = pdf.make_stream(b"BT /F1 40 Tf 10 20 Td (A\\222A\\222A) Tj ET")
+
+    def render():
+        buf = BytesIO()
+        pdf.save(buf)
+        pix = pymupdf.open(stream=buf.getvalue(), filetype="pdf")[0].get_pixmap(dpi=72)
+        return np.frombuffer(pix.samples, np.uint8)
+
+    before = render()
+    subset_fonts(pdf, [])
+    font = pdf.pages[0].Resources.Font.F1
+    assert (int(font.FirstChar), int(font.LastChar)) == (0, 255)
+    assert [int(w) for w in font.Widths] == widths
+    assert np.array_equal(render(), before)
