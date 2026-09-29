@@ -847,3 +847,21 @@ def test_help_markdown_renders_h3_heading():
 
     output = buffer.getvalue()
     assert "A Sub-subheading" in output
+
+
+def test_colour_variable_named_in_help_forces_colour_into_a_pipe():
+    import os
+    import re
+    import subprocess
+
+    var = re.search(r"variable\s+`(\w+)`\s+is set", helpmod._help_help_topic.__doc__).group(1)
+    env = {k: v for k, v in os.environ.items() if k not in ("NO_COLOR", "FORCE_COLOR", "TERM")}
+    env[var] = "1"
+    result = subprocess.run(
+        [sys.executable, "-m", "pdftl", "help", "help"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "\x1b[" in result.stdout

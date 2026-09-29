@@ -126,6 +126,11 @@ def test_api_input_context_get_input_raises() -> None:
         context.get_input("Enter a filename: ")
 
 
+def test_api_input_context_get_pass_raises() -> None:
+    with pytest.raises(UserCommandLineError, match="password prompt"):
+        ApiInputContext().get_pass(prompt="Enter the password: ")
+
+
 def test_build_pipeline_stages_raises_on_forbidden_output() -> None:
     """Direct parent-process unit test to cover the forbidden output check
     in build_pipeline_stages in-process (Line 134 coverage)."""

@@ -554,10 +554,11 @@ def run_pdftl():
     def _run(args):
         with patch.object(sys, "argv", ["pdftl"] + args):
             try:
-                main()
+                code = main()
             except SystemExit as e:
-                if e.code != 0:
-                    raise RuntimeError(f"pdftl failed with exit code {e.code}")
+                code = e.code
+            if code not in (0, None):
+                raise RuntimeError(f"pdftl failed with exit code {code}")
 
     return _run
 

@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PDFTL_PROFILE_MEMORY=<stage>|all` writes a memory profile of a CLI stage, and stages using
   more than `PDFTL_MEMORY_THRESHOLD` MB say so
 
+- Interactive password prompt support for encrypted PDFs (using `PROMPT` or `A=PROMPT`).
+
 ### Security
 
 - Parsing an embedded Type 1 font program is now bounded in steps, operand stack and memory, so
@@ -162,6 +164,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dump_bookmarks`, `dump_data`, `toc` and `delete_bookmarks`: destinations that target structure elements now resolve to the correct page when the page reference is on a later inline child
 
 - `stamp_fields`: inline widget kids after the first are no longer skipped
+
+- Documentation fixes:
+  - Correct `FORCE_COLORS` to `FORCE_COLOR`
+  - Correct input handle lifetime documentation
+  - Clarify handle scoping for page ranges in `cat` (e.g., `B2,4` vs `B2,B4`)
 
 ## [0.29.0] - 2026-09-23
 

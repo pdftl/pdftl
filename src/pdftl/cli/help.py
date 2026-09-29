@@ -564,9 +564,9 @@ def find_help_command(cli_args):
     examples=[
         HelpExample(
             desc=(
-                "Get all help. This is nice if you set `FORCE_COLORS=1` and pipe "
+                "Get all help. This is nice if you set `FORCE_COLOR=1` and pipe "
                 "the output to `less -R`, with the complete command "
-                "`FORCE_COLORS=1 pdftl help all | less -R`."
+                "`FORCE_COLOR=1 pdftl help all | less -R`."
             ),
             cmd="help all",
         ),
@@ -587,7 +587,7 @@ def _help_help_topic():
     By default, colors are used if printing directly to the
     terminal, and usually not in other situations (e.g., if
     the output is redirected). If the environment variable
-    `FORCE_COLORS` is set, then colors should appear in all
+    `FORCE_COLOR` is set, then colors should appear in all
     cases.
 
     The special help topic `all` is particularly interesting.

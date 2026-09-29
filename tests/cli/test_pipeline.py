@@ -279,6 +279,33 @@ def test_resolve_stage_io_prompts_prompts_user(monkeypatch):
     assert stage.inputs == ["file1.pdf"]
 
 
+def test_resolve_password_prompts_asks_only_for_prompt_passwords():
+    stage = CliStage(inputs=["_", "a.pdf", "b.pdf"], input_passwords=[None, "PROMPT", "x"])
+    stage.handles = {"A": 1}
+    get_pass = MagicMock(return_value="typed")
+    stage.resolve_password_prompts(get_pass, stage_num=2)
+    get_pass.assert_called_once_with(
+        prompt="Enter the password for a.pdf (pipeline stage 2, input #2 with handle A): "
+    )
+    assert stage.input_passwords == [None, "typed", "x"]
+
+
+@pytest.mark.parametrize("pw_arg", ["PROMPT", "A=PROMPT"])
+def test_input_pw_prompt_opens_an_encrypted_input(tmp_path, monkeypatch, pw_arg):
+    from pdftl.cli.main import main
+
+    src, out = tmp_path / "enc.pdf", tmp_path / "out.pdf"
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page(page_size=(123, 456))
+        pdf.save(src, encryption=pikepdf.Encryption(owner="own", user="secret"))
+    monkeypatch.setattr("getpass.getpass", lambda prompt="": "secret")
+    argv = ["pdftl", f"A={src}", "input_pw", pw_arg, "cat", "output", str(out)]
+    assert main(argv) == 0
+    with pikepdf.open(out) as pdf:
+        assert not pdf.is_encrypted
+        assert [float(x) for x in pdf.pages[0].mediabox] == [0, 0, 123, 456]
+
+
 # -----------------------------
 # _save_kw_options simple branch
 # -----------------------------
@@ -456,7 +483,8 @@ MOCK_REGISTRY = SimpleNamespace(operations=MOCK_REGISTRY_OPERATIONS)
 def mock_context():
     """Returns a mock input context."""
     return SimpleNamespace(
-        get_input=MagicMock(side_effect=lambda prompt, completer=None: "prompted_file.pdf")
+        get_input=MagicMock(side_effect=lambda prompt, completer=None: "prompted_file.pdf"),
+        get_pass=MagicMock(return_value="prompted_password"),
     )
 
 

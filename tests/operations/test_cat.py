@@ -100,3 +100,24 @@ def test_cat_no_pages_error(pdf_b):
 
     with pytest.raises(OperationError, match="Range specifications gave no pages"):
         cat_pages(inputs, specs, opened_pdfs, {})
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [("B2,4", [("B", 2), ("A", 4)]), ("B2,B4", [("B", 2), ("B", 4)])],
+)
+def test_handle_applies_only_to_the_range_it_prefixes(tmp_path, spec, expected):
+    from pdftl.cli.main import main
+
+    widths = {"A": 100, "B": 200}
+    for name, width in widths.items():
+        with pikepdf.new() as pdf:
+            for i in range(5):
+                pdf.add_blank_page(page_size=(width + i, 300))
+            pdf.save(tmp_path / f"{name}.pdf")
+    out = tmp_path / "out.pdf"
+    argv = ["pdftl", f"A={tmp_path / 'A.pdf'}", f"B={tmp_path / 'B.pdf'}", "cat", spec]
+    assert main([*argv, "output", str(out)]) == 0
+    with pikepdf.open(out) as pdf:
+        got = [int(page.mediabox[2]) for page in pdf.pages]
+    assert got == [widths[name] + page - 1 for name, page in expected]

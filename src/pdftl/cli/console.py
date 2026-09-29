@@ -6,6 +6,7 @@
 
 """A global rich console"""
 
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,5 +20,15 @@ def get_console(create_if_none=True) -> "Console | None":
     if _CONSOLE is None and create_if_none:
         from rich.console import Console
 
-        _CONSOLE = Console()
+        force_color = "FORCE_COLOR" in os.environ
+        if force_color:
+            # legacy_windows=False: on Windows, a pipe has no VT console mode,
+            # so rich would otherwise fall back to the Win32 API and emit no ANSI.
+            _CONSOLE = Console(
+                color_system="standard",
+                force_terminal=True,
+                legacy_windows=False,
+            )
+        else:
+            _CONSOLE = Console()
     return _CONSOLE

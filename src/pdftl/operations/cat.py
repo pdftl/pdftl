@@ -19,6 +19,8 @@ The `cat` operation is used to assemble pages from one or more PDFs.
 Input PDFs can be assigned to handles (e.g., `A=one.pdf B=two.pdf`).
 Each spec may refer to these handles to select pages or page ranges.
 When no handle is specified, the first input file is used.
+A handle applies only to the range it prefixes, so `B2,4` takes page 2
+of `B` and page 4 of the first input; write `B2,B4` for both from `B`.
 
 Considerable effort is made to do "the right thing" as regards
 hyperlinks and any outlines (table of contents). Since `cat` is quite

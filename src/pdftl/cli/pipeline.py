@@ -80,25 +80,34 @@ class CliStage:
         and prompts the user to resolve them.
         """
         logger.debug("resolve_stage_io_prompts")
-        # Create an inverse handle map for nice prompts
-        handles_inverse = {index: handle for handle, index in self.handles.items()}
         for i, filename in enumerate(self.inputs):
             logger.debug("i=%s, filename=%s", i, filename)
             if filename == "PROMPT":
                 logger.debug("Found a PROMPT, asking user")
-                desc = f"input #{i + 1}"
-                if (handle := handles_inverse.get(i, None)) is not None:
-                    desc += f" with handle {handle}"
-
-                if stage_num > 1:
-                    desc = f"pipeline stage {stage_num}, {desc}"
-
                 new_filename = get_input(
-                    f"Enter a filename for an input PDF ({desc}): ",
+                    f"Enter a filename for an input PDF ({self._input_desc(i, stage_num)}): ",
                     completer=pdf_filename_completer,
                 )
 
                 self.inputs[i] = new_filename
+
+    def resolve_password_prompts(self, get_pass, stage_num):
+        """Asks for each input password given as "PROMPT"."""
+        for i, password in enumerate(self.input_passwords):
+            if password == "PROMPT":
+                desc = self._input_desc(i, stage_num)
+                self.input_passwords[i] = get_pass(
+                    prompt=f"Enter the password for {self.inputs[i]} ({desc}): "
+                )
+
+    def _input_desc(self, i, stage_num):
+        desc = f"input #{i + 1}"
+        handle = next((h for h, index in self.handles.items() if index == i), None)
+        if handle is not None:
+            desc += f" with handle {handle}"
+        if stage_num > 1:
+            desc = f"pipeline stage {stage_num}, {desc}"
+        return desc
 
 
 class PipelineResult:
@@ -159,6 +168,7 @@ class PipelineManager:
         try:
             for i, stage in enumerate(self.stages):
                 stage.resolve_stage_io_prompts(self.input_context.get_input, i + 1)
+                stage.resolve_password_prompts(self.input_context.get_pass, i + 1)
                 stage_name = stage.operation or "filter"
                 stage_args = stage.operation_args
                 with CliStageProfiler(stage_name, stage_args):
@@ -688,7 +698,7 @@ _PIPELINE_HELP_EXAMPLES = [
         cmd="in.pdf rotate right --- crop '(a4)' output out.pdf",
     ),
     HelpExample(
-        desc="Assign named handles to inputs to reuse them later in the pipeline",
+        desc="Assign named handles to inputs to reuse them within a stage",
         cmd="A=logo.pdf B=content.pdf cat A B A output out.pdf",
     ),
     HelpExample(
@@ -779,9 +789,14 @@ def _pipeline_help_topic():
     pdftl A=logo.pdf B=content.pdf ...
     ```
 
-    This allows you to reuse a specific file or result multiple times in
-    different stages (e.g., `cat A B A`). Handles are visible to all
-    subsequent stages in the same pipeline.
+    This allows you to reuse a specific file or result multiple times
+    (e.g., `cat A B A`). A handle belongs to the stage that assigns it,
+    including any `JOB ... DONE` inside that stage. A later stage (after
+    `---`) that needs the file must assign the handle again, as in:
+
+    ```
+    pdftl A=a.pdf B=b.pdf cat A1 --- B=b.pdf cat _1 B2 output out.pdf
+    ```
 
     **3. Pipeline Substitution (`JOB ... DONE`)**
 

@@ -45,6 +45,12 @@ class ApiInputContext:
             "cannot prompt a user; provide all inputs explicitly."
         )
 
+    def get_pass(self, prompt: str = "") -> str:
+        raise UserCommandLineError(
+            f"A password prompt was requested ({prompt!r}) but the API "
+            "cannot prompt a user; provide the password explicitly."
+        )
+
 
 def parse_pipeline_steps(args_raw: str) -> list[dict[str, Any]]:
     """Parse the ``args`` form field for a pipeline request into step dicts.
