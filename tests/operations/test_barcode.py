@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pikepdf
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from pdftl.exceptions import OperationError
 from pdftl.operations.barcode import (
@@ -343,3 +343,136 @@ def test_barcode_all_rotations_execution(mock_gen, mock_stamp):
 
 
 # --- 6. Image Modes and OCG Layers (Lines 97, 120-122) ---
+
+
+# --- 7. Rotation regression: orientation/placement in visible space ---
+
+PAGE_W, PAGE_H = 612.0, 792.0
+BARCODE_W = 144.0
+IMG_PX = (200, 100)  # deliberately non-square, so a wrong 90/270 fit is visible
+BARCODE_H = BARCODE_W * IMG_PX[1] / IMG_PX[0]
+MARKER_PX = 40
+
+
+def _marked_image(*_args, **_kwargs):
+    """White image with a red block in its top-left corner (breaks all symmetry)."""
+    img = Image.new("RGB", IMG_PX, "white")
+    ImageDraw.Draw(img).rectangle([0, 0, MARKER_PX - 1, MARKER_PX - 1], fill="red")
+    return img
+
+
+def _is_red(rgb):
+    """Tolerant match: PIL embeds RGB images as lossy JPEG in PDF."""
+    r, g, b = rgb
+    return r > 180 and g < 90 and b < 90
+
+
+def _mul(m, n):
+    """Row-vector convention (PDF): result = m x n, i.e. apply m first."""
+    a, b, c, d, e, f = m
+    a2, b2, c2, d2, e2, f2 = n
+    return (
+        a * a2 + b * c2,
+        a * b2 + b * d2,
+        c * a2 + d * c2,
+        c * b2 + d * d2,
+        e * a2 + f * c2 + e2,
+        e * b2 + f * d2 + f2,
+    )
+
+
+def _apply(m, x, y):
+    a, b, c, d, e, f = m
+    return (a * x + c * y + e, b * x + d * y + f)
+
+
+def _image_ctms(stream_obj, resources, ctm, out):
+    """Walk a content stream, recording the CTM in force at every image Do."""
+    stack = []
+    for operands, operator in pikepdf.parse_content_stream(stream_obj):
+        op = str(operator)
+        if op == "q":
+            stack.append(ctm)
+        elif op == "Q":
+            ctm = stack.pop()
+        elif op == "cm":
+            ctm = _mul(tuple(float(x) for x in operands), ctm)
+        elif op == "Do":
+            xobj = resources.XObject[operands[0]]
+            if xobj.Subtype == "/Image":
+                out.append((ctm, xobj))
+            else:  # form XObject
+                fm = tuple(float(x) for x in xobj.get("/Matrix", [1, 0, 0, 1, 0, 0]))
+                inner_res = xobj.get("/Resources", resources)
+                _image_ctms(xobj, inner_res, _mul(fm, ctm), out)
+
+
+def _to_visible(rotation, x, y):
+    """Map default user space to the displayed page (/Rotate is clockwise)."""
+    if rotation == 90:
+        return y, PAGE_W - x
+    if rotation == 180:
+        return PAGE_W - x, PAGE_H - y
+    if rotation == 270:
+        return PAGE_H - y, x
+    return x, y
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_barcode_is_upright_and_correctly_placed_on_rotated_pages(rotation):
+    """Regression: the stamp must look identical, in *visible* space, for every /Rotate.
+
+    pikepdf's Page.add_overlay() already counter-rotates the overlay by the
+    page's /Rotate, so pre-rotating the PIL image as well double-compensates.
+    """
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(PAGE_W, PAGE_H))
+    page.Rotate = rotation
+
+    with patch(
+        "pdftl.operations.barcode.generate_barcode",
+        side_effect=_marked_image,
+    ):
+        barcode_pdf(pdf, ["1!data!(position=top-right,width=144pt)"])
+
+    ctms = []
+    page = pdf.pages[0]
+    _image_ctms(page, page.Resources, (1, 0, 0, 1, 0, 0), ctms)
+    assert len(ctms) == 1
+    ctm, image_xobj = ctms[0]
+
+    # Image unit square -> visible page coordinates.
+    o = _to_visible(rotation, *_apply(ctm, 0, 0))
+    ux = _to_visible(rotation, *_apply(ctm, 1, 0))
+    uy = _to_visible(rotation, *_apply(ctm, 0, 1))
+    corners = [o, ux, uy, _to_visible(rotation, *_apply(ctm, 1, 1))]
+
+    vis_w, vis_h = (PAGE_H, PAGE_W) if rotation in (90, 270) else (PAGE_W, PAGE_H)
+
+    # 1. Image x axis points right and y axis points up (upright, unmirrored).
+    assert ux[0] - o[0] == pytest.approx(BARCODE_W, abs=0.01)
+    assert ux[1] - o[1] == pytest.approx(0.0, abs=0.01)
+    assert uy[0] - o[0] == pytest.approx(0.0, abs=0.01)
+    assert uy[1] - o[1] == pytest.approx(BARCODE_H, abs=0.01)
+
+    # 2. Flush against the visible top-right corner, at full (unshrunk) size.
+    assert min(x for x, _ in corners) == pytest.approx(vis_w - BARCODE_W, abs=0.01)
+    assert max(x for x, _ in corners) == pytest.approx(vis_w, abs=0.01)
+    assert min(y for _, y in corners) == pytest.approx(vis_h - BARCODE_H, abs=0.01)
+    assert max(y for _, y in corners) == pytest.approx(vis_h, abs=0.01)
+
+    # 3. The red marker (top-left of the source image) must appear at the
+    #    visible top-left of the stamp, whatever the page's /Rotate.
+    pixels = pikepdf.PdfImage(image_xobj).as_pil_image().convert("RGB")
+    red = [
+        (col, row)
+        for row in range(pixels.height)
+        for col in range(pixels.width)
+        if _is_red(pixels.getpixel((col, row)))
+    ]
+    assert red, "marker not found in embedded image"
+    mx = sum(c for c, _ in red) / len(red) / pixels.width
+    my = 1 - sum(r for _, r in red) / len(red) / pixels.height
+    vx, vy = _to_visible(rotation, *_apply(ctm, mx, my))
+    assert vx < vis_w - BARCODE_W / 2, "marker is not on the left half of the stamp"
+    assert vy > vis_h - BARCODE_H / 2, "marker is not on the top half of the stamp"

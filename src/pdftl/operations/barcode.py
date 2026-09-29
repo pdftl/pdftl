@@ -186,7 +186,6 @@ def _process_single_rule(
 ) -> None:
     """Runs a single rule operation inside isolated execution boundaries."""
     import pikepdf
-    from PIL import Image
 
     x0, y0, w_phys, h_phys = raw_dims  # codeql[py/mismatched-multiple-assignment]
 
@@ -225,21 +224,22 @@ def _process_single_rule(
     vis_x = anchor_x + offset_x + draw_x
     vis_y = anchor_y + offset_y + draw_y
 
+    # NOTE: do not transpose pil_image here. pikepdf's Page.add_overlay()
+    # already applies the inverse of the page's /Rotate to the form, rotating
+    # about the rect centre and fitting it into the rect. We only need to give
+    # it the *physical* (unrotated-space) rect that bounds the visible one.
     if rotation == 90:
         phys_x = x0 + w_phys - vis_y - resolved_h
         phys_y = y0 + vis_x
         phys_w, phys_h = resolved_h, resolved_w
-        pil_image = pil_image.transpose(Image.Transpose.ROTATE_90)
     elif rotation == 180:
         phys_x = x0 + w_phys - vis_x - resolved_w
         phys_y = y0 + h_phys - vis_y - resolved_h
         phys_w, phys_h = resolved_w, resolved_h
-        pil_image = pil_image.transpose(Image.Transpose.ROTATE_180)
     elif rotation == 270:
         phys_x = x0 + vis_y
         phys_y = y0 + h_phys - vis_x - resolved_w
         phys_w, phys_h = resolved_h, resolved_w
-        pil_image = pil_image.transpose(Image.Transpose.ROTATE_270)
     else:
         phys_x = x0 + vis_x
         phys_y = y0 + vis_y

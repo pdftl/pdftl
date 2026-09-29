@@ -170,6 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Correct input handle lifetime documentation
   - Clarify handle scoping for page ranges in `cat` (e.g., `B2,4` vs `B2,B4`)
 
+- `barcode`: correct orientation on rotated pages
+
 ## [0.29.0] - 2026-09-23
 
 ### Added
