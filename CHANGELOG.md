@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `gui` operation (`pip install pdftl[gui]`): a desktop window where every pipeline stage shows its
+  output pages; selected pages become page specs, and a command bar reads and writes the command
+
 - `modify_layer_configs` operation: add, update, delete, rename or promote to default the named
   layer configurations (`/OCProperties /Configs`); `dump_layers` now reports each
   configuration's locked layers and creator

@@ -76,6 +76,7 @@ HARDCODED_KEYWORDS = {
     "filter",
     "generate_fdf",
     "grep",
+    "gui",
     "highlight",
     "import_fonts",
     "import_images",

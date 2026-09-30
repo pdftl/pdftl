@@ -201,6 +201,13 @@ See the [**API Tutorial**][4] for more details.
 
 A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.html) interface to API is provided; [try it here](https://pdftl.onrender.com/builder).
 
+## Desktop GUI
+
+`pdftl gui [file.pdf ...]` opens a desktop window for building pipelines interactively: every
+stage shows thumbnails of its output pages, selected pages become page specs for the next
+stage, and the command bar shows (and accepts) the equivalent `pdftl` command. It is fully
+keyboard operable and needs the `gui` extra: `pipx install "pdftl[gui]"`.
+
 ## Operations and options
 
 | Operation                                                                                               | Description                                                     |
@@ -262,6 +269,7 @@ A simple [`server`](https://pdftl.readthedocs.io/en/latest/operations/server.htm
 | [`filter`](https://pdftl.readthedocs.io/en/latest/operations/filter.html)                               | Do nothing (the default if `<operation>` is absent)             |
 | [`generate_fdf`](https://pdftl.readthedocs.io/en/latest/operations/generate_fdf.html)                   | Generate an FDF file containing PDF form data                   |
 | [`grep`](https://pdftl.readthedocs.io/en/latest/operations/grep.html)                                   | Match text patterns and get bounding boxes                      |
+| [`gui`](https://pdftl.readthedocs.io/en/latest/operations/gui.html)                                     | Open the desktop GUI                                            |
 | [`highlight`](https://pdftl.readthedocs.io/en/latest/operations/highlight.html)                         | Highlight text matching a regex pattern                         |
 | [`import_fonts`](https://pdftl.readthedocs.io/en/latest/operations/import_fonts.html)                   | Import edited fonts from a directory using a JSON manifest      |
 | [`import_images`](https://pdftl.readthedocs.io/en/latest/operations/import_images.html)                 | Import edited images from a directory using a JSON manifest     |

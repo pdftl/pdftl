@@ -65,6 +65,10 @@ def _builder_html() -> bytes:
     return html_bytes
 
 
+# server would recurse; gui would open a window on the server host.
+_API_BLOCKED_OPERATIONS = {"server", "gui"}
+
+
 class PdftlServerRequestHandlerMixIn:
     """Stateless HTTP server daemon mixin for routing PDF processing requests."""
 
@@ -350,12 +354,10 @@ class PdftlServerRequestHandlerMixIn:
     def _dispatch_execution_route(self, operation: str) -> None:
         from pdftl.core.registry import registry
 
-        if operation == "server":
-            logger.warning(
-                "Blocked attempt to execute 'server' operation recursively over the API."
-            )
+        if operation in _API_BLOCKED_OPERATIONS:
+            logger.warning("Blocked attempt to execute '%s' operation over the API.", operation)
             self._send_error(
-                403, "Forbidden: Server operation cannot be called recursively via the API."
+                403, f"Forbidden: the '{operation}' operation cannot be called via the API."
             )
             return
 

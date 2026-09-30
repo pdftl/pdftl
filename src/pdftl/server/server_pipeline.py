@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Operations that must never be reachable as a pipeline step: 'server' for
 # the same recursion/resource-exhaustion reason single-op dispatch blocks
 # it, and 'pipeline' itself since it isn't a registered operation.
-_BLOCKED_STEP_OPERATIONS = {"server", "pipeline"}
+_BLOCKED_STEP_OPERATIONS = {"server", "gui", "pipeline"}
 
 
 class ApiInputContext:

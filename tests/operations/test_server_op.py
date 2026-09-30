@@ -573,12 +573,13 @@ def test_server_keyboard_interrupt_graceful_exit() -> None:
         assert result.success is True
 
 
-def test_server_blocked_recursive_server(server) -> None:
-    """Verifies that executing the 'server' operation over the API returns HTTP 403 Forbidden."""
+@pytest.mark.parametrize("operation", ["server", "gui"])
+def test_server_blocked_recursive_server(server, operation) -> None:
+    """Executing 'server' or 'gui' over the API returns HTTP 403 Forbidden."""
     ms = server()
     base_url = ms.base_url
 
-    req = urllib.request.Request(f"{base_url}/v1/execute/server", data=b"{}")
+    req = urllib.request.Request(f"{base_url}/v1/execute/{operation}", data=b"{}")
     with pytest.raises(urllib.error.HTTPError) as exc_info:
         urllib.request.urlopen(req)
     assert exc_info.value.code == 403
