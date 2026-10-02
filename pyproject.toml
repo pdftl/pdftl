@@ -99,6 +99,9 @@ full = [
     "pdftl[extras]",
 ]
 
+# Desktop GUI (`pdftl gui`). Not in `extras`: it pulls in Qt.
+gui = ["PySide6-Essentials>=6.5", "pypdfium2", "pyyaml"]
+
 # Documentation dependencies
 docs = [
     "sphinx>=7.0",
@@ -129,6 +132,8 @@ dev = [
     "types-setuptools",
     # Include full feature set so tests run against all capabilities
     "pdftl[full]",
+    "pdftl[gui]",
+    "pytest-qt",
 ]
 
 # Complete installation for maintainers/CI
@@ -146,6 +151,7 @@ version_file = "src/pdftl/_version.py"
 [tool.setuptools.package-data]
 "pdftl" = ["*.pyi", "py.typed"]
 "pdftl.operations" = ["static/*.html"]
+"pdftl.gui" = ["*.svg"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -216,6 +222,8 @@ omit = [
 exclude_also = [
     # A pragma comment that excludes an entire file:
     '\A(?s:.*# pragma: exclude this file.*)\Z',
+    # Protocol and overload bodies:
+    '^\s*\.\.\.\s*$',
 ]
 skip_covered = true
 

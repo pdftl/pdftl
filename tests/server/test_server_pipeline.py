@@ -78,6 +78,8 @@ def test_parse_pipeline_steps_blocks_forbidden_step_operations() -> None:
         parse_pipeline_steps('[{"operation": "server"}]')
     with pytest.raises(UserCommandLineError, match="cannot be used as a pipeline step"):
         parse_pipeline_steps('[{"operation": "pipeline"}]')
+    with pytest.raises(UserCommandLineError, match="cannot be used as a pipeline step"):
+        parse_pipeline_steps('[{"operation": "gui"}]')
 
 
 def test_parse_pipeline_steps_rejects_unknown_operation() -> None:
