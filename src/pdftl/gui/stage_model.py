@@ -174,8 +174,10 @@ def output_options_help_markdown(highlight: str | None = None) -> str:
     save_only = _ordered(sorted(n for n in entries if is_save_only_option(n)), highlight)
     parts = [
         "# Output options",
-        "Typed in the Output box below the last stage; applied after it, exactly like"
-        " typing them on the `pdftl` command line.",
+        (
+            "Typed in the Output box below the last stage; applied after it, exactly like"
+            " typing them on the `pdftl` command line."
+        ),
     ]
     if general:
         parts.append("## General")

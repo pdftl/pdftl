@@ -1,6 +1,7 @@
 """Tests for window_stages: adding, moving, deleting and focusing stages."""
 
 import shlex
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,6 +9,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 from pdftl.gui import window_menus, window_stages
 from pdftl.gui.command_bar import parse_command
@@ -403,3 +405,113 @@ def test_insert_selection_from_the_last_stage_adds_a_stage_for_it(qtbot, make_wi
     window.insert_selection()
     assert len(window.boxes) == 2
     assert window.boxes[1].args.text() == "1"
+
+
+def _fake_picker(window, token="10,20"):
+    calls = []
+
+    def picker(parent, path, pages, passwords):
+        calls.append((parent, path, list(pages), passwords))
+        return None if token is None else SimpleNamespace(token=token)
+
+    window.run_picker = picker
+    return calls
+
+
+def test_pick_point_in_focused_arguments_picks_on_the_stage_input(qtbot, make_window, two_pages):
+    window = make_window([str(two_pages)])
+    stage = window.boxes[0]
+    qtbot.waitUntil(lambda: window.inputs_box.total == 2, timeout=15000)
+    calls = _fake_picker(window)
+    stage.args.setText("1(abs")
+    stage.args.setFocus()
+    qtbot.waitUntil(lambda: _focus_widget_is(window, stage.args))
+    fire(qtbot, "pick_point")
+    assert calls == [(window, window.inputs_box.path, [1, 2], window._password_for)]
+    assert stage.args.text() == "1(abs,10,20"
+    assert stage.args.cursorPosition() == len("1(abs,10,20")
+
+
+def test_pick_point_from_a_strip_uses_its_selection_and_fills_a_new_next_stage(
+    qtbot, make_window, two_pages
+):
+    window = make_window([str(two_pages)])
+    stage1 = window.boxes[0]
+    stage1.args.setText("1-2")
+    qtbot.waitUntil(lambda: stage1.total == 2, timeout=15000)
+    stage1.strip.setFocus()
+    qtbot.waitUntil(lambda: _focus_widget_is(window, stage1.strip))
+    stage1.strip.clearSelection()
+    stage1.strip.item(1).setSelected(True)
+    calls = _fake_picker(window)
+    window.pick_point()
+    assert [c[1:3] for c in calls] == [(stage1.path, [2])]
+    assert len(window.boxes) == 2
+    assert window.boxes[1].args.text() == "10,20"
+
+
+def test_cancelling_the_picker_changes_nothing(qtbot, make_window, two_pages):
+    window = make_window([str(two_pages)])
+    qtbot.waitUntil(lambda: window.inputs_box.total == 2, timeout=15000)
+    window.inputs_box.strip.setFocus()
+    qtbot.waitUntil(lambda: window.current is window.inputs_box)
+    calls = _fake_picker(window, token=None)
+    window.pick_point()
+    assert len(calls) == 1
+    assert [b.args.text() for b in window.boxes] == [""]
+
+
+def test_pick_point_without_pages_says_so(qtbot, make_window):
+    window = make_window([])
+    calls = _fake_picker(window)
+    window.cli.setFocus()
+    window.pick_point()
+    assert "No pages" in window.statusBar().currentMessage()
+    window.boxes[0].args.setFocus()
+    qtbot.waitUntil(lambda: _focus_widget_is(window, window.boxes[0].args))
+    window.pick_point()
+    assert calls == []
+    assert "No pages" in window.statusBar().currentMessage()
+
+
+def test_pick_point_is_disabled_without_a_current_box(qtbot, make_window, two_pages):
+    window = make_window([str(two_pages)])
+    window.boxes[0].args.setFocus()
+    qtbot.waitUntil(lambda: window.current is window.boxes[0])
+    fire(qtbot, "delete_stage")
+    assert not _enabled(window, "pick_point")
+    calls = _fake_picker(window)
+    window.pick_point()
+    assert calls == [] and "No pages" in window.statusBar().currentMessage()
+
+
+def test_the_real_picker_inserts_the_centre_of_the_page(qtbot, make_window, two_pages):
+    from PySide6.QtCore import QTimer
+
+    window = make_window([str(two_pages)])
+    stage = window.boxes[0]
+    qtbot.waitUntil(lambda: window.inputs_box.total == 2, timeout=15000)
+    qtbot.keyClick(window.inputs_box.strip, Qt.Key.Key_Home)
+    stage.args.setFocus()
+    qtbot.waitUntil(lambda: _focus_widget_is(window, stage.args))
+
+    def accept():
+        dialog = QApplication.activeModalWidget()
+        if dialog is None or dialog is window:
+            QTimer.singleShot(20, accept)
+            return
+        qtbot.keyClick(dialog, Qt.Key.Key_Return)
+
+    QTimer.singleShot(0, accept)
+    window.pick_point()
+    # Page 1 is 100pt square; the crosshair starts at its centre.
+    assert stage.args.text() == "50pt,50pt"
+
+
+def test_run_picker_opens_the_picker_module_lazily(monkeypatch):
+    from pdftl.gui import picker
+
+    seen = []
+    monkeypatch.setattr(picker, "pick_point", lambda *a: seen.append(a) or "picked")
+    assert window_stages.run_picker("p", "f.pdf", [1], None) == "picked"
+    assert seen == [("p", "f.pdf", [1], None)]

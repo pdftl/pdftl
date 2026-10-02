@@ -11,10 +11,17 @@ from __future__ import annotations
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
-from pdftl.gui.pagesel import insert_into_args
+from pdftl.gui.pagesel import insert_coordinates, insert_into_args
 from pdftl.gui.widgets import StageBox, StripBox
 
 REVEAL_MARGIN = 6
+
+
+def run_picker(parent, path, pages, passwords):
+    """The coordinate picker, imported on first use: it loads numpy."""
+    from pdftl.gui.picker import pick_point
+
+    return pick_point(parent, path, pages, passwords)
 
 
 class StagesMixin:
@@ -178,6 +185,36 @@ class StagesMixin:
             self._new_box(i)
         target = self.boxes[i].args
         text, pos = insert_into_args(target.text(), target.cursorPosition(), spec)
+        target.setText(text)
+        target.setCursorPosition(pos)
+        target.setFocus()
+        self.schedule()
+
+    def _pick_target(self) -> int | None:
+        """The stage whose arguments get the point: the current one while its
+        arguments have focus, otherwise the one after the current box."""
+        box = self.current
+        if box in self.boxes and QApplication.focusWidget() is box.args:
+            return self.boxes.index(box)
+        if box is None:
+            return None
+        return 0 if box is self.inputs_box else self.boxes.index(box) + 1
+
+    def pick_point(self) -> None:
+        """Pick on the pages that feed the target stage: its selected ones, or all."""
+        i = self._pick_target()
+        source = None if i is None else self.inputs_box if i == 0 else self.boxes[i - 1]
+        if source is None or source.path is None:
+            self.statusBar().showMessage("No pages to pick a point on yet", 4000)
+            return
+        pages = source.selected_pages() or range(1, source.total + 1)
+        picked = self.run_picker(self, source.path, pages, self._password_for)
+        if picked is None:
+            return
+        if i == len(self.boxes):
+            self._new_box(i)
+        target = self.boxes[i].args
+        text, pos = insert_coordinates(target.text(), target.cursorPosition(), picked.token)
         target.setText(text)
         target.setCursorPosition(pos)
         target.setFocus()

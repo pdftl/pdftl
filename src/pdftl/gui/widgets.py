@@ -498,8 +498,11 @@ class StripBox(BoxFrame):
             item.setIcon(QIcon(QPixmap.fromImage(image)))
             self.strip.viewport().update(placeholder_rect)
 
+    def selected_pages(self) -> list[int]:
+        return sorted(i.data(Qt.ItemDataRole.UserRole) for i in self.strip.selectedItems())
+
     def selection_spec(self) -> str:
-        pages = [i.data(Qt.ItemDataRole.UserRole) for i in self.strip.selectedItems()]
+        pages = self.selected_pages()
         return pages_to_spec(pages, self.total, self.handle) if pages else ""
 
     def _update_spec(self) -> None:

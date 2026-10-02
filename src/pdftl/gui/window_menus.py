@@ -90,6 +90,7 @@ MENUS: tuple[tuple[str, tuple[MenuEntry, ...]], ...] = (
             ("move_stage_down", "Move Do&wn"),
             None,
             ("insert_selection", "&Insert Selected Pages"),
+            ("pick_point", "Pick a &Point…"),
             ("run", "&Run Now"),
             None,
             ("view_stage", "&Open Snapshot in Viewer"),
@@ -217,6 +218,7 @@ class MenusMixin:
             "focus_pages": lambda: self._focus_part("strip"),
             "focus_output": self.focus_output_box,
             "insert_selection": self.insert_selection,
+            "pick_point": self.pick_point,
             "run": self.run_pipeline,
             "focus_command": self.focus_command,
             "focus_console": self.focus_console,
@@ -322,6 +324,7 @@ class MenusMixin:
             "move_stage_down": stage and i < len(self.boxes) - 1,
             "follow_stage": stage and (output or self.current in self.followed),
             "insert_selection": self.current is not None,
+            "pick_point": self.current is not None,
             "prev_stage": bool(self.boxes),
             "next_stage": bool(self.boxes),
         }

@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `crop`/`clip` `abs` percentages are of the unrotated page, from its origin; on a rotated
+  page, or one whose MediaBox does not start at 0,0, they gave the wrong box
+
 - `modify_layers`: a specific target now overrides a conflicting action for `all`, so
   `hide all show X` reliably leaves X visible (it depended on Python's hash seed) and
   `strip all keep X` keeps X; conflicting actions on the same target are an error

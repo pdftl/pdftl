@@ -345,8 +345,6 @@ def test_injected_kinds(tmp_path, files):
 
 
 def test_cancel_without_process_groups(tmp_path, files, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     monkeypatch.setattr(engine_module, "_POSIX", False)
     python = _script(tmp_path / "py", "time.sleep(30)")
     engine = SubprocessEngine(cache_dir=tmp_path / "c", python=python)
@@ -409,8 +407,6 @@ def test_file_args_include_key_value_paths(tmp_path):
 
 
 def test_cancel_is_bounded_when_a_grandchild_holds_the_pipes(tmp_path, files, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     monkeypatch.setattr(engine_module, "_POSIX", False)
     monkeypatch.setattr(engine_module, "KILL_GRACE_SECONDS", 0.3)
     python = _script(
@@ -426,8 +422,6 @@ def test_cancel_is_bounded_when_a_grandchild_holds_the_pipes(tmp_path, files, mo
 
 
 def test_cache_keeps_only_the_newest_entries(logged, files, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     engine, _ = logged
     monkeypatch.setattr(engine_module, "MAX_CACHE_ENTRIES", 2)
     results = [_run(engine, _pipeline(files, Stage("cat", f"A{i}")))[0] for i in (1, 2, 3)]
@@ -501,8 +495,6 @@ def test_cache_json_round_trips_utf8(tmp_path):
 
 @pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
 def test_kill_tolerates_a_stage_that_has_already_exited():
-    import pdftl.gui.engine as engine_module
-
     proc = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
     proc.wait()
     with pytest.raises(ProcessLookupError):
@@ -513,8 +505,6 @@ def test_kill_tolerates_a_stage_that_has_already_exited():
 @pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
 def test_kill_tolerates_eperm_from_a_group_of_zombies(monkeypatch):
     import errno
-
-    import pdftl.gui.engine as engine_module
 
     monkeypatch.setattr(engine_module, "_POSIX", True)
 
@@ -529,8 +519,6 @@ def test_kill_tolerates_eperm_from_a_group_of_zombies(monkeypatch):
 
 
 def test_kill_uses_taskkill_on_windows(monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     monkeypatch.setattr(engine_module, "_POSIX", False)
     calls = []
 
@@ -554,8 +542,6 @@ def test_kill_uses_taskkill_on_windows(monkeypatch):
 
 
 def test_kill_falls_back_to_proc_kill_when_taskkill_is_unavailable(monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     monkeypatch.setattr(engine_module, "_POSIX", False)
 
     def fake_run(argv, **kwargs):
@@ -572,8 +558,6 @@ def test_kill_falls_back_to_proc_kill_when_taskkill_is_unavailable(monkeypatch):
 
 
 def test_prune_skips_an_entry_whose_unlink_fails(tmp_path, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     engine = SubprocessEngine(cache_dir=tmp_path / "c")
     monkeypatch.setattr(engine_module, "MAX_CACHE_ENTRIES", 0)
     for i, name in enumerate(("old1", "old2", "locked")):
@@ -614,8 +598,6 @@ class _FakeMsvcrt:
 
 
 def test_lock_acquire_and_release_on_windows(tmp_path, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     fake = _FakeMsvcrt()
     monkeypatch.setattr(engine_module, "_POSIX", False)
     monkeypatch.setattr(engine_module, "msvcrt", fake)
@@ -628,8 +610,6 @@ def test_lock_acquire_and_release_on_windows(tmp_path, monkeypatch):
 
 
 def test_lock_acquire_on_windows_when_already_locked(tmp_path, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     fake = _FakeMsvcrt(fail=True)
     monkeypatch.setattr(engine_module, "_POSIX", False)
     monkeypatch.setattr(engine_module, "msvcrt", fake)
@@ -654,8 +634,6 @@ def test_sweep_does_not_remove_a_live_locked_dir(tmp_path, monkeypatch):
 
 
 def _released_lock_dir(tmp_path):
-    import pdftl.gui.engine as engine_module
-
     path = Path(tempfile.mkdtemp(prefix="pdftl-gui-", dir=str(tmp_path)))
     fd = engine_module._lock_acquire(path / engine_module.LOCK_FILENAME)
     fd.close()  # the owning process exited: the OS drops the lock
@@ -680,14 +658,10 @@ def test_sweep_spares_a_dir_touched_within_the_grace_period(tmp_path, monkeypatc
 
 
 def test_lock_acquire_returns_none_when_the_file_cannot_be_opened(tmp_path):
-    import pdftl.gui.engine as engine_module
-
     assert engine_module._lock_acquire(tmp_path) is None
 
 
 def test_sweep_removes_a_lockless_old_dir(tmp_path, monkeypatch):
-    import pdftl.gui.engine as engine_module
-
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
     old = Path(tempfile.mkdtemp(prefix="pdftl-gui-", dir=str(tmp_path)))
     old_time = time.time() - engine_module.STALE_SECONDS - 10
@@ -723,8 +697,6 @@ def test_close_tolerates_a_never_acquired_lock(tmp_path, monkeypatch):
 
 
 def test_is_stale_returns_false_when_stat_fails(tmp_path):
-    import pdftl.gui.engine as engine_module
-
     assert engine_module._is_stale(tmp_path / "does-not-exist") is False
 
 

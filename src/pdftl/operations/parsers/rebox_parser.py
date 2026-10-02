@@ -54,10 +54,14 @@ def specs_to_page_rules(specs, total_pages, operation):
     return page_rules, preview
 
 
-def parse_rebox_content(content_str, page_width, page_height, operation):
+def parse_rebox_content(content_str, page_width, page_height, operation, abs_frame=None):
     """
     Master parser for the content string inside the parentheses.
     Dispatches to Smart rebox, Paper Size, or Margin parsers in order.
+
+    `page_width`/`page_height` are the displayed (rotated) size. `abs_frame`,
+    `(x0, y0, width, height)` of the unrotated box, is what `abs` percentages
+    are of; without it they are of the displayed size from 0.
 
     Accepts an optional trailing ',preview' keyword in content_str.
 
@@ -82,7 +86,8 @@ def parse_rebox_content(content_str, page_width, page_height, operation):
         return {"type": "paper", "size": paper_size, "preview": local_preview}
 
     # 3. Try absolute box
-    abs_box = parse_abs_box(content_str, page_width, page_height)
+    frame = abs_frame or (0.0, 0.0, page_width, page_height)
+    abs_box = parse_abs_box(content_str, *frame)
     if abs_box:
         return {"type": "abs", "values": abs_box, "preview": local_preview}
 
@@ -106,7 +111,8 @@ def _strip_preview_keyword(content_str):
     return content_str, False
 
 
-def parse_abs_box(spec_str, page_width, page_height):
+def parse_abs_box(spec_str, origin_x, origin_y, page_width, page_height):
+    """A percentage is of the page size, measured from the page's origin."""
     parts = [p.strip() for p in spec_str.split(",")]
     head = parts[0].lower()
 
@@ -116,10 +122,14 @@ def parse_abs_box(spec_str, page_width, page_height):
     if not len(parts) == 5:
         raise ValueError(f"Should have 4 comma-separated values following `abs`, got {parts[1:]}")
 
-    x0 = dim_str_to_pts(parts[1], page_width)
-    y0 = dim_str_to_pts(parts[2], page_height)
-    x1 = dim_str_to_pts(parts[3], page_width)
-    y1 = dim_str_to_pts(parts[4], page_height)
+    def coord(text, origin, size):
+        value = dim_str_to_pts(text, size)
+        return origin + value if text.endswith("%") else value
+
+    x0 = coord(parts[1], origin_x, page_width)
+    y0 = coord(parts[2], origin_y, page_height)
+    x1 = coord(parts[3], origin_x, page_width)
+    y1 = coord(parts[4], origin_y, page_height)
     return x0, y0, x1, y1
 
 

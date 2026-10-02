@@ -57,6 +57,19 @@ def spec_to_pages(spec: str, total: int) -> list[int]:
     return page_numbers_matching_page_spec(spec, total)
 
 
+def insert_coordinates(args_text: str, cursor: int, token: str) -> tuple[str, int]:
+    """Insert `token` at `cursor`, after a comma if it follows other spec text.
+
+    So `1(abs` then two picks gives `1(abs,x0,y0,x1,y1`. Returns the new text
+    and the position just after `token`.
+    """
+    cursor = max(0, min(cursor, len(args_text)))
+    before, after = args_text[:cursor], args_text[cursor:]
+    if before and before[-1] not in "(, \t":
+        before += ","
+    return before + token + after, len(before) + len(token)
+
+
 def insert_into_args(args_text: str, cursor: int, spec: str) -> tuple[str, int]:
     """Insert `spec` at `cursor` as its own shell token.
 

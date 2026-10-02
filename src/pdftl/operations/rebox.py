@@ -64,9 +64,11 @@ expand the {verb} rectangle: `(fit,1cm)` or `(fit-group, 10,0,20,50)`.
 When using `abs` you can also give units or percentages, or just
 numbers to default to `pt`. This uses the PDF page coordinate system,
 so x-values increase to the right and y-values increase
-upwards. Often, but not always, the origin (0,0) is at the bottom left
-corner of the page (this depends on the page MediaBox, as shown by
-`dump_data`, for example.)
+upwards, ignoring any page rotation. Often, but not always, the origin
+(0,0) is at the bottom left corner of the unrotated page (this depends
+on the page MediaBox, as shown by `dump_data`, for example.) A
+percentage is of the unrotated page's width or height, measured from
+its lower-left corner, so `abs,0%,0%,50%,50%` is the lower-left quarter.
 
 If the `preview` keyword is given, a rectangle will be drawn instead
 of {verbing}.
@@ -246,7 +248,9 @@ def _calculate_new_box(page, spec_str, page_idx, fit_ctx, all_rules, operation):
     _vx0, _vy0, v_width, v_height = visual_dims
 
     # Use the master parser which handles fit/paper/margin modes based on visual dimensions
-    parsed = parse_rebox_content(spec_str, v_width, v_height, operation)
+    parsed = parse_rebox_content(
+        spec_str, v_width, v_height, operation, abs_frame=(ux0, uy0, u_width, u_height)
+    )
 
     if parsed["type"] == "abs":
         logger.debug("values=%s", parsed["values"])

@@ -6,6 +6,8 @@
 
 """Tests for viewer_dialog: picking a viewer and keeping it in the settings."""
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -51,7 +53,7 @@ def test_a_saved_viewer_reads_back_the_same(settings, viewer):
 def test_the_ini_holds_a_readable_name_and_command(settings):
     save_viewer(settings, EVINCE)
     settings.sync()
-    text = open(settings.fileName(), encoding="utf-8").read()
+    text = Path(settings.fileName()).read_text(encoding="utf-8")
     assert "name=Document Viewer" in text
     assert "command=evince, {file}" in text
 

@@ -46,7 +46,7 @@ from pdftl.gui.window_menus import MenusMixin, exec_menu
 from pdftl.gui.window_outputs import OutputsMixin
 from pdftl.gui.window_recent import RecentMixin
 from pdftl.gui.window_run import RunMixin, Runner, Saver
-from pdftl.gui.window_stages import StagesMixin
+from pdftl.gui.window_stages import StagesMixin, run_picker
 from pdftl.gui.zoom import Zoom, ZoomArea
 
 GEOMETRY_KEY = "window/geometry"
@@ -106,6 +106,7 @@ class MainWindow(
         self.setWindowIcon(app_icon())
         self.run_dialog: Callable[[QDialog], object] = QDialog.exec
         self.run_menu: Callable[[QMenu, QPoint], object] = exec_menu
+        self.run_picker = run_picker
         self.thumbs = PdfiumThumbProvider(passwords=self._password_for)
         self._build_inputs()
         self._build_output()

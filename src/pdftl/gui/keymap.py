@@ -72,6 +72,12 @@ def build_actions(macos: bool) -> tuple[KeyAction, ...]:
             "Insert page selection into next stage's arguments",
             "window",
         ),
+        KeyAction(
+            "pick_point",
+            ("Ctrl+Shift+K",),
+            "Pick a point on the pages and insert its coordinates into the arguments",
+            "window",
+        ),
         KeyAction("save", ("Ctrl+S",), "Save output", "window"),
         KeyAction("focus_console", focus("L"), "Focus the console", "window"),
         KeyAction("save_console", ("Ctrl+Shift+S",), "Save console text", "window"),

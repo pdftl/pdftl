@@ -256,6 +256,12 @@ def test_every_window_scope_shortcut_fires_via_its_key(qtbot, make_window, two_p
     go("focus_pages")
     qtbot.keyClick(stage1.strip, Qt.Key.Key_Home)
     go("insert_selection")
+    picked = []
+    window.run_picker = lambda *a: picked.append(a[1])
+    stage1.args.setFocus()
+    qtbot.waitUntil(lambda: _focus_widget_is(window, stage1.args))
+    go("pick_point")
+    assert picked == [window.inputs_box.path]
 
     window.ask_save_path = lambda *a, **k: str(tmp_path / "saved.pdf")
     go("save")

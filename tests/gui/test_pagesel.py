@@ -6,7 +6,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from pdftl.exceptions import InvalidArgumentError
-from pdftl.gui.pagesel import insert_into_args, pages_to_spec, spec_to_pages
+from pdftl.gui.pagesel import insert_coordinates, insert_into_args, pages_to_spec, spec_to_pages
 
 TOTAL = 12
 
@@ -115,3 +115,20 @@ def test_spec_to_pages_invalid():
 )
 def test_insert_into_args(text, cursor, spec, expected):
     assert insert_into_args(text, cursor, spec) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "cursor", "token", "expected"),
+    [
+        ("", 0, "10,20", ("10,20", 5)),
+        ("1(abs", 5, "10,20", ("1(abs,10,20", 11)),
+        ("1(abs,", 6, "10,20", ("1(abs,10,20", 11)),
+        ("1(abs,1,2", 9, "3,4", ("1(abs,1,2,3,4", 13)),
+        ("1( ", 3, "3,4", ("1( 3,4", 6)),
+        ("1(abs)", 5, "3,4", ("1(abs,3,4)", 9)),
+        ("x", 99, "3,4", ("x,3,4", 5)),
+        ("x", -5, "3,4", ("3,4x", 3)),
+    ],
+)
+def test_insert_coordinates(text, cursor, token, expected):
+    assert insert_coordinates(text, cursor, token) == expected

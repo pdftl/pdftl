@@ -295,6 +295,23 @@ def test_crop_with_abs_spec():
     assert list(result.pdf.pages[0].mediabox) == [10, 10, 90, 90]
 
 
+def test_abs_percentages_are_of_the_unrotated_page():
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(600, 800))
+    pdf.pages[0].Rotate = 90
+    crop_or_clip_pages(pdf, ["1(abs,0,0,50%,25%)"], operation="crop")
+    # Half of the 600pt unrotated width, a quarter of the 800pt height.
+    assert list(pdf.pages[0].mediabox) == [0, 0, 300, 200]
+
+
+def test_abs_percentages_are_measured_from_the_page_origin():
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(600, 800))
+    pdf.pages[0].MediaBox = [100, 200, 700, 1000]
+    crop_or_clip_pages(pdf, ["1(abs,50%,0%,100%,90%)"], operation="crop")
+    assert list(pdf.pages[0].mediabox) == [400, 200, 700, 920]
+
+
 def test_clip_operation():
     """
     Covers lines 221-225 in crop.py.
