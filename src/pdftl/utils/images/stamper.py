@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pikepdf
 
+from pdftl.utils.affix_content import padded_content
 from pdftl.utils.dimensions import dim_str_to_pts
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
 from pdftl.utils.images.embedder import create_image_xobject
@@ -180,7 +181,7 @@ def _inject_stream(pdf: pikepdf.Pdf, page: pikepdf.Page, cmd_bytes: bytes, under
     """Inserts a freshly compiled stream as either a PDF overlay or underlay."""
     import pikepdf
 
-    new_stream = pdf.make_stream(cmd_bytes)
+    new_stream = pdf.make_stream(padded_content(cmd_bytes))
     contents = page.get("/Contents")
 
     if contents is None:

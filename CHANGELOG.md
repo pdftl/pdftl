@@ -63,6 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Content added by `zoom`, `place`, `deskew`, `inject`, `redact`, image stamping and page
+  scaling now injects whitespace to ensure it no longer produces invalid content streams
+
 - `modify_layers`: a specific target now overrides a conflicting action for `all`, so
   `hide all show X` reliably leaves X visible (it depended on Python's hash seed) and
   `strip all keep X` keeps X; conflicting actions on the same target are an error

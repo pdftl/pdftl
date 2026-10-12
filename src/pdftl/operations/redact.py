@@ -47,6 +47,7 @@ import pdftl.core.constants as c
 from pdftl.core.core_types import OpResult
 from pdftl.core.registry import register_operation
 from pdftl.exceptions import InvalidArgumentError, OperationError
+from pdftl.utils.affix_content import affix_content
 from pdftl.utils.dependencies import ensure_dependencies
 from pdftl.utils.keyval_parser import parse_keyval_string
 from pdftl.utils.page_specs import page_numbers_matching_page_spec
@@ -478,7 +479,7 @@ def _draw_page_boxes(
         prop_key = _register_layer_property(page, ocg)
         snippet = f"/OC /{prop_key} BDC\n{snippet}\nEMC"
 
-    page.contents_add(snippet.encode("utf-8"), prepend=False)
+    affix_content(page, snippet, "tail")
 
 
 def _register_layer_property(page: Any, ocg: Any) -> str:

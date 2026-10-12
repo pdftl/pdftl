@@ -11,6 +11,7 @@ Page scaling
 import logging
 
 from pdftl.core.constants import PAGE_BOXES
+from pdftl.utils.affix_content import affix_content
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,7 @@ def apply_scaling(page, scale, scale_annotations=True):
 
     _scale_standard_page_boxes(page, scale)
 
-    # Prepend a scaling matrix to the page's content stream.
-    page.contents_add(bytes(f"{scale} 0 0 {scale} 0 0 cm", "utf-8"), prepend=True)
+    affix_content(page, f"{scale} 0 0 {scale} 0 0 cm", "head")
 
     if scale_annotations:
         scale_annotations_in_page(page, scale)

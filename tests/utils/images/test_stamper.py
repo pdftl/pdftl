@@ -329,3 +329,17 @@ def test_stamp_images_no_matching_pages(sample_pdf_path, sample_image_path):
             width="50pt",
         )
         assert "/XObject" not in pdf.pages[0].Resources
+
+
+def test_stamp_images_overlay_does_not_fuse_with_unterminated_content(
+    sample_pdf_path, sample_image_path
+):
+    """The overlay stream must not fuse with existing content that ends
+    without whitespace when /Contents is concatenated byte-for-byte."""
+    with pikepdf.open(sample_pdf_path) as pdf:
+        page = pdf.pages[0]
+        page.Contents = pdf.make_stream(b"q 0 0 m 10 10 l S Q")
+        stamp_images_on_pdf(pdf=pdf, images=[sample_image_path], pages="1", width="50pt")
+        joined = pdf.make_stream(get_page_contents(page))
+        ops = [str(op) for _, op in pikepdf.parse_content_stream(joined)]
+    assert ops == ["q", "m", "l", "S", "Q", "q", "cm", "Do", "Q"]

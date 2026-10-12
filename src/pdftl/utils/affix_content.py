@@ -12,12 +12,20 @@ if TYPE_CHECKING:
     from pikepdf import Matrix
 
 
+def padded_content(code) -> bytes:
+    """Content bytes with a newline on each side, so they cannot fuse
+    with a neighbouring stream's token when /Contents is concatenated."""
+    if isinstance(code, str):
+        code = code.encode("utf-8")
+    return b"\n" + code + b"\n"
+
+
 def affix_content(page, code, position):
     """
     Inject code into page content stream
     at given position, either 'head' or 'tail'
     """
-    page.contents_add(bytes(code, "utf-8"), prepend=position == "head")
+    page.contents_add(padded_content(code), prepend=position == "head")
 
 
 def apply_content_matrix(page, matrix: "Matrix") -> None:

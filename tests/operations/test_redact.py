@@ -522,6 +522,17 @@ class TestDrawPageBoxesEmptyRects:
         assert before == after  # nothing appended
 
 
+class TestDrawPageBoxesStreamBoundary:
+    def test_boxes_do_not_fuse_with_unterminated_content(self):
+        pdf = pikepdf.new()
+        page = pdf.add_blank_page(page_size=(100, 100))
+        page.Contents = pdf.make_stream(b"q 0 0 m 10 10 l S Q")
+        _draw_page_boxes(pdf, page, [[1, 1, 5, 5]], RedactOptions({}), None)
+        joined = pdf.make_stream(b"".join(s.read_bytes() for s in page.obj.Contents))
+        ops = [str(op) for _, op in pikepdf.parse_content_stream(joined)]
+        assert ops == ["q", "m", "l", "S", "Q", "rg", "q", "re", "f", "Q"]
+
+
 # ---------------------------------------------------------------------------
 # _apply_redact_spec -- per-page "no match on this page" skip
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+import pikepdf
 import pytest
 from pikepdf import Array, Dictionary, Page
 
@@ -142,8 +143,27 @@ def test_apply_scaling_orchestration(mocker):
     mock_scale_boxes.assert_called_once_with(page, scale)
 
     # 2. Check that the content stream was modified
-    expected_bytes = b"3.0 0 0 3.0 0 0 cm"
+    expected_bytes = b"\n3.0 0 0 3.0 0 0 cm\n"
     page.contents_add.assert_called_once_with(expected_bytes, prepend=True)
 
     # 3. Check that the annotation scaling helper was called
     mock_scale_annots.assert_called_once_with(page, scale)
+
+
+def test_apply_scaling_twice_does_not_fuse_with_following_stream():
+    """Two prepended scalings must survive byte-for-byte concatenation
+    of /Contents: `cm` + `1.358 ...` must not read as `cm1.358`."""
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page()
+    page.Contents = pdf.make_stream(b"q 0 0 m 10 10 l S Q")
+
+    apply_scaling(page, 1.358, scale_annotations=False)
+    apply_scaling(page, 0.9, scale_annotations=False)
+
+    joined = pdf.make_stream(b"".join(s.read_bytes() for s in page.obj.Contents))
+    parsed = [
+        (list(map(float, args)), str(op)) for args, op in pikepdf.parse_content_stream(joined)
+    ]
+    assert [op for _, op in parsed] == ["cm", "cm", "q", "m", "l", "S", "Q"]
+    assert parsed[0][0] == [0.9, 0, 0, 0.9, 0, 0]
+    assert parsed[1][0] == [1.358, 0, 0, 1.358, 0, 0]
