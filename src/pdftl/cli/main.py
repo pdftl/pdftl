@@ -165,7 +165,10 @@ def _validate_single_input(filespec, stage):
     if filespec in getattr(stage, "handles", {}):
         return
     if "=" in filespec:
-        _, filespec = filespec.split("=", 1)
+        # Fix for filenames containing '='
+        prefix, remainder = filespec.split("=", 1)
+        if len(prefix) == 1 and filespec.isupper():
+            filespec = remainder
     if not os.path.exists(filespec):
         raise UserCommandLineError(f"Unable to find file: {filespec}")
 
