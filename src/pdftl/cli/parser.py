@@ -7,6 +7,7 @@
 """Parser for CLI interface"""
 
 import logging
+import re
 from contextlib import suppress
 
 import pdftl.core.constants as c
@@ -16,6 +17,20 @@ from pdftl.core.registry import registry
 from pdftl.exceptions import DuplicateArgumentError, InvalidArgumentError, MissingArgumentError
 
 logger = logging.getLogger(__name__)
+
+
+_HANDLE_RE = re.compile(r"([A-Z]+)=(.+)", re.DOTALL)
+
+
+def split_handle(arg):
+    """Split a pdftk-style handle prefix off a file argument.
+
+    A handle is one or more ASCII uppercase letters followed by '='.
+    Exactly one prefix is stripped; the remainder is never re-split.
+    Returns (handle, rest), or (None, arg) if arg has no handle prefix.
+    """
+    m = _HANDLE_RE.fullmatch(arg)
+    return (m.group(1), m.group(2)) if m else (None, arg)
 
 
 def _get_registry_data_entries(main_key, sub_key, test, transform=None):
@@ -177,8 +192,8 @@ def _parse_file_handles(file_args):
     inputs, handles = ([], {})
     for i, arg in enumerate(file_args):
         if isinstance(arg, str):
-            if len(arg) > 2 and arg[1] == "=" and arg[0].isupper():
-                handle, filename = arg.split("=", 1)
+            handle, filename = split_handle(arg)
+            if handle is not None:
                 handles[handle] = i
                 inputs.append(filename)
             else:
@@ -207,8 +222,8 @@ def _parse_passwords(pw_args):
     """Parses password arguments into dictionaries for handle-based and positional passwords."""
     passwords_by_handle, passwords_by_order = ({}, [])
     for arg in pw_args:
-        if len(arg) > 2 and arg[1] == "=" and arg[0].isupper():
-            handle, password = arg.split("=", 1)
+        handle, password = split_handle(arg)
+        if handle is not None:
             passwords_by_handle[handle] = password
         else:
             passwords_by_order.append(arg)

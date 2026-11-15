@@ -782,8 +782,8 @@ def _pipeline_help_topic():
 
     **2. Named Handles (`X=...`)**
 
-    You can assign single capital letter handles (A-Z) to inputs to refer
-    to them later:
+    You can assign handles (one or more capital letters, A-Z) to inputs
+    to refer to them later:
 
     ```
     pdftl A=logo.pdf B=content.pdf ...
@@ -924,6 +924,12 @@ def _inputs_help_topic():
 
       - A handle assignment (for referring to files in
         operations): `A=my_doc.pdf`
+
+        A handle is capital letters followed by `=`. Exactly one such
+        prefix is removed, so `A=A=b.pdf` is handle `A` for the file
+        `A=b.pdf`. Any other name containing `=` (such as `a=b.pdf`) is
+        an ordinary file name. Use `./A=b.pdf` to force a file name
+        that looks like a handle.
 
       - A single dash `-` to read from standard input (stdin).
 

@@ -677,6 +677,59 @@ def test_resolve_alias_and_spec(mock_pdfs_fixture):
         _resolve_alias_and_spec("1-5", {"A": pdf_A}, "INVALID_DEFAULT")
 
 
+@pytest.mark.parametrize(
+    "spec, expected_alias, expected_spec",
+    [
+        ("AB", "AB", ""),
+        ("AB1-2", "AB", "1-2"),
+        ("ABeven", "AB", "even"),
+        ("ABr1", "AB", "r1"),
+        # a defined single-letter handle still works when a longer one exists
+        ("A1-2", "A", "1-2"),
+    ],
+)
+def test_resolve_alias_and_spec_multi_letter_handle(
+    mock_pdfs_fixture, spec, expected_alias, expected_spec
+):
+    """pdftk accepts multi-letter handles in page specs (cat AB, cat AB1)."""
+    pdf_A = mock_pdfs_fixture["pdf_A"]
+    pdf_AB = MagicMock(spec=pikepdf.Pdf)
+    by_alias = {"A": pdf_A, "AB": pdf_AB, "DEFAULT": pdf_A}
+
+    pdf, rest, alias = _resolve_alias_and_spec(spec, by_alias, "DEFAULT")
+
+    assert alias == expected_alias
+    assert rest == expected_spec
+    assert pdf is by_alias[expected_alias]
+
+
+def test_resolve_alias_and_spec_multi_letter_handle_only():
+    """AB defined, A not defined: 'AB1' must resolve to AB, not fall back."""
+    pdf_AB = MagicMock(spec=pikepdf.Pdf)
+    by_alias = {"AB": pdf_AB, "DEFAULT": pdf_AB}
+
+    pdf, rest, alias = _resolve_alias_and_spec("AB1-2", by_alias, "DEFAULT")
+
+    assert (alias, rest) == ("AB", "1-2")
+    assert pdf is pdf_AB
+
+
+def test_resolve_alias_and_spec_longest_defined_handle_wins():
+    """Longest *defined* handle wins; an undefined longer candidate is skipped."""
+    pdf_AB = MagicMock(spec=pikepdf.Pdf)
+    pdf_ABC = MagicMock(spec=pikepdf.Pdf)
+    by_alias = {"AB": pdf_AB, "ABC": pdf_ABC, "DEFAULT": pdf_AB}
+
+    # all three lengths exist: longest wins
+    _, _, alias = _resolve_alias_and_spec("ABC1", by_alias, "DEFAULT")
+    assert alias == "ABC"
+
+    # ABC removed: the loop must skip ABC and match AB
+    del by_alias["ABC"]
+    _, _, alias = _resolve_alias_and_spec("ABC1", by_alias, "DEFAULT")
+    assert alias == "AB"  # remainder deliberately not asserted (see pdftk check)
+
+
 def test_create_page_tuples_from_numbers_out_of_range(mock_pdfs_fixture):
     """Tests that _create_page_tuples_from_numbers raises on invalid page num."""
     pdf = mock_pdfs_fixture["pdf_B"]  # 5 pages

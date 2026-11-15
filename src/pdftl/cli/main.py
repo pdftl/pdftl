@@ -164,8 +164,6 @@ def _validate_single_input(filespec, stage):
         return
     if filespec in getattr(stage, "handles", {}):
         return
-    if "=" in filespec:
-        _, filespec = filespec.split("=", 1)
     if not os.path.exists(filespec):
         raise UserCommandLineError(f"Unable to find file: {filespec}")
 

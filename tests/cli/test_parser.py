@@ -288,6 +288,35 @@ class TestPrivateHelpers:
         assert inputs == ["in1.pdf", "in2.pdf", "in3.pdf"]
         assert handles == {"A": 1, "B": 2}
 
+    @pytest.mark.parametrize(
+        "arg, expected_input, expected_handles",
+        [
+            ("A=A=A.pdf", "A=A.pdf", {"A": 0}),
+            ("A=A.pdf", "A.pdf", {"A": 0}),
+            ("B=A=A.pdf", "A=A.pdf", {"B": 0}),
+            ("./A=A=A.pdf", "./A=A=A.pdf", {}),
+            ("./A=b.pdf", "./A=b.pdf", {}),
+            ("./AB=x.pdf", "./AB=x.pdf", {}),
+            (".\\A=b.pdf", ".\\A=b.pdf", {}),
+            ("x y=z.pdf", "x y=z.pdf", {}),
+            ("a=A.pdf", "a=A.pdf", {}),
+            ("Wilczek - F=ma.pdf", "Wilczek - F=ma.pdf", {}),
+            ("A=Wilczek - F=ma.pdf", "Wilczek - F=ma.pdf", {"A": 0}),
+            # multi-letter handles (pdftk: one or more ASCII uppercase letters)
+            ("AB=x.pdf", "x.pdf", {"AB": 0}),
+            ("AB=AB=x.pdf", "AB=x.pdf", {"AB": 0}),
+            ("Ab=x.pdf", "Ab=x.pdf", {}),
+            ("aB=x.pdf", "aB=x.pdf", {}),
+            ("1=x.pdf", "1=x.pdf", {}),
+            ("\u00c9=x.pdf", "\u00c9=x.pdf", {}),
+        ],
+    )
+    def test_parse_file_handles_pdftk_rules(self, arg, expected_input, expected_handles):
+        """Handle = one or more ASCII uppercase letters + '='; strip exactly one prefix."""
+        inputs, handles = _parse_file_handles([arg])
+        assert inputs == [expected_input]
+        assert handles == expected_handles
+
     def test_handle_pipeline_input(self):
         # First stage, no change
         inputs, handles = _handle_pipeline_input(["in.pdf"], {}, True)
@@ -307,6 +336,37 @@ class TestPrivateHelpers:
         by_handle, by_order = _parse_passwords(args)
         assert by_handle == {"A": "pw2"}
         assert by_order == ["pw1", "pw3"]
+
+    @pytest.mark.parametrize(
+        "arg, expected_by_handle, expected_by_order",
+        [
+            ("A=pw", {"A": "pw"}, []),
+            # multi-letter handles (pdftk 3.3.3: AB=<pw> assigns by handle)
+            ("AB=pw", {"AB": "pw"}, []),
+            ("AB=AB=x", {"AB": "AB=x"}, []),
+            # not handles: positional passwords
+            ("Ab=pw", {}, ["Ab=pw"]),
+            ("a=pw", {}, ["a=pw"]),
+            ("1=pw", {}, ["1=pw"]),
+            ("\u00c9=pw", {}, ["\u00c9=pw"]),
+            ("pa=ss", {}, ["pa=ss"]),
+            ("A=", {}, ["A="]),
+        ],
+    )
+    def test_parse_passwords_handle_rules(self, arg, expected_by_handle, expected_by_order):
+        """Password handles follow the same rule as file handles."""
+        by_handle, by_order = _parse_passwords([arg])
+        assert by_handle == expected_by_handle
+        assert by_order == expected_by_order
+
+    def test_parse_cli_stage_multi_letter_password_handles(self, mock_registry, mock_constants):
+        """AB= passwords reach the right input, regardless of order."""
+        args = ["A=ex.pdf", "AB=ey.pdf", "input_pw", "AB=ow2", "A=ow1", "cat"]
+        stage = parse_cli_stage(args, is_first_stage=True)
+
+        assert stage.inputs == ["ex.pdf", "ey.pdf"]
+        assert stage.handles == {"A": 0, "AB": 1}
+        assert stage.input_passwords == ["ow1", "ow2"]
 
     def test_assign_passwords(self):
         # 3 inputs, 2 handles

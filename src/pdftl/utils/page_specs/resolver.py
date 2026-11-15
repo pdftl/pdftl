@@ -20,10 +20,25 @@ def _handle_no_specs(inputs, opened_pdfs) -> list[PageTransform]:
     return page_tuples
 
 
+def _longest_defined_handle(spec, opened_pdfs_by_alias):
+    """Longest multi-letter handle (2+ ASCII capitals) that starts spec
+    and is actually defined; None if there is none."""
+    run = 0
+    while run < len(spec) and "A" <= spec[run] <= "Z":
+        run += 1
+    for n in range(run, 1, -1):
+        if spec[:n] in opened_pdfs_by_alias:
+            return spec[:n]
+    return None
+
+
 def _resolve_alias_and_spec(spec, opened_pdfs_by_alias, default_alias):
     if spec and spec.startswith("_"):
         alias = default_alias
         page_spec_full = spec[1:]
+    elif spec and (multi := _longest_defined_handle(spec, opened_pdfs_by_alias)):
+        alias = multi
+        page_spec_full = spec[len(multi) :]
     elif spec and spec[0].isalpha() and spec[0].upper() in opened_pdfs_by_alias:
         alias = spec[0].upper()
         page_spec_full = spec[1:]

@@ -639,16 +639,118 @@ def test_validate_inputs_exist_skips_stdin():
     _validate_inputs_exist(pipeline)  # Should not raise
 
 
-def test_validate_inputs_exist_handle_syntax(tmp_path):
-    """Tests A=file.pdf syntax is correctly resolved."""
+def test_validate_inputs_exist_equals_in_filename(tmp_path, monkeypatch):
+    """Regression test for #40: an existing file whose name contains '='
+    must not be truncated at the '='."""
+    from pdftl.cli.main import _validate_inputs_exist
+
+    monkeypatch.chdir(tmp_path)
+    name = "Whence the Force of F=ma - I.pdf"
+    (tmp_path / name).touch()
+
+    stage = types.SimpleNamespace(inputs=[name])
+    pipeline = types.SimpleNamespace(stages=[stage])
+
+    _validate_inputs_exist(pipeline)  # Should not raise
+
+
+def test_validate_inputs_exist_missing_file_with_equals_reports_full_name(tmp_path, monkeypatch):
+    """Regression test for #40: a missing file with '=' in its name is
+    reported by its full name, not the text after the first '='."""
     from pdftl.cli.main import _validate_inputs_exist
     from pdftl.exceptions import UserCommandLineError
 
-    stage = types.SimpleNamespace(inputs=["A=nonexistent.pdf"])
+    monkeypatch.chdir(tmp_path)
+    stage = types.SimpleNamespace(inputs=["Whence the Force of F=ma - I.pdf"])
     pipeline = types.SimpleNamespace(stages=[stage])
 
-    with pytest.raises(UserCommandLineError, match="Unable to find file: nonexistent.pdf"):
+    with pytest.raises(
+        UserCommandLineError,
+        match=r"Unable to find file: Whence the Force of F=ma - I\.pdf$",
+    ):
         _validate_inputs_exist(pipeline)
+
+
+@pytest.mark.parametrize(
+    "existing, arg, missing",
+    [
+        # handle A + file "A=A.pdf" (pdftk: one prefix stripped, no re-splitting)
+        (["A=A.pdf"], "A=A=A.pdf", None),
+        (["A=A=A.pdf"], "A=A=A.pdf", "A=A.pdf"),
+        # handle A + file "A.pdf"; the literal file "A=A.pdf" must not satisfy it
+        (["A.pdf"], "A=A.pdf", None),
+        (["A=A.pdf"], "A=A.pdf", "A.pdf"),
+        # another handle + file with '=' in its name
+        (["A=A.pdf"], "B=A=A.pdf", None),
+        # './' escapes handle syntax
+        (["A=A=A.pdf"], "./A=A=A.pdf", None),
+        # space before '=': not a handle, whole arg is the filename
+        (["x y=z.pdf"], "x y=z.pdf", None),
+        (["z.pdf"], "x y=z.pdf", "x y=z.pdf"),
+        # lowercase, mixed case, digit, non-ASCII first char: not handles
+        (["A.pdf"], "a=A.pdf", "a=A.pdf"),
+        (["x.pdf"], "Ab=x.pdf", "Ab=x.pdf"),
+        (["Ab=x.pdf"], "Ab=x.pdf", None),
+        (["1=x.pdf"], "1=x.pdf", None),
+        (["\u00c9=x.pdf"], "\u00c9=x.pdf", None),
+        # error names the file after the handle prefix
+        ([], "A=missing.pdf", "missing.pdf"),
+        # multi-letter handles (pdftk: one or more ASCII uppercase letters)
+        (["x.pdf"], "AB=x.pdf", None),
+        (["AB=x.pdf"], "AB=x.pdf", "x.pdf"),
+        (["AB=x.pdf"], "AB=AB=x.pdf", None),
+        # the #40 report: handle prefix plus '=' in the filename
+        (["Wilczek - F=ma - I - Shock.pdf"], "A=Wilczek - F=ma - I - Shock.pdf", None),
+    ],
+)
+def test_validate_cli_args_matches_pdftk_handle_rules(
+    tmp_path, monkeypatch, existing, arg, missing
+):
+    """Real parser + validator together follow pdftk's handle rules (see #40)."""
+    import re
+
+    from pdftl.cli.main import _validate_inputs_exist
+    from pdftl.cli.parser import _parse_file_handles
+    from pdftl.exceptions import UserCommandLineError
+
+    monkeypatch.chdir(tmp_path)
+    for name in existing:
+        (tmp_path / name).touch()
+
+    inputs, handles = _parse_file_handles([arg])
+    pipeline = types.SimpleNamespace(
+        stages=[types.SimpleNamespace(inputs=inputs, handles=handles)]
+    )
+
+    if missing is None:
+        _validate_inputs_exist(pipeline)
+    else:
+        with pytest.raises(
+            UserCommandLineError, match=f"Unable to find file: {re.escape(missing)}$"
+        ):
+            _validate_inputs_exist(pipeline)
+
+
+def test_dot_slash_forces_literal_filename_that_looks_like_handle(tmp_path, monkeypatch):
+    """Help says './A=b.pdf' forces a file name. Both b.pdf (1 page) and
+    A=b.pdf (3 pages) exist, so the page count shows which one was opened."""
+    import pikepdf
+
+    monkeypatch.chdir(tmp_path)
+    for name, n in {"b.pdf": 1, "A=b.pdf": 3}.items():
+        pdf = pikepdf.new()
+        for _ in range(n):
+            pdf.add_blank_page()
+        pdf.save(name)
+        pdf.close()
+
+    assert cli_main(["pdftl", "./A=b.pdf", "cat", "output", "out_literal.pdf"]) == 0
+    assert cli_main(["pdftl", "A=b.pdf", "cat", "output", "out_handle.pdf"]) == 0
+
+    with pikepdf.open("out_literal.pdf") as p:
+        assert len(p.pages) == 3  # the literal file "A=b.pdf"
+    with pikepdf.open("out_handle.pdf") as p:
+        assert len(p.pages) == 1  # handle A + "b.pdf"
 
 
 def test_main_integration_broken_pipe(tmp_path):
