@@ -892,8 +892,16 @@ def _strip_charset_operator(data: bytes) -> bytes:
     _ = top.CharStrings
     top.order = [op for op in top.order if op != "charset"]
     del top.charset
+    glyph_order = list(top.CharStrings.keys())
+
+    class _StubWithGlyphOrder(_MinimalOTFontStub):
+        # Newer fontTools asks the containing font for a glyph order when a
+        # Top DICT has no charset; older versions simply skipped it.
+        def getGlyphOrder(self):
+            return glyph_order
+
     buf = io.BytesIO()
-    font_set.compile(buf, otFont=_MinimalOTFontStub())
+    font_set.compile(buf, otFont=_StubWithGlyphOrder())
     stripped = buf.getvalue()
     check = CFFFontSet()
     check.decompile(io.BytesIO(stripped), otFont=None)
