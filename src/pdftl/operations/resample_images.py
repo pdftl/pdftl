@@ -32,7 +32,7 @@ from pdftl.utils.page_specs import page_numbers_matching_page_specs
 from pdftl.utils.pikepdf_compatibility_utils import (
     as_pil_image_compat,
     drop_stale_decode_array,
-    image_extraction_errors,
+    image_decode_errors,
     is_indexed_image,
 )
 
@@ -393,12 +393,8 @@ def _prepare_image_for_worker(
         return payload, ctx
 
     except (
-        pikepdf.PdfError,
-        ValueError,
-        TypeError,
-        OSError,
         RuntimeError,
-        *image_extraction_errors(),
+        *image_decode_errors(),
     ) as e:
         logger.debug(
             "Page %s: Failed to extract image %s for resample: %s",
@@ -645,7 +641,6 @@ def _resample_inline_images(
 )
 def resample_images(pdf, operation_args: list) -> OpResult:
     """Resample images exceeding the dpi threshold using a ThreadPoolExecutor."""
-    import pikepdf
 
     dpi, quality, threads, allow_upscale, allow_growth, force, page_specs, mono_dpi, threshold = (
         _parse_args(operation_args)
@@ -690,7 +685,7 @@ def resample_images(pdf, operation_args: list) -> OpResult:
             worker_func=_worker_compute_resample,
             commit_func=commit_wrapper,
         )
-    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
+    except (RuntimeError, *image_decode_errors()) as exc:
         logger.warning(
             "Skipped resampling an image due to an error in resample_images parallel processing: "
             "%s",
@@ -708,7 +703,7 @@ def resample_images(pdf, operation_args: list) -> OpResult:
             mono_dpi=mono_dpi,
             threshold=threshold,
         )
-    except (pikepdf.PdfError, ValueError, TypeError, OSError, RuntimeError) as exc:
+    except (RuntimeError, *image_decode_errors()) as exc:
         logger.warning("Skipped resampling inline image(s) due to an error: %s", exc)
 
     logger.info(
