@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Interactive password prompt support for encrypted PDFs (using `PROMPT` or `A=PROMPT`).
 
+### Changed
+
+- Handles can have several capital letters, as in pdftk: `AB=file.pdf` in inputs, `cat AB1-3`
+  in page specs, and `input_pw AB=secret`. A handle is one or more ASCII capitals followed
+  by `=`; anything else (`a=b.pdf`, `Ab=b.pdf`, `./A=b.pdf`) is an ordinary file name. A
+  password such as `AB=secret` after `input_pw` is now read as a handle assignment, and
+  `É=x.pdf` is now a file name, not a handle
+
 ### Security
 
 - Parsing an embedded Type 1 font program is now bounded in steps, operand stack and memory, so
@@ -62,6 +70,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or crashing the operation
 
 ### Fixed
+
+- Input files whose names contain `=` (for example `A=Whence the Force of F=ma.pdf`) no
+  longer fail with "Unable to find file" (#40)
 
 - Content added by `zoom`, `place`, `deskew`, `inject`, `redact`, image stamping and page
   scaling now injects whitespace to ensure it no longer produces invalid content streams

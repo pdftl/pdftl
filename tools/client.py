@@ -12,10 +12,13 @@ Sends multi-part form payloads, handles file streaming, and renders response hea
 import argparse
 import json
 import os
+import re
 import sys
 from typing import Any
 import urllib.error
 import urllib.request
+
+_HANDLE_RE = re.compile(r"([A-Z]+)=(.+)", re.DOTALL)
 
 
 def print_success(msg: str) -> None:
@@ -119,8 +122,9 @@ def _handle_status_query(base_url: str) -> None:
 
 def _parse_file_spec(idx: int, file_spec: str, total_files: int) -> tuple[str, str]:
     """Extract file part name and physical path."""
-    if "=" in file_spec:
-        return file_spec.split("=", 1)
+    m = _HANDLE_RE.fullmatch(file_spec)
+    if m:
+        return m.group(1), m.group(2)
     part_name = f"file_{idx}" if total_files > 1 else "file"
     return part_name, file_spec
 

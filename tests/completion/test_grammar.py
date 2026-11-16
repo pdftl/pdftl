@@ -63,3 +63,22 @@ def test_args_flag_parses_successfully():
 
     # Should not raise
     parser.parse("--args foo.yml t.pdf")
+
+
+def test_handle_rules_allow_multi_letter_handles():
+    """pdftk handles are one or more capitals (AB=x.pdf, cat AB1)."""
+    grammar = GrammarBuilder().build()
+
+    handle_line = next(
+        line for line in grammar.splitlines() if line.strip().startswith("handle_prefix:")
+    )
+    assert "[A-Z]+=" in handle_line
+
+    cat_line = next(line for line in grammar.splitlines() if line.strip().startswith("cat_spec:"))
+    assert "[A-Z]+" in cat_line
+
+
+def test_multi_letter_handle_input_parses():
+    from lark import Lark
+
+    Lark(GrammarBuilder().build(), parser="earley").parse("AB=x.pdf")

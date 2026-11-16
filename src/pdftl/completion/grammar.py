@@ -13,7 +13,7 @@ from pdftl.registry_init import initialize_registry
 
 # ============================== IMPORTANT ====================================
 # bump this if grammar output changes, both here and in src/pdf/cli/complete.py
-GRAMMAR_VERSION = "9"
+GRAMMAR_VERSION = "10"
 # =============================================================================
 
 
@@ -134,7 +134,7 @@ class GrammarBuilder:
 
             # Modified file_ref to accept recursive pipelines
             file_ref: handle_prefix? (PDF_PATH | inline_pipeline | each_pipeline)
-            handle_prefix: /[A-Z]=/
+            handle_prefix: /[A-Z]+=/
 
             KW_SUB.10: "{SUB_START}"
             KW_EACH.10: "{SUB_EACH}"
@@ -147,7 +147,7 @@ class GrammarBuilder:
             FILE_PATH.0: /[^ \\t\\n\\x01\\x00-\\x1f]+/
 
             range_expr: /[0-9]+(-([0-9]+|end))?[A-Z]?/
-            cat_spec: (/[A-Z]/ | range_expr)*
+            cat_spec: (/[A-Z]+/ | range_expr)*
             rotate_spec: range_expr? (DIR_ABS | DIR_REL)?
             DIR_ABS: "north"|"south"|"east"|"west"
             DIR_REL: "left"|"right"|"down"

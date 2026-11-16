@@ -13,7 +13,7 @@ import pickle
 PICKLER = "cloudpickle"
 
 # if grammar.py output changes: update this!
-GRAMMAR_VERSION = "9"
+GRAMMAR_VERSION = "10"
 
 HARDCODED_KEYWORDS = {
     "EACH",
