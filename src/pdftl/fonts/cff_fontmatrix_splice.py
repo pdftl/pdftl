@@ -238,8 +238,8 @@ def _build_index(entries: list[bytes]) -> bytes:
 # operator -> which operand index(es) are absolute offsets that must shift.
 # Private is (size, offset) -- only the offset (index 1) shifts.
 _OFFSET_OPERATORS = {
-    15: [0],  # charset
-    16: [0],  # Encoding
+    15: [0],  # charset (values > 2 are offsets; 0..2 are predefined charsets)
+    16: [0],  # Encoding (values > 1 are offsets; 0..1 are predefined encodings)
     17: [0],  # CharStrings
     18: [1],  # Private: [size, offset]
     (12, 36): [0],  # FDArray
@@ -247,6 +247,14 @@ _OFFSET_OPERATORS = {
 }
 
 _FONT_MATRIX_OP = (12, 7)
+
+# Predefined CFF IDs that occupy the offset operand slot without being offsets.
+_PREDEFINED_MAX_ID = {
+    15: 2,  # ISOAdobe (0), Expert (1), ExpertSubset (2)
+    16: 1,  # StandardEncoding (0), ExpertEncoding (1)
+}
+
+_FDARRAY_OP = (12, 36)
 
 
 def _with_font_matrix_forced(
@@ -264,11 +272,16 @@ def _with_font_matrix_forced(
 
 
 def _with_offsets_shifted(
-    dict_entries: list[tuple[object, list]], delta: int
+    dict_entries: list[tuple[object, list]],
+    delta: int,
+    *,
+    post_fdarray_delta: int = 0,
+    fdarray_end: int | None = None,
 ) -> list[tuple[object, list]]:
     """Returns a copy of `dict_entries` with every absolute-offset operand
-    (per _OFFSET_OPERATORS) bumped by `delta`."""
-    if not delta:
+    (per _OFFSET_OPERATORS) bumped by `delta` (plus `post_fdarray_delta` for
+    any offset pointing past `fdarray_end`)."""
+    if not delta and not post_fdarray_delta:
         return dict_entries
     working = []
     for op, operands in dict_entries:
@@ -276,32 +289,79 @@ def _with_offsets_shifted(
         if not idxs:
             working.append((op, operands))
             continue
+        predefined_max = _PREDEFINED_MAX_ID.get(op, -1)
         new_operands = list(operands)
         for idx in idxs:
-            new_operands[idx] = operands[idx] + delta
+            val = operands[idx]
+            if val <= predefined_max:
+                continue
+            shift = delta
+            if fdarray_end is not None and val >= fdarray_end:
+                shift += post_fdarray_delta
+            new_operands[idx] = val + shift
         working.append((op, new_operands))
     return working
 
 
 def _splice_top_dict_index(
-    dict_entries: list[tuple[object, list]], matrix: tuple[float, ...], original_index_len: int
-) -> bytes:
+    dict_entries: list[tuple[object, list]],
+    matrix: tuple[float, ...],
+    original_index_len: int,
+    *,
+    post_fdarray_delta: int = 0,
+    fdarray_end: int | None = None,
+) -> tuple[bytes, int]:
     """Iterates to a fixpoint on the byte-length delta caused by forcing
     FontMatrix and shifting offset operands, since shifting an offset can
-    itself change that offset's encoded width. Returns the rebuilt Top DICT
-    INDEX bytes."""
+    itself change that offset's encoded width. Returns (rebuilt Top DICT
+    INDEX bytes, byte-length delta)."""
     delta = 0
     for _ in range(5):
         working = _with_font_matrix_forced(dict_entries, matrix)
-        working = _with_offsets_shifted(working, delta)
+        working = _with_offsets_shifted(
+            working,
+            delta,
+            post_fdarray_delta=post_fdarray_delta,
+            fdarray_end=fdarray_end,
+        )
 
         new_dict_bytes = _encode_dict(working)
         new_index_bytes = _build_index([new_dict_bytes])
         new_delta = len(new_index_bytes) - original_index_len
         if new_delta == delta:
-            return new_index_bytes
+            return new_index_bytes, delta
         delta = new_delta
     raise RuntimeError("FontMatrix splice offset-fixup did not converge")
+
+
+def _splice_fdarray_index(
+    fd_entries: list[bytes],
+    orig_fdarray_len: int,
+    orig_fdarray_end: int,
+    top_delta: int,
+) -> tuple[bytes, int]:
+    """Rebuilds the FDArray Font DICT INDEX with each FD's Private DICT
+    absolute offset shifted by `top_delta` (plus `fdarray_delta` for Private
+    DICTs stored after FDArray), iterating to a fixpoint in case shifting a
+    Private offset changes its encoded width."""
+    decoded_fds = [_decode_dict(entry) for entry in fd_entries]
+    fdarray_delta = 0
+    for _ in range(5):
+        rebuilt_entries = []
+        for fd_dict in decoded_fds:
+            shifted_fd = _with_offsets_shifted(
+                fd_dict,
+                top_delta,
+                post_fdarray_delta=fdarray_delta,
+                fdarray_end=orig_fdarray_end,
+            )
+            rebuilt_entries.append(_encode_dict(shifted_fd))
+        new_fdarray_bytes = _build_index(rebuilt_entries)
+        new_delta = len(new_fdarray_bytes) - orig_fdarray_len
+        if new_delta == fdarray_delta:
+            return new_fdarray_bytes, fdarray_delta
+        fdarray_delta = new_delta
+    raise RuntimeError("FDArray Private offset-fixup did not converge")
 
 
 def splice_top_font_matrix(cff_bytes: bytes, matrix: tuple[float, ...]) -> bytes:
@@ -309,9 +369,8 @@ def splice_top_font_matrix(cff_bytes: bytes, matrix: tuple[float, ...]) -> bytes
     Returns a new bytes object: `cff_bytes` with the Top DICT's FontMatrix
     operator forced to `matrix` (6 floats), inserting the operator if it's
     absent and overwriting it if present. All downstream absolute offsets
-    (both the Top DICT INDEX's own position relative to nothing -- it's
-    first -- and every offset-valued operator inside the Top DICT itself)
-    are correctly shifted by however many bytes the Top DICT INDEX grows.
+    (both inside the Top DICT itself and Private DICT offsets inside
+    FDArray for CID-keyed CFF fonts) are shifted accordingly.
 
     Assumes a single font in the CFF (cff.fontNames has exactly one entry),
     which holds for every /FontFile3 embedded in a PDF.
@@ -328,9 +387,49 @@ def splice_top_font_matrix(cff_bytes: bytes, matrix: tuple[float, ...]) -> bytes
         raise ValueError(f"Expected exactly 1 Top DICT, found {len(top_entries)}")
 
     dict_entries = _decode_dict(top_entries[0])
-    new_index_bytes = _splice_top_dict_index(dict_entries, matrix, top_index_end - top_index_start)
+    orig_top_index_len = top_index_end - top_index_start
 
-    return cff_bytes[:top_index_start] + new_index_bytes + cff_bytes[top_index_end:]
+    fdarray_offset = next(
+        (operands[0] for op, operands in dict_entries if op == _FDARRAY_OP),
+        None,
+    )
+    if fdarray_offset is None:
+        new_top_index_bytes, _ = _splice_top_dict_index(dict_entries, matrix, orig_top_index_len)
+        return cff_bytes[:top_index_start] + new_top_index_bytes + cff_bytes[top_index_end:]
+
+    fd_entries, orig_fdarray_start, orig_fdarray_end = _read_index(cff_bytes, fdarray_offset)
+    orig_fdarray_len = orig_fdarray_end - orig_fdarray_start
+
+    # Solve Top DICT and FDArray together in case FDArray's own length changes
+    # when Private offsets cross an integer encoding boundary.
+    fdarray_delta = 0
+    for _ in range(5):
+        new_top_index_bytes, top_delta = _splice_top_dict_index(
+            dict_entries,
+            matrix,
+            orig_top_index_len,
+            post_fdarray_delta=fdarray_delta,
+            fdarray_end=orig_fdarray_end,
+        )
+        new_fdarray_bytes, new_fdarray_delta = _splice_fdarray_index(
+            fd_entries,
+            orig_fdarray_len,
+            orig_fdarray_end,
+            top_delta,
+        )
+        if new_fdarray_delta == fdarray_delta:
+            break
+        fdarray_delta = new_fdarray_delta
+    else:
+        raise RuntimeError("Top DICT / FDArray offset-fixup did not converge")
+
+    return (
+        cff_bytes[:top_index_start]
+        + new_top_index_bytes
+        + cff_bytes[top_index_end:orig_fdarray_start]
+        + new_fdarray_bytes
+        + cff_bytes[orig_fdarray_end:]
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover -- CLI smoke-test entry point, not library logic

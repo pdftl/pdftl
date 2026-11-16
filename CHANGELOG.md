@@ -71,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix Private DICT offset shifting for CID-keyed CFF fonts when splicing `FontMatrix`.
+
 - Input files whose names contain `=` (for example `A=Whence the Force of F=ma.pdf`) no
   longer fail with "Unable to find file" (#40)
 

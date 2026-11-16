@@ -382,3 +382,160 @@ class TestSpliceNonConvergence:
 
         with pytest.raises(RuntimeError, match="did not converge"):
             splice_top_font_matrix(fake_cff, (0.001, 0, 0, 0.001, 0, 0))
+
+
+def test_splice_cid_keyed_cff_shifts_fdarray_private_offsets():
+    """For a CID-keyed CFF (CIDFontType0C), Private DICT offsets live inside
+    FDArray entries as absolute byte offsets from the start of the CFF table.
+    Splicing FontMatrix into the Top DICT must shift those FDArray Private
+    offsets as well so CharStrings / Private DICT decompilation succeeds."""
+    from fontTools.cffLib import FDArrayIndex, FDSelect, FontDict
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.t2CharStringPen import T2CharStringPen
+    from fontTools.ttLib import TTFont
+
+    pen = T2CharStringPen(500, {})
+    pen.moveTo((0, 0))
+    pen.lineTo((0, 500))
+    pen.lineTo((500, 500))
+    pen.closePath()
+    charstrings = {
+        ".notdef": T2CharStringPen(0, {}).getCharString(),
+        "cid00001": pen.getCharString(),
+    }
+
+    fb = FontBuilder(1000, isTTF=False)
+    fb.setupGlyphOrder([".notdef", "cid00001"])
+    fb.setupCharacterMap({})
+    fb.setupCFF("TestCIDFont", {"FontName": "TestCIDFont"}, charstrings, {})
+    fb.setupHorizontalMetrics({".notdef": (0, 0), "cid00001": (500, 0)})
+    fb.setupHorizontalHeader(advanceWidthMax=500)
+    fb.setupNameTable({"familyName": "TestCID", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+
+    topdict = fb.font["CFF "].cff[0]
+    topdict.ROS = ("Adobe", "Identity", 0)
+    fd = FontDict()
+    fd.FontName = "TestCIDFont-FD0"
+    fd.FontMatrix = [1, 0, 0, 1, 0, 0]
+    fd.Private = topdict.Private
+    del topdict.Private
+    fd_array = FDArrayIndex()
+    fd_array.append(fd)
+    topdict.FDArray = fd_array
+    fd_select = FDSelect()
+    fd_select.gidArray = [0, 0]
+    topdict.FDSelect = fd_select
+
+    buf = BytesIO()
+    fb.font.save(buf)
+    buf.seek(0)
+    tt = TTFont(buf)
+    compiled = tt["CFF "].compile(tt)
+
+    patched = splice_top_font_matrix(compiled, (0.001, 0, 0, 0.001, 0, 0))
+
+    cff = CFFFontSet()
+    cff.decompile(BytesIO(patched), otFont=None)
+    topdict = cff[cff.fontNames[0]]
+    assert topdict.rawDict.get("FontMatrix") == [0.001, 0, 0, 0.001, 0, 0]
+    # Accessing CharStrings triggers lazy Private DICT decompilation via FDArray[0].
+    cs = topdict.CharStrings["cid00001"]
+    cs.decompile()
+    assert cs.program[0] == 500
+
+
+def test_preserves_predefined_charset_and_encoding_ids():
+    """Predefined charset IDs (0..2) and Encoding IDs (0..1) occupy the
+    same DICT operator slots as byte offsets but must NOT be shifted."""
+    entries = [
+        (15, [0]),  # ISOAdobe predefined charset
+        (16, [1]),  # Expert predefined encoding
+        (17, [80]),  # CharStrings offset
+    ]
+    header = bytes([1, 0, 4, 4])
+    name_index = _build_index([b"F"])
+    top_dict_index = _build_index([_encode_dict(entries)])
+    fake_cff = header + name_index + top_dict_index
+
+    patched = splice_top_font_matrix(fake_cff, (0.001, 0, 0, 0.001, 0, 0))
+
+    pos = 4
+    _, _, pos = _read_index(patched, pos)
+    top_entries, _, _ = _read_index(patched, pos)
+    decoded = dict(_decode_dict(top_entries[0]))
+
+    growth = len(patched) - len(fake_cff)
+    assert decoded[15] == [0]
+    assert decoded[16] == [1]
+    assert decoded[17] == [80 + growth]
+
+
+def test_fdarray_private_offset_fixup_non_convergence(monkeypatch):
+    import pdftl.fonts.cff_fontmatrix_splice as splice_mod  # codeql[py/import-and-import-from]
+
+    real_build_index = splice_mod._build_index
+    call_count = {"n": 0}
+
+    def _growing_build_index(entries):
+        call_count["n"] += 1
+        return real_build_index(entries) + (b"\x00" * call_count["n"])
+
+    monkeypatch.setattr(splice_mod, "_build_index", _growing_build_index)
+    with pytest.raises(RuntimeError, match="FDArray Private offset-fixup did not converge"):
+        splice_mod._splice_fdarray_index([_encode_dict([(18, [10, 50])])], 10, 40, 9)
+
+
+def test_fdarray_size_growth_shifts_post_fdarray_top_dict_offsets():
+    """When shifting an FDArray Private offset causes that integer's encoded
+    width to grow (crosses the 1-byte/2-byte boundary at 107),
+    FDArray itself grows by 1 byte, and offsets pointing past
+    FDArray (such as CharStrings) must shift by top_delta + fdarray_delta."""
+    header = bytes([1, 0, 4, 4])
+    name_index = _build_index([b"F"])  # 6 bytes -> ends at 10
+    # Top DICT: FDArray=20, CharStrings=35 (10 bytes -> ends at 20)
+    top_dict_index = _build_index([_encode_dict([((12, 36), [20]), (17, [35])])])
+    # FDArray at 20: Private=[5, 105] (8 bytes -> ends at 28)
+    fdarray_index = _build_index([_encode_dict([(18, [5, 105])])])
+    fake_cff = header + name_index + top_dict_index + fdarray_index + (b"\x00" * 100)
+
+    patched = splice_top_font_matrix(fake_cff, (0.001, 0, 0, 0.001, 0, 0))
+
+    pos = 4
+    _, _, pos = _read_index(patched, pos)
+    top_entries, top_start, top_end = _read_index(patched, pos)
+    top_delta = (top_end - top_start) - len(top_dict_index)
+    decoded_top = dict(_decode_dict(top_entries[0]))
+
+    new_fdarray_offset = decoded_top[(12, 36)][0]
+    assert new_fdarray_offset == 20 + top_delta
+
+    fd_entries, fd_start, fd_end = _read_index(patched, new_fdarray_offset)
+    fdarray_delta = (fd_end - fd_start) - len(fdarray_index)
+    assert fdarray_delta == 1
+    decoded_fd = dict(_decode_dict(fd_entries[0]))
+    assert decoded_fd[18] == [5, 105 + top_delta + fdarray_delta]
+    assert decoded_top[17] == [35 + top_delta + fdarray_delta]
+
+
+def test_top_and_fdarray_outer_fixpoint_non_convergence(monkeypatch):
+    import pdftl.fonts.cff_fontmatrix_splice as splice_mod  # codeql[py/import-and-import-from]
+
+    header = bytes([1, 0, 4, 4])
+    name_index = _build_index([b"F"])
+    top_dict_index = _build_index([_encode_dict([((12, 36), [22])])])
+    fdarray_index = _build_index([_encode_dict([(18, [5, 50])])])
+    fake_cff = header + name_index + top_dict_index + fdarray_index + (b"\x00" * 40)
+
+    call_count = {"n": 0}
+    monkeypatch.setattr(
+        splice_mod,
+        "_splice_fdarray_index",
+        lambda *args, **kwargs: (
+            fdarray_index,
+            (call_count.update(n=call_count["n"] + 1) or call_count["n"]),
+        ),
+    )
+    with pytest.raises(RuntimeError, match="Top DICT / FDArray offset-fixup did not converge"):
+        splice_top_font_matrix(fake_cff, (0.001, 0, 0, 0.001, 0, 0))
