@@ -290,9 +290,9 @@ def test_resample_growth_guard(mock_orig_size, real_pdf):
 
 
 def test_exception_handling(real_pdf):
-    # Test main pipeline execution crash safety by deleting required structural keys
+    # Crash safety: an undecodable stream must fail gracefully, not raise.
     img = make_real_image_dict(real_pdf)
-    del img["xobj"].Width
+    img["xobj"].write(b"not a valid flate stream", filter=pikepdf.Name("/FlateDecode"))
     assert simulate_pipeline(img) is False
 
 

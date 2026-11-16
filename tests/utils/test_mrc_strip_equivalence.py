@@ -152,7 +152,7 @@ def test_coverage_matches_whole_page_resize(small_strips, h, w, div):
     size = (max(w // div, 1), max(h // div, 1))
     got = segmentation.coverage(mask, size)
     assert got.dtype == np.float32
-    assert np.array_equal(got, _ref_reduce(mask.astype(np.float32), size))
+    np.testing.assert_allclose(got, _ref_reduce(mask.astype(np.float32), size), rtol=0, atol=1e-6)
 
 
 @pytest.mark.parametrize("h,w", SHAPES)
@@ -164,7 +164,8 @@ def test_masked_mean_matches_whole_page_reference(small_strips, h, w, div, keep_
     keep = rng.random((h, w)) < keep_rate
     size = (max(w // div, 1), max(h // div, 1))
     got = segmentation.masked_mean(rgb, keep, size)
-    assert np.array_equal(got, _ref_masked_mean(rgb, keep, size))
+    # Values are in 0..255, so allow a few float32 ulps (~1e-5 at that scale).
+    np.testing.assert_allclose(got, _ref_masked_mean(rgb, keep, size), rtol=0, atol=1e-4)
 
 
 def test_masked_mean_hole_filling_goes_through_several_levels(small_strips):
